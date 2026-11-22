@@ -2888,14 +2888,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>**Deleting an ActionsGateway within <code>completedPodTTL</code> of its last job holds the finalizer for a worker pod that already finished, until …</td>
 </tr>
 <tr>
-<td><a href="Q1365/">Q1365</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/wait-for-publish.sh">Start the gate deploy once the images publish, not the whole publish run</a></td>
-<td><code>dogfood</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>**The release gate waits for all of <code>publish.yml</code> before it deploys, but deploy needs only the image jobs, which finish 5.5 to 5.8 minutes …</td>
-</tr>
-<tr>
 <td><a href="Q1364/">Q1364</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Bring the e2e node up during the gate deploy, not on the Kata dispatch</a></td>
 <td><code>dogfood</code></td>

@@ -2879,8 +2879,8 @@
 
 <h1 id="release-gate-speed">Release gate speed<a class="headerlink" href="#release-gate-speed" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status:</strong> ❌ Investigation done 2026-11-18, nothing implemented.
-Seven rows are open, ranked in the order below: <a href="../../queue/Q1363/">Q1363</a>, <a href="../../queue/Q1362/">Q1362</a>, <a href="../../queue/Q1365/">Q1365</a>, <a href="../../queue/Q1364/">Q1364</a>, <a href="../../queue/Q1366/">Q1366</a>, <a href="../../queue/Q1367/">Q1367</a> and <a href="../../queue/Q1368/">Q1368</a>.</p>
+<p><strong>Status:</strong> 🚧 Investigation done 2026-11-18; the third option (Q1365) is implemented, the other six are not.
+Six rows are open, ranked in the order below: <a href="../../queue/Q1363/">Q1363</a>, <a href="../../queue/Q1362/">Q1362</a>, <a href="../../queue/Q1364/">Q1364</a>, <a href="../../queue/Q1366/">Q1366</a>, <a href="../../queue/Q1367/">Q1367</a> and <a href="../../queue/Q1368/">Q1368</a>.</p>
 </blockquote>
 <p>The release-candidate gate (<code>.github/workflows/validate-candidate.yml</code> running <code>scripts/dogfood/validate-release.sh</code>) took 115.5 minutes for <code>v2.0.1-rc.1</code> and 133.1 minutes for <code>v2.0.0-rc.3</code>, counted from the start of its gate step to its verdict.
 About a fifth of that, 21.7 and 25.3 minutes, is the gate waiting on a worker pod that finished long before.
@@ -3068,7 +3068,7 @@ The gate runs on <code>ubuntu-latest</code> in a public repository, so its minut
 </tr>
 <tr>
 <td>3</td>
-<td><a href="../../queue/Q1365/">Q1365</a></td>
+<td>Q1365 (shipped)</td>
 <td>Deploy once the image jobs succeed; require the whole publish run only before the CRD smoke</td>
 <td>Up to 5.8 min (measured: <code>chart-publish</code> took 5m47s and 5m30s), and only when the approval beats the images</td>
 <td>Falls by the same Actions minutes; node-hours unchanged</td>
@@ -3136,6 +3136,9 @@ The rest of the run is <code>chart-publish</code>, which creates the GitHub Rele
 The gate reads those only in the CRD-smoke and storage legs, about 35 minutes after deploy.</p>
 <p>So the gate can start deploying once the image jobs succeed, and check that the whole run succeeded before the CRD smoke.
 The saving applies only when the environment approval comes before the images, as in rc.1; in rc.3 the approval took 24 minutes and the wait was 1 second.</p>
+<p>Shipped as <code>wait-for-publish.sh --images</code>, which returns once every <code>publish (…)</code> job has succeeded.
+The legs that read what <code>chart-publish</code> produces wait for the whole run through <code>await_publish_run</code> in <code>validate-release.sh</code>: <code>crd_smoke</code>, and <code>storage_leg</code>, which also pulls the OCI chart (<code>helm pull oci://…/charts/actions-gateway</code>) in addition to the release assets the row named.
+The saving was not re-measured after the change; the 5m47s and 5m30s above are the <code>chart-publish</code> durations it is sized against.</p>
 <p>The risk is spending: a red <code>chart-publish</code> would now be found after the Kata leg rather than before deploy, costing about 35 minutes of node time on a candidate that cannot ship.
 How often <code>chart-publish</code> fails was not counted.</p>
 <h3 id="4-bring-the-e2e-node-up-during-deploy-q1364">4. Bring the e2e node up during deploy (Q1364)<a class="headerlink" href="#4-bring-the-e2e-node-up-during-deploy-q1364" title="Permanent link">&para;</a></h3>
