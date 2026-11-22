@@ -34,6 +34,10 @@ func publishedStageBodies(stages map[string]*dockerStage, images []string) map[s
 	for _, img := range images {
 		walk(img)
 	}
+	// The instructions ahead of the first FROM feed every stage's base.
+	if pre, ok := stages[""]; ok {
+		out[""] = strings.Join(pre.body, "\n")
+	}
 	return out
 }
 

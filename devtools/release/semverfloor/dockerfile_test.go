@@ -79,6 +79,18 @@ func TestDockerfileChanged(t *testing.T) {
 		})
 	}
 
+	// A global ARG before the first FROM feeds `FROM ${BASE}`, so bumping it moves
+	// a published image's base while every stage body stays textually identical.
+	t.Run("a global ARG ahead of the first FROM counts", func(t *testing.T) {
+		d := narrowRepo(t)
+		before := "ARG BASE=gcr.io/distroless/static:nonroot@sha256:111\nFROM ${BASE} AS app\nCOPY app /app\n"
+		commitFiles(t, d, "chore: base", map[string]string{dockerfilePath: before})
+		sha := commitFiles(t, d, "fix: bump the base", map[string]string{dockerfilePath: replace(t, before, "sha256:111", "sha256:999")})
+		if !dockerfileChanged(d, sha, []string{"app"}) {
+			t.Error("a bumped global ARG read as unchanged")
+		}
+	})
+
 	t.Run("an added Dockerfile counts, since nothing can be compared", func(t *testing.T) {
 		d := narrowRepo(t)
 		commitFiles(t, d, "chore: other", map[string]string{"README.md": "x\n"})

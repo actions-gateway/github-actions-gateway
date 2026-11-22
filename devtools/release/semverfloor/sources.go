@@ -246,14 +246,15 @@ func ParseDockerfile(path string) (map[string]*dockerStage, error) {
 func parseDockerfileSource(name, src string) (map[string]*dockerStage, error) {
 	path := name
 	stages := map[string]*dockerStage{}
-	var cur *dockerStage
+	// Instructions before the first FROM (global ARGs that feed `FROM ${BASE}`)
+	// belong to no stage; they are kept under the empty name so a change to one
+	// is not lost.
+	preamble := &dockerStage{}
+	cur := preamble
 	for _, line := range logicalLines(src) {
 		if m := fromRE.FindStringSubmatch(line); m != nil {
 			cur = &dockerStage{name: m[2], base: m[1], body: []string{line}}
 			stages[m[2]] = cur
-			continue
-		}
-		if cur == nil {
 			continue
 		}
 		if line != "" {
@@ -273,6 +274,9 @@ func parseDockerfileSource(name, src string) (map[string]*dockerStage, error) {
 				cur.goBuilds = append(cur.goBuilds, b)
 			}
 		}
+	}
+	if len(preamble.body) > 0 {
+		stages[""] = preamble
 	}
 	return stages, nil
 }
