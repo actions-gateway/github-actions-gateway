@@ -2182,6 +2182,30 @@ prewarm_rc=0
 check "e2e node: a refused resize does not fail the gate" 0 "${prewarm_rc}"
 check_contains "  ...and says what it costs" "e2e-prewarm: warning:" "$(cat "${SCRATCH}/prewarm.out")"
 
+# Q1363: the Dragonfly leg empties the e2e pool after the DinD tenant is down and
+# before its own e2e_leg dispatches, and a pool that will not empty is a warning.
+DF_DIR="${SCRATCH}/dragonfly"
+mkdir -p "${DF_DIR}"
+cat >"${DF_DIR}/e2e-stop.sh" <<STUB_BODY
+#!/usr/bin/env bash
+echo "e2e-stop.sh" >>"${DF_DIR}/order"
+STUB_BODY
+dragonfly_order() (
+	SCRIPT_DIR="${DF_DIR}" E2E_POOL=e2e
+	empty_node_pool() { echo "empty_node_pool $1" >>"${DF_DIR}/order"; return "${1:+${EMPTY_RC:-0}}"; }
+	e2e_leg() { echo "e2e_leg" >>"${DF_DIR}/order"; }
+	: >"${DF_DIR}/order"
+	dragonfly_leg >"${DF_DIR}/out" 2>&1
+	echo "rc=$?"
+	paste -sd'|' "${DF_DIR}/order"
+)
+check "dragonfly: the e2e pool is emptied between the DinD teardown and the dispatch" \
+	"rc=0|e2e-stop.sh|empty_node_pool e2e|e2e_leg" "$(dragonfly_order | paste -sd'|' - | sed 's/|$//')"
+EMPTY_RC=1 dragonfly_order >"${DF_DIR}/res" 2>&1 || true
+check "dragonfly: a pool that will not empty still runs the leg" \
+	"rc=0|e2e-stop.sh|empty_node_pool e2e|e2e_leg" "$(paste -sd'|' "${DF_DIR}/res")"
+check_contains "  ...and warns the reading may be warm" "e2e-pool-empty: warning:" "$(cat "${DF_DIR}/out")"
+
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2
 	exit 1
