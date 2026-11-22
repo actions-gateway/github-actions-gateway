@@ -445,6 +445,7 @@ The abuse-specific first moves:
 2. **Rotate everything.** A compromised GMC can read every tenant's GitHub App Secret.
    Rotate **all** tenant GitHub App keys.
 3. **Scope.** Audit GMC ServiceAccount `get secrets` and `create`/`patch` calls; reconcile provisioned resources against live `ActionsGateway` CRs to find anything created off-CR.
+   In each tenant namespace, delete any Deployment the GMC created that runs as a ServiceAccount it did not provision, since its pods hold that ServiceAccount's tokens; on a release before the guard refused them, look for GMC-created Secrets of type `kubernetes.io/service-account-token` too, and delete them to revoke their tokens.
 4. **Verify the image.** Confirm the GMC image digest against the deployed manifest before scaling back up.
 
 ### Proxy saturation / slowloris
