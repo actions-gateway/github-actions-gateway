@@ -1177,9 +1177,11 @@ If it is missing, the grant has not been accepted; check the consumer's conditio
 kubectl get actionsgateway -n team-a gateway -o jsonpath='{.status.conditions}'
 ```
 
-`Degraded` with reason `ProxyShareNotGranted` means the proxy exists but does not list this namespace.
-Reason `ProxyNotFound` means the name or namespace is wrong.
-Both fail closed: no worker pods run and no traffic is permitted while either is set.
+`Degraded` with reason `ProxyShareNotGranted` means either the name or namespace is wrong or the proxy does not list this namespace.
+The consumer cannot tell which, by design: a tenant can name any namespace, and a different answer for a missing proxy would tell it which names exist there.
+Ask the provider, or read the GMC log, which records `cross-namespace defaultProxyRef not granted` with `proxyMissing` set for a proxy that does not exist.
+`ProxyNotFound` is reported only for a proxy in the gateway's own namespace.
+Either reason fails closed: no worker pods run and no traffic is permitted while it is set.
 
 A gateway's AGC mounts the proxy certificate from that ConfigMap, so the GMC creates the AGC only once the ConfigMap exists.
 For the few seconds after you create a gateway naming a granted proxy, it reports `ProxyShareNotGranted` with a message saying the certificate "has not yet been projected here", and it re-checks every 10 seconds.

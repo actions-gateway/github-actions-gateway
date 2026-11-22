@@ -3,6 +3,7 @@
 package integration_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -84,6 +85,63 @@ func TestV2_ProxySharing_UngrantedCrossNamespaceRefIsDenied(t *testing.T) {
 	}, &cm)
 	assert.True(t, apierrors.IsNotFound(err),
 		"a CA projection exists for an ungranted reference (err=%v)", err)
+}
+
+// A tenant naming a proxy in another namespace must not learn from its own gateway's
+// status whether that proxy exists: a missing proxy and an ungranted one report the
+// same reason and message, with only the names that were written into the gateway
+// differing.
+func TestV2_ProxySharing_MissingAndUngrantedCrossNamespaceRefsReadAlike(t *testing.T) {
+	const (
+		holdsNS    = "v2-oracle-holds"
+		emptyNS    = "v2-oracle-empty"
+		consumerA  = "v2-oracle-consumer-a"
+		consumerB  = "v2-oracle-consumer-b"
+		poolName   = "pool"
+		gatewayRef = "oracle-gw"
+	)
+	for _, ns := range []string{holdsNS, emptyNS, consumerA, consumerB} {
+		createNamespace(t, ns)
+	}
+	startActionsGatewayV2Reconciler(t)
+
+	ep := &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: poolName, Namespace: holdsNS}}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	for consumer, provider := range map[string]string{consumerA: holdsNS, consumerB: emptyNS} {
+		createGitHubAppSecret(t, consumer, "oracle-creds")
+		ag := newV2GatewayWired(gatewayRef, consumer, "oracle-creds", "")
+		ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: poolName, Namespace: provider}
+		require.NoError(t, k8sClient.Create(ctx, ag))
+		t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
+	}
+
+	// What each tenant wrote is the only part allowed to differ.
+	normalise := func(s, consumer, provider string) string {
+		return strings.NewReplacer(consumer, "<consumer>", provider, "<provider>").Replace(s)
+	}
+	read := func(consumer, provider string) (reason, message string, ok bool) {
+		c := gatewayCondition(t, consumer, gatewayRef, v2.ConditionDegraded)
+		if c == nil || c.Status != metav1.ConditionTrue {
+			return "", "", false
+		}
+		return c.Reason, normalise(c.Message, consumer, provider), true
+	}
+
+	var ungrantedReason, ungrantedMsg, missingReason, missingMsg string
+	require.Eventually(t, func() bool {
+		var okA, okB bool
+		ungrantedReason, ungrantedMsg, okA = read(consumerA, holdsNS)
+		missingReason, missingMsg, okB = read(consumerB, emptyNS)
+		return okA && okB
+	}, 30*time.Second, 250*time.Millisecond, "both gateways must report Degraded")
+
+	assert.Equal(t, v2.ReasonProxyShareNotGranted, ungrantedReason)
+	assert.Equal(t, ungrantedReason, missingReason,
+		"a missing cross-namespace proxy must report the reason an ungranted one does")
+	assert.Equal(t, ungrantedMsg, missingMsg,
+		"a missing cross-namespace proxy must report the message an ungranted one does")
 }
 
 // Granting consent flips the same reference, and the ingress rule that admits it

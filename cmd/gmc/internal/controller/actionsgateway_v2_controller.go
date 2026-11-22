@@ -285,14 +285,19 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if proxyErr != nil && !apierrors.IsNotFound(proxyErr) {
 			return ctrl.Result{}, proxyErr
 		}
-		if apierrors.IsNotFound(proxyErr) {
+		// Across namespaces a missing proxy and an ungranted one read the same, so the
+		// gateway's status cannot tell its tenant whether another namespace holds an
+		// EgressProxy of that name. The GMC log keeps the difference for the admin.
+		missing := apierrors.IsNotFound(proxyErr)
+		if proxyNS != ag.Namespace && (missing || !proxyShareGranted(&p, ag.Namespace)) {
+			logf.FromContext(ctx).Info("cross-namespace defaultProxyRef not granted",
+				"proxyNamespace", proxyNS, "proxy", ag.Spec.DefaultProxyRef.Name, "proxyMissing", missing)
+			return r.setNotReady(ctx, &ag, gmcv2.ConditionDegraded, gmcv2.ReasonProxyShareNotGranted,
+				sharedProxyNotGrantedMessage(ag.Spec.DefaultProxyRef.Name, proxyNS, ag.Namespace))
+		}
+		if missing {
 			return r.setNotReady(ctx, &ag, gmcv2.ConditionDegraded, gmcv2.ReasonProxyNotFound,
 				fmt.Sprintf("EgressProxy %q (defaultProxyRef) not found in namespace %q", ag.Spec.DefaultProxyRef.Name, proxyNS))
-		}
-		if proxyNS != ag.Namespace && !proxyShareGranted(&p, ag.Namespace) {
-			return r.setNotReady(ctx, &ag, gmcv2.ConditionDegraded, gmcv2.ReasonProxyShareNotGranted,
-				fmt.Sprintf("EgressProxy %q in namespace %q does not list namespace %q in spec.sharing.allowedNamespaces",
-					ag.Spec.DefaultProxyRef.Name, proxyNS, ag.Namespace))
 		}
 		if proxyNS != ag.Namespace {
 			// The AGC mounts the pool's CA from the share projection (§H.9), which the

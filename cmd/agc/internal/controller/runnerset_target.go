@@ -674,8 +674,10 @@ func resolveSharedProxy(ctx context.Context, reader client.Reader, consumerNS, p
 	if err := reader.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: name}, &cm); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, refResolution{reason: v2.ReasonProxyShareNotGranted,
-				message: fmt.Sprintf("EgressProxy %q in namespace %q does not list namespace %q in spec.sharing.allowedNamespaces",
-					proxyName, proxyNS, consumerNS)}
+				// The GMC's sharedProxyNotGrantedMessage: a projection is absent alike
+				// for a proxy that does not exist and one that has not granted.
+				message: fmt.Sprintf("EgressProxy %q in namespace %q is not shared with namespace %q: it does not exist there, "+
+					"or its spec.sharing.allowedNamespaces does not list this namespace", proxyName, proxyNS, consumerNS)}
 		}
 		return nil, refResolution{err: fmt.Errorf("read projected proxy share: %w", err)}
 	}

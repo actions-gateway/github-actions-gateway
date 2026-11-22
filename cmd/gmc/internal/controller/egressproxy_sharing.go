@@ -72,6 +72,14 @@ func ProxyShareGranted(ep *gmcv2.EgressProxy, consumerNS string) bool {
 	return proxyShareGranted(ep, consumerNS)
 }
 
+// sharedProxyNotGrantedMessage is the ProxyShareNotGranted message for a
+// cross-namespace proxy reference. It does not say whether the proxy exists, since a
+// tenant can name any namespace; the AGC reports the same text for a RunnerSet.
+func sharedProxyNotGrantedMessage(proxyName, proxyNS, consumerNS string) string {
+	return fmt.Sprintf("EgressProxy %q in namespace %q is not shared with namespace %q: it does not exist there, "+
+		"or its spec.sharing.allowedNamespaces does not list this namespace", proxyName, proxyNS, consumerNS)
+}
+
 // proxyShareConfigMapName derives the name a projected share ConfigMap takes in a
 // consumer namespace. It keys on the provider's namespace AND name: one consumer may
 // hold grants from same-named proxies in two provider namespaces, and a name derived
