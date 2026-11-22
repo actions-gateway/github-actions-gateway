@@ -1,7 +1,7 @@
 # Release gate speed
 
-> **Status:** 🚧 Investigation done 2026-11-18; the third and fourth options (Q1365, Q1364) are implemented, the other five are not.
-> Five rows are open, ranked in the order below: [Q1363](../queue/Q1363.md), [Q1362](../queue/Q1362.md), [Q1366](../queue/Q1366.md), [Q1367](../queue/Q1367.md) and [Q1368](../queue/Q1368.md).
+> **Status:** 🚧 Investigation done 2026-11-18; the first, third and fourth options (Q1363, Q1365, Q1364) are implemented, the other four are not.
+> Four rows are open, ranked in the order below: [Q1362](../queue/Q1362.md), [Q1366](../queue/Q1366.md), [Q1367](../queue/Q1367.md) and [Q1368](../queue/Q1368.md).
 
 The release-candidate gate (`.github/workflows/validate-candidate.yml` running `scripts/dogfood/validate-release.sh`) took 115.5 minutes for `v2.0.1-rc.1` and 133.1 minutes for `v2.0.0-rc.3`, counted from the start of its gate step to its verdict.
 About a fifth of that, 21.7 and 25.3 minutes, is the gate waiting on a worker pod that finished long before.
@@ -107,7 +107,7 @@ The gate runs on `ubuntu-latest` in a public repository, so its minutes are not 
 
 | Rank | Row | Change | Saving | Cost effect |
 |---|---|---|---|---|
-| 1 | [Q1363](../queue/Q1363.md) | Put the Dragonfly leg on a fresh e2e node explicitly | None: it keeps rank 2 from weakening a reading | Neutral (estimate): that leg cold-starts today too |
+| 1 | Q1363 (shipped) | Put the Dragonfly leg on a fresh e2e node explicitly | None: it keeps rank 2 from weakening a reading | Neutral (estimate): that leg cold-starts today too |
 | 2 | [Q1362](../queue/Q1362.md) | Release the gateway delete once the finished worker pod is reaped, not when its node goes | 20–24 min (estimate, from measured holds of 21.7 and 25.3 min) | Falls (estimate): 2 system nodes × 20–24 min ≈ 0.7–0.8 node-h, the same Actions minutes, and the e2e node's 10-min idle before scale-down |
 | 3 | Q1365 (shipped) | Deploy once the image jobs succeed; require the whole publish run only before the CRD smoke | Up to 5.8 min (measured: `chart-publish` took 5m47s and 5m30s), and only when the approval beats the images | Falls by the same Actions minutes; node-hours unchanged |
 | 4 | Q1364 (shipped) | Bring the e2e node up during deploy instead of on the Kata dispatch | About 3 min (estimate, from rc.1's measured 3m59s dispatch-to-runner) | Falls slightly (estimate): the e2e node starts ~1–2 min early, while 2 system nodes stop ~3 min early |
@@ -119,6 +119,10 @@ Ranks 1 to 6 together bring a gate like rc.1's from 115.5 minutes to roughly 85 
 Rank 7 is a scoping row because its proof risks and quota are unmeasured.
 
 ### 1. A fresh node for the Dragonfly leg (Q1363)
+
+Shipped as `empty_node_pool` in `lib/pool.sh`, called at the top of `dragonfly_leg` after `e2e-stop.sh`: it resizes the e2e pool to zero and waits until the cluster lists no node.
+A pool that cannot be emptied is a warning, not a gate failure, because the reading is evidence rather than a gate.
+GKE accepts `resize` on an autoscaled pool but advises against combining the two, so the size interaction is not exercised; there is no live cluster in this change.
 
 Not a saving, and it must land before rank 2.
 The Dragonfly leg installs Dragonfly's node client so the kubelet pulls worker images through it, and its `node-p2p` reading records whether containerd did.
