@@ -66,6 +66,9 @@ So the two controllers split it:
    A `deletionTimestamp` on it makes the RunnerSet reconciler stop both acquisition tiers and delete every worker pod under `reason="gateway_deleted"` — while it still holds its full tenant grant, because the GMC has not deleted anything yet.
 2. Teardown's **first** act is to check `status.activeJobs`/`pendingJobs` across the bound sets and requeue while any are non-zero, before the first `del`.
    The counts fall as soon as the AGC issues its deletes (a pod carrying a deletion timestamp is finished by the kubelet with no controller involved), so the healthy path costs one requeue.
+   It also requeues while any bound worker pod has no deletion timestamp (Q1362), because a pod whose job finished is in neither count and would otherwise wait for the AGC's `completedPodTTL` with the AGC already gone.
+   On the release gate that pod then held the workload policy below until the autoscaler removed its node, 8.7 to 16.3 minutes per tenant swap.
+   Deleting a finished pod removes it at once, so this wait also costs a requeue or two.
    A 90-second deadline measured from the CR's own `deletionTimestamp` — stateless, so it survives a GMC restart mid-teardown — bounds the case where no AGC is running to reap at all; past it teardown proceeds and emits a `WorkerDrainTimeout` Warning naming what it is leaving to the kubelet's `maxWorkerLifetime` deadline.
 3. The workload `NetworkPolicy` waits for the pods rather than the counts (Q1328).
    It is a worker pod's only egress restriction, and a pod still runs job code after the counts fall: through its template's `terminationGracePeriodSeconds`, which nothing caps, on the healthy path, and until `maxWorkerLifetime` past the deadline.

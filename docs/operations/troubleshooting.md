@@ -1928,10 +1928,12 @@ Prefer setting `maxWorkers: 0` on the sets, which stops new jobs while leaving t
 ## ActionsGateway Deletion Hangs on WaitingForWorkerDrain
 
 **Symptoms.** `kubectl delete actionsgateway` does not return.
-The gateway sits `Terminating` on the `actions-gateway.com/gmc-cleanup` finalizer, and `kubectl describe` shows repeated `Normal` `WaitingForWorkerDrain` events naming the sets that still report workers.
+The gateway sits `Terminating` on the `actions-gateway.com/gmc-cleanup` finalizer, and `kubectl describe` shows repeated `Normal` `WaitingForWorkerDrain` events naming the sets that still report workers, or `worker pods not yet deleted:` and the pods themselves.
 
 **What happened.** Teardown deliberately deletes nothing until the AGC has reaped the tenant's worker pods (previous entry) — deleting its Deployment first would strand them.
 The wait normally lasts a second or two: the counts fall as soon as the AGC *issues* its deletes, because a pod that already carries a deletion timestamp is finished by the kubelet with no controller involved.
+A pod whose job already finished counts too, until the AGC deletes it, because it is in no job count and only the AGC's reaper would remove it.
+On GMC `v2.0.1` and earlier, teardown did not wait for such a pod, so a gateway deleted within `completedPodTTL` of its last job could sit `Terminating` until the pod's node was removed.
 
 **Likely cause of a long wait.** The AGC is not running, so nothing is reaping and nothing is updating the counts — it is crash-looping, scaled to zero, or never became healthy.
 

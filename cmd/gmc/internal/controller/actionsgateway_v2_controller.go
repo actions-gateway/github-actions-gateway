@@ -1211,12 +1211,35 @@ func (r *ActionsGatewayV2Reconciler) undrainedRunnerSets(ctx context.Context, ag
 	return undrained
 }
 
-// boundWorkerPods names the pods, terminating ones included, that the workload
+// unreapedWorkerPods names the bound worker pods that carry no deletion timestamp
+// (Q1362). The AGC deletes every worker pod once it sees the gateway terminating, so a
+// pod without one is a pod it has not reached yet. A finished pod is in no job count,
+// yet it holds the workload NetworkPolicy until something deletes it. A read failure or
+// a terminating namespace yields nothing, as in undrainedRunnerSets.
+func (r *ActionsGatewayV2Reconciler) unreapedWorkerPods(ctx context.Context, ag *gmcv2.ActionsGateway) []string {
+	if terminating, err := r.namespaceTerminating(ctx, ag); err != nil || terminating {
+		return nil
+	}
+	pods, err := r.boundWorkerPods(ctx, ag)
+	if err != nil {
+		logf.FromContext(ctx).Error(err, "could not list worker pods for the teardown worker drain")
+		return nil
+	}
+	var names []string
+	for i := range pods {
+		if pods[i].DeletionTimestamp.IsZero() {
+			names = append(names, pods[i].Name)
+		}
+	}
+	return names
+}
+
+// boundWorkerPods lists the pods, terminating ones included, that the workload
 // NetworkPolicy selects and that belong to a RunnerSet bound to ag, or to one that
 // no longer exists: a RunnerSet deleted with its gateway sheds its finalizer before
 // its pods exit. It reads pod metadata uncached, through the namespace's
 // gmc-tenant-secret-reader RoleBinding.
-func (r *ActionsGatewayV2Reconciler) boundWorkerPods(ctx context.Context, ag *gmcv2.ActionsGateway) ([]string, error) {
+func (r *ActionsGatewayV2Reconciler) boundWorkerPods(ctx context.Context, ag *gmcv2.ActionsGateway) ([]metav1.PartialObjectMetadata, error) {
 	var rsList gmcv2.RunnerSetList
 	if err := r.List(ctx, &rsList, client.InNamespace(ag.Namespace)); err != nil {
 		return nil, err
@@ -1231,17 +1254,17 @@ func (r *ActionsGatewayV2Reconciler) boundWorkerPods(ctx context.Context, ag *gm
 		client.MatchingLabels{labelComponent: componentWorkload}); err != nil {
 		return nil, err
 	}
-	var names []string
+	var workers []metav1.PartialObjectMetadata
 	for i := range pods.Items {
 		set, ok := pods.Items[i].Labels[labelRunnerSetOwner]
 		if !ok {
 			continue
 		}
 		if mine, exists := bound[set]; mine || !exists {
-			names = append(names, pods.Items[i].Name)
+			workers = append(workers, pods.Items[i])
 		}
 	}
-	return names, nil
+	return workers, nil
 }
 
 // namespaceTerminating reports whether ag's namespace is being deleted. The namespace
@@ -1288,8 +1311,14 @@ func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gm
 	// do-not-disrupt annotations, pinning a billable node until the kubelet's
 	// activeDeadlineSeconds fires up to maxWorkerLifetime later. So teardown waits for
 	// the counts to reach zero — which happens as soon as the deletes are ISSUED, since
-	// the AGC's reaper stops counting a pod that already carries a deletion timestamp.
-	if undrained := r.undrainedRunnerSets(ctx, ag); len(undrained) > 0 {
+	// the AGC's reaper stops counting a pod that already carries a deletion timestamp —
+	// and for every bound worker pod to carry one, because a pod whose job finished is
+	// in no count and is left to the reaper's completedPodTTL (Q1362).
+	undrained := r.undrainedRunnerSets(ctx, ag)
+	if unreaped := r.unreapedWorkerPods(ctx, ag); len(unreaped) > 0 {
+		undrained = append(undrained, "worker pods not yet deleted: "+strings.Join(unreaped, ", "))
+	}
+	if len(undrained) > 0 {
 		if r.nowFunc()().Before(ag.DeletionTimestamp.Add(workerDrainTimeout)) {
 			r.recordEvent(ag, corev1.EventTypeNormal, "WaitingForWorkerDrain", "ReconcileDelete",
 				"Holding gateway teardown until the AGC reaps its worker pods: %s",
@@ -1366,8 +1395,12 @@ func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gm
 	} else if workers, err := r.boundWorkerPods(ctx, ag); err != nil {
 		errs = append(errs, fmt.Errorf("NetworkPolicy %s: listing worker pods: %w", workloadNPNameV2(ag), err))
 	} else if len(workers) > 0 {
+		names := make([]string, len(workers))
+		for i := range workers {
+			names[i] = workers[i].Name
+		}
 		lingering = append(lingering, fmt.Sprintf("NetworkPolicy %s (held for worker pods %s)",
-			workloadNPNameV2(ag), strings.Join(workers, ", ")))
+			workloadNPNameV2(ag), strings.Join(names, ", ")))
 	} else {
 		del(&networkingv1.NetworkPolicy{}, "NetworkPolicy", ns, workloadNPNameV2(ag))
 	}
