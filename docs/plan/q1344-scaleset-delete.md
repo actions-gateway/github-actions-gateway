@@ -84,7 +84,7 @@ The logs were checked for key material and hold none.
 
 Three things follow from the readings rather than from source:
 
-- **GitHub keeps a job queued against the name, not the scale-set id.** Each successor had a new id and a different owner, and was offered the deleted set's job about 20 minutes after T0, once the window ended and the probe re-created the set.
+- **GitHub keeps a job queued against the name, not the scale-set id.** Each successor had a new id, and its session's owner name, `gag-q1344-successor`, is set in the probe's source rather than read from the logs; it was offered the deleted set's job about 20 minutes after T0, once the window ended and the probe re-created the set.
 - **A delete does not conclude or cancel the job.** It stayed `queued` for the whole window on both arms.
 - **The runner record goes with the scale set.** So a delete would retire the records leak a rename leaves, which deregistration in the AGC would otherwise have to do.
 
