@@ -2778,7 +2778,12 @@
 
 
 <h1 id="both-proxyconnectworks-specs-502-the-connect-tunnel-in-both-cni-lanes">Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes<a class="headerlink" href="#both-proxyconnectworks-specs-502-the-connect-tunnel-in-both-cni-lanes" title="Permanent link">&para;</a></h1>
-<p><strong>Top of queue per the <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Both proxy-CONNECT specs failed together again on 2026-11-07, and this time the banner and the GMC log point at one cause: the GMC's GitHub <code>/meta</code> fetch was rate-limited from a runner address whose GitHub API quota was already spent, and the proxy's upstream dial timed out in the same window (<a href="#measured-2026-11-07-the-gmcs-meta-fetch-was-rate-limited">Measured 2026-11-07</a>).
+<p><strong>Event:</strong> <code>E2E_V2_ProxyConnectWorks</code> or <code>E2E_GMC_TenantProvisioning_ProxyConnectWorks</code> fails on <code>main</code> or in a merge group with an <code>UPSTREAM-DIAL-FAILED</code> banner, after the seed below. → top of Queue, escalated.
+A failing run's GMC log is the first read: <code>GitHub meta returned 403</code> together with no <code>seeded GitHub IP ranges from the persisted copy</code> line means the seed did not reach the pod.</p>
+<p>The e2e suite seeds the GMC's <code>actions-gateway-gmc-ip-ranges</code> ConfigMap from a <code>/meta</code> response the workflow fetches with the job's own token (<code>scripts/e2e/fetch-github-meta.sh</code>, <code>seedGitHubIPRanges</code> in <code>e2e_suite_test.go</code>), so a spent unauthenticated quota on the runner address no longer empties the proxy NetworkPolicy.
+The mechanism is the 2026-11-07 measurement below; no run has shown the seeded GMC surviving a spent quota, because the quota cannot be spent on demand, and the unit tests drive the store and a rate-limited fetch only.
+The seed is served for 49 hours, far longer than any spec.
+Authenticating the GMC's own fetch and bundling a fallback in the image are product changes the row does not ask for and are not built.
 That points the fix at the e2e GMC's IP-range source, which must not depend on the runner address's API quota, rather than at the spec's retry window.</p>
 <p><code>E2E_V2_ProxyConnectWorks: a workload pod reaches GitHub through the v2 EgressProxy</code> (<code>[real-github-egress]</code>) failed in the merge group and the queue evicted the PR.
 It is the e2e lane's only failure: <code>70 Passed | 1 Failed | 0 Pending | 7 Skipped</code>.</p>
