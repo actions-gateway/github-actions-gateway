@@ -33,18 +33,19 @@ The breaker thresholds, the 7-day ledger expiry and the deferred path's 24-hour 
 ### Readings from the dogfood turn-up, 2026-11-22
 
 Taken on the `ci` set in `gag-dogfood`, whose AGC ran `v2.0.1-rc.2`; its detection and retry code is unchanged on `main` at `f414275fa`.
-The jobs came from the [`q1236-detection-probe`](../../.github/workflows/q1236-detection-probe.yml) fixture, runs 45052015868 (attempts 1 and 2) and 45053166409, and the readings from the AGC's `scaleset: job assigned`, `job completed` and `reaped worker pod` log lines and the `scaleset-failures-ci` ledger.
+The jobs came from the [`q1236-detection-probe`](../../.github/workflows/q1236-detection-probe.yml) fixture, runs 45052015868 (attempts 1 and 2) and 45053166409, and the out-of-memory job from run 45052020040 (the Q1317 probe).
+The readings are the AGC's `scaleset: job assigned`, `job completed`, `scale-set job failed` and `reaped worker pod` log lines, the failure line carrying the record's `context`, and the `scaleset-failures-ci` ledger, read last at 18:04:25 UTC.
 `scaleset_jobs_completed_total` itself was not queried: the listener increments it with the same `result` it logs, in the same once-per-job block.
 
 - **M1.** A red step completes `failed` (jobs `82a2530d…`, `abe6cad3…`, `ee99fae0…`).
   A job killed by `timeout-minutes` completes `canceled` (`b31558d4…`, `486169c1…`; the jobs API says `cancelled`), exactly as a user's cancel does (`3762586f…`), so detection records no timed-out job and never counts its later success as flaky ([Q1374](../queue/Q1374.md)).
-  A job whose runner an out-of-memory kill ended completes `failed`, 9 min 48 s after the kill, when the job lock lapses (`ff028f4b…`).
+  A job whose runner an out-of-memory kill ended completes `failed`, 9 min 48 s after the kill, when the job lock lapses (`ff028f4b…`, run 45052020040).
 - **M2.** A re-run of the failed job arrives with a new job UUID (`abe6cad3…`, then `4349fbb7…`) under the same run ID and `jobDisplayName`, and pairs as `trigger=other`, flaky, as designed.
-  GitHub accepts two jobs sharing one `name:`, and they share one failure key: the green twin's success paired with the red twin's failure, emitted a false `FlakyJobDetected` and deleted the red record ([Q1375](../queue/Q1375.md)).
+  GitHub accepts two jobs sharing one `name:`, and they share one failure key: the green twin's success paired with the red twin's failure and emitted a false `FlakyJobDetected` (18:05:32 UTC), and the red twin's re-run at 18:07:02 logged as a fresh failure rather than a pairing, so its record was gone ([Q1375](../queue/Q1375.md)).
 - **M4.** A job that ends on a step's result completes before its pod's terminal transition: the completion is logged in the same second as `job started`, and every such record's `context` reads `podPhase: Running` (three in these runs, and `44325908424/scripts-test` from 2026-11-18); in two of the three no container had terminated yet, and in `ee99fae0…` the runner had just terminated `Completed`, exit 0.
   So `Completed` reads the running pod every time, and the snapshot the terminal transition takes moments later is never taken by any completion; it waits in the 1,024-entry map until evicted ([Q1376](../queue/Q1376.md)).
   The runner exits 0 when its job fails: both red jobs' pods, and the timed-out job's, were reaped `Succeeded`, so a red test on its own never reads as a fault.
-  A kill that ends the runner inverts the order: the out-of-memory worker failed at 17:58:21 UTC, was reaped at 18:03:23, and its completion at 18:08:09 took the terminal snapshot, so that record shows the fault and raised `PlatformFaultOnFailedJob`.
+  A kill that ends the runner inverts the order: run 45052020040's out-of-memory worker failed at 17:58:21 UTC, was reaped at 18:03:23, and its completion at 18:08:09 took the terminal snapshot, so that record shows the fault and raised `PlatformFaultOnFailedJob`.
 - **`JobCompleted` carries `eventName` and `jobWorkflowRef`.** Every record holds `event: push` and the fixture's workflow ref, and the listener reads both from the completion message.
 
 ## Component 1: the failure ledger (Q555, R1 to R8)
