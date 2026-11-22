@@ -139,7 +139,8 @@ var nonBoundaryFiles = map[string]string{
 	"../controller/integration/v2_runnerset_capacity_gate_test.go":           "skips mid-delete worker pods when counting in-flight jobs for the advertised-capacity assertion; no assertion about the mark",
 	"testdata/gmc/internal/controller/integration/v2_teardown_test.go":       "asserts an ActionsGateway CR is mid-deletion; CR finalizers, not worker pods",
 	"testdata/gmc/internal/controller/integration/priorityclass_vap_test.go": "asserts a RunnerSet CR is held deleting by its finalizer; an admission-policy subject",
-	"testdata/gmc/internal/controller/integration/reconcile_counter_test.go": "reconcileCounter skips an EgressProxy CR that is mid-deletion; no worker pods",
+	"testdata/gmc/internal/controller/integration/reconcile_counter_test.go": "reconcileCounter skips a counted CR that is mid-deletion; no worker pods",
+	"testdata/gmc/internal/controller/integration/v2_teardown_scope_test.go": "asserts a neighbouring gateway's children are not mid-deletion; GMC-owned children, not worker pods",
 	"testdata/gmc/test/e2e/tracing_collector_test.go":                        "a go-template skips an AGC pod a rollout is terminating, so its log is not read; no worker pods",
 }
 
