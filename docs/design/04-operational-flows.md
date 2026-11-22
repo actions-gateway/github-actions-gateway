@@ -937,6 +937,14 @@ When the completion arrives after the pod already exists, the stamp does the res
 Such a pod cannot start — the completion reclaimed the JIT-config Secret it mounts — and reading the stamp only in the `Running` arm left it to sit out `pendingPodDeadline`, ten minutes by default, before being reaped as a scheduling stall it never had.
 The `Pending` grace is far shorter than the `Running` one because there is no runner shutdown to wait out; it exists only to let a pod already mid-start reach `Running`, where the five-minute grace takes over.
 
+**A withdrawal reads like a cancellation unless the reaper looks for the re-issue** (Q1361).
+GitHub's withdrawal of an assignment no runner took is the same `JobCompleted` naming no runner, so a worker that cannot start, on a node that accepts pods and cannot run them, is stamped and reaped as `completed_pending` every five minutes while each re-issue's worker sticks the same way.
+At the default ten-minute `pendingPodDeadline` the deadline never fires for any of them, so neither does the abandoned-run recovery it starts (Q766), which is correct here: GitHub still holds the job.
+A deadline under about five and a half minutes, the withdrawal plus the 30-second grace, reaps first under `pending_deadline`, and Q766 then cancels the run, which ends the loop.
+The check also matches a re-run of a cancelled run whose new worker exists when the 30-second grace ends: a re-run keeps the run ID and job name, and the job message carries no run attempt to tell them apart, so that cancellation is named `WorkerReplacedBeforeStart`; the reap is the same either way.
+The reaper therefore checks a `completed_pending` worker that never started for a newer worker of the set with the same `run-id` and `job-name` annotations, which is the re-issue's, and records `WorkerReplacedBeforeStart` naming the stuck worker's node and its replacement in place of `WorkerPodCompletedPending`.
+It does not stop provisioning the re-issue: where the failure is one node's, the next worker can be scheduled to another and run the job, which a halt would strand.
+
 The same arm collects a pod held open past the runner's exit by a container that never terminates — the injected-mesh-sidecar case the [`PossibleReapBlockingSidecar`](../operations/troubleshooting.md#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar) condition warns about — on the ScaleSet tier.
 Classic worker pods are never stamped (their `provision()` goroutine owns them through to a terminal phase), so nothing changes for them.
 

@@ -86,6 +86,17 @@ type job struct {
 	owner string
 	repo  string
 	runID int64
+	// name is the job's display name, the job ID when empty. A re-issue keeps its
+	// predecessor's (ReissueJob).
+	name string
+}
+
+// displayName is the jobDisplayName the job's messages carry.
+func (j *job) displayName() string {
+	if j.name != "" {
+		return j.name
+	}
+	return j.jobID
 }
 
 // The identity the fake stamps on every enqueued job. Exported so a test can assert
@@ -864,6 +875,33 @@ func (s *Stub) completeJobLocked(ss *scaleSet, j *job, result string) {
 	}})
 }
 
+// ReissueJob models GitHub withdrawing a scale-set assignment no runner took and
+// re-issuing the workflow job under a new job ID: the assigned job completes with result
+// and no runner, and a new job carrying its run ID and display name is queued. Measured
+// on dogfood on 2026-11-18, where the withdrawal came five minutes after the assignment
+// (Q1361); the live withdrawal's result was not recorded, so the caller names one. It
+// returns the new job's ID, or "" when jobID is not assigned on that scale set.
+func (s *Stub) ReissueJob(scaleSetID int, jobID, result string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ss := s.scaleSets[scaleSetID]
+	if ss == nil {
+		return ""
+	}
+	for _, j := range ss.jobs {
+		if j.jobID != jobID || j.state != jobAssigned {
+			continue
+		}
+		s.completeJobLocked(ss, j, result)
+		next := s.newQueuedJobLocked()
+		next.owner, next.repo, next.runID, next.name = j.owner, j.repo, j.runID, j.displayName()
+		ss.jobs = append(ss.jobs, next)
+		s.notifyLocked()
+		return next.jobID
+	}
+	return ""
+}
+
 // ExpireQueueToken rotates the active session's queue token without revealing the
 // new value, so the client's cached token 401s on its next poll/acquire — the lever
 // for the queue-token refresh test. RefreshSession (PATCH) hands the client the new
@@ -1640,7 +1678,7 @@ func (s *Stub) claimLocked(ss *scaleSet, ids []int64) map[string]any {
 					OwnerName:       j.owner,
 					RepositoryName:  j.repo,
 					WorkflowRunID:   j.runID,
-					JobDisplayName:  j.jobID,
+					JobDisplayName:  j.displayName(),
 					EventName:       DefaultJobEvent,
 				}})
 				won = append(won, reqID)
@@ -1848,7 +1886,7 @@ func (ss *scaleSet) assignUnderCapacity(capacity int, nextID func() int64) {
 				OwnerName:      j.owner,
 				RepositoryName: j.repo,
 				WorkflowRunID:  j.runID,
-				JobDisplayName: j.jobID,
+				JobDisplayName: j.displayName(),
 				EventName:      DefaultJobEvent,
 			}})
 			assigned++

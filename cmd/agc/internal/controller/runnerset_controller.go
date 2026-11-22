@@ -840,6 +840,20 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 					"worker pod %s was still Pending %s after its job completed and has been deleted; "+
 						"the job ended before the pod could start, so the pod had nothing to run", podName, grace)
 			},
+			emitReplacedBeforeStart: func(pod *corev1.Pod, replacement string) {
+				// Operator-visible: GitHub gave up waiting on this worker and gave its job
+				// to a new one, which on a node or class that cannot run workers sticks the
+				// same way, every five minutes (Q1361).
+				placed := "not scheduled"
+				if pod.Spec.NodeName != "" {
+					placed = "on node " + pod.Spec.NodeName
+				}
+				r.recordEvent(rs, corev1.EventTypeWarning, "WorkerReplacedBeforeStart", "ReapWorkerPods",
+					"worker pod %s never started (%s) before GitHub withdrew its job and "+
+						"re-issued it to worker pod %s, and has been deleted; if the replacement does not "+
+						"start either, the job gets a new worker every five minutes until GitHub gives up on it",
+					pod.Name, placed, replacement)
+			},
 			emitLifetimeExceeded: func(podName string) {
 				// Operator-visible: name the cause and the field to raise, so a
 				// legitimately long job killed by the cap diagnoses itself (Q438).

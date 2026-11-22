@@ -310,6 +310,12 @@ type reapHooks struct {
 	// emitCompletedPending records the Event for a pod reaped while still Pending
 	// because its job had already completed (Q575).
 	emitCompletedPending func(podName string, grace time.Duration)
+	// emitReplacedBeforeStart records the Event for a completed_pending reap of a worker
+	// that never started and whose job GitHub re-issued to replacement, in place of
+	// emitCompletedPending (Q1361). One per withdrawal is what makes a worker that can
+	// never start legible: each re-issue's worker sticks the same way, so the set
+	// registers a runner every five minutes while every Event reads as a cancellation.
+	emitReplacedBeforeStart func(pod *corev1.Pod, replacement string)
 	// deregisterRunner removes the GitHub runner record a scale-set worker registered,
 	// called with the name from provisioner.AnnotationRunnerName just before the pod is
 	// deleted (Q550). Only the scale-set tier wires it, and only a pod carrying the
@@ -578,8 +584,12 @@ func reapWorkerPodsByLabel(
 		if reason == reapReasonLifetimeExceeded && hooks.emitLifetimeExceeded != nil {
 			hooks.emitLifetimeExceeded(pod.Name)
 		}
-		if reason == reapReasonCompletedPending && hooks.emitCompletedPending != nil {
-			hooks.emitCompletedPending(pod.Name, completedJobPendingGrace)
+		if reason == reapReasonCompletedPending {
+			if replacement := provisioner.ReissueReplacement(pod, pods.Items); replacement != "" && hooks.emitReplacedBeforeStart != nil {
+				hooks.emitReplacedBeforeStart(pod, replacement)
+			} else if hooks.emitCompletedPending != nil {
+				hooks.emitCompletedPending(pod.Name, completedJobPendingGrace)
+			}
 		}
 		if reason == reapReasonIdleRunner && hooks.emitIdleRunner != nil {
 			hooks.emitIdleRunner(pod.Name, idleRunnerGrace)
