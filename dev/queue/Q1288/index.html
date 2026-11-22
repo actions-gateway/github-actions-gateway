@@ -2709,7 +2709,10 @@ Clearing the finalizers by hand on that private cluster let the next run pass.
 Measured once during the Q1167 work, 2026-11-04, when five namespaces also read <code>Terminating</code> for 15 hours on another session's kind cluster.</p>
 <p><code>drainTenantNamespaces</code> in <code>cmd/gmc/test/e2e/e2e_suite_test.go</code> already documents this as a local-only case (Q301): its wait is best-effort and bounded, and CI deletes the whole cluster per run.
 So this costs a local rerun rather than a CI failure, and what the failure lacks is a message: it reads as a defect in the spec it happens to stop, not as state left by an earlier run.
-Whether the finalizers came from an earlier spec or an interrupted run is unmeasured.</p>
+The source is <code>E2E_V2_MultiGateway</code> itself, on every run: measured 2026-11-22 during Q1289, two clean, uninterrupted <code>make e2e</code> runs focused on that container, on a freshly created private kind cluster, each left <code>tenant-v2-multigw</code> <code>Terminating</code>.
+Each time both RunnerSets still held <code>actions-gateway.com/agentpool-cleanup</code> (<code>NamespaceFinalizersRemaining=True: ... in 2 resource instances</code>) while <code>kubectl get deploy,pods -n tenant-v2-multigw</code> read <code>No resources found</code>.
+So the container's <code>AfterAll</code> namespace delete removes the AGC Deployments that would clear the finalizer before they clear it, and the suite's drain cannot recover once they are gone.
+The same day, the shared <code>actions-gateway-e2e</code> cluster held <code>tenant-v2-multigw</code> and four other namespaces <code>Terminating</code> at 18 days old.</p>
 
 
 
