@@ -314,7 +314,7 @@ else
 			# `<name> missing` is the invented case. `ambiguous` means the
 			# abbreviation names several objects, which only a real hash can.
 			if [[ "$rest" == *" missing" ]]; then
-				if grep -qxF -- "${dname} ${sha}" "$BASELINE"; then
+				if awk -v d="$dname" -v s="$sha" '$1 == d && $2 == s { found = 1 } END { exit !found }' "$BASELINE"; then
 					cites_baselined=$((cites_baselined + 1))
 					continue
 				fi

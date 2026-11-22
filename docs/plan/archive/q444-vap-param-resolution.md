@@ -113,7 +113,7 @@ A conclusion was drawn from that non-restart earlier in this investigation and h
 
 ## Ruled out
 
-- **Retaining the paramKind-bearing policy across the uninstall.** Shipped as `07061175`, reverted in `70b4b351`.
+- **Retaining the paramKind-bearing policy across the uninstall.** Shipped as `07061175`, reverted in `18654058e` (#918).
   Now explained: `usedParams` is built from bindings, so a policy without one is invisible to it.
 - **CNI.** CI reproduced it on both kindnet and calico lanes.
 - **Object churn rate, cluster ConfigMap count, cluster load.** Arm 1 holds all of these constant against arm 2 and does not break.
@@ -182,7 +182,7 @@ Two candidates were on the table, both entirely in our control:
    It also only defends the Helm path; anything else that deletes the binding still breaks the cluster.
    **Rejected**; the invariant it would have overturned is still enforced.
 
-Note the historical irony: retaining the *policy* was tried and reverted (`07061175` / `70b4b351`), and the binding — the one object that would have worked — is precisely the one we forbid retaining.
+Note the historical irony: retaining the *policy* was tried and reverted (`07061175` / `18654058e`), and the binding — the one object that would have worked — is precisely the one we forbid retaining.
 
 ### What shipped in Q492
 
