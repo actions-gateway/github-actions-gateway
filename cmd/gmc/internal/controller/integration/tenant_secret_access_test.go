@@ -72,7 +72,7 @@ func gmcServiceAccountConfig() *rest.Config {
 // access reconciler as the GMC ServiceAccount, with the production Secret
 // cache bypass and the default 10h resync, so a gateway reacts to a Secret change
 // within a test's window only through the per-namespace Secret watch.
-func startGMCAsServiceAccount(t *testing.T) {
+func startGMCAsServiceAccount(t *testing.T, tweaks ...func(*controller.ActionsGatewayV2Reconciler)) {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	t.Cleanup(mgrCancel)
@@ -102,14 +102,18 @@ func startGMCAsServiceAccount(t *testing.T) {
 		ServiceAccountNamespace: gmcSANamespace,
 		Watches:                 watches,
 	}).SetupWithManager(mgr))
-	require.NoError(t, (&controller.ActionsGatewayV2Reconciler{
+	ag := &controller.ActionsGatewayV2Reconciler{
 		Client:        mgr.GetClient(),
 		Scheme:        mgr.GetScheme(),
 		AGCImage:      "agc:test",
 		Recorder:      mgr.GetEventRecorder("actionsgateway-v2-controller"),
 		Reader:        mgr.GetAPIReader(),
 		SecretWatches: watches,
-	}).SetupWithManager(mgr))
+	}
+	for _, tweak := range tweaks {
+		tweak(ag)
+	}
+	require.NoError(t, ag.SetupWithManager(mgr))
 
 	go func() { _ = mgr.Start(mgrCtx) }()
 }

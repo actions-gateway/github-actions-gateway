@@ -78,6 +78,34 @@ func TestReconcileDeleteV2_ProceedsOnceDrained(t *testing.T) {
 		"a drained gateway must tear down on the first pass, with no added latency")
 }
 
+// TestReconcileDeleteV2_HoldsForAFinishedWorker (Q1362): a worker pod whose job
+// finished is in no job count, yet only the AGC deletes it before completedPodTTL.
+// Zero counts alone must not release the gate while such a pod has no deletion
+// timestamp; once it does, teardown proceeds.
+func TestReconcileDeleteV2_HoldsForAFinishedWorker(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ns := "team-a"
+	ag := deletingV2GatewayFor(10 * time.Second)
+	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: agcNameV2(ag), Namespace: ns}}
+	finished := workerPod("drained-w1", ns, "drained")
+	finished.Status.Phase = corev1.PodSucceeded
+
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(ag, dep, workloadNP(ag), workingRunnerSet("drained", ns, 0, 0), finished).Build()
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme}
+
+	_, err := r.reconcileDelete(context.Background(), ag)
+	require.NoError(t, err)
+	assert.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: agcNameV2(ag)}, &appsv1.Deployment{}),
+		"the AGC is the finished worker's only reaper, so it must survive the wait")
+
+	require.NoError(t, c.Delete(context.Background(), workerPod("drained-w1", ns, "drained")))
+	_, err = r.reconcileDelete(context.Background(), ag)
+	require.NoError(t, err)
+	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: agcNameV2(ag)}, &appsv1.Deployment{}),
+		"with the finished worker deleted, teardown proceeds")
+}
+
 // TestReconcileDeleteV2_WorkerDrainTimesOut: an AGC that is crashed, scaled to zero or
 // never healthy updates no counts, so the gate would hold the gateway forever. Past the
 // deadline teardown proceeds and says what it is leaving behind.
