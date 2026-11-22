@@ -3816,6 +3816,8 @@ Everything less certain is kept as shipping, including a chart file, a file that
 The floor is a floor, and the only costly error is dropping a commit that did change behaviour, so what the narrowing removed is printed under <strong>Comment-only</strong> rather than dropped quietly.
 It still reproduces all four release windows to date as <code>minor</code>.</p>
 <p><strong>The surface it checks against is derived, not listed.</strong> It reads publish.yml's image matrix, follows each image's Dockerfile stage back through its <code>COPY --from=</code> edges to the <code>go build</code> that produced the binary, and expands those with <code>go list -deps</code>; the chart trees come from the same workflow's <code>helm package</code> calls.
+The Dockerfile itself compiles no package, so it counts only for a commit that changes a stage a published image is built from: a new <code>FROM</code> base or digest, or a changed instruction, in that stage or one it copies from or chains from.
+A comment or a stage nothing published reads from does not count (Q1359).
 Add an image or a chart and it is picked up with nothing to maintain.
 The one thing not derivable is a release asset built by a script, the <code>gag-migrate</code> CLI, which is declared instead; <code>make semver-floor-sources-check</code> (part of <code>make check</code>) fails if publish.yml stops matching that declaration.</p>
 <p><strong>It reports; it does not gate.</strong> The floor is monotonic and saturates early.

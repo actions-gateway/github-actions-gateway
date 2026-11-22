@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1359/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1377/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>semver-floor misses a Dockerfile base bump as shipping nothing - GitHub Actions Gateway</title>
+        <title>check-artifact-unchanged misses a Dockerfile base bump - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#semver-floor-misses-a-dockerfile-base-bump-as-shipping-nothing" class="md-skip">
+        <a href="#check-artifact-unchanged-misses-a-dockerfile-base-bump" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              semver-floor misses a Dockerfile base bump as shipping nothing
+              check-artifact-unchanged misses a Dockerfile base bump
             
           </span>
         </div>
@@ -2703,16 +2703,13 @@
   
 
 
-<h1 id="semver-floor-misses-a-dockerfile-base-bump-as-shipping-nothing">semver-floor misses a Dockerfile base bump as shipping nothing<a class="headerlink" href="#semver-floor-misses-a-dockerfile-base-bump-as-shipping-nothing" title="Permanent link">&para;</a></h1>
-<p><strong><code>semver-floor.sh</code> reports a commit that changes a shipped image's base as shipping nothing.</strong> Measured 2026-11-17 over <code>v2.0.0..f156d4c53</code>: it listed <code>e25db67fb</code> (#2344) under <em>Withheld</em>, "whose type would raise the floor, but which ship nothing".
-That commit moved <code>build-runner</code>'s <code>docker:29-cli</code> base from <code>2357639a</code> to <code>34507eb5</code> in the root <code>Dockerfile</code>, which changes the Docker CLI, buildx and compose binaries <code>build-runner</code> and <code>cache-runner</code> ship, and clears CVE-2026-78669 from them.
-The <code>distroless/static</code> bump <code>6c770110c</code> (#2335), which changes the GMC, AGC and proxy bases and touches only the <code>Dockerfile</code>, is also absent from its <em>What sets it</em> list.</p>
-<p>The script's own header says it derives the surface from <code>publish.yml</code>'s image matrix and "the Dockerfile stages behind it", and its summary line counts package directories and chart trees only, so a <code>FROM</code> line is read as no surface at all.
-That the cause is the <code>Dockerfile</code> itself being outside the surface is inferred from the two commits above, not read from the code.</p>
-<p><strong>Why it matters.</strong> Its <em>Withheld</em> section is what a release author reads to decide what the notes and the floor leave out.
-Taken at its word for <code>v2.0.1</code>, it would have dropped the release's one vulnerability fix from the notes.
-Here the floor stays <code>PATCH</code> either way, but a <code>feat</code> that changed only a base would lower a <code>minor</code> floor to <code>patch</code>.</p>
-<p><strong>Done when</strong> a commit changing a <code>FROM</code> line of a stage <code>publish.yml</code> publishes counts as touching the released surface, with a case in <code>release-delta-test.sh</code> or a semver-floor test pinning it.</p>
+<h1 id="check-artifact-unchanged-misses-a-dockerfile-base-bump">check-artifact-unchanged misses a Dockerfile base bump<a class="headerlink" href="#check-artifact-unchanged-misses-a-dockerfile-base-bump" title="Permanent link">&para;</a></h1>
+<p><strong>The freeze check reports "nothing that ships has changed" for a window whose only change is a published image's base.</strong> It filters a path list through <code>semverfloor -ships</code>, and a path list cannot say what changed inside the <code>Dockerfile</code>, so <code>Dockerfile</code> never counts.
+Measured 2026-11-22 on <code>origin/main</code> after Q1359: <code>printf 'Dockerfile\ncmd/gmc/internal/webhook/v2/actionsgateway_webhook.go\n' | .build/semverfloor -ships</code> prints only the webhook path.</p>
+<p><strong>Why it matters.</strong> The check guards the gap between a validated candidate and the stable tag, so a base-image bump merged in that gap would ship in an image the candidate never validated, with the freeze check reading clean.
+Q1359 made <code>semver-floor.sh</code> read the <code>Dockerfile</code> by diff for exactly this case; <code>-ships</code> is the path-only mode and was not part of that change.</p>
+<p><strong>Done when</strong> a window that edits a stage a published image is built from (a <code>FROM</code> base or digest, or an instruction in it) is reported as changing what ships, with a case in <code>check-artifact-unchanged-test.sh</code> for both a base bump and a comment-only <code>Dockerfile</code> edit.
+<code>devtools/release/semverfloor/dockerfile.go</code> has <code>dockerfileChanged(root, sha, images)</code>, which answers it per commit; the check would need to ask it per commit in the window rather than per path.</p>
 
 
 

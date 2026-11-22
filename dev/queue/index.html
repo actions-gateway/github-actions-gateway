@@ -2837,15 +2837,15 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>flake</code> <code>ci</code></td>
 <td>💤</td>
 <td>S</td>
-<td><strong>Event:</strong> a <code>doc-links.yml</code> job is cancelled at its timeout with a checkout step as the last one running, on <code>main</code> or in a merge group …</td>
+<td><strong>Event:</strong> a <code>doc-links.yml</code> run on <code>main</code> or in a merge group carries the <code>checkout stalled</code> warning annotation, or fails with a checkout …</td>
 </tr>
 <tr>
 <td><a href="Q1286/">Q1286</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml">release-links job outruns its 10-minute limit provisioning the docs venv</a></td>
 <td><code>flake</code> <code>ci</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td><strong>Top of queue per <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> On 2026-11-05 the <code>release-links</code> job …</td>
+<td><strong>Event:</strong> a <code>release-links</code> run on <code>main</code> or in a merge group carries the <code>docs venv provisioning stalled</code> warning annotation, or its …</td>
 </tr>
 <tr>
 <td><a href="Q1261/">Q1261</a></td>
@@ -4672,20 +4672,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The credential-gated probe scenarios table in <a href="../development/testing/#the-credential-gated-probe-scenarios">testing.md</a> ends after the …</td>
 </tr>
 <tr>
-<td><a href="Q1359/">Q1359</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/semver-floor.sh">semver-floor misses a Dockerfile base bump as shipping nothing</a></td>
-<td><code>bug</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><strong><code>semver-floor.sh</code> reports a commit that changes a shipped image's base as shipping nothing.</strong> Measured 2026-11-17 over …</td>
-</tr>
-<tr>
 <td><a href="Q1372/">Q1372</a></td>
 <td><a href="../design/05-security/">Make the <code>restricted</code> worker security profile the default</a></td>
 <td><code>security</code> <code>feature</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>**The default worker profile is <code>baseline</code>, so a tenant gets in-container root through <code>sudo</code> and the container runtime's default …</td>
+</tr>
+<tr>
+<td><a href="Q1377/">Q1377</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-artifact-unchanged.sh">check-artifact-unchanged misses a Dockerfile base bump</a></td>
+<td><code>bug</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>The freeze check reports "nothing that ships has changed" for a window whose only change is a published image's base.</strong> It filters a path …</td>
+</tr>
+<tr>
+<td><a href="Q1380/">Q1380</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/release/semverfloor/notes.go">semver-floor --notes omits a shipping build(deps) base bump</a></td>
+<td><code>ci</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>A dependency bump that changes a published image appears in neither list <code>--notes</code> prints.</strong> Measured 2026-11-22 …</td>
 </tr>
 </tbody>
 </table>

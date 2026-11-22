@@ -2704,9 +2704,10 @@
 
 
 <h1 id="full-history-checkout-outlasts-the-5-minute-timeout-on-docs-jobs">Full-history checkout outlasts the 5-minute timeout on docs jobs<a class="headerlink" href="#full-history-checkout-outlasts-the-5-minute-timeout-on-docs-jobs" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> a <code>doc-links.yml</code> job is cancelled at its timeout with a checkout step as the last one running, on <code>main</code> or in a merge group, after the retry below. → top of Queue, escalated.
+<p><strong>Event:</strong> a <code>doc-links.yml</code> run on <code>main</code> or in a merge group carries the <code>checkout stalled</code> warning annotation, or fails with a checkout step as the last one running. → top of Queue, escalated.
 A <code>pages.yml</code> stall does not revive this row until the <code>ci</code> stream gives that file the same retry.</p>
-<p>Every checkout in <code>doc-links.yml</code> is two steps: the first carries a step timeout (6 minutes full history, 2 shallow) and <code>continue-on-error</code>, and a second runs when it did not succeed.
+<p>Every checkout in <code>doc-links.yml</code> is three steps: the first carries a step timeout (6 minutes full history, 2 shallow) and <code>continue-on-error</code>, and an annotation step (<code>::warning title=checkout stalled::</code>) and a retry run when it did not succeed.
+A rescued stall ends the job green, so the annotation is the only record of it.
 Job budgets are 20 minutes for the full-history jobs (<code>release-links</code> 25) and 10 for the rest, so both attempts fit.
 On 2026-11-03, 12 full-history checkouts across <code>doc-links.yml</code> and <code>pages.yml</code> ran past 180 s and 10 of them completed (185 to 319 s), so the full-history budget sits above the completed tail: a 3-minute step would have restarted fetches that finish.
 Only 2 ran to the cancel, and the reruns of the 2026-11-17 stalls took about 20 s.

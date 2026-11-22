@@ -2704,7 +2704,13 @@
 
 
 <h1 id="release-links-job-outruns-its-10-minute-limit-provisioning-the-docs-venv">release-links job outruns its 10-minute limit provisioning the docs venv<a class="headerlink" href="#release-links-job-outruns-its-10-minute-limit-provisioning-the-docs-venv" title="Permanent link">&para;</a></h1>
-<p><strong>Top of queue per <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong></p>
+<p><strong>Event:</strong> a <code>release-links</code> run on <code>main</code> or in a merge group carries the <code>docs venv provisioning stalled</code> warning annotation, or its provision step fails or times out. → top of Queue, escalated.</p>
+<p><code>scripts/docs/docs-preview.sh venv</code> provisions <code>.venv-docs/</code> and stops, and the <code>release-links</code> job runs it as its own step with a 4-minute step timeout and a retry (announced by a <code>::warning::</code> annotation, since a rescued stall ends green) before <code>make release-links-check</code>.
+A slow window then shows in the step list, and <code>ensure_venv</code> prints seconds for the interpreter, the pip upgrade and the pinned install.
+On a quiet local machine on 2026-11-22 the three stages took 3 s, 5 s and 17 s.
+The 6-minute silence between the <code>site/ is not built</code> line and the first <code>provisioning venv</code> line is still unexplained: nothing runs between them but <code>git rev-parse</code>, a <code>python3 -c</code> hash and an <code>[[</code> test, so the next occurrence's step timings are what name it.
+No cache of <code>.venv-docs/</code> is added, because nothing measured says installation rather than the silent stretch is the slow part.
+<code>render-overflow</code> provisions its own <code>.venv-render/</code> and the Chromium download under a 20-minute budget and is not changed; <code>pages.yml</code> <code>build</code> and <code>validate</code> run <code>docs-preview.sh build</code> and are the <code>ci</code> stream's file.</p>
 <p>On 2026-11-05 the <code>release-links</code> job in run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/42047586935">42047586935</a> hit <code>timeout-minutes: 10</code> and was cancelled, so <code>doc-links-gate</code> failed on <code>a gating job concluded 'cancelled'</code>.
 It checked no link, and a rerun with no code change passed in 61 s (15:22:02Z to 15:23:03Z).</p>
 <p>This is not <a href="../Q1280/">Q1280</a>'s stall, which sits in a full-history checkout: here the checkout took 21 s (14:43:49Z to 14:44:10Z).
