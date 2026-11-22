@@ -1,7 +1,7 @@
 # Release gate speed
 
-> **Status:** 🚧 Investigation done 2026-11-18; the third option (Q1365) is implemented, the other six are not.
-> Six rows are open, ranked in the order below: [Q1363](../queue/Q1363.md), [Q1362](../queue/Q1362.md), [Q1364](../queue/Q1364.md), [Q1366](../queue/Q1366.md), [Q1367](../queue/Q1367.md) and [Q1368](../queue/Q1368.md).
+> **Status:** 🚧 Investigation done 2026-11-18; the third and fourth options (Q1365, Q1364) are implemented, the other five are not.
+> Five rows are open, ranked in the order below: [Q1363](../queue/Q1363.md), [Q1362](../queue/Q1362.md), [Q1366](../queue/Q1366.md), [Q1367](../queue/Q1367.md) and [Q1368](../queue/Q1368.md).
 
 The release-candidate gate (`.github/workflows/validate-candidate.yml` running `scripts/dogfood/validate-release.sh`) took 115.5 minutes for `v2.0.1-rc.1` and 133.1 minutes for `v2.0.0-rc.3`, counted from the start of its gate step to its verdict.
 About a fifth of that, 21.7 and 25.3 minutes, is the gate waiting on a worker pod that finished long before.
@@ -110,7 +110,7 @@ The gate runs on `ubuntu-latest` in a public repository, so its minutes are not 
 | 1 | [Q1363](../queue/Q1363.md) | Put the Dragonfly leg on a fresh e2e node explicitly | None: it keeps rank 2 from weakening a reading | Neutral (estimate): that leg cold-starts today too |
 | 2 | [Q1362](../queue/Q1362.md) | Release the gateway delete once the finished worker pod is reaped, not when its node goes | 20–24 min (estimate, from measured holds of 21.7 and 25.3 min) | Falls (estimate): 2 system nodes × 20–24 min ≈ 0.7–0.8 node-h, the same Actions minutes, and the e2e node's 10-min idle before scale-down |
 | 3 | Q1365 (shipped) | Deploy once the image jobs succeed; require the whole publish run only before the CRD smoke | Up to 5.8 min (measured: `chart-publish` took 5m47s and 5m30s), and only when the approval beats the images | Falls by the same Actions minutes; node-hours unchanged |
-| 4 | [Q1364](../queue/Q1364.md) | Bring the e2e node up during deploy instead of on the Kata dispatch | About 3 min (estimate, from rc.1's measured 3m59s dispatch-to-runner) | Falls slightly (estimate): the e2e node starts ~1–2 min early, while 2 system nodes stop ~3 min early |
+| 4 | Q1364 (shipped) | Bring the e2e node up during deploy instead of on the Kata dispatch | About 3 min (estimate, from rc.1's measured 3m59s dispatch-to-runner) | Falls slightly (estimate): the e2e node starts ~1–2 min early, while 2 system nodes stop ~3 min early |
 | 5 | [Q1366](../queue/Q1366.md) | Take the Dragonfly readings concurrently | About 2.5 min (estimate: 3m42s of probes measured in series, the slowest 74s) | Falls by the same minutes and system node time |
 | 6 | [Q1367](../queue/Q1367.md) | Schedule Kata workers only once a node's `kata-qemu` runtime is ready | Up to 37–74s per cold node (measured failure window), so about 1–2 min | Falls slightly |
 | 7 | [Q1368](../queue/Q1368.md) | Scope running the Kata and DinD legs at the same time on dogfood | About 20 min (estimate: the DinD leg's length once rank 2 lands) | Unpriced: peak e2e nodes rise from 1 to 2 inside the quota the gate already reserves, node-hours are expected to fall |
@@ -173,6 +173,10 @@ Deploy and `e2e-start.sh` take about 4 minutes before the dispatch, longer than 
 
 rc.3's Kata wait was 9m56s, but its worker pod's first event came 5 minutes after the job was created.
 What happened in those 5 minutes was not read; the cold path after them took the same shape as rc.1's.
+
+Shipped as `prewarm_e2e_node` in `validate-release.sh`: an asynchronous resize of the e2e pool to one node, issued after `reserve_cpu_budget` and before `start.sh`, and only when the Kata leg is selected.
+That placement is after `setup.sh`, so the head start is `start.sh` plus `e2e-start.sh` rather than the whole deploy, and the roughly 3 minute saving above is an upper bound that the next gate's Kata dispatch-to-runner time will measure.
+A refused resize is a warning, not a failure; whether GKE accepts `resize` on the autoscaled `e2e` pool was not exercised, because there is no live cluster in this change.
 
 The risk is to the CPU budget.
 `reserve_cpu_budget` (Q631) reserves the e2e pool's ceiling after setup, and a node raised before it draws on the same project quota.
