@@ -3229,7 +3229,8 @@ That is also why <code>pages.yml</code> pins <code>overrides/</code> to the curr
 <p>The one hand-written part is the optional per-release <strong>highlight</strong> prose, and it is guarded by a <code>highlight_for</code> version in the same template.
 The highlight renders only while <code>highlight_for</code> names the resolved release, so forgetting to refresh it degrades the bar to a release-notes link instead of pairing a new version with the previous release's headline.
 Refreshing it is an optional pre-flight step in <a href="../../operations/release/#1-pre-flight">release.md</a>.</p>
-<p>Why this is derived at all: a stable tag deploys that tag's docs wholesale, so a banner that is wrong at tag time is published permanently under that version and no later fix to <code>main</code> reaches it.
+<p>Why this is derived at all: a stable tag's <code>docs/</code> are published as they stood at the tag, so a page that is wrong at tag time stays wrong under that version and no later fix to <code>main</code> reaches it.
+The banner's version is derived so it cannot be one of them.
 Every stable tag missed the manual bump: <code>v1.0.0</code> shipped saying <em>"Alpha, pre-1.0"</em>, and <code>v1.1.0</code> and <code>v1.2.0</code> both said <em>"v1.0.0 is here"</em> (Q393).
 <code>publish.yml</code>'s <code>announce-bar</code> gate now builds the site at the tag and asserts the <strong>rendered</strong> bar names it, so a broken hook or template fails the release before any image is pushed.</p>
 <p>Both workflows check out with <code>fetch-depth: 0</code> for this reason: a default depth-1 checkout fetches no tags, and the bar would render the version-free fallback.
@@ -3345,10 +3346,11 @@ Each version is a full built copy under its own path on the <code>gh-pages</code
 <p><strong>What deploys when</strong> (<code>.github/workflows/pages.yml</code>):</p>
 <ul>
 <li><strong>push to <code>main</code></strong> → <code>mike deploy dev</code> (refreshes the unreleased <code>dev</code> docs).</li>
-<li><strong>stable <code>v*</code> tag push</strong> → re-runs <code>pages.yml</code> as a <code>workflow_dispatch</code> on the same tag (the <code>handoff</code> job), which deploys that release's docs, and <strong>only if it is the highest released version</strong> also moves the <code>stable</code> alias + the default root redirect to it (<code>mike set-default stable</code>).
+<li><strong>stable <code>v*</code> tag push</strong> → re-runs <code>pages.yml</code> as a <code>workflow_dispatch</code> on <strong><code>main</code></strong> with <code>docs_ref</code> set to the tag (the <code>handoff</code> job), which deploys that release's docs, and <strong>only if it is the highest released version</strong> also moves the <code>stable</code> alias + the default root redirect to it (<code>mike set-default stable</code>).
   This is the same tag push that runs <code>publish.yml</code>.
-  The push hands off rather than deploying because no deploy made by a tag push has been seen to serve (Q1041): <code>v1.6.0</code> to <code>v1.10.0</code> each reported success and kept the previous tree live, while every dispatch of the same content served, on <code>main</code> and on the <code>v1.10.0</code> tag ref alike.
-  Why the push differs is not known.</li>
+  The <code>handoff</code> job computes the version, alias and default with <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/pages/tag-deploy-inputs.sh"><code>tag-deploy-inputs.sh</code></a>, because a dispatch with an explicit version applies its alias verbatim.
+  It dispatches on <code>main</code> rather than the tag because the stable tag's own run failed the live check at <code>v1.9.0</code>, <code>v1.10.0</code>, <code>v2.0.0</code> and <code>v2.0.1</code>, as a tag push for the first two and a dispatch on the tag ref for the last two, and a <code>main</code> dispatch of the same commit passed it each time (Q1355).
+  That is five runs with no controlled test, and why Pages serves the previous tree is not known; the first stable tag cut after this change is the test.</li>
 <li><strong>prerelease tag</strong> (<code>0.x</code>, <code>-rc</code>/<code>-alpha</code>/<code>-beta</code>) → <strong>no deploy</strong> (the same prerelease test <code>publish.yml</code> uses, Q293).</li>
 <li><strong><code>workflow_dispatch</code></strong> → deploys the <code>version</code>/<code>alias</code> inputs verbatim (or derives from the ref when blank) — used for <strong>seeding</strong> already-released versions and manual redeploys.
   The <code>docs_ref</code> input picks which ref the docs <em>content</em> is built from, independently of the ref the workflow logic runs from (see § Seeding below).</li>
@@ -3470,8 +3472,8 @@ Four things are deliberately <strong>not</strong> taken from the tag:</p>
 </tr>
 </tbody>
 </table>
-<p><strong>That safety net covers seeds only.</strong> A stable tag's deploy has a blank <code>docs_ref</code> and builds the tag wholesale, <code>overrides/</code> included.
-That is safe for the announce bar's <em>version</em>, which the hook derives from the tag list at build time rather than from a string in the checkout; only the optional highlight prose is pinned to the tag.
+<p><strong>A stable tag's deploy takes the same path, since Q1355.</strong> The <code>handoff</code> job dispatches on <code>main</code> with <code>docs_ref</code> set to the tag, so <code>docs/</code> and <code>mkdocs.yml</code> come from the tag while <code>overrides/</code>, <code>requirements-docs.txt</code>, <code>site_url</code>, <code>docs/CNAME</code>, the <code>hooks:</code> list and <code>extra.version</code> come from <code>main</code>.
+That is safe for the announce bar's <em>version</em>, which the hook derives from the tag list at build time rather than from a string in the checkout; the optional highlight prose is whatever <code>main</code> carries when the deploy runs, not what the tag carried.
 Refreshing it is an optional pre-flight step in <a href="../../operations/release/#1-pre-flight">release.md</a>.</p>
 <p>The <code>mkdocs.yml</code> overrides ride in an <a href="https://www.mkdocs.org/user-guide/configuration/#inheritance"><code>INHERIT</code></a> overlay (<code>mkdocs.versioned.yml</code>) rather than a YAML rewrite, so the tag's own nav and config stay byte-for-byte intact: MkDocs deep-merges the inherited mapping, and scalars such as <code>site_url</code> are replaced.</p>
 <p>A subsequent <code>main</code> push adds the <code>dev</code> entry.

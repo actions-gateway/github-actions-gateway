@@ -2746,6 +2746,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#recurrence-every-stable-tag-since" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recurrence: every stable tag since
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2826,6 +2837,58 @@ Neither replaces <code>verify-published-docs</code>, which reads the version pin
 The gap was that it was the <em>last</em> line of defence rather than a gate, so the failure was caught by a human remembering to look, at whatever point they looked.
 That is what <code>verify-pages-live.sh</code> closes: the same question, asked by the run that caused it, within five minutes rather than whenever someone thinks to check.
 <code>verify-published-docs</code> keeps its own job, which is the pins, and stays a hand step because a tag cannot pass it.</p>
+<h2 id="recurrence-every-stable-tag-since">Recurrence: every stable tag since<a class="headerlink" href="#recurrence-every-stable-tag-since" title="Permanent link">&para;</a></h2>
+<p><code>verify-pages-live.sh</code> has failed at every stable tag after <code>v1.6.0</code>, so the incident was not a one-off.
+Measured 2026-11-22 from each run's live-check step (<code>gh run list --workflow pages</code>, <code>gh run view &lt;id&gt; --log-failed</code>) and the Pages deployments API (<code>gh api repos/actions-gateway/github-actions-gateway/deployments?environment=github-pages</code>, then each deployment's <code>/statuses</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Run</th>
+<th>Ref</th>
+<th>Commit already deployed on <code>main</code></th>
+<th>Live check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>v1.9.0</code>, 2026-10-06</td>
+<td>tag push</td>
+<td>yes, 2 min earlier</td>
+<td>failed; a <code>main</code> dispatch of the same commit passed</td>
+</tr>
+<tr>
+<td><code>v1.10.0</code>, 2026-10-27</td>
+<td>tag push</td>
+<td>yes, 34 min earlier</td>
+<td>failed; a <code>main</code> dispatch of the same commit passed</td>
+</tr>
+<tr>
+<td><code>v1.10.0</code>, 2026-11-02</td>
+<td>dispatch on the tag</td>
+<td>no, the site had moved on</td>
+<td>passed</td>
+</tr>
+<tr>
+<td><code>v2.0.0</code>, 2026-11-17</td>
+<td>dispatch on the tag</td>
+<td>yes, 6 min earlier</td>
+<td>failed; a <code>main</code> dispatch of the same commit passed</td>
+</tr>
+<tr>
+<td><code>v2.0.1</code>, 2026-11-18</td>
+<td>dispatch on the tag</td>
+<td>yes, 13 min earlier</td>
+<td>failed; a <code>main</code> dispatch of the same commit passed</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>github-pages</code> deployment statuses do not separate these: they record the publish job's outcome, not whether Pages activated the deployment, so a failed live check shows as a deployment <code>failure</code> and the <code>v1.10.0</code> release candidates' tag-ref deployments show <code>success</code> in about 30 seconds.
+The <code>main</code> push deployments in the same window are no evidence either, since they skip the live check.
+What separates the runs is the run's own live check, and the four <code>main</code> dispatches that repaired a release passed it.
+The <code>v2.0.0</code> and <code>v2.0.1</code> runs were dispatches on the tag ref, so the earlier fix (Q1041, dispatch instead of push) did not change the outcome.
+That is five runs and no controlled test, and why Pages serves the previous tree is not known.
+The <code>handoff</code> job now dispatches on <code>main</code> with <code>docs_ref</code> set to the tag (Q1355).
+The first stable tag cut after that change is the test, and this section should be amended with its result.</p>
 
 
 
