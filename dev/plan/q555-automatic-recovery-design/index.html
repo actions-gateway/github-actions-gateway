@@ -3112,7 +3112,7 @@ A per-set failure ledger joins each failed job's platform context to its later a
 Retry classes then fire off that context through the re-run path the disruption arms already use, after one run read that both checks futility and enforces a budget that survives a restart.</p>
 <h2 id="measure-before-building">Measure before building<a class="headerlink" href="#measure-before-building" title="Permanent link">&para;</a></h2>
 <p>Each of these decides a component's shape.
-M1, M2 and M4 were measured on dogfood on 2026-11-22 (<a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>); the rest have not been observed:</p>
+M1 to M4 were measured on dogfood on 2026-11-22 (<a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>); the rest have not been observed:</p>
 <table>
 <thead>
 <tr>
@@ -3139,7 +3139,7 @@ M1, M2 and M4 were measured on dogfood on 2026-11-22 (<a href="#readings-from-th
 <td>M3</td>
 <td>Whether a container killed at its memory limit takes the runner with it (the pod fails, and GitHub concludes the job only when the job lock lapses, about 10 minutes later) or only a step's process (the runner survives and reports a failed step)</td>
 <td>Whether the out-of-memory class fires from the pod watch, like the disruption arms, or from <code>JobCompleted</code></td>
-<td>A dogfood job that allocates past its limit under <code>Binpack</code></td>
+<td>Measured under <code>Throughput</code>: <a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a></td>
 </tr>
 <tr>
 <td>M4</td>
@@ -3161,11 +3161,11 @@ M1, M2 and M4 were measured on dogfood on 2026-11-22 (<a href="#readings-from-th
 </tr>
 </tbody>
 </table>
-<p>M3 rests on recall that kubelets on cgroup v2 kill a container's whole process group on an out-of-memory event.
+<p>M3 rested on recall that kubelets on cgroup v2 kill a container's whole process group on an out-of-memory event; the reading below confirms it on dogfood's nodes.
 The breaker thresholds, the 7-day ledger expiry and the deferred path's 24-hour expiry are proposals, not measurements; R14's metrics are what will move them.</p>
 <h3 id="readings-from-the-dogfood-turn-up-2026-11-22">Readings from the dogfood turn-up, 2026-11-22<a class="headerlink" href="#readings-from-the-dogfood-turn-up-2026-11-22" title="Permanent link">&para;</a></h3>
 <p>Taken on the <code>ci</code> set in <code>gag-dogfood</code>, whose AGC ran <code>v2.0.1-rc.2</code>; its detection and retry code is unchanged on <code>main</code> at <code>f414275fa</code>.
-The jobs came from the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q1236-detection-probe.yml"><code>q1236-detection-probe</code></a> fixture, runs 45052015868 (attempts 1 and 2) and 45053166409, and the out-of-memory job from run 45052020040 (the Q1317 probe).
+The jobs came from the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q1236-detection-probe.yml"><code>q1236-detection-probe</code></a> fixture, runs 45052015868 (attempts 1 and 2) and 45053166409, and for M3 the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q1317-oom-probe.yml"><code>q1317-oom-probe</code></a> fixture, run 45052020040 (attempts 1 and 2).
 The readings are the AGC's <code>scaleset: job assigned</code>, <code>job completed</code>, <code>scale-set job failed</code> and <code>reaped worker pod</code> log lines, the failure line carrying the record's <code>context</code>, and the <code>scaleset-failures-ci</code> ledger, read last at 18:04:25 UTC.
 <code>scaleset_jobs_completed_total</code> itself was not queried: the listener increments it with the same <code>result</code> it logs, in the same once-per-job block.</p>
 <ul>
@@ -3178,6 +3178,11 @@ The readings are the AGC's <code>scaleset: job assigned</code>, <code>job comple
   So <code>Completed</code> reads the running pod every time, and the snapshot the terminal transition takes moments later is never taken by any completion; it waits in the 1,024-entry map until evicted (<a href="../../queue/Q1376/">Q1376</a>).
   The runner exits 0 when its job fails: both red jobs' pods, and the timed-out job's, were reaped <code>Succeeded</code>, so a red test on its own never reads as a fault.
   A kill that ends the runner inverts the order: run 45052020040's out-of-memory worker failed at 17:58:21 UTC, was reaped at 18:03:23, and its completion at 18:08:09 took the terminal snapshot, so that record shows the fault and raised <code>PlatformFaultOnFailedJob</code>.</li>
+<li><strong>M3.</strong> The worker's cgroup is v2 (<code>cgroup2fs</code>) and its <code>memory.oom.group</code> reads 1, both read from inside the job; the kubelet's <code>singleProcessOOMKill</code> is unset on the system pool's node (<code>configz</code>, kubelet <code>v1.35.8-gke.1796000</code>), and the worker pool's kubelet was not read.
+  A step allocating 9216Mi past the runner's 8268Mi limit took the whole container: the pod reached <code>Failed</code> with the runner <code>OOMKilled</code>, exit 137, at 17:58:21 UTC, and GitHub concluded the job <code>failure</code> at 18:08:09 with "The self-hosted runner lost communication with the server" and no step log.
+  So the class fires from the pod watch, as built: 2 s after the kill it recorded the floor 8268Mi to 12416Mi, emitted <code>MemoryLimitRaisedForRetry</code> and parked the re-run, which it released at 18:09:28, 79 s after the run concluded.
+  The re-run's pod carried a runner limit of 12416Mi, its request unchanged at 5568Mi since <code>Throughput</code> raises only the limit, and <code>actions-gateway.com/rerun-cause: oom</code>; its step read <code>memory.max</code> as 13019119616 bytes (12416Mi), survived the same allocation, and paired as <code>trigger=gag</code>, <code>cause=oom</code>, not flaky.
+  <code>Binpack</code>, which raises the request with the limit, was not measured: the live set runs <code>Throughput</code> (<a href="../../queue/Q1382/">Q1382</a>).</li>
 <li><strong><code>JobCompleted</code> carries <code>eventName</code> and <code>jobWorkflowRef</code>.</strong> Every record holds <code>event: push</code> and the fixture's workflow ref, and the listener reads both from the completion message.</li>
 </ul>
 <h2 id="component-1-the-failure-ledger-q555-r1-to-r8">Component 1: the failure ledger (Q555, R1 to R8)<a class="headerlink" href="#component-1-the-failure-ledger-q555-r1-to-r8" title="Permanent link">&para;</a></h2>
@@ -3486,6 +3491,7 @@ The <code>EvictionRerunWithheld</code> Event names the reason and the fix.</p>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">}</span>
 </code></pre></div>
 <p>It runs where M3 says the evidence is first complete: on the worker's terminal transition, beside the disruption arms, if the class's failure kills the runner; on <code>Completed</code> if the runner survives to report.
+An out-of-memory kill takes the runner with it (M3, <a href="#readings-from-the-dogfood-turn-up-2026-11-22">measured</a>), so the first class fires from the terminal transition, as built.
 Either way it reads the same snapshot detection records, which is why Q1183 waits on Q555.</p>
 <h3 id="how-it-waits">How it waits<a class="headerlink" href="#how-it-waits" title="Permanent link">&para;</a></h3>
 <p>Classes go through one deferred path, built beside the abandoned arm's (Q691, <code>abandoned_rerun.go</code>) but persistent:</p>
@@ -3809,7 +3815,7 @@ Job-granular avoids that, and costs:</p>
 </ul>
 <h2 id="order-of-work">Order of work<a class="headerlink" href="#order-of-work" title="Permanent link">&para;</a></h2>
 <ol>
-<li>The dogfood turn-up settles M1, M2 and M4; M3 waits for the out-of-memory reproduction, and M6 needs its own test workflow.</li>
+<li>The dogfood turn-up of 2026-11-22 settled M1 to M4 (<a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>); M6 needs its own test workflow.</li>
 <li>Q1182 (built) created the ledger store, with its version rules, <code>reruns</code> map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as <code>selfCancelledAttempt</code>.</li>
 <li>Q1181 (built): <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the widened run read, honouring <code>selfCancelledAttempt</code>, between the run read and the reservation in <code>handleScaleSetEviction</code>; <code>already_rerun</code>, <code>run_succeeded</code> and <code>worker_unstartable</code> are not built, and the classic tier takes none.</li>
 <li>Q555 (built) added the <code>failures</code> map, the snapshot, the pairing and the metrics on that store.

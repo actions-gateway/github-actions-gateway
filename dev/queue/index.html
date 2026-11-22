@@ -2872,14 +2872,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The self-hosted e2e image still runs <code>actions/runner</code> 2.338.1, so a release candidate's e2e jobs on <code>gag-ci-e2e</code> should stop being queued …</td>
 </tr>
 <tr>
-<td><a href="Q1363/">Q1363</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Start the Dragonfly gate leg on a fresh e2e node, not a warm one</a></td>
-<td><code>dogfood</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>**The Dragonfly leg's <code>node-p2p</code> reading needs the worker image pulled through the node client, and today it gets a fresh node only because …</td>
-</tr>
-<tr>
 <td><a href="Q1362/">Q1362</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">Gateway teardown waits on a finished worker pod until its node is gone</a></td>
 <td><code>bug</code> <code>dogfood</code></td>
@@ -3136,12 +3128,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>A reader cannot paste the install command as written.</strong> The five pages <code>release-pins-check</code> reads carry 40 <code>sha256:&lt;component&gt;</code> …</td>
 </tr>
 <tr>
-<td><a href="Q1323/">Q1323</a></td>
-<td><a href="../plan/security-audit-2026-11/#confirmed-low-findings">Five low-severity confirmed findings from the November security audit</a></td>
+<td><a href="Q1378/">Q1378</a></td>
+<td><a href="../plan/security-audit-2026-11/#a-direct-egress-gateways-workload-networkpolicy-permits-direct-github-egress-for-proxied-workers-in-the-same-namespace-while-their-status-reports-proxied-and-attributed">Direct-egress gateway's workload policy opens GitHub to proxied workers</a></td>
 <td><code>security</code> <code>bug</code></td>
 <td>🔲</td>
 <td>M</td>
-<td><strong>Five boundary slips confirmed from source on 2026-11-09, each narrow and none needing a major to fix.</strong> Nothing was run, so each result …</td>
+<td>**In a namespace holding a direct-egress gateway and a proxied one, the proxied gateway's workers can reach GitHub directly, while their …</td>
+</tr>
+<tr>
+<td><a href="Q1379/">Q1379</a></td>
+<td><a href="../plan/security-audit-2026-11/#a-tenant-can-pre-claim-scale-set-names-in-a-github-org-it-holds-no-credentials-for-and-another-tenants-runnerset-or-gateway-is-then-rejected-at-admission">A tenant can pre-claim scale-set names in a GitHub org it cannot reach</a></td>
+<td><code>security</code> <code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>**A tenant can bind a gateway to a GitHub org it holds no credentials for and claim scale-set names there, and another tenant who does hold …</td>
+</tr>
+<tr>
+<td><a href="Q1384/">Q1384</a></td>
+<td><a href="../plan/security-audit-2026-11/#share-and-attribution-projection-names-collide-for-ns-a-b-proxy-c-and-ns-a-proxy-b-c">Derive share and attribution projection names injectively</a></td>
+<td><code>security</code> <code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>**Two pools whose namespace and name join to one string, (<code>a-b</code>, <code>c</code>) and (<code>a</code>, <code>b-c</code>), still derive one projection name, so the second …</td>
 </tr>
 <tr>
 <td><a href="Q1344/">Q1344</a></td>
@@ -3150,14 +3158,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>When a set's first label is renamed, or a <code>RunnerSet</code> is deleted, the old scale set stays registered at GitHub, and the next tenant …</td>
-</tr>
-<tr>
-<td><a href="Q1361/">Q1361</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go">An unplaceable scale-set worker is re-created every five minutes</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>**A job whose only worker can never start gets a fresh worker every five minutes until GitHub gives up on the job, and each one registers a …</td>
 </tr>
 <tr>
 <td><a href="Q822/">Q822</a></td>
@@ -3264,12 +3264,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>A job killed by its <code>timeout-minutes</code> completes <code>canceled</code> on the scale-set message queue, the same spelling as a user's cancel, and …</td>
 </tr>
 <tr>
-<td><a href="Q1317/">Q1317</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#measure-before-building">Reproduce the out-of-memory retry class on dogfood (M3, R12)</a></td>
+<td><a href="Q1382/">Q1382</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#the-first-class-out-of-memory-under-right-sizing">Reproduce the out-of-memory retry class on a Binpack set (R12)</a></td>
 <td><code>dogfood</code> <code>tests</code> <code>2.1-gate</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Q1183 shipped the out-of-memory retry class from source, without the dogfood reproduction R12 asks of every class, so the shape it …</td>
+<td>Q1317 asked for the out-of-memory class's reproduction on a <code>Binpack</code> set and took it on dogfood's <code>ci</code> set, which runs <code>Throughput</code>, so …</td>
 </tr>
 <tr>
 <td><a href="Q1320/">Q1320</a></td>

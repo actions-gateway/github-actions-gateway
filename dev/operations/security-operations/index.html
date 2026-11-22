@@ -5411,6 +5411,11 @@ The same limit reaches the <a href="#per-connection-egress-audit">per-connection
 <p><strong>Only the public certificate crosses the boundary.</strong> The GMC copies the proxy's certificate into each granted namespace as a ConfigMap named <code>proxy-share-&lt;provider-namespace&gt;-&lt;proxy-name&gt;</code>.
 The private key stays in the provider namespace.
 That ConfigMap is GMC-owned: do not edit or delete it, and do not create one by hand expecting it to grant access, since the GMC reconciles it back.</p>
+<p><strong>Two pools can derive one name.</strong> The name joins the namespace and the proxy name with <code>-</code>, so <code>team-a-b</code>/<code>c</code> and <code>team-a</code>/<code>b-c</code> both project <code>proxy-share-team-a-b-c</code>, and a consumer granted by both can hold only one of them.
+The pool that wrote it first keeps it; the other skips that consumer and records a <code>ProjectionNameCollision</code> Warning Event on its <code>EgressProxy</code>, and the consumer's reference to it fails closed with <code>ProxyShareNotGranted</code>: a <code>RunnerSet</code>'s message names the pool that holds the name, and a gateway's <code>defaultProxyRef</code> keeps reporting that the certificate "has not yet been projected here".
+Each controller that reads a projection checks the <code>proxy-namespace</code> and <code>proxy-name</code> keys inside it, so neither consumer is ever wired to the wrong pool.
+The GMC defers only to a pool that could have written the projection, one that derives the same name and grants this namespace; it restores a projection whose labels a tenant changed to name any other pool, so the labels neither stop the restore nor reveal which pools exist elsewhere.
+Rename one of the two proxies to clear it.</p>
 <h3 id="verifying-a-grant-took-effect">Verifying a grant took effect<a class="headerlink" href="#verifying-a-grant-took-effect" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>-l<span class="w"> </span>actions-gateway/proxy-share<span class="o">=</span><span class="nb">true</span>
 </code></pre></div>
@@ -5418,9 +5423,11 @@ That ConfigMap is GMC-owned: do not edit or delete it, and do not create one by 
 If it is missing, the grant has not been accepted; check the consumer's condition:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>gateway<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions}'</span>
 </code></pre></div>
-<p><code>Degraded</code> with reason <code>ProxyShareNotGranted</code> means the proxy exists but does not list this namespace.
-Reason <code>ProxyNotFound</code> means the name or namespace is wrong.
-Both fail closed: no worker pods run and no traffic is permitted while either is set.</p>
+<p><code>Degraded</code> with reason <code>ProxyShareNotGranted</code> means either the name or namespace is wrong or the proxy does not list this namespace.
+The consumer cannot tell which, by design: a tenant can name any namespace, and a different answer for a missing proxy would tell it which names exist there.
+Ask the provider, or read the GMC log, which records <code>cross-namespace defaultProxyRef not granted</code> with <code>proxyMissing</code> set for a proxy that does not exist.
+<code>ProxyNotFound</code> is reported only for a proxy in the gateway's own namespace.
+Either reason fails closed: no worker pods run and no traffic is permitted while it is set.</p>
 <p>A gateway's AGC mounts the proxy certificate from that ConfigMap, so the GMC creates the AGC only once the ConfigMap exists.
 For the few seconds after you create a gateway naming a granted proxy, it reports <code>ProxyShareNotGranted</code> with a message saying the certificate "has not yet been projected here", and it re-checks every 10 seconds.
 That message persisting means the ConfigMap is not being written: check the provider's <code>EgressProxy</code> status and the GMC logs.</p>

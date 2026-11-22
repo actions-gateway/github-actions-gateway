@@ -2747,7 +2747,7 @@
 <h1 id="release-21-milestone-definition">Release 2.1 Milestone Definition<a class="headerlink" href="#release-21-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status: scoped 2026-11-09, nothing landed.</strong> The maintainer made flaky-job detection and automatic retry for more platform failures the <code>v2.1.0</code> headline on 2026-11-09.
-Q1236's dogfood readings are taken (2026-11-22); nine rows still gate the tag and nothing rides yet.
+Q1236's and Q1317's dogfood readings are taken (2026-11-22); nine rows still gate the tag and nothing rides yet.
 Three of them are the readings' refutations, Q1374 to Q1376, gated on 2026-11-22 because each breaks a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the <code>trigger="other"</code> rate this release measures success by, biased in opposite directions.
 Nothing here is a commitment to a date.</p>
 </blockquote>
@@ -2796,8 +2796,14 @@ This release finishes it: it measures what the shipped half rests on, then adds 
 <td>🔲 open</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1317/">Q1317</a></td>
+<td>Q1317</td>
 <td>Reproduce the out-of-memory retry class on dogfood (M3, R12)</td>
+<td><code>2.1-gate</code></td>
+<td>✅ reproduced 2026-11-22 under <code>Throughput</code>: the kill takes the runner, and the class fires and re-runs as built; <code>Binpack</code> is Q1382</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1382/">Q1382</a></td>
+<td>Reproduce the out-of-memory retry class on a <code>Binpack</code> set (R12)</td>
 <td><code>2.1-gate</code></td>
 <td>🔲 open</td>
 </tr>

@@ -2721,7 +2721,7 @@ Reproduce on kind first: delete a gateway within 5 minutes of a job ending and r
 <li>or let the Q1328 hold skip pods in <code>Succeeded</code> or <code>Failed</code>, which run no container and so need no egress restriction.</li>
 </ul>
 <p><strong>Done when</strong> deleting a gateway seconds after its last job finishes completes without waiting for the pod's node, with envtest cases for a finished pod, a running pod (still held), and the no-AGC 90-second deadline; and <code>docs/design/04-operational-flows.md</code> and <code>docs/operations/troubleshooting.md</code> describe the new hold.
-Land <a href="../Q1363/">Q1363</a> first: once swaps are fast, the Dragonfly gate leg would otherwise start on a warm node.
+The Dragonfly gate leg empties the e2e pool before its dispatch (Q1363), so a fast swap leaves it a warm node only when that empty fails, which the gate logs as <code>e2e-pool-empty: warning:</code>.
 Saving on the gate: 20–24 minutes per run (estimate, from the measured holds), with the system pool's two nodes and the gate's Actions minutes falling by the same.
 Context: <a href="../../plan/release-gate-speed/#why-the-swap-waits">release-gate-speed.md</a>.</p>
 

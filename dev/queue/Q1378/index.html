@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1361/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1378/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>An unplaceable scale-set worker is re-created every five minutes - GitHub Actions Gateway</title>
+        <title>Direct-egress gateway's workload policy opens GitHub to proxied workers - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#an-unplaceable-scale-set-worker-is-re-created-every-five-minutes" class="md-skip">
+        <a href="#direct-egress-gateways-workload-policy-opens-github-to-proxied-workers" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              An unplaceable scale-set worker is re-created every five minutes
+              Direct-egress gateway's workload policy opens GitHub to proxied workers
             
           </span>
         </div>
@@ -2703,17 +2703,21 @@
   
 
 
-<h1 id="an-unplaceable-scale-set-worker-is-re-created-every-five-minutes">An unplaceable scale-set worker is re-created every five minutes<a class="headerlink" href="#an-unplaceable-scale-set-worker-is-re-created-every-five-minutes" title="Permanent link">&para;</a></h1>
-<p><strong>A job whose only worker can never start gets a fresh worker every five minutes until GitHub gives up on the job, and each one registers a runner.</strong> The mechanism is derived from the code and one measured GitHub behaviour, and has not been reproduced.</p>
-<p>GitHub withdraws a scale-set assignment no runner takes within five minutes, with a <code>JobCompleted</code> naming no runner, and re-issues the job under a new job ID.
-Measured once, on dogfood on 2026-11-18, from the cluster's audit log; whether GitHub documents the window was not checked.
-The withdrawal stamps the stuck worker <code>job-completed-at</code>, so the reaper deletes it 30 seconds later under <code>completed_pending</code>, and the re-issue gets a new worker that sticks on the same capacity.
-A Pending worker's own <code>pendingPodDeadline</code> (10 minutes by default) never fires, because the withdrawal always comes first, so the abandoned-run recovery that deadline starts (Q766) never runs either.</p>
-<p>The shape to expect is a node that accepts pods and cannot run them, such as a broken on-premises node with no autoscaler to replace it, or a runtime class the pool lacks.
-The opt-in capacity gate (<code>spec.capacityGate</code>, off by default) declines intake on scheduling signals, and a pod bound to a broken node may never produce one.</p>
-<p>This is separate from the idle-runner reap (<code>reason="idle_runner"</code>), which collects a <code>Running</code> worker whose runner started nothing.
-Here no worker reaches <code>Running</code>, every one has a deadline, and the loop is the cost.</p>
-<p><strong>Done when</strong> the loop is reproduced against <code>test/fakegithub</code> or a kind cluster with an unplaceable worker, and the AGC either stops re-provisioning a job whose earlier workers never started or surfaces it on the <code>RunnerSet</code>, with a test that goes red with the mechanism deleted.</p>
+<h1 id="direct-egress-gateways-workload-policy-opens-github-to-proxied-workers">Direct-egress gateway's workload policy opens GitHub to proxied workers<a class="headerlink" href="#direct-egress-gateways-workload-policy-opens-github-to-proxied-workers" title="Permanent link">&para;</a></h1>
+<p><strong>In a namespace holding a direct-egress gateway and a proxied one, the proxied gateway's workers can reach GitHub directly, while their status reports <code>Proxied</code> and attributed.</strong> Confirmed from source by the November security audit (2026-11-09), low severity; one of the five findings Q1323 carried, filed on its own because its fix is a design choice the other four did not need.</p>
+<p>The GMC builds one workload NetworkPolicy per gateway, and each one selects the namespace-wide <code>component=workload</code> label (<code>cmd/gmc/internal/controller/actionsgateway_v2_builder.go:92:// workloadNPNameV2 is the per-gateway workload NetworkPolicy name. Its selector</code>).
+A direct gateway's policy adds the GitHub CIDR egress rule, and NetworkPolicy is additive, so that rule reaches every workload pod in the namespace, the proxied gateway's included.
+<code>setEgressMode</code> and the gateway's <code>updateStatus</code> each read only their own object's proxy reference, so nothing reports it.
+Whether a given CNI then passes the packet was not observed.</p>
+<p>The audit gives two directions, and choosing between them is the design question:</p>
+<ul>
+<li><strong>Scope the rule.</strong> The AGC stamps workers with a selectable egress-mode or gateway label, and the GitHub CIDR rule moves into a policy selecting only direct-mode pods, leaving the shared default-deny with DNS and the proxy peers.
+  This edits <code>actionsgateway_v2_builder.go</code> and the AGC's pod build, and changes the policy set an operator sees.</li>
+<li><strong>Keep the shared posture and report it.</strong> Set <code>EgressUnattributed=True</code>, or a dedicated condition, on every proxied <code>RunnerSet</code> and gateway whose namespace also holds a direct gateway, and say so in <code>05-security.md</code>, <code>network-architecture.md</code> and <code>tenant-onboarding.md</code>.</li>
+</ul>
+<p>Either way <code>docs/design/05-security.md</code> and <code>docs/operations/troubleshooting.md</code> currently say proxied workers cannot egress directly (the audit cites <code>05-security.md:147</code> and <code>troubleshooting.md:3936</code>, cited as of 2026-11-09 and not re-checked here), so the docs change with the fix.</p>
+<p>Contention, read 2026-11-22: draft PR 2084 (the GKE Workload Identity opt-in) edits <code>actionsgateway_v2_builder.go</code>, <code>05-security.md</code> and <code>troubleshooting.md</code>, so the first option collides with it in code and either option in docs; re-take its file list before starting.</p>
+<p><strong>Done when</strong> no NetworkPolicy whose selector matches a proxied set's workers carries an <code>ipBlock</code> egress peer, pinned by a test building a direct and a proxied gateway's policies in one namespace, or the shared posture is reported on the affected objects and documented as a residual in <code>05-security.md</code>.</p>
 
 
 

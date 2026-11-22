@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1323/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1384/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Five low-severity confirmed findings from the November security audit - GitHub Actions Gateway</title>
+        <title>Derive share and attribution projection names injectively - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#five-low-severity-confirmed-findings-from-the-november-security-audit" class="md-skip">
+        <a href="#derive-share-and-attribution-projection-names-injectively" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Five low-severity confirmed findings from the November security audit
+              Derive share and attribution projection names injectively
             
           </span>
         </div>
@@ -2703,18 +2703,15 @@
   
 
 
-<h1 id="five-low-severity-confirmed-findings-from-the-november-security-audit">Five low-severity confirmed findings from the November security audit<a class="headerlink" href="#five-low-severity-confirmed-findings-from-the-november-security-audit" title="Permanent link">&para;</a></h1>
-<p><strong>Five boundary slips confirmed from source on 2026-11-09, each narrow and none needing a major to fix.</strong> Nothing was run, so each result is what the code determines, not what a cluster showed.
-<a href="../../plan/security-audit-2026-11/#confirmed-low-findings">Each finding, with evidence and the smallest fix</a>:</p>
-<ul>
-<li>Share and attribution projection names collide for (ns 'a-b', proxy 'c') and (ns 'a', proxy 'b-c') (confirmed, low).</li>
-<li>ActionsGateway defaultProxyRef status tells a tenant whether a named EgressProxy exists in another namespace (confirmed, low).</li>
-<li>An attributed namespace named 'ca' overwrites the attribution CA in the clients Secret and forces a bundle regeneration on every reconcile (confirmed, low).</li>
-<li>A direct-egress gateway's workload NetworkPolicy permits direct GitHub egress for proxied workers in the same namespace, while their status reports Proxied and attributed (confirmed, low).</li>
-<li>A tenant can pre-claim scale-set names in a GitHub org it holds no credentials for, and another tenant's RunnerSet or gateway is then rejected at admission (confirmed, low).</li>
-</ul>
-<p>The direct-egress one also contradicts two operator-facing statements, <code>docs/design/05-security.md:147</code> and <code>docs/operations/troubleshooting.md:3936</code>, so its fix includes the docs whichever way the policy goes.</p>
-<p><strong>Done when</strong> each has its fix and a test that fails without it, or a recorded decision to accept it as a documented residual in <code>05-security.md</code>.</p>
+<h1 id="derive-share-and-attribution-projection-names-injectively">Derive share and attribution projection names injectively<a class="headerlink" href="#derive-share-and-attribution-projection-names-injectively" title="Permanent link">&para;</a></h1>
+<p><strong>Two pools whose namespace and name join to one string, (<code>a-b</code>, <code>c</code>) and (<code>a</code>, <code>b-c</code>), still derive one projection name, so the second pool's consumer in a shared namespace gets no projection at all.</strong> Q1323 made that collision fail closed: the GMC leaves the first pool's projection in place and records <code>ProjectionNameCollision</code>, and every reader checks the <code>proxy-namespace</code> and <code>proxy-name</code> keys, so no reference is wired to the wrong pool.
+What it did not take is the November audit's primary fix (<a href="../../plan/security-audit-2026-11/#share-and-attribution-projection-names-collide-for-ns-a-b-proxy-c-and-ns-a-proxy-b-c">finding</a>): make the derived name injective, so the two pools never contend for one object and both references work.</p>
+<p>The derivations are <code>proxyShareConfigMapName</code> and <code>proxyAttributionName</code> in <code>cmd/gmc/internal/controller/</code>, and the AGC derives the same names from prefixes in <code>cmd/agc/internal/controller/runnerset_target.go</code> and <code>cmd/agc/internal/proxyattribution/poller.go</code>.
+The audit suggests a short hash of <code>namespace + "/" + name</code>, since <code>/</code> cannot appear in either field.</p>
+<p>The cost is the rename, which is why it was left out of Q1323.
+Every existing projection changes name, the GMC has to delete the old-named object in each namespace it keeps, and a GMC writing new names beside an AGC still reading old ones would leave every cross-namespace reference unresolved until the AGC rolls, so the AGC has to read both names for a release before the GMC stops writing the old one.
+Read from source, not measured.</p>
+<p><strong>Done when</strong> (<code>a-b</code>, <code>c</code>) and (<code>a</code>, <code>b-c</code>) derive distinct names at every site, pinned by a table case in <code>egressproxy_sharing_test.go</code>, an upgrade from the old names keeps every cross-namespace reference resolved throughout, and <code>docs/operations/security-operations.md</code> names the new form.</p>
 
 
 

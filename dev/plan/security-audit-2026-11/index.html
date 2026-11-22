@@ -3328,7 +3328,7 @@ The first audit (2026-05) is <a href="../security/">security.md</a> and the seco
 The fork pull request lead is closed by Q1330's default refusal once the dogfood cluster runs it.
 Nothing reached high or critical.
 Two rows gated <code>v2.0.0</code>, Q1321 and Q1322, and both have landed.
-Of the rows filed from it, <a href="../../queue/Q1323/">Q1323</a> and the follow-ups <a href="../../queue/Q1334/">Q1334</a>, <a href="../../queue/Q1341/">Q1341</a>, <a href="../../queue/Q1344/">Q1344</a> and <a href="../../queue/Q1373/">Q1373</a> are open, Q1343 having closed its token route; the Azure range lead closed with Q1253 as a <a href="../../design/05-security/#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">recorded residual</a>, and its narrowing is <a href="../../queue/Q1350/">Q1350</a>.</p>
+Of the rows filed from it, <a href="../../queue/Q1378/">Q1378</a>, <a href="../../queue/Q1379/">Q1379</a>, <a href="../../queue/Q1384/">Q1384</a> and the follow-ups <a href="../../queue/Q1334/">Q1334</a>, <a href="../../queue/Q1341/">Q1341</a>, <a href="../../queue/Q1344/">Q1344</a> and <a href="../../queue/Q1373/">Q1373</a> are open, Q1343 having closed its token route; the Azure range lead closed with Q1253 as a <a href="../../design/05-security/#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">recorded residual</a>, and its narrowing is <a href="../../queue/Q1350/">Q1350</a>.</p>
 </blockquote>
 <h2 id="method-and-limits">Method and limits<a class="headerlink" href="#method-and-limits" title="Permanent link">&para;</a></h2>
 <p>The audit read source and ran nothing.
@@ -3411,27 +3411,27 @@ A coverage critic after the first wave accepted eight gaps, which became the sec
 <tr>
 <td><a href="#confirmed-low-findings">Share and attribution projection names collide for (ns 'a-b', proxy 'c') and (ns 'a', proxy 'b-c')</a></td>
 <td>confirmed, low</td>
-<td><a href="../../queue/Q1323/">Q1323</a></td>
+<td>Q1323, fixed to fail closed; the injective name is <a href="../../queue/Q1384/">Q1384</a></td>
 </tr>
 <tr>
 <td><a href="#confirmed-low-findings">ActionsGateway defaultProxyRef status tells a tenant whether a named EgressProxy exists in another namespace</a></td>
 <td>confirmed, low</td>
-<td><a href="../../queue/Q1323/">Q1323</a></td>
+<td>Q1323, fixed</td>
 </tr>
 <tr>
 <td><a href="#confirmed-low-findings">An attributed namespace named 'ca' overwrites the attribution CA in the clients Secret and forces a bundle regeneration on every reconcile</a></td>
 <td>confirmed, low</td>
-<td><a href="../../queue/Q1323/">Q1323</a></td>
+<td>Q1323, fixed</td>
 </tr>
 <tr>
 <td><a href="#confirmed-low-findings">A direct-egress gateway's workload NetworkPolicy permits direct GitHub egress for proxied workers in the same namespace, while their status reports Proxied and attributed</a></td>
 <td>confirmed, low</td>
-<td><a href="../../queue/Q1323/">Q1323</a></td>
+<td><a href="../../queue/Q1378/">Q1378</a></td>
 </tr>
 <tr>
 <td><a href="#confirmed-low-findings">A tenant can pre-claim scale-set names in a GitHub org it holds no credentials for, and another tenant's RunnerSet or gateway is then rejected at admission</a></td>
 <td>confirmed, low</td>
-<td><a href="../../queue/Q1323/">Q1323</a></td>
+<td><a href="../../queue/Q1379/">Q1379</a></td>
 </tr>
 <tr>
 <td><a href="#egress-proxy-sharing-leads">Provider-writable proxy TLS Secret is projected unvalidated into consumer namespaces and installed as an unconstrained trust root by consumer AGCs and workers</a></td>
@@ -3794,7 +3794,8 @@ Left open on purpose: a <code>podCertificate</code> from any other signer (a wor
 The remaining blockers (what the worker ServiceAccount's token can reach, tenant RBAC) are deployment facts and stay unobserved.</p>
 <p><strong>Evidence.</strong> <code>docs/design/05-security.md:907</code>, <code>docs/design/05-security.md:869</code>, <code>cmd/agc/internal/provisioner/pod.go:349</code>, <code>cmd/gmc/internal/controller/actionsgateway_v2_builder.go:137</code>, <code>cmd/gmc/internal/controller/shared_agc_deployment.go:219</code>.</p>
 <h2 id="confirmed-low-findings">Confirmed low findings<a class="headerlink" href="#confirmed-low-findings" title="Permanent link">&para;</a></h2>
-<p>Five confirmed findings whose fix needs no major, tracked as <a href="../../queue/Q1323/">Q1323</a>.</p>
+<p>Five confirmed findings whose fix needs no major.
+Q1323 fixed the first three; the direct-egress policy finding is <a href="../../queue/Q1378/">Q1378</a> and the scale-set pre-claim finding is <a href="../../queue/Q1379/">Q1379</a>, each filed alone because its fix is a design choice.</p>
 <h3 id="share-and-attribution-projection-names-collide-for-ns-a-b-proxy-c-and-ns-a-proxy-b-c">Share and attribution projection names collide for (ns 'a-b', proxy 'c') and (ns 'a', proxy 'b-c')<a class="headerlink" href="#share-and-attribution-projection-names-collide-for-ns-a-b-proxy-c-and-ns-a-proxy-b-c" title="Permanent link">&para;</a></h3>
 <p><code>apinames/join-ambiguous-proxy-projection-name</code>: confirmed, low.
 Starts at <code>cmd/gmc/internal/controller/egressproxy_sharing.go:73</code>.</p>

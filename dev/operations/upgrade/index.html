@@ -1785,6 +1785,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-pool-with-failure-attribution-reissues-its-attribution-certificates-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a pool with failure attribution reissues its attribution certificates once
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4133,6 +4144,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-pool-with-failure-attribution-reissues-its-attribution-certificates-once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a pool with failure attribution reissues its attribution certificates once
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5359,6 +5381,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#before-upgrading-to-v200-no-v1alpha1-object-is-left">Before upgrading to v2.0.0: no v1alpha1 object is left</a></li>
 <li><a href="#before-upgrading-to-v200-every-tenant-namespace-carries-the-actions-gatewaycom-labels">Before upgrading to v2.0.0: every tenant namespace carries the actions-gateway.com labels</a></li>
 <li><a href="#migration-notes">Migration Notes</a></li>
+<li><a href="#non-breaking-a-pool-with-failure-attribution-reissues-its-attribution-certificates-once">Non-breaking: a pool with failure attribution reissues its attribution certificates once</a></li>
 <li><a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting</a></li>
 <li><a href="#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol">Action required before v2.0.0: a Classic RunnerSet now runs on the scale-set protocol</a></li>
 <li><a href="#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them">Action required at v2.0.0: remove the CRDs' conversion webhook before applying them</a></li>
@@ -5608,6 +5631,11 @@ Label each one it prints, as an administrator:</p>
 <hr />
 <h2 id="migration-notes">Migration Notes<a class="headerlink" href="#migration-notes" title="Permanent link">&para;</a></h2>
 <p>Each note is written as of its release, so one older than <code>v2.0.0</code> can name a version or a kind that has since been removed.</p>
+<h3 id="non-breaking-a-pool-with-failure-attribution-reissues-its-attribution-certificates-once">Non-breaking: a pool with failure attribution reissues its attribution certificates once<a class="headerlink" href="#non-breaking-a-pool-with-failure-attribution-reissues-its-attribution-certificates-once" title="Permanent link">&para;</a></h3>
+<p>The <code>&lt;proxy&gt;-attribution-clients</code> Secret now keeps each namespace's client certificate under <code>client.&lt;namespace&gt;.crt</code> and <code>client.&lt;namespace&gt;.key</code>, because a consumer namespace named <code>ca</code> used to overwrite the Secret's own <code>ca.crt</code> and reissue the bundle on every reconcile (Q1323).
+On the first reconcile after the upgrade, the GMC reads no namespaces from the old keys, reissues the bundle, and emits one <code>AttributionCertificateIssued</code> Event whose message ends <code>(namespaces changed)</code>.
+The pool rolls once to pick up the new CA, as it does whenever the attributed namespaces change, and consumers' projected Secrets follow it.
+Nothing needs doing.</p>
 <h3 id="action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before <code>v2.0.0</code>: <code>v2</code> is the storage version, and stored objects need rewriting<a class="headerlink" href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> every cluster with the v2 CRDs installed.</p>
 <p><strong>What changed.</strong> Every <code>actions-gateway.com</code> kind now stores <code>v2</code>, the six in both charts alike.

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1363/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1382/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Start the Dragonfly gate leg on a fresh e2e node, not a warm one - GitHub Actions Gateway</title>
+        <title>Reproduce the out-of-memory retry class on a Binpack set (R12) - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#start-the-dragonfly-gate-leg-on-a-fresh-e2e-node-not-a-warm-one" class="md-skip">
+        <a href="#reproduce-the-out-of-memory-retry-class-on-a-binpack-set-r12" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Start the Dragonfly gate leg on a fresh e2e node, not a warm one
+              Reproduce the out-of-memory retry class on a Binpack set (R12)
             
           </span>
         </div>
@@ -2703,16 +2703,16 @@
   
 
 
-<h1 id="start-the-dragonfly-gate-leg-on-a-fresh-e2e-node-not-a-warm-one">Start the Dragonfly gate leg on a fresh e2e node, not a warm one<a class="headerlink" href="#start-the-dragonfly-gate-leg-on-a-fresh-e2e-node-not-a-warm-one" title="Permanent link">&para;</a></h1>
-<p><strong>The Dragonfly leg's <code>node-p2p</code> reading needs the worker image pulled through the node client, and today it gets a fresh node only because the tenant swap before it is slow.</strong> Land this before <a href="../Q1362/">Q1362</a>, which removes that slowness.</p>
-<p>The leg installs Dragonfly's node client (Q540) so the kubelet pulls worker images through it, and <code>dragonfly_node_p2p_reading</code> records whether containerd sent any request by the peer-to-peer rule.
-On both measured gates (<code>v2.0.1-rc.1</code> run 44236535751 and <code>v2.0.0-rc.3</code> run 44043297649) the swap into the leg held for 13 and 16 minutes, so the autoscaler had removed the DinD leg's node and the Dragonfly worker cold-started.
-With the hold gone, the worker lands on the DinD node with the 722 MB runner image already cached, and the reading reports no request by rule, its <code>finding</code> shape, for a reason unrelated to Dragonfly.</p>
-<p><strong>Done when</strong> <code>dragonfly_leg</code> resizes the e2e node pool to zero (through <code>scripts/dogfood/lib/pool.sh</code>, not a bare <code>gcloud</code>) and waits for it before <code>e2e_leg</code> dispatches, and the gate's tests cover the order.
-Today the resize is a no-op, because the pool is already at zero by then, so this changes nothing until Q1362 lands.
-The cost is the resize itself, about a minute (estimate), on top of the cold start the leg already pays.</p>
-<p>Not a duplicate of <a href="../Q1161/">Q1161</a>, which the allocator matched on the shared target: that row runs the legs on separate clusters.
-Context and measurements: <a href="../../plan/release-gate-speed/#1-a-fresh-node-for-the-dragonfly-leg-q1363">release-gate-speed.md</a>.</p>
+<h1 id="reproduce-the-out-of-memory-retry-class-on-a-binpack-set-r12">Reproduce the out-of-memory retry class on a Binpack set (R12)<a class="headerlink" href="#reproduce-the-out-of-memory-retry-class-on-a-binpack-set-r12" title="Permanent link">&para;</a></h1>
+<p>Q1317 asked for the out-of-memory class's reproduction on a <code>Binpack</code> set and took it on dogfood's <code>ci</code> set, which runs <code>Throughput</code>, so half of the class's R12 reproduction is unmeasured.
+The kill itself does not depend on the profile, and that half is settled: on 2026-11-22 the runner died with the container, the pod failed, and the class fired from the pod watch and re-ran the job (<a href="../../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">the reading</a>).
+What <code>Binpack</code> changes is the arithmetic and the request: its headroom is 1.4 rather than 1.5, and because requests equal limits under it, the raised floor raises the request too, so the re-run's pod asks the scheduler for more memory where <code>Throughput</code>'s asked for the same 5568Mi.</p>
+<ul>
+<li>Run <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q1317-oom-probe.yml"><code>q1317-oom-probe</code></a> on a set with <code>spec.sizing.profile: Binpack</code> and <code>sizingProfileState: Active</code>, with <code>ALLOC_MIB</code> re-derived to sit between the set's derived limit and 1.4 times it, rounded up to 64Mi; its <code>runs-on</code> names the <code>ci</code> set, so either switch that set's profile for the run or point the job at another set.</li>
+<li>Read the <code>MemoryLimitRaisedForRetry</code> Event's two limits, and the re-run pod's runner request and limit, which should be equal and raised.</li>
+<li>Read whether the raised request still schedules: a request a node cannot hold leaves the re-run <code>Pending</code>, which the <code>Throughput</code> reading could not show.</li>
+</ul>
+<p>Gated on 2.1 because Q1317 was, and this is the part of it the reading did not reach.</p>
 
 
 

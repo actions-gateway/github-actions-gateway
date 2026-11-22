@@ -3949,6 +3949,7 @@ So the class raises the limit from the killed pod's own:</p>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ceiling  = spec.sizing.maxRequests.memory, or 2 × killed where unset
 </code></pre></div>
 <p>It fires on a worker whose pod reached <code>PodFailed</code> with the <strong>runner</strong> container terminated <code>OOMKilled</code>, and which carries the <code>actions-gateway.com/sizing-profile</code> annotation, meaning the profile derived its limits when it was built.
+That is the shape a memory kill leaves on cgroup v2, which kills the whole container: reproduced on dogfood on 2026-11-22 under <code>Throughput</code> (R12), GitHub concluded the job <code>failure</code> 9 min 48 s after the kill, and the re-run at the raised limit succeeded (<a href="../../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>).
 A sidecar killed for memory is not covered: the runner survives it to report the job's own result, so the pod's terminal transition says nothing about whether the job failed.</p>
 <table>
 <thead>
@@ -4280,6 +4281,13 @@ The listener avoids reaching it: it handles a message batch's <code>JobCompleted
 <p>When the completion arrives after the pod already exists, the stamp does the rest: the reaper reads it in the <code>Pending</code> arm too, on a thirty-second grace, under <code>reason="completed_pending"</code> with a <code>WorkerPodCompletedPending</code> Warning Event.
 Such a pod cannot start — the completion reclaimed the JIT-config Secret it mounts — and reading the stamp only in the <code>Running</code> arm left it to sit out <code>pendingPodDeadline</code>, ten minutes by default, before being reaped as a scheduling stall it never had.
 The <code>Pending</code> grace is far shorter than the <code>Running</code> one because there is no runner shutdown to wait out; it exists only to let a pod already mid-start reach <code>Running</code>, where the five-minute grace takes over.</p>
+<p><strong>A withdrawal reads like a cancellation unless the reaper looks for the re-issue</strong> (Q1361).
+GitHub's withdrawal of an assignment no runner took is the same <code>JobCompleted</code> naming no runner, so a worker that cannot start, on a node that accepts pods and cannot run them, is stamped and reaped as <code>completed_pending</code> every five minutes while each re-issue's worker sticks the same way.
+At the default ten-minute <code>pendingPodDeadline</code> the deadline never fires for any of them, so neither does the abandoned-run recovery it starts (Q766), which is correct here: GitHub still holds the job.
+A deadline under about five and a half minutes, the withdrawal plus the 30-second grace, reaps first under <code>pending_deadline</code>, and Q766 then cancels the run, which ends the loop.
+The check also matches a re-run of a cancelled run whose new worker exists when the 30-second grace ends: a re-run keeps the run ID and job name, and the job message carries no run attempt to tell them apart, so that cancellation is named <code>WorkerReplacedBeforeStart</code>; the reap is the same either way.
+The reaper therefore checks a <code>completed_pending</code> worker that never started for a newer worker of the set with the same <code>run-id</code> and <code>job-name</code> annotations, which is the re-issue's, and records <code>WorkerReplacedBeforeStart</code> naming the stuck worker's node and its replacement in place of <code>WorkerPodCompletedPending</code>.
+It does not stop provisioning the re-issue: where the failure is one node's, the next worker can be scheduled to another and run the job, which a halt would strand.</p>
 <p>The same arm collects a pod held open past the runner's exit by a container that never terminates — the injected-mesh-sidecar case the <a href="../../operations/troubleshooting/#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar"><code>PossibleReapBlockingSidecar</code></a> condition warns about — on the ScaleSet tier.
 Classic worker pods are never stamped (their <code>provision()</code> goroutine owns them through to a terminal phase), so nothing changes for them.</p>
 <hr />
