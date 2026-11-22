@@ -56,6 +56,19 @@ concurrency:
 permissions:
   contents: read
 
+# Every job's checkout is two steps (Q1280): the first has a step timeout and
+# continue-on-error, the second runs only when the first did not succeed. The
+# stall is a fetch that prints nothing until the job's own timeout cancels it
+# (runs 44168970558, 44169518457, 44192442984 on 2026-11-17: each checkout step
+# ran to the 5-minute job limit; reruns finished in about 20 s), so a step
+# timeout turns a hang into a restart instead of a lost job. The step budget is
+# 6 minutes for fetch-depth: 0 and 2 for shallow; the job budgets are sized to
+# hold both attempts. On 2026-11-03, 10 of the 12 full-history checkouts that ran
+# past 180 s completed (185 to 319 s) and 2 hung to the cancel, so the full-history
+# budget sits above the completed tail rather than at the p95 (171 s); the 523
+# shallow checkouts that day peaked at 64 s. A
+# composite action cannot do this once: a local action needs the checkout it
+# would perform.
 jobs:
   # Fine-grained path gate. The workflow now triggers on every PR (so
   # doc-links-gate can report), so classify the diff here and skip the content
@@ -73,13 +86,21 @@ jobs:
   # drag the docs-site build in release-links along with it.
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
     outputs:
       docs: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.docs || 'true' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         # paths-filter resolves the changed-file list through ONE un-retried
@@ -122,9 +143,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - name: markdown links + anchors (make doc-links)
         run: make doc-links
 
@@ -145,9 +173,18 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
+        continue-on-error: true
+        with:
+          fetch-depth: 0
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
         with:
           fetch-depth: 0
       - name: fetch the ratchet base
@@ -169,9 +206,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - name: admonition + stat-tile density (make page-density-check)
         run: make page-density-check
 
@@ -186,9 +230,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - name: hand-kept indexes match their headings (make doc-toc-check)
         run: make doc-toc-check
 
@@ -201,9 +252,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - name: prose names only targets that exist (make make-targets-check)
         run: make make-targets-check
 
@@ -220,9 +278,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
@@ -243,9 +308,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - name: AGC Deployment names are version-scoped (make agc-names-check)
         run: make agc-names-check
 
@@ -263,9 +335,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - name: prose tier claims match their source (make tier-claims-check)
         run: make tier-claims-check
 
@@ -283,9 +362,18 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
+        continue-on-error: true
+        with:
+          fetch-depth: 0
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
         with:
           fetch-depth: 0
       - name: fetch the diff base
@@ -310,9 +398,18 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
+        continue-on-error: true
+        with:
+          fetch-depth: 0
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
         with:
           fetch-depth: 0
       - name: fetch the diff base
@@ -335,9 +432,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
@@ -353,9 +457,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - name: competitor verdicts carry a version and date (make comparison-stamps-check)
         run: make comparison-stamps-check
 
@@ -368,9 +479,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - name: every script is documented (make script-docs-check)
         run: make script-docs-check
 
@@ -386,9 +504,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - name: gate lists agree (make gate-lists-check)
         run: make gate-lists-check
 
@@ -404,9 +529,16 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
       - name: install-doc blocks keep their annotations (make getting-started-check)
         run: make getting-started-check
 
@@ -417,9 +549,18 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
+        continue-on-error: true
+        with:
+          fetch-depth: 0
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
         with:
           fetch-depth: 0
       - name: release pins are current (make release-pins-check)
@@ -440,9 +581,19 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
+        continue-on-error: true
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -463,9 +614,18 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
+        continue-on-error: true
+        with:
+          fetch-depth: 0
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
         with:
           fetch-depth: 0
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -506,7 +666,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
+        continue-on-error: true
+        with:
+          fetch-depth: 0
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
         with:
           fetch-depth: 0
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
