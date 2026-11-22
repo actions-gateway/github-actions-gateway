@@ -109,7 +109,7 @@ func TestV2_EgressProxy_Attribution_ProvisionsThePoolSide(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: providerNS, Name: "attr-pool-attribution-clients"}, &clients) == nil
 	}, 30*time.Second, 250*time.Millisecond)
-	assert.NotEmpty(t, clients.Data[consumerNS+".crt"])
+	assert.NotEmpty(t, clients.Data["client."+consumerNS+".crt"])
 
 	// The opted-in namespace's workers may reach the attributed port range, which
 	// the real apiserver must accept as an endPort rule.

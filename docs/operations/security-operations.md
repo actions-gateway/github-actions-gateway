@@ -1164,6 +1164,12 @@ The same limit reaches the [per-connection egress audit](#per-connection-egress-
 The private key stays in the provider namespace.
 That ConfigMap is GMC-owned: do not edit or delete it, and do not create one by hand expecting it to grant access, since the GMC reconciles it back.
 
+**Two pools can derive one name.** The name joins the namespace and the proxy name with `-`, so `team-a-b`/`c` and `team-a`/`b-c` both project `proxy-share-team-a-b-c`, and a consumer granted by both can hold only one of them.
+The pool that wrote it first keeps it; the other skips that consumer and records a `ProjectionNameCollision` Warning Event on its `EgressProxy`, and the consumer's reference to it fails closed with `ProxyShareNotGranted`: a `RunnerSet`'s message names the pool that holds the name, and a gateway's `defaultProxyRef` keeps reporting that the certificate "has not yet been projected here".
+Each controller that reads a projection checks the `proxy-namespace` and `proxy-name` keys inside it, so neither consumer is ever wired to the wrong pool.
+The GMC defers only to a pool that could have written the projection, one that derives the same name and grants this namespace; it restores a projection whose labels a tenant changed to name any other pool, so the labels neither stop the restore nor reveal which pools exist elsewhere.
+Rename one of the two proxies to clear it.
+
 ### Verifying a grant took effect
 
 ```bash
@@ -1177,9 +1183,11 @@ If it is missing, the grant has not been accepted; check the consumer's conditio
 kubectl get actionsgateway -n team-a gateway -o jsonpath='{.status.conditions}'
 ```
 
-`Degraded` with reason `ProxyShareNotGranted` means the proxy exists but does not list this namespace.
-Reason `ProxyNotFound` means the name or namespace is wrong.
-Both fail closed: no worker pods run and no traffic is permitted while either is set.
+`Degraded` with reason `ProxyShareNotGranted` means either the name or namespace is wrong or the proxy does not list this namespace.
+The consumer cannot tell which, by design: a tenant can name any namespace, and a different answer for a missing proxy would tell it which names exist there.
+Ask the provider, or read the GMC log, which records `cross-namespace defaultProxyRef not granted` with `proxyMissing` set for a proxy that does not exist.
+`ProxyNotFound` is reported only for a proxy in the gateway's own namespace.
+Either reason fails closed: no worker pods run and no traffic is permitted while it is set.
 
 A gateway's AGC mounts the proxy certificate from that ConfigMap, so the GMC creates the AGC only once the ConfigMap exists.
 For the few seconds after you create a gateway naming a granted proxy, it reports `ProxyShareNotGranted` with a message saying the certificate "has not yet been projected here", and it re-checks every 10 seconds.

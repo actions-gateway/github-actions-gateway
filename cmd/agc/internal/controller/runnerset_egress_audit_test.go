@@ -173,9 +173,11 @@ func TestRunnerSetEgressAudit_SharedPoolReadsTheProjection(t *testing.T) {
 	const ns, proxyNS, proxyName = "team-a", "platform-egress", "shared"
 	share := func(data map[string]string) *corev1.ConfigMap {
 		base := map[string]string{
-			"ca.crt":     "-----BEGIN CERTIFICATE-----\nstub\n-----END CERTIFICATE-----\n",
-			"proxy-host": proxyName + "-proxy." + proxyNS + ".svc.cluster.local",
-			"proxy-port": "8080",
+			"ca.crt":          "-----BEGIN CERTIFICATE-----\nstub\n-----END CERTIFICATE-----\n",
+			"proxy-host":      proxyName + "-proxy." + proxyNS + ".svc.cluster.local",
+			"proxy-port":      "8080",
+			"proxy-namespace": proxyNS,
+			"proxy-name":      proxyName,
 		}
 		for k, v := range data {
 			base[k] = v

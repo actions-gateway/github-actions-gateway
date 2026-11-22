@@ -55,9 +55,11 @@ func TestRunnerSetReconcile_ShareResolvedSetKeepsRecheckingTheGrant(t *testing.T
 			Labels:    map[string]string{"actions-gateway/proxy-share": "true"},
 		},
 		Data: map[string]string{
-			"ca.crt":     "-----BEGIN CERTIFICATE-----\nstub\n-----END CERTIFICATE-----\n",
-			"proxy-host": proxyName + "-proxy." + proxyNS + ".svc.cluster.local",
-			"proxy-port": "8080",
+			"ca.crt":          "-----BEGIN CERTIFICATE-----\nstub\n-----END CERTIFICATE-----\n",
+			"proxy-host":      proxyName + "-proxy." + proxyNS + ".svc.cluster.local",
+			"proxy-port":      "8080",
+			"proxy-namespace": proxyNS,
+			"proxy-name":      proxyName,
 		},
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).

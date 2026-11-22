@@ -17,7 +17,7 @@ import (
 func attributionProjection(ns, proxyNS, proxyName, port string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{Name: apinames.Join(apinames.MaxLabelValue, "proxy-attribution", proxyNS, proxyName), Namespace: ns},
-		Data:       map[string]string{proxyAttributionPortKey: port},
+		Data:       map[string]string{proxyAttributionPortKey: port, proxyShareProxyNSKey: proxyNS, proxyShareProxyNameKey: proxyName},
 	}
 }
 
@@ -28,7 +28,8 @@ func TestResolveRunnerSetRefs_UsesTheProjectedAttributionPort(t *testing.T) {
 	const ns, proxyNS = "team-a", "platform-egress"
 	share := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{Name: proxyShareConfigMapName(proxyNS, "shared"), Namespace: ns},
-		Data:       map[string]string{proxyShareHostKey: "shared-proxy." + proxyNS + ".svc.cluster.local", proxySharePortKey: "8080"},
+		Data: map[string]string{proxyShareHostKey: "shared-proxy." + proxyNS + ".svc.cluster.local", proxySharePortKey: "8080",
+			proxyShareProxyNSKey: proxyNS, proxyShareProxyNameKey: "shared"},
 	}
 	local := &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "local", Namespace: ns}}
 
@@ -73,4 +74,41 @@ func TestResolveRunnerSetRefs_RejectsABadAttributionPort(t *testing.T) {
 			assert.Contains(t, res.err.Error(), want)
 		})
 	}
+}
+
+// ("a-b", "c") and ("a", "b-c") derive one projection name, so the AGC accepts a
+// projection only when its identity keys name the pool it is resolving: a set
+// referencing one pool never takes the other's proxy or port (Q1323).
+func TestResolveRunnerSetRefs_RefusesAProjectionNamingACollidingPool(t *testing.T) {
+	const ns = "team-a"
+	require.Equal(t, proxyShareConfigMapName("a-b", "c"), proxyShareConfigMapName("a", "b-c"), "the premise: the two names collide")
+	other := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: proxyShareConfigMapName("a", "b-c"), Namespace: ns},
+		Data: map[string]string{proxyShareHostKey: "c-proxy.a-b.svc.cluster.local", proxySharePortKey: "8080",
+			proxyShareProxyNSKey: "a-b", proxyShareProxyNameKey: "c"},
+	}
+	rs := rsObj("set", ns, func(rs *v2.RunnerSet) { rs.Spec.ProxyRef = &v2.ProxyObjectRef{Name: "b-c", Namespace: "a"} })
+	c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(
+		gwObj("gw", ns, ""), tmplObj("tmpl", ns), rs, other,
+	).Build()
+
+	_, res := resolveRunnerSetRefs(context.Background(), c, c, rs)
+	require.False(t, res.resolved(), "a projection naming a-b/c must not resolve a reference to a/b-c")
+	assert.Equal(t, v2.ReasonProxyShareNotGranted, res.reason)
+	assert.Contains(t, res.message, "a-b/c")
+
+	t.Run("attribution port", func(t *testing.T) {
+		mine := &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: proxyShareConfigMapName("a", "b-c"), Namespace: ns},
+			Data: map[string]string{proxyShareHostKey: "b-c-proxy.a.svc.cluster.local", proxySharePortKey: "8080",
+				proxyShareProxyNSKey: "a", proxyShareProxyNameKey: "b-c"},
+		}
+		otherPort := attributionProjection(ns, "a-b", "c", "8105")
+		c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(
+			gwObj("gw", ns, ""), tmplObj("tmpl", ns), rs, mine, otherPort,
+		).Build()
+		refs, res := resolveRunnerSetRefs(context.Background(), c, c, rs)
+		require.True(t, res.resolved(), "%+v", res)
+		assert.Equal(t, 8080, refs.proxy.port, "a-b/c's attributed port must not move a/b-c's workers")
+	})
 }

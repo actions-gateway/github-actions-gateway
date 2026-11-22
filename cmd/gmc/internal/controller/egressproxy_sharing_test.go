@@ -458,3 +458,95 @@ func TestReconcileProxyShares_RefusedCertStillPrunesARevokedGrant(t *testing.T) 
 	assert.True(t, apierrors.IsNotFound(c.Get(ctx, keyB, &corev1.ConfigMap{})),
 		"the revoked share survived because the Secret was refused")
 }
+
+// ("a-b", "c") and ("a", "b-c") derive one projection name. The pool that wrote it
+// first keeps it: the other's apply is refused and reported for that consumer, and
+// the first pool's facts are left in place (Q1323).
+func TestApplyProxyShare_RefusesAProjectionAnotherPoolHolds(t *testing.T) {
+	require.Equal(t, proxyShareConfigMapName("a-b", "c"), proxyShareConfigMapName("a", "b-c"), "the premise: the two names collide")
+	ctx := context.Background()
+	grant := func(ep *gmcv2.EgressProxy) {
+		ep.Spec.Sharing = &gmcv2.ProxySharing{AllowedNamespaces: []string{"consumer"}}
+	}
+	holder := newEP("c", "a-b", grant)
+	mine := newEP("b-c", "a", grant)
+	c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(
+		holder, mine, buildProxyShareConfigMap(holder, "consumer", []byte("holder-ca")),
+	).Build()
+	r := &EgressProxyReconciler{Client: c, Scheme: c.Scheme()}
+
+	err := r.applyProxyShare(ctx, buildProxyShareConfigMap(mine, "consumer", []byte("my-ca")))
+	require.ErrorIs(t, err, errProjectionNameCollision)
+	assert.True(t, r.reportProjectionCollision(ctx, mine, err), "a collision is reported, not returned as a pool failure")
+
+	var got corev1.ConfigMap
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "consumer", Name: proxyShareConfigMapName("a", "b-c")}, &got))
+	assert.Equal(t, "a-b", got.Data[shareProxyNSKey])
+	assert.Equal(t, "c", got.Data[shareProxyNamKey])
+	assert.Equal(t, "a-b", got.Labels[labelShareProxyNS])
+	assert.Equal(t, "holder-ca", got.Data[shareCACertKey])
+
+	// Labels are tenant-writable, so a label that no pool could have written is
+	// healed; deferring on it would let the tenant stop the heal, and deferring on
+	// the named pool's existence alone would tell it which pools another namespace
+	// holds.
+	relabel := func(t *testing.T, ns, name string) {
+		t.Helper()
+		require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(&got), &got))
+		got.Labels[labelShareProxyNS], got.Labels[labelShareProxyNam] = ns, name
+		require.NoError(t, c.Update(ctx, &got))
+	}
+	healed := func(t *testing.T) {
+		t.Helper()
+		require.NoError(t, r.applyProxyShare(ctx, buildProxyShareConfigMap(mine, "consumer", []byte("my-ca"))))
+		require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(&got), &got))
+		assert.Equal(t, "a", got.Data[shareProxyNSKey])
+		assert.Equal(t, "b-c", got.Data[shareProxyNamKey])
+		assert.Equal(t, "a", got.Labels[labelShareProxyNS])
+	}
+
+	t.Run("a live pool in another namespace is healed whether or not it exists", func(t *testing.T) {
+		require.NoError(t, c.Create(ctx, newEP("guess", "victim", nil)))
+		relabel(t, "victim", "guess")
+		healed(t)
+		relabel(t, "victim", "absent")
+		healed(t)
+	})
+	t.Run("a pool deriving the name that does not grant the namespace is healed", func(t *testing.T) {
+		require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(holder), holder))
+		holder.Spec.Sharing = nil
+		require.NoError(t, c.Update(ctx, holder))
+		relabel(t, "a-b", "c")
+		healed(t)
+	})
+	t.Run("a granting pool that derives another name is healed", func(t *testing.T) {
+		other := newEP("other", "team-x", grant)
+		require.NoError(t, c.Create(ctx, other))
+		relabel(t, "team-x", "other")
+		healed(t)
+	})
+	t.Run("labels naming no live pool are healed", func(t *testing.T) {
+		relabel(t, "a-b", "c")
+		require.NoError(t, c.Delete(ctx, holder))
+		healed(t)
+	})
+}
+
+// A gateway waiting on a/b-c's projection is not provisioned off a-b/c's, which
+// sits under the same name (Q1323).
+func TestProxyShareProjected_IgnoresACollidingPoolsProjection(t *testing.T) {
+	ctx := context.Background()
+	holder := newEP("c", "a-b", nil)
+	mine := newEP("b-c", "a", nil)
+	c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(
+		buildProxyShareConfigMap(holder, "consumer", []byte("holder-ca")),
+	).Build()
+	r := &ActionsGatewayV2Reconciler{Client: c}
+
+	ok, err := r.proxyShareProjected(ctx, "consumer", mine)
+	require.NoError(t, err)
+	assert.False(t, ok, "a-b/c's projection must not read as a/b-c's")
+	ok, err = r.proxyShareProjected(ctx, "consumer", holder)
+	require.NoError(t, err)
+	assert.True(t, ok)
+}

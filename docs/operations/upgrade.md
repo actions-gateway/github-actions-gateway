@@ -18,6 +18,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Before upgrading to v2.0.0: no v1alpha1 object is left](#before-upgrading-to-v200-no-v1alpha1-object-is-left)
   - [Before upgrading to v2.0.0: every tenant namespace carries the actions-gateway.com labels](#before-upgrading-to-v200-every-tenant-namespace-carries-the-actions-gatewaycom-labels)
 - [Migration Notes](#migration-notes)
+  - [Non-breaking: a pool with failure attribution reissues its attribution certificates once](#non-breaking-a-pool-with-failure-attribution-reissues-its-attribution-certificates-once)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Action required before v2.0.0: a Classic RunnerSet now runs on the scale-set protocol](#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol)
   - [Action required at v2.0.0: remove the CRDs' conversion webhook before applying them](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them)
@@ -281,6 +282,13 @@ Also check the release notes for the new version before upgrading, particularly:
 ## Migration Notes
 
 Each note is written as of its release, so one older than `v2.0.0` can name a version or a kind that has since been removed.
+
+### Non-breaking: a pool with failure attribution reissues its attribution certificates once
+
+The `<proxy>-attribution-clients` Secret now keeps each namespace's client certificate under `client.<namespace>.crt` and `client.<namespace>.key`, because a consumer namespace named `ca` used to overwrite the Secret's own `ca.crt` and reissue the bundle on every reconcile (Q1323).
+On the first reconcile after the upgrade, the GMC reads no namespaces from the old keys, reissues the bundle, and emits one `AttributionCertificateIssued` Event whose message ends `(namespaces changed)`.
+The pool rolls once to pick up the new CA, as it does whenever the attributed namespaces change, and consumers' projected Secrets follow it.
+Nothing needs doing.
 
 ### Action required before `v2.0.0`: `v2` is the storage version, and stored objects need rewriting
 

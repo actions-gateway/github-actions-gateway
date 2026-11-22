@@ -38,6 +38,8 @@ const (
 	readHostKey          = "read-host"
 	readPortKey          = "read-port"
 	serverNameKey        = "server-name"
+	proxyNamespaceKey    = "proxy-namespace"
+	proxyNameKey         = "proxy-name"
 	caCertKey            = "ca.crt"
 	optInPerJob          = "PerJob"
 )
@@ -289,6 +291,12 @@ func (p *Poller) readPool(ctx context.Context, pl pool) error {
 			return nil
 		}
 		return fmt.Errorf("read projection: %w", err)
+	}
+	// Two pools can derive one projection name (Q1323), so one naming another pool
+	// is not this pool's.
+	if cm.Data[proxyNamespaceKey] != pl.namespace || cm.Data[proxyNameKey] != pl.name {
+		return fmt.Errorf("projection %q names EgressProxy %s/%s, not %s/%s", key.Name,
+			cm.Data[proxyNamespaceKey], cm.Data[proxyNameKey], pl.namespace, pl.name)
 	}
 	var sec corev1.Secret
 	if err := p.APIReader.Get(ctx, key, &sec); err != nil {
