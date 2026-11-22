@@ -2180,7 +2180,7 @@ prewarm_rc=0
 	prewarm_e2e_node
 ) >"${SCRATCH}/prewarm.out" 2>&1 || prewarm_rc=$?
 check "e2e node: a refused resize does not fail the gate" 0 "${prewarm_rc}"
-check_contains "  ...and says what it costs" "cold start" "$(cat "${SCRATCH}/prewarm.out")"
+check_contains "  ...and says what it costs" "e2e-prewarm: warning:" "$(cat "${SCRATCH}/prewarm.out")"
 
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2

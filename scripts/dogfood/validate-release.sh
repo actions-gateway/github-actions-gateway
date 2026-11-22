@@ -478,7 +478,7 @@ prewarm_e2e_node() {
 	gcloud container clusters resize "${CLUSTER}" \
 		--project="${PROJECT}" \
 		--node-pool="${E2E_POOL}" --num-nodes=1 --zone="${ZONE}" --quiet --async ||
-		echo "warning: could not start the e2e node early; the Kata leg will pay its cold start." >&2
+		echo "e2e-prewarm: warning: could not start the e2e node early; the Kata leg will pay its cold start." >&2
 	return 0
 }
 
@@ -648,6 +648,9 @@ e2e_leg() {
 	echo "Spinning up the on-demand e2e tenant (e2e-start.sh)..."
 	bash "${SCRIPT_DIR}/e2e-start.sh"
 
+	# Whether the early node (Q1364) survived to the moment the job needs it: the
+	# autoscaler may remove an idle node it did not add. Grep "e2e-pool-nodes".
+	echo "e2e-pool-nodes: $(pool_node_count "${E2E_POOL}") node(s) in ${E2E_POOL} at dispatch"
 	dispatch_e2e_run
 	local run_id="${E2E_RESOLVED_RUN_ID}"
 

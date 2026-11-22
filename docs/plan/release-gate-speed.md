@@ -176,6 +176,7 @@ What happened in those 5 minutes was not read; the cold path after them took the
 
 Shipped as `prewarm_e2e_node` in `validate-release.sh`: an asynchronous resize of the e2e pool to one node, issued after `reserve_cpu_budget` and before `start.sh`, and only when the Kata leg is selected.
 That placement is after `setup.sh`, so the head start is `start.sh` plus `e2e-start.sh` rather than the whole deploy, and the roughly 3 minute saving above is an upper bound that the next gate's Kata dispatch-to-runner time will measure.
+The gate log carries `e2e-pool-nodes:` (the pool's node count at dispatch, to show whether the autoscaler removed the early node before the job arrived) and `e2e-prewarm: warning:` (a refused resize).
 A refused resize is a warning, not a failure; whether GKE accepts `resize` on the autoscaled `e2e` pool was not exercised, because there is no live cluster in this change.
 
 The risk is to the CPU budget.
