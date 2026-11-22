@@ -71,7 +71,7 @@ REPORTS="$WORK/reports"
 fails=0
 
 # The 29 cases plus registry-complete. Bump it with the case you add.
-EXPECTED_REPORTS=30
+EXPECTED_REPORTS=31
 
 fail() {
 	printf 'FAIL %-34s %s\n' "$1" "$2" >&2
@@ -168,6 +168,7 @@ printf 'gh %s\n' "$*" >>"${STUB_CALLS}"
 case "$1 ${2:-}" in
 "issue list") printf '%s' "${GH_STUB_EXISTING:-}"; [[ -n "${GH_STUB_EXISTING:-}" ]] && echo ;;
 "issue view") printf '%s\n' "${GH_STUB_TITLE:-}" ;;
+"api "*) printf '%s\n' "${GH_STUB_TAGS:-}" ;;
 esac
 exit 0
 STUB
@@ -590,55 +591,69 @@ fi
 # pages.yml `handoff` — a tag push dispatching its own site deploy
 # ============================================================================
 #
-# The decision under test: a stable tag re-runs this workflow as a blank
-# dispatch on its own ref (Q1041), and a prerelease dispatches nothing, because
-# that dispatch publishes the site and moves `stable`. Blank matters: an input
-# would be applied verbatim instead of resolving from the tag.
+# The decision under test: a stable tag's site deploy is dispatched on `main`
+# with `docs_ref` naming the tag (Q1355), carrying the alias the tag's own ref
+# used to resolve, and a prerelease dispatches nothing, because that dispatch
+# publishes the site and moves `stable`. The version and alias come from
+# scripts/pages/tag-deploy-inputs.sh, which the sandbox carries a real copy of.
 
-# run_handoff CASE REF [BODY] — echoes the sandbox.
+# run_handoff CASE TAG TAGS [BODY] — echoes the sandbox. TAGS is the repository's
+# tag listing the step reads from the API.
 run_handoff() {
-	local case="$1" ref="$2" body="${3:-$HANDOFF_BODY}"
+	local case="$1" tag="$2" tags="$3" body="${4:-$HANDOFF_BODY}"
 	local dir got
 	dir="$(new_sandbox "$case")"
 	write_gh_stub "$dir"
-	got="$(drive "$dir" "$body" "GH_TOKEN=stub" "GITHUB_REPOSITORY=o/r" "REF=$ref")"
+	mkdir -p "$dir/scripts/pages"
+	cp "$REPO_ROOT/scripts/pages/tag-deploy-inputs.sh" "$dir/scripts/pages/"
+	got="$(drive "$dir" "$body" "GH_TOKEN=stub" "GITHUB_REPOSITORY=o/r" "TAG=$tag" "GH_STUB_TAGS=$tags")"
 	expect_rc "$case" 0 "$got" "$dir" || return 0
 	printf '%s\n' "$dir"
 }
 
+TAGS=$'v1.9.0\nv1.10.0\nv1.10.0-rc.1\nv0.9.0'
+
 # THE POSITIVE CONTROL: a stable tag must dispatch. A body that stopped acting
 # passes both prerelease cases below and fails here.
-dir="$(run_handoff pages-handoff-stable refs/tags/v1.10.0)"
+dir="$(run_handoff pages-handoff-stable v1.10.0 "$TAGS")"
 if [[ -n "$dir" ]]; then
 	expect_call pages-handoff-stable "$dir" \
-		'gh workflow run pages.yml --repo o/r --ref v1.10.0' &&
-		expect_no_call pages-handoff-stable "$dir" ' -f ' &&
-		pass pages-handoff-stable 'a stable tag dispatches a blank deploy on its own ref'
+		'gh workflow run pages.yml --repo o/r --ref main -f version=1.10.0 -f docs_ref=v1.10.0 -f alias=stable -f set_default=true' &&
+		pass pages-handoff-stable 'the highest stable tag dispatches on main and claims stable'
 fi
 
-dir="$(run_handoff pages-handoff-rc refs/tags/v1.10.0-rc.1)"
+# A backport must not move `stable`: the alias is the one input that differs.
+dir="$(run_handoff pages-handoff-backport v1.9.0 "$TAGS")"
+if [[ -n "$dir" ]]; then
+	expect_call pages-handoff-backport "$dir" \
+		'gh workflow run pages.yml --repo o/r --ref main -f version=1.9.0 -f docs_ref=v1.9.0 -f alias= -f set_default=false' &&
+		expect_no_call pages-handoff-backport "$dir" 'alias=stable' &&
+		pass pages-handoff-backport 'a backport dispatches without claiming stable'
+fi
+
+dir="$(run_handoff pages-handoff-rc v1.10.0-rc.1 "$TAGS")"
 if [[ -n "$dir" ]]; then
 	expect_no_call pages-handoff-rc "$dir" 'gh workflow run' &&
 		pass pages-handoff-rc 'a release candidate dispatches nothing'
 fi
 
-dir="$(run_handoff pages-handoff-zero refs/tags/v0.9.0)"
+dir="$(run_handoff pages-handoff-zero v0.9.0 "$TAGS")"
 if [[ -n "$dir" ]]; then
 	expect_no_call pages-handoff-zero "$dir" 'gh workflow run' &&
 		pass pages-handoff-zero 'a 0.x tag dispatches nothing'
 fi
 
-# Delete the prerelease test and require the rc case to go the other way, so
+# Delete the prerelease exit and require the rc case to go the other way, so
 # pages-handoff-rc is known to be able to fail.
 # The ${...} here are the workflow's own text, matched literally.
 # shellcheck disable=SC2016
-sed 's/if \[\[ "${core}" == 0\.\* || "${core}" == \*-\* \]\]; then/if false; then/' "$HANDOFF_BODY" >"$WORK/pages-handoff-no-prerelease.sh"
+sed 's/if \[\[ "${inputs}" == "deploy=false" \]\]; then/if false; then/' "$HANDOFF_BODY" >"$WORK/pages-handoff-no-prerelease.sh"
 if cmp -s "$HANDOFF_BODY" "$WORK/pages-handoff-no-prerelease.sh"; then
 	fail pages-regression-handoff 'the prerelease test is gone from the handoff step, so this control mutates nothing'
 else
-	dir="$(run_handoff pages-regression-handoff refs/tags/v1.10.0-rc.1 "$WORK/pages-handoff-no-prerelease.sh")"
+	dir="$(run_handoff pages-regression-handoff v1.10.0-rc.1 "$TAGS" "$WORK/pages-handoff-no-prerelease.sh")"
 	if [[ -n "$dir" ]] && grep -qF 'gh workflow run pages.yml' "$dir/calls"; then
-		pass pages-regression-handoff 'without the prerelease test a candidate publishes the site, so this case can fail'
+		pass pages-regression-handoff 'without the prerelease exit a candidate publishes the site, so this case can fail'
 	else
 		fail pages-regression-handoff 'the mutated body did not reproduce the defect'
 	fi

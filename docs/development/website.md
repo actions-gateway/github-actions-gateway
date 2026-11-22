@@ -41,7 +41,8 @@ The one hand-written part is the optional per-release **highlight** prose, and i
 The highlight renders only while `highlight_for` names the resolved release, so forgetting to refresh it degrades the bar to a release-notes link instead of pairing a new version with the previous release's headline.
 Refreshing it is an optional pre-flight step in [release.md](../operations/release.md#1-pre-flight).
 
-Why this is derived at all: a stable tag deploys that tag's docs wholesale, so a banner that is wrong at tag time is published permanently under that version and no later fix to `main` reaches it.
+Why this is derived at all: a stable tag's `docs/` are published as they stood at the tag, so a page that is wrong at tag time stays wrong under that version and no later fix to `main` reaches it.
+The banner's version is derived so it cannot be one of them.
 Every stable tag missed the manual bump: `v1.0.0` shipped saying *"Alpha, pre-1.0"*, and `v1.1.0` and `v1.2.0` both said *"v1.0.0 is here"* (Q393).
 `publish.yml`'s `announce-bar` gate now builds the site at the tag and asserts the **rendered** bar names it, so a broken hook or template fails the release before any image is pushed.
 
@@ -134,10 +135,11 @@ Each version is a full built copy under its own path on the `gh-pages` branch, a
 **What deploys when** (`.github/workflows/pages.yml`):
 
 - **push to `main`** → `mike deploy dev` (refreshes the unreleased `dev` docs).
-- **stable `v*` tag push** → re-runs `pages.yml` as a `workflow_dispatch` on the same tag (the `handoff` job), which deploys that release's docs, and **only if it is the highest released version** also moves the `stable` alias + the default root redirect to it (`mike set-default stable`).
+- **stable `v*` tag push** → re-runs `pages.yml` as a `workflow_dispatch` on **`main`** with `docs_ref` set to the tag (the `handoff` job), which deploys that release's docs, and **only if it is the highest released version** also moves the `stable` alias + the default root redirect to it (`mike set-default stable`).
   This is the same tag push that runs `publish.yml`.
-  The push hands off rather than deploying because no deploy made by a tag push has been seen to serve (Q1041): `v1.6.0` to `v1.10.0` each reported success and kept the previous tree live, while every dispatch of the same content served, on `main` and on the `v1.10.0` tag ref alike.
-  Why the push differs is not known.
+  The `handoff` job computes the version, alias and default with [`tag-deploy-inputs.sh`](../../scripts/pages/tag-deploy-inputs.sh), because a dispatch with an explicit version applies its alias verbatim.
+  It dispatches on `main` rather than the tag because the stable tag's own run failed the live check at `v1.9.0`, `v1.10.0`, `v2.0.0` and `v2.0.1`, as a tag push for the first two and a dispatch on the tag ref for the last two, and a `main` dispatch of the same commit passed it each time (Q1355).
+  That is five runs with no controlled test, and why Pages serves the previous tree is not known; the first stable tag cut after this change is the test.
 - **prerelease tag** (`0.x`, `-rc`/`-alpha`/`-beta`) → **no deploy** (the same prerelease test `publish.yml` uses, Q293).
 - **`workflow_dispatch`** → deploys the `version`/`alias` inputs verbatim (or derives from the ref when blank) — used for **seeding** already-released versions and manual redeploys.
   The `docs_ref` input picks which ref the docs *content* is built from, independently of the ref the workflow logic runs from (see § Seeding below).
@@ -233,8 +235,8 @@ Four things are deliberately **not** taken from the tag:
 | `extra.version` | A pre-versioning tag has no version block, so its pages would render with no selector and strand a visitor on an old release. |
 | `hooks` | A tag cut before Q393 does not wire `hooks/release_version.py`, so its announce bar would render the version-free fallback instead of naming the newest release. The whole list is copied, because `INHERIT` replaces a list rather than merging it: a one-entry list left `source_links.py` out, so `1.8.0` and `1.9.0` shipped `.github/` links that 404 (Q1041). |
 
-**That safety net covers seeds only.** A stable tag's deploy has a blank `docs_ref` and builds the tag wholesale, `overrides/` included.
-That is safe for the announce bar's *version*, which the hook derives from the tag list at build time rather than from a string in the checkout; only the optional highlight prose is pinned to the tag.
+**A stable tag's deploy takes the same path, since Q1355.** The `handoff` job dispatches on `main` with `docs_ref` set to the tag, so `docs/` and `mkdocs.yml` come from the tag while `overrides/`, `requirements-docs.txt`, `site_url`, `docs/CNAME`, the `hooks:` list and `extra.version` come from `main`.
+That is safe for the announce bar's *version*, which the hook derives from the tag list at build time rather than from a string in the checkout; the optional highlight prose is whatever `main` carries when the deploy runs, not what the tag carried.
 Refreshing it is an optional pre-flight step in [release.md](../operations/release.md#1-pre-flight).
 
 The `mkdocs.yml` overrides ride in an [`INHERIT`](https://www.mkdocs.org/user-guide/configuration/#inheritance) overlay (`mkdocs.versioned.yml`) rather than a YAML rewrite, so the tag's own nav and config stay byte-for-byte intact: MkDocs deep-merges the inherited mapping, and scalars such as `site_url` are replaced.
