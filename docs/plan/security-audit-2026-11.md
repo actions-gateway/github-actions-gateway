@@ -7,7 +7,7 @@ The first audit (2026-05) is [security.md](security.md) and the second (2026-06)
 > The fork pull request lead is closed by Q1330's default refusal once the dogfood cluster runs it.
 > Nothing reached high or critical.
 > Two rows gated `v2.0.0`, Q1321 and Q1322, and both have landed.
-> Of the rows filed from it, [Q1323](../queue/Q1323.md) and the follow-ups [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md), [Q1344](../queue/Q1344.md) and [Q1373](../queue/Q1373.md) are open, Q1343 having closed its token route; the Azure range lead closed with Q1253 as a [recorded residual](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges), and its narrowing is [Q1350](../queue/Q1350.md).
+> Of the rows filed from it, [Q1378](../queue/Q1378.md), [Q1379](../queue/Q1379.md) and the follow-ups [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md), [Q1344](../queue/Q1344.md) and [Q1373](../queue/Q1373.md) are open, Q1343 having closed its token route; the Azure range lead closed with Q1253 as a [recorded residual](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges), and its narrowing is [Q1350](../queue/Q1350.md).
 
 ## Method and limits
 
@@ -49,11 +49,11 @@ The recurring theme matches the second audit's: a documented isolation property 
 | [www.github.com and api.github.com spellings of githubURL yield a different scope key for the same org, so the cross-tenant scale-set name guard does not compare them](#stricter-admission-rules) | needs validation | Q1322 (`2.0-gate`), guard fixed, see the finding's Resolution; the GitHub-side question stays open |
 | [Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy](#stricter-admission-rules) | rule gap confirmed in envtest; node mount not observed | Q1322 (`2.0-gate`), fixed |
 | [Template projected serviceAccountToken volume survives buildPod despite the documented 'no Kubernetes API credentials in the worker pod' floor invariant](#stricter-admission-rules) | rule gap confirmed in envtest; token minting not observed | Q1322 (`2.0-gate`), fixed |
-| [Share and attribution projection names collide for (ns 'a-b', proxy 'c') and (ns 'a', proxy 'b-c')](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
-| [ActionsGateway defaultProxyRef status tells a tenant whether a named EgressProxy exists in another namespace](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
-| [An attributed namespace named 'ca' overwrites the attribution CA in the clients Secret and forces a bundle regeneration on every reconcile](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
-| [A direct-egress gateway's workload NetworkPolicy permits direct GitHub egress for proxied workers in the same namespace, while their status reports Proxied and attributed](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
-| [A tenant can pre-claim scale-set names in a GitHub org it holds no credentials for, and another tenant's RunnerSet or gateway is then rejected at admission](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
+| [Share and attribution projection names collide for (ns 'a-b', proxy 'c') and (ns 'a', proxy 'b-c')](#confirmed-low-findings) | confirmed, low | Q1323, fixed |
+| [ActionsGateway defaultProxyRef status tells a tenant whether a named EgressProxy exists in another namespace](#confirmed-low-findings) | confirmed, low | Q1323, fixed |
+| [An attributed namespace named 'ca' overwrites the attribution CA in the clients Secret and forces a bundle regeneration on every reconcile](#confirmed-low-findings) | confirmed, low | Q1323, fixed |
+| [A direct-egress gateway's workload NetworkPolicy permits direct GitHub egress for proxied workers in the same namespace, while their status reports Proxied and attributed](#confirmed-low-findings) | confirmed, low | [Q1378](../queue/Q1378.md) |
+| [A tenant can pre-claim scale-set names in a GitHub org it holds no credentials for, and another tenant's RunnerSet or gateway is then rejected at admission](#confirmed-low-findings) | confirmed, low | [Q1379](../queue/Q1379.md) |
 | [Provider-writable proxy TLS Secret is projected unvalidated into consumer namespaces and installed as an unconstrained trust root by consumer AGCs and workers](#egress-proxy-sharing-leads) | confirmed by a local test, fixed | Q1324 |
 | [A tenant can stall another tenant's EgressProxy reconcile with a labelled ConfigMap and an unblankable Secret in its own namespace](#egress-proxy-sharing-leads) | confirmed by a local test, fixed | Q1324 |
 | [Bring-your-own-autoscaled EgressProxy lets the live Deployment replica count drive an unbounded repeated-addition loop on the GMC's single EgressProxy worker](#egress-proxy-sharing-leads) | confirmed by a local test, fixed | Q1324 |
@@ -386,7 +386,8 @@ The remaining blockers (what the worker ServiceAccount's token can reach, tenant
 
 ## Confirmed low findings
 
-Five confirmed findings whose fix needs no major, tracked as [Q1323](../queue/Q1323.md).
+Five confirmed findings whose fix needs no major.
+Q1323 fixed the first three; the direct-egress policy finding is [Q1378](../queue/Q1378.md) and the scale-set pre-claim finding is [Q1379](../queue/Q1379.md), each filed alone because its fix is a design choice.
 
 ### Share and attribution projection names collide for (ns 'a-b', proxy 'c') and (ns 'a', proxy 'b-c')
 
