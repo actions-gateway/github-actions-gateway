@@ -2712,7 +2712,9 @@ So this costs a local rerun rather than a CI failure, and what the failure lacks
 The source is <code>E2E_V2_MultiGateway</code> itself, on every run: measured 2026-11-22 during Q1289, two clean, uninterrupted <code>make e2e</code> runs focused on that container, on a freshly created private kind cluster, each left <code>tenant-v2-multigw</code> <code>Terminating</code>.
 Each time both RunnerSets still held <code>actions-gateway.com/agentpool-cleanup</code> (<code>NamespaceFinalizersRemaining=True: ... in 2 resource instances</code>) while <code>kubectl get deploy,pods -n tenant-v2-multigw</code> read <code>No resources found</code>.
 So the container's <code>AfterAll</code> namespace delete removes the AGC Deployments that would clear the finalizer before they clear it, and the suite's drain cannot recover once they are gone.
-The same day, the shared <code>actions-gateway-e2e</code> cluster held <code>tenant-v2-multigw</code> and four other namespaces <code>Terminating</code> at 18 days old.</p>
+The same day, the shared <code>actions-gateway-e2e</code> cluster held <code>tenant-v2-multigw</code> and four other namespaces <code>Terminating</code> at 18 days old.
+That <code>AfterAll</code> deletes the namespace without first calling <code>utils.DeleteActionsGatewayCR</code> for <code>alpha</code> and <code>beta</code>, whose godoc (Q585) describes this wedge and which the sibling suites call before their own namespace delete (<code>github_e2e_test.go</code>, <code>hpa_pdb_test.go</code>).
+Calling it for both gateways ahead of <code>utils.DeleteNamespace(tenantNS)</code> is the likely fix; it is unmeasured.</p>
 
 
 
