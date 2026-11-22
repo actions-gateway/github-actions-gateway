@@ -2864,14 +2864,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> a test in <code>cmd/gmc/internal/controller/integration/v2_egressproxy_test.go</code> fails on <code>main</code> with a <code>not found</code> read of a proxy …</td>
 </tr>
 <tr>
-<td><a href="Q1307/">Q1307</a></td>
-<td>Bump the e2e runner image off 2.338.1 before its update window closes</td>
-<td><code>dogfood</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The self-hosted e2e image still runs <code>actions/runner</code> 2.338.1, so a release candidate's e2e jobs on <code>gag-ci-e2e</code> should stop being queued …</td>
-</tr>
-<tr>
 <td><a href="Q1362/">Q1362</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">Gateway teardown waits on a finished worker pod until its node is gone</a></td>
 <td><code>bug</code> <code>dogfood</code></td>
@@ -4678,6 +4670,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><strong>A dependency bump that changes a published image appears in neither list <code>--notes</code> prints.</strong> Measured 2026-11-22 …</td>
+</tr>
+<tr>
+<td><a href="Q1385/">Q1385</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-runner-window.sh">check-runner-window.sh reports a missing feed as an empty one</a></td>
+<td><code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**A bare <code>scripts/release/check-runner-window.sh --pinned 2.338.1</code> exits 2 with <code>could not read the releases feed: it was empty</code>, because …</td>
 </tr>
 <tr>
 <td><a href="Q1383/">Q1383</a></td>

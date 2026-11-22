@@ -2718,9 +2718,8 @@ Below 1.33 the AGC already picks the initContainer.</p>
 <p>Not measured: 1.33 itself, a managed provider's gate setting, and a job through a worker the AGC created.
 The fix is neither designed nor sized, and <code>M</code> is a placeholder until it is.
 It has no twin on <code>main</code> to cherry-pick because Q1284's floor makes 1.33 and 1.34 unreachable there, so it lands on <code>release-1.10</code> alone; read <a href="../../operations/release/#patch-releases-and-backports">Patch releases and backports</a> on what that needs.</p>
-<p><strong>The cut.</strong> Create <code>release-1.10</code> from the <code>v1.10.0</code> tag, cherry-pick #2170, take the <code>dogfood-e2e-runner</code> pin from #2268 in both <code>deploy/dogfood-e2e/overlays/</code> kustomizations, add the wrapper fix, and cut <code>v1.10.1</code> through the candidate flow.
+<p><strong>The cut.</strong> Create <code>release-1.10</code> from the <code>v1.10.0</code> tag, cherry-pick #2170, take the <code>dogfood-e2e-runner</code> pin as it reads on <code>main</code> at the cut (Q1307 moved it to <code>2.338.2-1</code>) in both <code>deploy/dogfood-e2e/overlays/</code> kustomizations, add the wrapper fix, and cut <code>v1.10.1</code> through the candidate flow.
 The pin is there because <code>validate-release.sh</code> dispatches e2e from <code>main</code> on patch lines too, and <code>main</code>'s suite runs <code>helm template</code> against the 1.35 floor, which #2268 measured <code>2.338.1-1</code>'s Helm 3.16.3 refusing; that the candidate would fail this way is read from the code, not run.
-Q1307 holds the same image's own runner deadline.
 The <code>v2.0.0</code> window is otherwise held out of this line (<a href="../../plan/release-ladder/#why-there-is-no-111-rung">why</a>).</p>
 <p><strong>Done when</strong> <code>v1.10.1</code> is tagged, and a worker the AGC created on Kubernetes 1.34 has started under the default <code>WRAPPER_DELIVERY</code>, and <code>docs/releases/v2.0.0.md</code> names <code>v1.10.1</code> under <strong>Upgrading</strong> with its <code>WRAPPER_DELIVERY</code> step re-read.</p>
 

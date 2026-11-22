@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1307/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1385/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Bump the e2e runner image off 2.338.1 before its update window closes - GitHub Actions Gateway</title>
+        <title>check-runner-window.sh reports a missing feed as an empty one - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#bump-the-e2e-runner-image-off-23381-before-its-update-window-closes" class="md-skip">
+        <a href="#check-runner-windowsh-reports-a-missing-feed-as-an-empty-one" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Bump the e2e runner image off 2.338.1 before its update window closes
+              check-runner-window.sh reports a missing feed as an empty one
             
           </span>
         </div>
@@ -2703,14 +2703,13 @@
   
 
 
-<h1 id="bump-the-e2e-runner-image-off-23381-before-its-update-window-closes">Bump the e2e runner image off 2.338.1 before its update window closes<a class="headerlink" href="#bump-the-e2e-runner-image-off-23381-before-its-update-window-closes" title="Permanent link">&para;</a></h1>
-<p>The self-hosted e2e image still runs <code>actions/runner</code> 2.338.1, so a release candidate's e2e jobs on <code>gag-ci-e2e</code> should stop being queued from about 2026-11-25, which would block any candidate gate after that date, <code>v2.0.0</code>'s and <code>v1.10.1</code>'s included.
-<code>scripts/dogfood/e2e-runner/Dockerfile</code> is <code>FROM ghcr.io/actions-gateway/dogfood-runner:2.338.1</code>, and its header says to bump that in lockstep with <code>scripts/dogfood/runner/Dockerfile</code>, which #2170 moved to 2.338.2.
-The <code>2.338.1-2</code> image #2268 pinned kept the old base.</p>
-<p><strong>Unmeasured.</strong> The date is the 30-day rule as <code>scripts/release/check-runner-window.sh --pinned 2.338.1</code> reads it (19 days left on 2026-11-06); this is read from the Dockerfiles, and nothing here has observed GitHub stop queueing to this image.
-Found by the independent review of #2234.</p>
-<p><strong>Done when</strong> both <code>deploy/dogfood-e2e/overlays/</code> kustomizations pin an e2e runner image built on the newest stable runner, and a dispatched e2e run has been picked up on it.
-Building that image is still a manual push until <a href="../Q1305/">Q1305</a> lands.</p>
+<h1 id="check-runner-windowsh-reports-a-missing-feed-as-an-empty-one">check-runner-window.sh reports a missing feed as an empty one<a class="headerlink" href="#check-runner-windowsh-reports-a-missing-feed-as-an-empty-one" title="Permanent link">&para;</a></h1>
+<p><strong>A bare <code>scripts/release/check-runner-window.sh --pinned 2.338.1</code> exits 2 with <code>could not read the releases feed: it was empty</code>, because it was given no feed.</strong> With no <code>RELEASES_JSON</code> argument the script reads stdin, so a run with nothing piped in reads zero bytes.
+Measured 2026-11-22 at the head of #2386 (found by rev-ci, reproduced by Claude here): <code>--pinned 2.338.1 &lt;/dev/null</code> exits 2 with that message, and the same command given a saved copy of <code>gh api repos/actions/runner/releases</code> as a file exits 1 and prints <code>3 days remain of the 30-day window</code> (exit 1 is the stale verdict, not a failure). The script makes no <code>gh api</code> call of its own.</p>
+<p><strong>Why it matters.</strong> The message blames the feed, so the caller looks for a broken fetch when the fix is to pass one.
+The orchestrator who hit it on 2026-11-22 read it as a failure of the check, and the one instrument that says a pinned runner is about to leave GitHub's 30-day window (a closing window is silent on the cluster) went unread until someone re-ran it with input.</p>
+<p><strong>Done when</strong> the script says what is missing when stdin is empty or a terminal (that no <code>RELEASES_JSON</code> was given, and the <code>gh api repos/actions/runner/releases</code> invocation that makes one), with a case in <code>scripts/release/check-runner-window-test.sh</code> for a zero-byte stdin that asserts the new wording and exit 2.
+Whether the script should fetch the feed itself when given none is the design question to settle first; the usage header says it takes a feed, so the minimal fix is the message.</p>
 
 
 
