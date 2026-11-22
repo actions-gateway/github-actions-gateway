@@ -1167,6 +1167,7 @@ That ConfigMap is GMC-owned: do not edit or delete it, and do not create one by 
 **Two pools can derive one name.** The name joins the namespace and the proxy name with `-`, so `team-a-b`/`c` and `team-a`/`b-c` both project `proxy-share-team-a-b-c`, and a consumer granted by both can hold only one of them.
 The pool that wrote it first keeps it; the other skips that consumer and records a `ProjectionNameCollision` Warning Event on its `EgressProxy`, and the consumer's reference to it fails closed with `ProxyShareNotGranted`: a `RunnerSet`'s message names the pool that holds the name, and a gateway's `defaultProxyRef` keeps reporting that the certificate "has not yet been projected here".
 Each controller that reads a projection checks the `proxy-namespace` and `proxy-name` keys inside it, so neither consumer is ever wired to the wrong pool.
+The GMC defers only to a pool that could have written the projection, one that derives the same name and grants this namespace; it restores a projection whose labels a tenant changed to name any other pool, so the labels neither stop the restore nor reveal which pools exist elsewhere.
 Rename one of the two proxies to clear it.
 
 ### Verifying a grant took effect
