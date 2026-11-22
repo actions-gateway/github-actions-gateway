@@ -2204,7 +2204,7 @@ check "dragonfly: the e2e pool is emptied between the DinD teardown and the disp
 EMPTY_RC=1 dragonfly_order >"${DF_DIR}/res" 2>&1 || true
 check "dragonfly: a pool that will not empty still runs the leg" \
 	"rc=0|e2e-stop.sh|empty_node_pool e2e|e2e_leg" "$(paste -sd'|' "${DF_DIR}/res")"
-check_contains "  ...and warns the reading may be warm" "warm node" "$(cat "${DF_DIR}/out")"
+check_contains "  ...and warns the reading may be warm" "e2e-pool-empty: warning:" "$(cat "${DF_DIR}/out")"
 
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2

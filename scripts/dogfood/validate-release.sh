@@ -743,7 +743,7 @@ dragonfly_leg() {
 	# that true once the swap is not. Not fatal: the reading is evidence rather
 	# than a gate, and the warning names what it can no longer say.
 	empty_node_pool "${E2E_POOL}" || {
-		echo "warning: the e2e pool could not be emptied, so the Dragonfly worker may land on a warm node." >&2
+		echo "e2e-pool-empty: warning: the e2e pool could not be emptied, so the Dragonfly worker may land on a warm node." >&2
 		echo "  Read the node-p2p reading with that in mind: no request by rule may not be Dragonfly's doing." >&2
 	}
 	E2E_VARIANT=kata
