@@ -88,15 +88,16 @@ pool_node_count() {
 # lists none, so the next workload placed on it starts a node cold (Q1363).
 # Needs PROJECT, ZONE and CLUSTER. Returns 1 when the resize is refused or the
 # pool still has nodes (or cannot be read) after POOL_EMPTY_TIMEOUT seconds
-# (default 600), polling every POOL_EMPTY_INTERVAL (default 15). The resize is
-# --async so that timeout bounds the whole wait, drain included.
+# (default 600), polling every POOL_EMPTY_INTERVAL (default 15). The resize
+# itself is blocking and bounded only by the caller's step timeout; it is not
+# --async, so the operation has finished before a later resize starts.
 empty_node_pool() {
 	local pool="$1" timeout="${POOL_EMPTY_TIMEOUT:-600}" interval="${POOL_EMPTY_INTERVAL:-15}"
 	local waited=0 count
 	echo "Resizing node pool ${pool} to 0 nodes..."
 	gcloud container clusters resize "${CLUSTER}" \
 		--project="${PROJECT}" \
-		--node-pool="${pool}" --num-nodes=0 --zone="${ZONE}" --quiet --async || return 1
+		--node-pool="${pool}" --num-nodes=0 --zone="${ZONE}" --quiet || return 1
 	while :; do
 		count="$(pool_node_count "${pool}")"
 		[[ "${count}" == 0 ]] && {

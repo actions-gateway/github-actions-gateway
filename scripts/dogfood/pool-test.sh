@@ -121,19 +121,19 @@ empty_case() (
 	rm -rf "${dir}"
 )
 check "an already-empty pool returns after the resize" \
-	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet --async|rc=0" \
+	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet|rc=0" \
 	"$(empty_case "0" 0 | paste -sd'|' -)"
 check "a draining pool is waited for" \
-	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet --async|sleep 10|sleep 10|rc=0" \
+	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet|sleep 10|sleep 10|rc=0" \
 	"$(empty_case "1 1 0" 0 | paste -sd'|' -)"
 check "a pool that never empties fails after the timeout" \
-	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet --async|sleep 10|sleep 10|sleep 10|rc=1" \
+	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet|sleep 10|sleep 10|sleep 10|rc=1" \
 	"$(empty_case "1" 0 | paste -sd'|' -)"
 check "an unreadable cluster is not an empty pool" \
-	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet --async|sleep 10|sleep 10|sleep 10|rc=1" \
+	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet|sleep 10|sleep 10|sleep 10|rc=1" \
 	"$(empty_case "fail" 0 | paste -sd'|' -)"
 check "a refused resize fails without waiting" \
-	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet --async|rc=1" \
+	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet|rc=1" \
 	"$(empty_case "0" 1 | paste -sd'|' -)"
 
 if ((fails > 0)); then
