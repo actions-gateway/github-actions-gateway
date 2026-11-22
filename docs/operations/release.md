@@ -255,7 +255,7 @@ In 1.5 the answers arrived after `rc.1` had been cut, published and validated, a
   This step exists because the alternative is remembering.
   The `v1.2.0`→next window accumulated a required pre-upgrade `kubectl apply`, a removed values key that fails the render, and a rollback that re-arms a cluster-wide outage — each recorded correctly in `docs/operations/upgrade.md` by the change that introduced it, and each invisible to anyone reading a generated changelog.
 
-- **Reconcile [`docs/roadmap.md`](../roadmap.md) and [`docs/features.md`](../features.md) against [`docs/queue/`](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md) before you tag.** The same freeze that applies to the announce bar applies here: a stable tag deploys that tag's docs wholesale, so a stale roadmap is published permanently under that version.
+- **Reconcile [`docs/roadmap.md`](../roadmap.md) and [`docs/features.md`](../features.md) against [`docs/queue/`](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md) before you tag.** The same freeze that applies to the announce bar applies here: a stable tag's `docs/` are published as they stood at the tag, so a stale roadmap is published permanently under that version.
   `make roadmap-check` catches the mechanical half — a roadmap bullet naming a deleted Queue row, or one sitting in the wrong section — and it runs in CI.
   What it cannot catch is the move itself: **work that shipped this cycle needs a `docs/features.md` line**, and a Deferred row describing a capability an adopter would ask about belongs in *Exploring*.
   A 2026-07-25 audit found six of seven near-term items already shipped.
@@ -750,7 +750,8 @@ gh run watch "$(gh run list --workflow=publish.yml --branch=vX.Y.Z -L1 --json da
 #### The tag push hands the site deploy to a dispatch
 
 **Expect two `pages` runs for a stable tag, and read the second.** The tag push's run deploys nothing: its `handoff` job dispatches `pages` on `main` with `docs_ref` set to the tag, and that run builds, deploys and checks the live site (Q1355).
-It runs on `main` because a Pages deployment whose ref is a tag has not activated when its commit is already the one being served: `v1.9.0`, `v1.10.0`, `v2.0.0` and `v2.0.1` each ended `failure` after the check below timed out, and a `main` deployment of the same commit served every time.
+It runs on `main` because the stable tag's own run has failed the live check below at `v1.9.0`, `v1.10.0`, `v2.0.0` and `v2.0.1`, whether it was the tag push or a dispatch on the tag ref, and a `main` dispatch of the same commit passed it each time.
+The dispatch also takes `overrides/`, the `hooks:` list and `extra.version` from `main` rather than the tag.
 The dispatch has not yet been exercised by a real tag, so the first stable tag after this change is its test: if it fails, the repair below is the same command the earlier releases needed.
 
 If the dispatched run fails, dispatch it again by hand, with the inputs the handoff would have passed:

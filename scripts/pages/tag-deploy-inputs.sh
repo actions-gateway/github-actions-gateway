@@ -3,12 +3,11 @@
 # tag-deploy-inputs.sh — turn a pushed release tag into the `pages.yml`
 # workflow_dispatch inputs that deploy its docs (Q1355).
 #
-# A Pages deployment whose ref is a tag and whose commit is the one the site is
-# already serving is accepted and never activated (v1.9.0, v1.10.0, v2.0.0 and
-# v2.0.1 each; see docs/postmortems/2026-08-26-the-tag-published-no-docs.md).
-# The same content deployed on `main` activates. So the tag's deploy is
-# dispatched on `main` with `docs_ref` naming the tag, and the version and alias
-# the tag's own ref used to resolve are computed here instead.
+# A stable tag's own run has failed verify-pages-live at v1.9.0, v1.10.0, v2.0.0
+# and v2.0.1, and a `main` dispatch of the same commit passed it each time (see
+# docs/postmortems/2026-08-26-the-tag-published-no-docs.md). So the tag's deploy
+# is dispatched on `main` with `docs_ref` naming the tag, and the version and
+# alias the tag's own ref used to resolve are computed here instead.
 #
 # Usage:
 #   tag-deploy-inputs.sh vX.Y.Z < tag-names

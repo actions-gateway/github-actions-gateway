@@ -137,19 +137,21 @@ jobs:
         run: mkdocs build --strict --site-dir _site-dev
 
   # Stable tag push: hand the deploy to a dispatch on `main` that builds the
-  # tag's docs through `docs_ref` (Q1041, Q1355). No Pages deployment whose ref
-  # is a tag has been seen to activate when its commit is the one the site is
-  # already serving, and a tag points at the tip `main` just deployed as `dev`:
-  # v1.9.0, v1.10.0, v2.0.0 and v2.0.1 each reached `in_progress`, never
-  # `success`, then `failure` when verify-pages-live failed the run, and each
-  # was repaired by a `main` dispatch of the same commit. The same commit
-  # deployed on `main` activated every time. So the ref type, not push versus
-  # dispatch, is what differs; v2.0.0 and v2.0.1 were dispatches on the tag ref
-  # and failed. The cause inside Pages is unmeasured.
+  # tag's docs through `docs_ref` (Q1041, Q1355). A stable tag's run has failed
+  # verify-pages-live at v1.9.0, v1.10.0, v2.0.0 and v2.0.1, each time with
+  # `main` having deployed the same commit as `dev` minutes before, and each
+  # was repaired by a `main` dispatch of that commit whose live check passed.
+  # v2.0.0 and v2.0.1 were dispatches on the tag ref, so push versus dispatch
+  # is not what differs. The deployment statuses record the publish job's
+  # outcome rather than Pages activation, so what is measured is the live
+  # check's result by ref type, not whether Pages activated. Why Pages serves
+  # the previous tree is unmeasured.
   #
   # The version, alias and default the tag's own ref used to resolve come from
   # scripts/pages/tag-deploy-inputs.sh, so a backport still leaves `stable`
-  # alone. A workflow_dispatch made with GITHUB_TOKEN still starts a run, which
+  # alone. A dispatch with a `version` resolves stable_tag=false, so
+  # verify-pages-artifact no longer re-derives `stable` for itself; it checks
+  # the alias the handoff computed, and verify-pages-live checks that. A workflow_dispatch made with GITHUB_TOKEN still starts a run, which
   # is the documented exception validate-candidate.yml's hand-off also rests on.
   handoff:
     if: github.event_name == 'push' && github.ref_type == 'tag'
@@ -247,11 +249,12 @@ jobs:
         #     render the version-free fallback, and a one-entry list would drop
         #     source_links.py and the rest for every tag that does (Q1041).
         #
-        # NOTE this only covers seeds. A stable tag's deploy has a blank
-        # `docs_ref` and builds the tag wholesale, overrides included. That is
-        # safe for the banner's VERSION, which the hook derives from the tag list
-        # at build time rather than from a string in the checkout (Q393); only the
-        # optional highlight prose is pinned to the tag. See
+        # NOTE a stable tag's deploy is a `docs_ref` dispatch on `main` too
+        # (Q1355), so it takes `docs/` and mkdocs.yml from the tag and the
+        # exclusions above from `main`. The banner's VERSION is safe, because the
+        # hook derives it from the tag list at build time rather than from a
+        # string in the checkout (Q393); the optional highlight prose is
+        # whatever `main` carries when the deploy runs. See
         # docs/operations/release.md, Pre-flight.
         #
         # The overrides ride in an INHERIT overlay rather than a YAML rewrite, so
