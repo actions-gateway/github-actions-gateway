@@ -1,0 +1,80 @@
+# Q1236 probe fixture — dispatch-only, never runs in normal CI.
+#
+# Gives flaky-job detection (Q555) the completions the q555 design's M1, M2 and M4
+# need, on the dogfood `ci` scale set: a step that is red on the first attempt and
+# green on a re-run, a job killed by its timeout, two jobs sharing one `name:`, and
+# a job left running to be cancelled. The readings are the AGC's `scaleset: job
+# assigned` / `job completed` / `reaped worker pod` log lines and the
+# `scaleset-failures-ci` ledger ConfigMap; see the Q1236 findings in the q555 design.
+#
+# Runs only while the dogfood cluster is up: the jobs wait server-side on the
+# `gag-ci-scaleset` label until its listener is serving.
+name: q1236-detection-probe
+on:
+  workflow_dispatch:
+    inputs:
+      probe:
+        description: "detection (the four completions) or cancel (one job to cancel)"
+        type: choice
+        options: [detection, cancel]
+        default: detection
+  # workflow_dispatch only works once the file reaches the default branch; the
+  # push trigger (scoped to this file on claude/ branches) lets the probe session
+  # queue the jobs from its own feature branch.
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/q1236-detection-probe.yml"]
+
+# The jobs never touch the repo, so they get no token scopes at all.
+permissions: {}
+
+# Jobs run only on explicit opt-in: a workflow_dispatch, or a push whose head
+# commit message contains "[q1236-probe]" (detection) or "[q1236-cancel]". A plain
+# push touching this file skips every job, so the run concludes green.
+jobs:
+  # M1 (a red step's result) and M2 (a re-run's job ID and display name): red on
+  # attempt 1, so a re-run of the failed jobs pairs a success with the failure.
+  red-then-green:
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'detection') || contains(github.event.head_commit.message, '[q1236-probe]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: |
+          echo "run attempt ${GITHUB_RUN_ATTEMPT}"
+          if [ "${GITHUB_RUN_ATTEMPT}" = 1 ]; then
+            echo "red on the first attempt only (Q1236)"
+            exit 1
+          fi
+
+  # M1: the result a job killed by timeout-minutes completes with.
+  timed-out:
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'detection') || contains(github.event.head_commit.message, '[q1236-probe]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 1
+    steps:
+      - run: sleep 300
+
+  # M2: two jobs whose display name is the same. The red one completes first, so a
+  # shared failure key would pair the green one's success with it.
+  shared-name-red:
+    name: shared-name
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'detection') || contains(github.event.head_commit.message, '[q1236-probe]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: exit 1
+  shared-name-green:
+    name: shared-name
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'detection') || contains(github.event.head_commit.message, '[q1236-probe]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: sleep 90
+
+  # M1: the result a user's cancel completes with. Cancelled by hand once running.
+  cancelled:
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'cancel') || contains(github.event.head_commit.message, '[q1236-cancel]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 15
+    steps:
+      - run: sleep 600

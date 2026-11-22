@@ -6,13 +6,15 @@
 # a typo'd label still fails, instead of the whole rule being switched off.
 #
 # These are the labels registered by the GAG dogfood cluster's own runner scale
-# sets — the credential-gated probe workflows and the scale-set probe. The
-# migrated unit/integration/e2e jobs reach their runner through
+# sets — the credential-gated probe workflows, the scale-set probe, and the CI
+# tenant's `gag-ci-scaleset`, which the retry-measurement probes (Q1236) name
+# literally. The migrated unit/integration/e2e jobs reach that same runner through
 # `fromJSON(vars.GAG_RUNNER)` instead, which is an expression actionlint does not
-# resolve, so no entry is needed (or possible) for those.
+# resolve, so they need no entry of their own.
 self-hosted-runner:
   labels:
     - probe
+    - gag-ci-scaleset
     - gag-probe-scaleset
     - gag-q468-retention
     - gag-q583-replay
