@@ -166,7 +166,7 @@ TREE_BANDS = (
       "LICENSE", "NOTICE", "SECURITY.md",
       # The pages MkDocs publishes from the docs/ root.
       "docs/index.md", "docs/why-gag.md", "docs/features.md", "docs/alternatives.md",
-      "docs/demo.md", "docs/roadmap.md")),
+      "docs/demo.md", "docs/roadmap.md", "docs/worker-isolation.md")),
     ("machinery_docs",
      ("docs/development/",),
      ("CONTRIBUTING.md", "CLAUDE.md", "AGENTS.md")),
