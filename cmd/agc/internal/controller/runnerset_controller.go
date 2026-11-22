@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -849,8 +850,16 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 						"to disable the cap", podName,
 					provisioner.MaxWorkerLifetimeOrDefault(rs.Spec.MaxWorkerLifetime))
 			},
-			deregisterRunner: r.deregisterScaleSetRunner(rs, log),
-			recoverAbandoned: r.recoverAbandonedRun(rs),
+			emitIdleRunner: func(podName string, grace time.Duration) {
+				// Operator-visible: a worker no completion stamp reached, typically one an
+				// AGC restart built for a job another runner had already taken (Q1360).
+				r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodRunnerIdle", "ReapWorkerPods",
+					"worker pod %s was Running for more than %s with no job started, GitHub "+
+						"reported its runner idle, and it has been deleted", podName, grace)
+			},
+			deregisterRunner:  r.deregisterScaleSetRunner(rs, log),
+			releaseIdleRunner: r.releaseIdleScaleSetRunner(rs, log),
+			recoverAbandoned:  r.recoverAbandonedRun(rs),
 			// v2 only: v1 is terminal and grows no status field for this (Q792).
 			observeWorkerReport: observed.observe,
 		})
@@ -887,6 +896,56 @@ func (r *RunnerSetReconciler) deregisterScaleSetRunner(rs *v2.RunnerSet, log *sl
 			log.Info("reaper: deregistered worker runner record", "runner", runnerName)
 		}
 	}
+}
+
+// releaseIdleScaleSetRunner returns the reaper's idle-runner check for this RunnerSet
+// (Q1360), or nil for a set whose listener has not started. It deletes the runner's
+// record, which GitHub refuses for a runner running a job.
+//
+// A name the exact-name filter does not resolve is looked up in the full listing before
+// it counts as gone, because the filter can miss a record that exists (Q550), and a
+// missed busy record read as gone would reap a live job. Any error, and a name this
+// set's listener did not mint, leaves the pod for a later pass.
+func (r *RunnerSetReconciler) releaseIdleScaleSetRunner(rs *v2.RunnerSet, log *slog.Logger) func(context.Context, string) idleRunnerVerdict {
+	ssClient, scaleSetName := r.scaleSetClientFor(types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name})
+	if ssClient == nil {
+		return nil
+	}
+	return func(ctx context.Context, runnerName string) idleRunnerVerdict {
+		if !scalesetlistener.MintedBy(scaleSetName, runnerName) {
+			log.Debug("reaper: not checking a runner name this scale set did not mint",
+				"runner", runnerName, "scaleSet", scaleSetName)
+			return idleRunnerUnknown
+		}
+		deleted, err := ssClient.DeregisterRunnerByName(ctx, runnerName)
+		if err == nil && !deleted {
+			err = deregisterListedRunner(ctx, ssClient, runnerName)
+		}
+		var busy *scaleset.RunnerBusyError
+		switch {
+		case errors.As(err, &busy):
+			return idleRunnerBusy
+		case err != nil:
+			log.Info("reaper: idle-runner check failed; retrying", "runner", runnerName, "error", err)
+			return idleRunnerUnknown
+		}
+		return idleRunnerReleased
+	}
+}
+
+// deregisterListedRunner deletes runnerName's record found through the full runner
+// listing, returning nil when the listing holds no such record.
+func deregisterListedRunner(ctx context.Context, ssClient *scaleset.Client, runnerName string) error {
+	records, err := ssClient.ListRunnersWithPrefix(ctx, runnerName)
+	if err != nil {
+		return err
+	}
+	for _, rec := range records {
+		if rec.Name == runnerName {
+			return ssClient.DeregisterRunnerByID(ctx, rec.ID, rec.Name)
+		}
+	}
+	return nil
 }
 
 // recoverAbandonedRun returns the reaper's abandoned-run recovery hook: force-cancel the

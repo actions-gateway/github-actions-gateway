@@ -20,6 +20,11 @@ const (
 	// out from pending_deadline so an operator is not sent after a scheduling problem
 	// that does not exist (Q575).
 	reapReasonCompletedPending = "completed_pending"
+	// reapReasonIdleRunner labels a scale-set pod deleted because its runner had been
+	// up for idleRunnerGrace without starting a job and GitHub agreed it was idle — a
+	// worker no completion stamp will ever reach, such as one built after an AGC
+	// restart for a job another runner already took (Q1360).
+	reapReasonIdleRunner = "idle_runner"
 	// reapReasonGatewayDeleted labels a pod deleted because its ActionsGateway is
 	// terminating: the AGC is the pods' only reaper and is about to be torn down with
 	// the gateway, so it reaps them itself rather than leave them pinning a node with

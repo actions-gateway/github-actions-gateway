@@ -53,6 +53,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` o
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
 - [Worker Pod Reaped While Pending After Its Job Completed (WorkerPodCompletedPending)](#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending)
 - [Worker Pod Reaped While Running (WorkerPodOrphanedRunning)](#worker-pod-reaped-while-running-workerpodorphanedrunning)
+- [Worker Pod Reaped With an Idle Runner (WorkerPodRunnerIdle)](#worker-pod-reaped-with-an-idle-runner-workerpodrunneridle)
 - [Workers Left Behind by an AGC That Was Down](#workers-left-behind-by-an-agc-that-was-down)
 - [Worker Killed by the Lifetime Cap (WorkerPodLifetimeExceeded)](#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded)
 - [Worker Pods Reaped on Gateway Teardown (WorkerPodsReapedOnGatewayTeardown)](#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown)
@@ -1724,6 +1725,48 @@ The five-minute grace is a fixed constant, not a CRD field: it measures runner s
 
 ---
 
+## Worker Pod Reaped With an Idle Runner (WorkerPodRunnerIdle)
+
+**Symptoms.** A `Warning` Event with reason `WorkerPodRunnerIdle` appears on the `RunnerSet` and `actions_gateway_worker_pods_reaped_total{reason="idle_runner"}` increments.
+Before the reap, the pod looked like the shape in the section above, a `Running` worker whose logs end at `Listening for Jobs`, but with no `actions-gateway.com/job-completed-at` stamp to put it on the clock.
+
+**What happened.** The worker's runner container had been up ten minutes, the AGC had recorded no job start for it (`actions-gateway.com/started-job-id`), and GitHub reported the runner idle, so the AGC deleted its runner record and then the pod.
+No completion ever names such a worker, so on AGC `v2.0.1` and earlier it held its node until the 12-hour `maxWorkerLifetime` (Q1360).
+Two orderings produce it, both after GitHub re-issues a job no runner took within five minutes:
+
+- **An AGC restart.** The restarted listener replays its queue and builds a worker for the re-issue again, but the re-issue's start names the runner that already took it.
+- **A start and an assignment in one message batch.** The surplus the start frees lands on another worker or on none, and the re-issue's own worker is left with nothing to run.
+
+A worker whose runner GitHub reports running a job is kept, whatever the AGC has recorded, and is stamped `actions-gateway.com/runner-busy-at` so it is not checked again.
+That is the state an AGC outage across a job's start leaves: the runner is mid-job and the AGC never saw it begin.
+
+**Diagnostics.**
+
+```sh
+# The reap event names the deleted pod
+kubectl get events -n <namespace> --field-selector reason=WorkerPodRunnerIdle
+```
+
+```sh
+# Running workers with no recorded start, and which ones GitHub reported busy
+kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<set> \
+  --field-selector status.phase=Running \
+  -o custom-columns='NAME:.metadata.name,STARTED:.metadata.annotations.actions-gateway\.com/started-job-id,BUSY-AT:.metadata.annotations.actions-gateway\.com/runner-busy-at'
+```
+
+```sh
+# A check GitHub could not answer is retried a minute later, and logged
+kubectl logs -n <namespace> deploy/<agc-deployment> | grep 'idle-runner check failed'
+```
+
+**Resolution.** None is needed for an occasional reap: it returns the slot and the node.
+A sustained rate means GitHub is re-issuing jobs, which happens when workers take longer than five minutes to start: a node scale-up from zero, a slow volume or image pull on a cold node, and the other causes under [Worker Pods Stuck Pending](#worker-pods-stuck-pending).
+
+The ten-minute grace is a fixed constant, not a CRD field.
+A runner takes a queued job within seconds of coming up, so the grace only has to outlast the AGC's own record of a start, and GitHub's answer decides the reap.
+
+---
+
 ## Workers Left Behind by an AGC That Was Down
 
 **Symptoms.** Worker pods sit `Running` for hours with no job executing, their nodes never scale down, and — unlike the section above — **no** `WorkerPodOrphanedRunning` Event ever fires and `actions_gateway_worker_pods_reaped_total` does not move.
@@ -1739,6 +1782,7 @@ Workers that already reached a terminal phase, workers stuck `Pending`, and work
 A still-`Running` worker whose job ended during the outage is reclaimed if GitHub redelivers that job's completion to the restarted AGC, which stamps the pod and reaps it five minutes later.
 GitHub holds that completion for a long time: a live probe found one still redelivered to a brand-new session **13 hours** after the previous session went away (observed 2026-07-29 — GitHub does not publish a retention window, so treat this as "long enough in practice", not a guarantee).
 Since no worker outlives the 12 h `maxWorkerLifetime` below anyway, redelivery covers essentially the whole span in which a stranded `Running` worker can still exist.
+Without a redelivered completion, a ScaleSet worker whose runner never started a job is still reaped once GitHub reports that runner idle, ten minutes after it came up ([WorkerPodRunnerIdle](#worker-pod-reaped-with-an-idle-runner-workerpodrunneridle)).
 
 **The unconditional backstop is `maxWorkerLifetime` (default 12h).** Every worker pod is created with that value as its `activeDeadlineSeconds`, so the **kubelet** — not the AGC — kills a worker that outlives it.
 That is what bounds this failure even when the AGC never comes back at all: the incident above ran 16 hours precisely because nothing was running to notice.

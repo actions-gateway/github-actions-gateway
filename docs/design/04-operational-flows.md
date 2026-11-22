@@ -899,7 +899,8 @@ At 06:01:12Z, five minutes later, a `JobCompleted` naming no runner withdrew tha
 The first worker's runner came up and took the re-issue at 06:01:17Z, so the second worker had nothing to run.
 Its surplus stamp, moved off the first worker by that start, found the second worker still `Pending` and was dropped while `Pending` workers were never picked, leaving it idle until it was deleted by hand (Q1360).
 A re-issue whose start arrives in the same batch as its assignment still gets a worker, because the start is handled first and the surplus it moves may already sit on another job's `Pending` worker, which the re-issue's worker then replaces.
-Where no worker takes that surplus, the re-issue's worker is idle with no stamp, the gap Q1360 still carries.
+Where no worker takes that surplus, the re-issue's worker is idle with no stamp, and so is a worker an AGC restart builds for a re-issue whose start names another runner: the listener's `provisioned` guard is in memory, so a replayed queue provisions the re-issue again.
+The idle-runner deadline below collects both.
 The listener records each `JobStarted` on its runner's pod as `actions-gateway.com/started-job-id`, handling a batch's starts before its completions.
 The same start replaces the pod's `run-id` and `repository` with the started job's run, which is what eviction recovery re-runs (Q1152).
 A worker disrupted before its runner started anything still carries the identity of the job it was created for, so eviction recovery re-runs nothing for it while another worker has started that job (Q1169).
@@ -913,9 +914,21 @@ A start also lifts a deadline set while that runner was idle, and moves it to an
 The grace is a constant, not a tunable: it measures runner shutdown — a runner that actually ran the job reports completion and exits within seconds — and the job is already over at GitHub either way, so the only thing a premature reap costs is the terminal pod's `completedPodTTL` inspection window.
 The stamp is set once, so a completion replayed to a re-created session cannot push the deadline back, and it lives on the pod rather than in AGC memory, so the deadline survives an AGC restart.
 
-The deadline is only as good as the completion message: a pod whose job GitHub never reports terminal is never stamped, and keeps the old no-deadline treatment.
-That is deliberate — an unstamped `Running` pod is indistinguishable from one executing a live job, and reaping those would kill real builds.
+The deadline is only as good as the completion message: a pod whose job GitHub never reports terminal is never stamped.
 The replay property covers the process-crash case (a re-created session polls from cursor 0, so a completion handled just before a crash is redelivered and stamps the pod then).
+
+**An unstamped worker whose runner started nothing has a deadline of its own** (Q1360).
+From the pod alone, an unstamped `Running` worker is indistinguishable from one executing a live job, because an AGC that was down across the job's start never recorded it.
+GitHub can tell them apart, so the reaper asks: once the runner container has been up ten minutes (`idleRunnerGrace`) with no `actions-gateway.com/started-job-id`, it deletes the runner's record at GitHub, and GitHub refuses that delete for a runner running a job.
+A deleted record means the runner can take no job, so the pod is reaped under `reason="idle_runner"` with a `WorkerPodRunnerIdle` Warning Event.
+A refusal keeps the pod and stamps it `actions-gateway.com/runner-busy-at`, which ends the check for that pod, since an ephemeral runner takes one job and exits with it.
+The refusal is GitHub's own test at the moment of the delete, so no read of the record can go stale between the check and the reap.
+A name GitHub's exact-name filter does not resolve is looked up in the full runner listing before it counts as deleted, because the filter can miss a record that exists (Q550).
+An error leaves the pod for another try a minute later.
+
+Ten minutes is far past a runner's pickup: in the measured re-issue above, the runner took its job four seconds after its container started.
+A runner idle that long has no queued job waiting for it, and a job queued later gets a worker of its own.
+The window this does not close is GitHub assigning a job to the runner in the instant the delete lands; how long a runner stays not-busy after GitHub hands it a job was not measured.
 
 A job that completes while its worker is still `Pending` is the same problem one phase earlier, and it is handled at two points (Q575).
 The listener avoids reaching it: it handles a message batch's `JobCompleted` entries **before** its `JobAssigned` entries, and refuses to provision a job it has already seen completed — so a batch carrying both messages for one job, which is what a cancelled run and a replayed queue both produce, builds no pod at all.

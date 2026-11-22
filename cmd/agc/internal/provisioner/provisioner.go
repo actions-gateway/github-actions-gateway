@@ -987,7 +987,7 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 // worker minted for jobID: jobID ended before any runner started it, so one of the set's
 // runners will never be given a job, but the one minted for it is busy with another
 // (Q1153). Left alone, that idle runner sits at "Listening for Jobs" holding a
-// concurrency slot and a node until spec.maxWorkerLifetime.
+// concurrency slot and a node until the reaper's idle-runner check finds it (Q1360).
 //
 // Every runner of the set can take any of its jobs, so which idle one goes does not
 // change how many jobs still have a runner to take them. A candidate is a Running or
@@ -1004,7 +1004,8 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 //
 // It is idempotent per jobID: a worker already carrying AnnotationSurplusForJob for it
 // means a replayed completion has nothing left to reclaim. except names a pod never to
-// pick. Finding no candidate is not an error; the lifetime cap remains the backstop.
+// pick. Finding no candidate is not an error; the reaper's idle-runner check is the
+// backstop for a worker this leaves idle (Q1360).
 func (p *Provisioner) reclaimSurplusWorker(ctx context.Context, target Target, jobID, except string) error {
 	key := target.Key()
 	var pods corev1.PodList
