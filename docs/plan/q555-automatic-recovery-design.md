@@ -1,7 +1,7 @@
 # Q555 automatic recovery: design
 
 **Status:** ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; so is Q1181's `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the scale-set tier (`rerun_futility.go`); so is Q555's detection (`flaky_jobs.go`): the `failures` map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up ([Q1236](../queue/Q1236.md)), with the colocated proxy's readiness added by Q1237; the rest is not.
+Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; so is Q1181's `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the scale-set tier (`rerun_futility.go`); so is Q555's detection (`flaky_jobs.go`): the `failures` map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up whose [readings](#readings-from-the-dogfood-turn-up-2026-11-22) (Q1236) refute three of its assumptions, with the colocated proxy's readiness added by Q1237; the rest is not.
 It turns [the requirements draft](q555-flaky-job-retry.md) into components against the code as it stands, one per backlog row, and answers the draft's [open questions](q555-flaky-job-retry.md#open-questions-for-the-design-session).
 Each answer is marked **Decided** (the maintainer chose it, 2026-10-12), **Decide** (a recommendation still awaiting sign-off) or **Research** (needs a measurement before anyone can choose).
 The draft says *what* and *why*; this says *how*.
@@ -15,19 +15,37 @@ Retry classes then fire off that context through the re-run path the disruption 
 
 ## Measure before building
 
-Each of these decides a component's shape, and none has been observed:
+Each of these decides a component's shape.
+M1, M2 and M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)); the rest have not been observed:
 
 | # | Unknown | Decides | How to settle |
 |---|---|---|---|
-| M1 | The `result` vocabulary for a red step, a cancelled run and a timed-out job | Which completions the ledger records | The dogfood turn-up [Q1236](../queue/Q1236.md) names |
-| M2 | Whether a re-run job's `JobAssigned` carries a new job UUID and the same `jobDisplayName`, and whether two jobs in one run can share a display name (GitHub allows a duplicate `name:`, from recall) | Pairing's key | Same turn-up: re-run the failed job and read both assignments at debug level; a workflow with two jobs named alike |
+| M1 | The `result` vocabulary for a red step, a cancelled run and a timed-out job | Which completions the ledger records | Measured: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
+| M2 | Whether a re-run job's `JobAssigned` carries a new job UUID and the same `jobDisplayName`, and whether two jobs in one run can share a display name | Pairing's key | Measured: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
 | M3 | Whether a container killed at its memory limit takes the runner with it (the pod fails, and GitHub concludes the job only when the job lock lapses, about 10 minutes later) or only a step's process (the runner survives and reports a failed step) | Whether the out-of-memory class fires from the pod watch, like the disruption arms, or from `JobCompleted` | A dogfood job that allocates past its limit under `Binpack` |
-| M4 | Whether a finished worker's pod object still exists when its `JobCompleted` arrives | Where platform context is read | The same turn-up: compare the pod's deletion time to the completion's arrival in the AGC log |
+| M4 | Whether a finished worker's pod object still exists when its `JobCompleted` arrives | Where platform context is read | Measured: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
 | M5 | The `superseded` check's answer for a pull request from a fork whose branch is `main` | Whether the check needs more than the filters below | A fork PR on a test repository |
 | M6 | Whether `jobDisplayName` matches the jobs API's `name` exactly, for matrix jobs and reusable workflows, and what a single-job re-run does to the jobs it depends on and that depend on it | Whether a classified retry can re-run only its own job ([granularity](#run--or-job-granular-re-run-open-question-2)) | A test workflow with a matrix, a reusable workflow and a `needs:` chain, re-run one job at a time |
 
 M3 rests on recall that kubelets on cgroup v2 kill a container's whole process group on an out-of-memory event.
 The breaker thresholds, the 7-day ledger expiry and the deferred path's 24-hour expiry are proposals, not measurements; R14's metrics are what will move them.
+
+### Readings from the dogfood turn-up, 2026-11-22
+
+Taken on the `ci` set in `gag-dogfood`, whose AGC ran `v2.0.1-rc.2`; its detection and retry code is unchanged on `main` at `f414275fa`.
+The jobs came from the [`q1236-detection-probe`](../../.github/workflows/q1236-detection-probe.yml) fixture, runs 45052015868 (attempts 1 and 2) and 45053166409, and the readings from the AGC's `scaleset: job assigned`, `job completed` and `reaped worker pod` log lines and the `scaleset-failures-ci` ledger.
+`scaleset_jobs_completed_total` itself was not queried: the listener increments it with the same `result` it logs, in the same once-per-job block.
+
+- **M1.** A red step completes `failed` (jobs `82a2530d…`, `abe6cad3…`, `ee99fae0…`).
+  A job killed by `timeout-minutes` completes `canceled` (`b31558d4…`, `486169c1…`; the jobs API says `cancelled`), exactly as a user's cancel does (`3762586f…`), so detection records no timed-out job and never counts its later success as flaky ([Q1374](../queue/Q1374.md)).
+  A job whose runner an out-of-memory kill ended completes `failed`, 9 min 48 s after the kill, when the job lock lapses (`ff028f4b…`).
+- **M2.** A re-run of the failed job arrives with a new job UUID (`abe6cad3…`, then `4349fbb7…`) under the same run ID and `jobDisplayName`, and pairs as `trigger=other`, flaky, as designed.
+  GitHub accepts two jobs sharing one `name:`, and they share one failure key: the green twin's success paired with the red twin's failure, emitted a false `FlakyJobDetected` and deleted the red record ([Q1375](../queue/Q1375.md)).
+- **M4.** A job that ends on a step's result completes before its pod's terminal transition: the completion is logged in the same second as `job started`, and every such record's `context` reads `podPhase: Running` with no container terminated (three in these runs, and `44325908424/scripts-test` from 2026-11-18).
+  So `Completed` reads the running pod every time, and the snapshot the terminal transition takes moments later is never taken by any completion; it waits in the 1,024-entry map until evicted ([Q1376](../queue/Q1376.md)).
+  The runner exits 0 when its job fails: both red jobs' pods, and the timed-out job's, were reaped `Succeeded`, so a red test on its own never reads as a fault.
+  A kill that ends the runner inverts the order: the out-of-memory worker failed at 17:58:21 UTC, was reaped at 18:03:23, and its completion at 18:08:09 took the terminal snapshot, so that record shows the fault and raised `PlatformFaultOnFailedJob`.
+- **`JobCompleted` carries `eventName` and `jobWorkflowRef`.** Every record holds `event: push` and the fixture's workflow ref, and the listener reads both from the completion message.
 
 ## Component 1: the failure ledger (Q555, R1 to R8)
 
@@ -45,7 +63,8 @@ A rolling update can briefly run two AGC pods, so the ledger is written with a c
 
 The pod is the evidence, and nothing maps a job to its pod once the pod is deleted.
 So the runner-set controller, whose pod watch already sees every worker reach a terminal phase (it drives `RecoverDisruptedScaleSetWorker`), snapshots each worker at that transition into a bounded in-memory map keyed by runner name.
-`Completed` takes the snapshot for its runner, falling back to reading the pod if it is still there (M4).
+`Completed` takes the snapshot for its runner, falling back to reading the pod if it is still there.
+Measured (M4), the fallback is the common path and reads a pod still `Running`: only a kill that ends the runner lets the snapshot arrive first ([Q1376](../queue/Q1376.md)).
 
 A snapshot holds only bounded fields, all read from objects the AGC can already see:
 
@@ -119,7 +138,7 @@ It is also [the budget](#the-budget-is-gags-own-count-in-the-ledger-r15): `count
 `pending` holds the class re-runs waiting for their run to conclude ([How it waits](#how-it-waits)).
 
 `event` and `workflowRef` are on the wire in `JobAssigned` (a live capture in [scaleset-eviction-recovery.md](scaleset-eviction-recovery.md)), but `scaleset/types.go` decodes neither, so decoding them is part of Q555.
-Whether `JobCompleted` carries them too is inferred from upstream's struct and unmeasured, so the listener carries them from the assignment, as it already carries the run identity, rather than relying on the completion; they cost no API call either way.
+`JobCompleted` carries them too (measured on dogfood, [2026-11-22](#readings-from-the-dogfood-turn-up-2026-11-22)), and the listener reads them from the completion; they cost no API call either way.
 
 **Bounds.**
 

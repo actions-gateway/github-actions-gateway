@@ -1,7 +1,7 @@
 # Release 2.1 Milestone Definition
 
 > **Status: scoped 2026-11-09, nothing landed.** The maintainer made flaky-job detection and automatic retry for more platform failures the `v2.1.0` headline on 2026-11-09.
-> Seven rows gate the tag and nothing rides yet.
+> Q1236's dogfood readings are taken (2026-11-22); six rows still gate the tag and nothing rides yet.
 > Nothing here is a commitment to a date.
 
 ## Why this release exists
@@ -24,7 +24,7 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
-| [Q1236](../queue/Q1236.md) | Measure flaky-job detection on dogfood: result spelling, re-run job IDs (M1, M2, M4) | `2.1-gate` | 🔲 open |
+| Q1236 | Measure flaky-job detection on dogfood: result spelling, re-run job IDs (M1, M2, M4) | `2.1-gate` | ✅ measured 2026-11-22; three refuted assumptions filed as Q1374 to Q1376, ungated |
 | [Q1317](../queue/Q1317.md) | Reproduce the out-of-memory retry class on dogfood (M3, R12) | `2.1-gate` | 🔲 open |
 | [Q1320](../queue/Q1320.md) | Build the `already_rerun`, `run_succeeded` and `worker_unstartable` checks | `2.1-gate` | 🔲 open |
 | [Q1318](../queue/Q1318.md) | Measure the `superseded` check on a fork PR whose branch is `main` (M5) | `2.1-gate` | 🔲 open |

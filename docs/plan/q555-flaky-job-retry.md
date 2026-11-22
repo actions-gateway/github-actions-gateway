@@ -28,6 +28,7 @@ The live evidence is thinner than "the outcome is delivered" suggests, and each 
 3. **Whether a timed-out job is distinguishable** from a failed one.
 
 All three are one dogfood turn-up to settle: fail a step, cancel a run, and time a job out, then read `actions_gateway_scaleset_jobs_completed_total` by `result`, which needs no code change.
+That turn-up ran on 2026-11-22 (Q1236): a red step reads `failed`, and a cancelled run and a timed-out job both read `canceled`, so a timed-out job is distinguishable from a failed one but not from a cancel ([the readings](q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22)).
 
 ## How this splits into backlog items
 
@@ -36,7 +37,7 @@ The requirements below span several separable pieces of work, filed 2026-10-10 s
 | Row | Covers | Depends on |
 |---|---|---|
 | Q555 (built) | Detection, R1 to R8 | Built without the dogfood measurement it named |
-| [Q1236](../queue/Q1236.md) | The dogfood readings detection rests on (M1, M2, M4) | Q1180 (applied) |
+| Q1236 (measured) | The dogfood readings detection rests on (M1, M2, M4); three refuted assumptions became Q1374 to Q1376 | Q1180 (applied) |
 | Q1237 (built) | The colocated egress proxy's readiness in R7's snapshot | Nothing |
 | Q1181 (built on the scale-set tier) | R18's futility checks, on the arms that exist today | Nothing |
 | Q1183 (built on the scale-set tier) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 (built) |
