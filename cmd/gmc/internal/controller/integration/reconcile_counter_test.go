@@ -13,25 +13,40 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// reconcileCounter wraps the EgressProxy reconciler's client to count, per namespace,
-// the reconciles that have started and finished. Every reconcile opens with a Get of
-// its EgressProxy and, once that finds a live object, writes its status exactly once
-// last, on the success and the degraded path alike, so the two counts differ only
-// while a reconcile is in flight.
+// reconcileCounter wraps a reconciler's client to count, per namespace, the reconciles
+// that have started and finished. Every reconcile opens with a Get of its live object
+// and, for the EgressProxy reconciler, writes its status exactly once last, on the
+// success and the degraded path alike, so the two counts differ only while a reconcile
+// is in flight. isKind picks the reconciled kind.
 type reconcileCounter struct {
 	client.Client
+	isKind   func(client.Object) bool
 	mu       sync.Mutex
 	started  map[string]int
 	finished map[string]int
 }
 
 func newReconcileCounter(c client.Client) *reconcileCounter {
-	return &reconcileCounter{Client: c, started: map[string]int{}, finished: map[string]int{}}
+	return newReconcileCounterFor(c, func(o client.Object) bool { _, ok := o.(*v2.EgressProxy); return ok })
+}
+
+// newReconcileCounterFor counts the reconciles of the kind isKind matches. Only the
+// started count is meaningful for a kind whose reconciler does not end on one status
+// Update, so waitIdle is EgressProxy-only.
+func newReconcileCounterFor(c client.Client, isKind func(client.Object) bool) *reconcileCounter {
+	return &reconcileCounter{Client: c, isKind: isKind, started: map[string]int{}, finished: map[string]int{}}
+}
+
+// startedIn reports how many reconciles of a live object in ns have started.
+func (c *reconcileCounter) startedIn(ns string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.started[ns]
 }
 
 func (c *reconcileCounter) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	err := c.Client.Get(ctx, key, obj, opts...)
-	if _, ok := obj.(*v2.EgressProxy); ok && err == nil && obj.GetDeletionTimestamp().IsZero() {
+	if c.isKind(obj) && err == nil && obj.GetDeletionTimestamp().IsZero() {
 		c.mu.Lock()
 		c.started[key.Namespace]++
 		c.mu.Unlock()
@@ -49,7 +64,7 @@ type statusCounter struct {
 }
 
 func (s *statusCounter) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
-	if _, ok := obj.(*v2.EgressProxy); ok {
+	if s.c.isKind(obj) {
 		defer func() {
 			s.c.mu.Lock()
 			s.c.finished[obj.GetNamespace()]++

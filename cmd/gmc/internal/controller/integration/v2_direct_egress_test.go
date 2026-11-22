@@ -69,9 +69,10 @@ func startActionsGatewayV2ReconcilerWithIPRange(t *testing.T, fetcher controller
 	require.NoError(t, err)
 
 	ipRangeReconciler := &controller.IPRangeReconciler{
-		Client:  mgr.GetClient(),
-		Fetcher: fetcher,
-		Cache:   ipCache,
+		Client:    mgr.GetClient(),
+		Fetcher:   fetcher,
+		Cache:     ipCache,
+		V2Enabled: true,
 	}
 
 	go func() { _ = mgr.Start(mgrCtx) }()
@@ -190,16 +191,13 @@ func TestV2_DirectEgress_IPRangeRefreshUpdatesDirectPolicies(t *testing.T) {
 	ipRangeReconciler.ReconcileNow(ctx)
 
 	// The relocated refresh loop (Q168) patches the direct AGC + workload NPs with the
-	// new range — the direct-egress allowlist stays current.
-	require.Eventually(t, func() bool {
-		var agcNP, workloadNP networkingv1.NetworkPolicy
-		if k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-agc"}, &agcNP) != nil {
-			return false
-		}
-		if k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-workload"}, &workloadNP) != nil {
-			return false
-		}
-		return npHasGitHubCIDR(&agcNP, "1.2.3.0/24") && npHasGitHubCIDR(&workloadNP, "1.2.3.0/24") &&
-			npHasGitHubCIDR(&agcNP, "140.82.112.0/20") && npHasGitHubCIDR(&workloadNP, "140.82.112.0/20")
-	}, 15*time.Second, 100*time.Millisecond, "IP refresh must patch the direct-egress NetworkPolicies with the new CIDR")
+	// new range — the direct-egress allowlist stays current. Read as ReconcileNow
+	// returns: the reconciler shares the cache and resyncs every 2s, so a later read
+	// cannot tell the refresh's patch from a resync's.
+	var agcNP, workloadNP networkingv1.NetworkPolicy
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-agc"}, &agcNP))
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-workload"}, &workloadNP))
+	assert.True(t, npHasGitHubCIDR(&agcNP, "1.2.3.0/24") && npHasGitHubCIDR(&workloadNP, "1.2.3.0/24") &&
+		npHasGitHubCIDR(&agcNP, "140.82.112.0/20") && npHasGitHubCIDR(&workloadNP, "140.82.112.0/20"),
+		"IP refresh must patch the direct-egress NetworkPolicies with the new CIDR")
 }
