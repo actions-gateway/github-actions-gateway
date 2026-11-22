@@ -39,6 +39,7 @@ Two detection substrates are used:
   - [Fallback for a shared pool: anti-affinity and priority](#fallback-for-a-shared-pool-anti-affinity-and-priority)
   - [Check the separation on a live cluster](#check-the-separation-on-a-live-cluster)
 - [Job intake: bind every tenant to a GitHub runner group](#job-intake-bind-every-tenant-to-a-github-runner-group)
+  - [Retire a scale set when its runner set is renamed or deleted](#retire-a-scale-set-when-its-runner-set-is-renamed-or-deleted)
   - [Fork pull requests choose their own runner label](#fork-pull-requests-choose-their-own-runner-label)
 - [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
   - [Managing egress at scale](#managing-egress-at-scale)
@@ -695,6 +696,33 @@ That is deliberate: the fallback would widen the boundary at the moment the name
 
 Onboarding walkthrough and failure modes: [tenant onboarding](tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group).
 Threat-model rationale: [design 5.2](../design/05-security.md).
+
+### Retire a scale set when its runner set is renamed or deleted
+
+Changing a set's first `runnerLabel`, or deleting the `RunnerSet`, leaves its scale set registered at GitHub: GAG never deletes one.
+Admission releases the name as soon as the change is stored, so another tenant whose gateway binds the same org, enterprise, or repo can claim that label, and its AGC adopts the old scale set by name instead of creating one.
+The adopting tenant then receives:
+
+- **jobs still queued on the old scale set**, from workflows that name the old label;
+- **the old scale set's runner group**, when the adopting set declares no `runnerGroup`, so the repositories that group admits keep routing jobs into the new tenant's namespace.
+
+Retiring the old scale set is the operator step that prevents this.
+Do it before anyone else can claim the name, for every rename and every deleted set:
+
+1. **Move every workflow off the old label**, and let the old label's queued and running jobs finish.
+   Do not skip this: deleting a scale set leaves its queued jobs queued, and the next scale set created under the same name receives them, whichever tenant creates it ([design 5.2](../design/05-security.md#cross-tenant-job-acquisition-via-a-shared-scale-set-name)).
+2. **Delete the old scale set at GitHub.** The scale-set API is not reachable with `gh`; the probe's cleanup mode lists and deletes scale sets with the gateway's GitHub App credentials, from a checkout of this repository.
+   `PROBE_SCALESET_NAME` selects one scale set by its exact name, and `PROBE_SCALESET_DRY_RUN=true` reports what would be deleted without deleting it:
+
+   ```bash
+   GITHUB_APP_ID=… GITHUB_APP_INSTALLATION_ID=… GITHUB_APP_PRIVATE_KEY=/path/to/key.pem GITHUB_ORG_URL=https://github.com/<org> PROBE_SCALESET_TEST=true PROBE_SCALESET_CLEANUP=true PROBE_SCALESET_NAME=<old-first-label> PROBE_SCALESET_DRY_RUN=true go run -C cmd/probe .
+   ```
+
+   Check that the `WOULD DELETE` line names only the old label, then run it again without `PROBE_SCALESET_DRY_RUN` to delete it.
+   Leave `PROBE_SCALESET_PRUNE_PREFIX` unset: a prefix also matches every longer label that starts with it, another tenant's included.
+
+**Bind every set to a runner group as well.** A set that declares `runnerGroup`, or inherits `defaultRunnerGroup`, moves an adopted scale set into its own group, so a name another tenant gave up cannot bring that tenant's group with it.
+The queued jobs are not covered by this; only draining them in step 1 does.
 
 ### Fork pull requests choose their own runner label
 
