@@ -7875,8 +7875,9 @@ The <code>EvictionRerunWithheld</code> Event names the reason; for the first two
 <p>Detection reads <code>JobCompleted</code> messages, is on for every <code>RunnerSet</code> with no field, and changes no behaviour.</p>
 </blockquote>
 <p>When a scale-set job completes <code>failed</code>, the AGC records it in the set's failure ledger, ConfigMap <code>scaleset-failures-&lt;runnerset&gt;</code>, key <code>failures.json</code>, under <code>failures["&lt;runID&gt;/&lt;job name&gt;"]</code>.
-The record holds the worker's state at its terminal transition (<code>context</code>): pod phase, reason and a truncated message, its conditions, the node and pod IP, and each container's termination reason, exit code and restart count.
-A <code>canceled</code> completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing.</p>
+The record holds the worker's state (<code>context</code>): pod phase, reason and a truncated message, its conditions, the node and pod IP, and each container's termination reason, exit code and restart count.
+For a job that ends on a step's result, GitHub's completion arrives before the worker's pod finishes, so the context is the pod while still <code>Running</code>, often before any container has terminated; a worker killed out from under its job, such as by an out-of-memory kill, is recorded as it finished (measured 2026-11-22, Q1376).
+A <code>canceled</code> completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing, and neither does a job that reached its <code>timeout-minutes</code>, which GitHub also reports <code>canceled</code> (Q1374).</p>
 <p>When a later attempt of the same job (same run, same job name) completes, it is paired with that record and counted in <code>actions_gateway_scaleset_job_reruns_total{trigger}</code>:</p>
 <table>
 <thead>
@@ -7919,7 +7920,8 @@ Read the pool with <code>kubectl get egressproxy -n &lt;namespace&gt; &lt;name&g
 <p><strong>What detection cannot see.</strong> Node conditions are not recorded (the AGC has no <code>nodes</code> read), nor is a registry mirror's readiness.
 A proxy pool shared from another namespace is recorded as <code>proxy.mode: shared</code> with no readiness, since the AGC's cache does not reach that namespace.
 A snapshot is held in memory, so a failure recorded after an AGC restart, or after more than 1,024 workers finished with no completion yet, has no <code>context</code>.
-A re-run more than 7 days after the failure, or one that lands on another <code>RunnerSet</code>, pairs with nothing and counts nothing.</p>
+A re-run more than 7 days after the failure, or one that lands on another <code>RunnerSet</code>, pairs with nothing and counts nothing.
+Two jobs of one run that share a <code>name:</code> share one record, so one's success pairs with the other's failure and counts as a flake nobody re-ran (Q1375).</p>
 <hr />
 <h2 id="evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget<a class="headerlink" href="#evicted-worker-pods-exhausting-retry-budget" title="Permanent link">&para;</a></h2>
 <blockquote>

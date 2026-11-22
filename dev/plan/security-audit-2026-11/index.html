@@ -3328,7 +3328,7 @@ The first audit (2026-05) is <a href="../security/">security.md</a> and the seco
 The fork pull request lead is closed by Q1330's default refusal once the dogfood cluster runs it.
 Nothing reached high or critical.
 Two rows gated <code>v2.0.0</code>, Q1321 and Q1322, and both have landed.
-Of the rows filed from it, <a href="../../queue/Q1323/">Q1323</a> and the follow-ups <a href="../../queue/Q1334/">Q1334</a>, <a href="../../queue/Q1341/">Q1341</a>, <a href="../../queue/Q1343/">Q1343</a> and <a href="../../queue/Q1344/">Q1344</a> are open; the Azure range lead closed with Q1253 as a <a href="../../design/05-security/#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">recorded residual</a>, and its narrowing is <a href="../../queue/Q1350/">Q1350</a>.</p>
+Of the rows filed from it, <a href="../../queue/Q1323/">Q1323</a> and the follow-ups <a href="../../queue/Q1334/">Q1334</a>, <a href="../../queue/Q1341/">Q1341</a>, <a href="../../queue/Q1344/">Q1344</a> and <a href="../../queue/Q1373/">Q1373</a> are open, Q1343 having closed its token route; the Azure range lead closed with Q1253 as a <a href="../../design/05-security/#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">recorded residual</a>, and its narrowing is <a href="../../queue/Q1350/">Q1350</a>.</p>
 </blockquote>
 <h2 id="method-and-limits">Method and limits<a class="headerlink" href="#method-and-limits" title="Permanent link">&para;</a></h2>
 <p>The audit read source and ran nothing.
@@ -3541,7 +3541,7 @@ A coverage critic after the first wave accepted eight gaps, which became the sec
 <tr>
 <td><a href="#worker-pod-and-networkpolicy-leads">Unmarking a tenant namespace revokes only the one canonical reader RoleBinding, so other GMC-written bindings keep granting Secret access there</a></td>
 <td>confirmed by a local test, fixed</td>
-<td>Q1328; token route <a href="../../queue/Q1343/">Q1343</a></td>
+<td>Q1328; token route Q1343, fixed</td>
 </tr>
 <tr>
 <td><a href="#worker-pod-and-networkpolicy-leads">namespace-psa-guard admits the GMC ServiceAccount setting Pod Security enforce=privileged on a marked tenant namespace that lacks the platform eligibility label</a></td>
@@ -4396,7 +4396,7 @@ Stop at that one Get.</p>
 <code>TestGMC_TenantSecretAccess_UnmarkRevokesEveryGMCBinding</code>, run as the plan describes against <code>main</code>'s guard, admitted both <code>extra-reader</code> and <code>extra-agc</code>, and after the unmark the GMC's Get of the Secret still succeeded.
 <code>gmc-tenant-resource-guard</code> now admits a GMC RoleBinding write only in the two shapes the GMC provisions: its own reader binding naming itself, or an <code>agc-tenant-role</code> binding whose subjects are ServiceAccounts of that namespace; both creates are denied by the guard and the Secret read is Forbidden after the unmark.
 What unmarking cannot do, recall what a GMC compromised while the namespace was marked already read, is recorded in <a href="../../design/05-security/#51-gmc-level-threats-cluster-scoped">05-security.md §5.1 Residuals</a>.
-Bounding it found one more route, a ServiceAccount token Secret the GMC creates and reads back, unmeasured and filed as <a href="../../queue/Q1343/">Q1343</a>.</p>
+Bounding it found one more route, a ServiceAccount token Secret the GMC creates and reads back, unmeasured and filed as Q1343, which the guard now refuses; a Deployment running as a tenant ServiceAccount is the remaining route, <a href="../../queue/Q1373/">Q1373</a>.</p>
 <p><strong>Evidence.</strong> <code>charts/actions-gateway/templates/tenant-resource-guard.yaml:10</code>, <code>docs/design/05-security.md:54</code>, <code>docs/operations/upgrade.md:595</code>, <code>charts/actions-gateway/templates/tenant-resource-guard.yaml:98</code>, <code>charts/actions-gateway/files/agc-tenant-role-rules.yaml:61</code>, <code>cmd/gmc/internal/controller/integration/tenant_secret_access_test.go:217</code>, <code>docs/operations/tenant-onboarding.md:25</code>.</p>
 <h3 id="namespace-psa-guard-admits-the-gmc-serviceaccount-setting-pod-security-enforceprivileged-on-a-marked-tenant-namespace-that-lacks-the-platform-eligibility-label">namespace-psa-guard admits the GMC ServiceAccount setting Pod Security enforce=privileged on a marked tenant namespace that lacks the platform eligibility label<a class="headerlink" href="#namespace-psa-guard-admits-the-gmc-serviceaccount-setting-pod-security-enforceprivileged-on-a-marked-tenant-namespace-that-lacks-the-platform-eligibility-label" title="Permanent link">&para;</a></h3>
 <p><code>gmc-namespace-psa-guard:privileged-stamp-without-eligibility</code>: needs validation.

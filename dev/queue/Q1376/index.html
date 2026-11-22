@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1343/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1376/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>GMC may mint ServiceAccount token Secrets in tenant namespaces - GitHub Actions Gateway</title>
+        <title>A failed job's recorded context is its still-Running pod (M4 measured) - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gmc-may-mint-serviceaccount-token-secrets-in-tenant-namespaces" class="md-skip">
+        <a href="#a-failed-jobs-recorded-context-is-its-still-running-pod-m4-measured" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              GMC may mint ServiceAccount token Secrets in tenant namespaces
+              A failed job's recorded context is its still-Running pod (M4 measured)
             
           </span>
         </div>
@@ -2703,14 +2703,20 @@
   
 
 
-<h1 id="gmc-may-mint-serviceaccount-token-secrets-in-tenant-namespaces">GMC may mint ServiceAccount token Secrets in tenant namespaces<a class="headerlink" href="#gmc-may-mint-serviceaccount-token-secrets-in-tenant-namespaces" title="Permanent link">&para;</a></h1>
-<p><strong>A GMC compromised while a namespace is marked may be able to mint a token for any ServiceAccount there, and keep it after the unmark.</strong> Found while bounding the unmark lead closed by Q1328, whose fix stops the GMC writing a RoleBinding that would keep its Secret reads after an unmark.</p>
-<p>The GMC holds Secret <code>create</code>/<code>update</code> cluster-wide, and <code>gmc-tenant-resource-guard</code> confines those writes to marked tenant namespaces without looking at the Secret's <code>type</code>.
-Kubernetes' token controller fills a Secret of type <code>kubernetes.io/service-account-token</code> annotated <code>kubernetes.io/service-account.name: &lt;sa&gt;</code> with a long-lived token for that ServiceAccount, and the GMC can read the Secret back through its <code>gmc-tenant-secret-reader</code> binding.
-The GMC writes no Secret of that type, so a guard rule denying it costs nothing in normal operation.</p>
-<p><strong>Unverified.</strong> That the token controller fills a GMC-written Secret on a supported Kubernetes version was not measured: envtest runs no controller manager, and no kind cluster was available in the Q1328 session.
-Measure it on kind before writing the rule, and say which ServiceAccounts a tenant namespace carries that hold more than <code>agc-tenant-role</code> (a tenant's own ServiceAccounts are the case that matters).</p>
-<p><strong>Done when</strong> the GMC ServiceAccount is denied creating or updating a Secret of type <code>kubernetes.io/service-account-token</code>, with an envtest case in <code>cmd/gmc/internal/controller/integration/tenant_resource_guard_test.go</code>, or the measurement shows the controller does not fill such a Secret and that is written into <code>docs/design/05-security.md</code> §5.1 Residuals.</p>
+<h1 id="a-failed-jobs-recorded-context-is-its-still-running-pod-m4-measured">A failed job's recorded context is its still-Running pod (M4 measured)<a class="headerlink" href="#a-failed-jobs-recorded-context-is-its-still-running-pod-m4-measured" title="Permanent link">&para;</a></h1>
+<p>Flaky-job detection records a failed job's platform context from the worker snapshot taken at the pod's terminal transition, falling back to reading the pod; measured on dogfood on 2026-11-22, the completion of a job that ends on a step's result arrives before that transition, so the record is the fallback's read of a pod still <code>Running</code>.
+Every such record in the runs read had <code>podPhase: Running</code>: jobs <code>82a2530d…</code>, <code>abe6cad3…</code> and <code>ee99fae0…</code> of run 45052015868, and <code>44325908424/scripts-test</code> from 2026-11-18 (<a href="../../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>).
+In the first two no container had terminated; in <code>ee99fae0…</code> the runner had just terminated <code>Completed</code>, exit 0, with the pod not yet terminal.
+The listener logged each completion in the same second as <code>job started</code>, and the pods were reaped 5 minutes later (<code>completed_ttl</code>) in phase <code>Succeeded</code>.</p>
+<p>Two consequences, both from <code>cmd/agc/internal/provisioner/flaky_jobs.go</code> read against those timings rather than observed directly:</p>
+<ul>
+<li>A fault that shows only on the terminated pod, such as a sidecar's termination reason or exit code, is never in the record, and no <code>PlatformFaultOnFailedJob</code> Warning names it.
+  Faults visible on a running pod (a restart count, a <code>DisruptionTarget</code> condition, the colocated proxy's readiness) still land.</li>
+<li><code>SnapshotScaleSetWorker</code> still stores a snapshot at the terminal transition, after the completion that would take it, so every worker leaves one in <code>workerSnapshots</code> until the 1,024-entry bound evicts the oldest, and each <code>put</code> past the bound scans the whole map.</li>
+</ul>
+<p>The order inverts for a kill that ends the runner: an out-of-memory worker's completion arrived 9 min 48 s after its pod failed, and took the terminal snapshot, which is the case the out-of-memory class relies on.
+The fix is a design choice: wait briefly for the terminal transition before recording, record at the transition and amend on completion, or stop snapshotting a pod whose job already completed.
+The retry classes that read the snapshot, Q1315 and Q1316, should be weighed against it before they are built.</p>
 
 
 

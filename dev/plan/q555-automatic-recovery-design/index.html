@@ -2700,6 +2700,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Measure before building">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#readings-from-the-dogfood-turn-up-2026-11-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Readings from the dogfood turn-up, 2026-11-22
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3084,7 +3101,7 @@
 
 <h1 id="q555-automatic-recovery-design">Q555 automatic recovery: design<a class="headerlink" href="#q555-automatic-recovery-design" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; so is Q1181's <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the scale-set tier (<code>rerun_futility.go</code>); so is Q555's detection (<code>flaky_jobs.go</code>): the <code>failures</code> map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up (<a href="../../queue/Q1236/">Q1236</a>), with the colocated proxy's readiness added by Q1237; the rest is not.
+Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; so is Q1181's <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the scale-set tier (<code>rerun_futility.go</code>); so is Q555's detection (<code>flaky_jobs.go</code>): the <code>failures</code> map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up whose <a href="#readings-from-the-dogfood-turn-up-2026-11-22">readings</a> (Q1236) refute three of its assumptions, with the colocated proxy's readiness added by Q1237; the rest is not.
 It turns <a href="../q555-flaky-job-retry/">the requirements draft</a> into components against the code as it stands, one per backlog row, and answers the draft's <a href="../q555-flaky-job-retry/#open-questions-for-the-design-session">open questions</a>.
 Each answer is marked <strong>Decided</strong> (the maintainer chose it, 2026-10-12), <strong>Decide</strong> (a recommendation still awaiting sign-off) or <strong>Research</strong> (needs a measurement before anyone can choose).
 The draft says <em>what</em> and <em>why</em>; this says <em>how</em>.
@@ -3094,7 +3111,8 @@ Code facts were read from source on 2026-10-10 and 2026-10-11 unless marked othe
 A per-set failure ledger joins each failed job's platform context to its later attempts, which gives the flake count, the manual re-run rate and each retry cause's success rate.
 Retry classes then fire off that context through the re-run path the disruption arms already use, after one run read that both checks futility and enforces a budget that survives a restart.</p>
 <h2 id="measure-before-building">Measure before building<a class="headerlink" href="#measure-before-building" title="Permanent link">&para;</a></h2>
-<p>Each of these decides a component's shape, and none has been observed:</p>
+<p>Each of these decides a component's shape.
+M1, M2 and M4 were measured on dogfood on 2026-11-22 (<a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>); the rest have not been observed:</p>
 <table>
 <thead>
 <tr>
@@ -3109,13 +3127,13 @@ Retry classes then fire off that context through the re-run path the disruption 
 <td>M1</td>
 <td>The <code>result</code> vocabulary for a red step, a cancelled run and a timed-out job</td>
 <td>Which completions the ledger records</td>
-<td>The dogfood turn-up <a href="../../queue/Q1236/">Q1236</a> names</td>
+<td>Measured: <a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a></td>
 </tr>
 <tr>
 <td>M2</td>
-<td>Whether a re-run job's <code>JobAssigned</code> carries a new job UUID and the same <code>jobDisplayName</code>, and whether two jobs in one run can share a display name (GitHub allows a duplicate <code>name:</code>, from recall)</td>
+<td>Whether a re-run job's <code>JobAssigned</code> carries a new job UUID and the same <code>jobDisplayName</code>, and whether two jobs in one run can share a display name</td>
 <td>Pairing's key</td>
-<td>Same turn-up: re-run the failed job and read both assignments at debug level; a workflow with two jobs named alike</td>
+<td>Measured: <a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a></td>
 </tr>
 <tr>
 <td>M3</td>
@@ -3127,7 +3145,7 @@ Retry classes then fire off that context through the re-run path the disruption 
 <td>M4</td>
 <td>Whether a finished worker's pod object still exists when its <code>JobCompleted</code> arrives</td>
 <td>Where platform context is read</td>
-<td>The same turn-up: compare the pod's deletion time to the completion's arrival in the AGC log</td>
+<td>Measured: <a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a></td>
 </tr>
 <tr>
 <td>M5</td>
@@ -3145,6 +3163,23 @@ Retry classes then fire off that context through the re-run path the disruption 
 </table>
 <p>M3 rests on recall that kubelets on cgroup v2 kill a container's whole process group on an out-of-memory event.
 The breaker thresholds, the 7-day ledger expiry and the deferred path's 24-hour expiry are proposals, not measurements; R14's metrics are what will move them.</p>
+<h3 id="readings-from-the-dogfood-turn-up-2026-11-22">Readings from the dogfood turn-up, 2026-11-22<a class="headerlink" href="#readings-from-the-dogfood-turn-up-2026-11-22" title="Permanent link">&para;</a></h3>
+<p>Taken on the <code>ci</code> set in <code>gag-dogfood</code>, whose AGC ran <code>v2.0.1-rc.2</code>; its detection and retry code is unchanged on <code>main</code> at <code>f414275fa</code>.
+The jobs came from the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q1236-detection-probe.yml"><code>q1236-detection-probe</code></a> fixture, runs 45052015868 (attempts 1 and 2) and 45053166409, and the out-of-memory job from run 45052020040 (the Q1317 probe).
+The readings are the AGC's <code>scaleset: job assigned</code>, <code>job completed</code>, <code>scale-set job failed</code> and <code>reaped worker pod</code> log lines, the failure line carrying the record's <code>context</code>, and the <code>scaleset-failures-ci</code> ledger, read last at 18:04:25 UTC.
+<code>scaleset_jobs_completed_total</code> itself was not queried: the listener increments it with the same <code>result</code> it logs, in the same once-per-job block.</p>
+<ul>
+<li><strong>M1.</strong> A red step completes <code>failed</code> (jobs <code>82a2530d…</code>, <code>abe6cad3…</code>, <code>ee99fae0…</code>).
+  A job killed by <code>timeout-minutes</code> completes <code>canceled</code> (<code>b31558d4…</code>, <code>486169c1…</code>; the jobs API says <code>cancelled</code>), exactly as a user's cancel does (<code>3762586f…</code>), so detection records no timed-out job and never counts its later success as flaky (<a href="../../queue/Q1374/">Q1374</a>).
+  A job whose runner an out-of-memory kill ended completes <code>failed</code>, 9 min 48 s after the kill, when the job lock lapses (<code>ff028f4b…</code>, run 45052020040).</li>
+<li><strong>M2.</strong> A re-run of the failed job arrives with a new job UUID (<code>abe6cad3…</code>, then <code>4349fbb7…</code>) under the same run ID and <code>jobDisplayName</code>, and pairs as <code>trigger=other</code>, flaky, as designed.
+  GitHub accepts two jobs sharing one <code>name:</code>, and they share one failure key: the green twin's success paired with the red twin's failure and emitted a false <code>FlakyJobDetected</code> (18:05:32 UTC), and the red twin's re-run at 18:07:02 logged as a fresh failure rather than a pairing, so its record was gone (<a href="../../queue/Q1375/">Q1375</a>).</li>
+<li><strong>M4.</strong> A job that ends on a step's result completes before its pod's terminal transition: the completion is logged in the same second as <code>job started</code>, and every such record's <code>context</code> reads <code>podPhase: Running</code> (three in these runs, and <code>44325908424/scripts-test</code> from 2026-11-18); in two of the three no container had terminated yet, and in <code>ee99fae0…</code> the runner had just terminated <code>Completed</code>, exit 0.
+  So <code>Completed</code> reads the running pod every time, and the snapshot the terminal transition takes moments later is never taken by any completion; it waits in the 1,024-entry map until evicted (<a href="../../queue/Q1376/">Q1376</a>).
+  The runner exits 0 when its job fails: both red jobs' pods, and the timed-out job's, were reaped <code>Succeeded</code>, so a red test on its own never reads as a fault.
+  A kill that ends the runner inverts the order: run 45052020040's out-of-memory worker failed at 17:58:21 UTC, was reaped at 18:03:23, and its completion at 18:08:09 took the terminal snapshot, so that record shows the fault and raised <code>PlatformFaultOnFailedJob</code>.</li>
+<li><strong><code>JobCompleted</code> carries <code>eventName</code> and <code>jobWorkflowRef</code>.</strong> Every record holds <code>event: push</code> and the fixture's workflow ref, and the listener reads both from the completion message.</li>
+</ul>
 <h2 id="component-1-the-failure-ledger-q555-r1-to-r8">Component 1: the failure ledger (Q555, R1 to R8)<a class="headerlink" href="#component-1-the-failure-ledger-q555-r1-to-r8" title="Permanent link">&para;</a></h2>
 <h3 id="where-the-hook-goes">Where the hook goes<a class="headerlink" href="#where-the-hook-goes" title="Permanent link">&para;</a></h3>
 <p>The listener's <code>completeJob</code> receives every <code>JobCompleted</code> and calls <code>Config.Cleanup(ctx, jobID, runnerName)</code>, which carries neither the result nor the run identity.
@@ -3156,7 +3191,8 @@ A rolling update can briefly run two AGC pods, so the ledger is written with a c
 <h3 id="what-a-failed-job-records-r7">What a failed job records (R7)<a class="headerlink" href="#what-a-failed-job-records-r7" title="Permanent link">&para;</a></h3>
 <p>The pod is the evidence, and nothing maps a job to its pod once the pod is deleted.
 So the runner-set controller, whose pod watch already sees every worker reach a terminal phase (it drives <code>RecoverDisruptedScaleSetWorker</code>), snapshots each worker at that transition into a bounded in-memory map keyed by runner name.
-<code>Completed</code> takes the snapshot for its runner, falling back to reading the pod if it is still there (M4).</p>
+<code>Completed</code> takes the snapshot for its runner, falling back to reading the pod if it is still there.
+Measured (M4), the fallback is the common path and reads a pod still <code>Running</code>: only a kill that ends the runner lets the snapshot arrive first (<a href="../../queue/Q1376/">Q1376</a>).</p>
 <p>A snapshot holds only bounded fields, all read from objects the AGC can already see:</p>
 <ul>
 <li>pod phase, reason and message (message truncated to 256 bytes), its conditions (<code>DisruptionTarget</code> included), <code>spec.nodeName</code>, pod IP and start time;</li>
@@ -3221,7 +3257,7 @@ Writes happen on a failed completion, a GAG re-run (its budget reservation) and 
 It is also <a href="#the-budget-is-gags-own-count-in-the-ledger-r15">the budget</a>: <code>count</code> is how many times GAG has re-run the run, and <code>attempts</code> records, per run attempt GAG re-ran from, what it re-ran and for which disruptions.
 <code>pending</code> holds the class re-runs waiting for their run to conclude (<a href="#how-it-waits">How it waits</a>).</p>
 <p><code>event</code> and <code>workflowRef</code> are on the wire in <code>JobAssigned</code> (a live capture in <a href="../scaleset-eviction-recovery/">scaleset-eviction-recovery.md</a>), but <code>scaleset/types.go</code> decodes neither, so decoding them is part of Q555.
-Whether <code>JobCompleted</code> carries them too is inferred from upstream's struct and unmeasured, so the listener carries them from the assignment, as it already carries the run identity, rather than relying on the completion; they cost no API call either way.</p>
+<code>JobCompleted</code> carries them too (measured on dogfood, <a href="#readings-from-the-dogfood-turn-up-2026-11-22">2026-11-22</a>), and the listener reads them from the completion; they cost no API call either way.</p>
 <p><strong>Bounds.</strong></p>
 <ul>
 <li><strong>Expiry:</strong> failure and pending entries after 7 days and 24 hours respectively; <code>reruns</code> entries after 30 days, GitHub's re-run window from recall, so a budget cannot refill while the run can still be re-run.</li>

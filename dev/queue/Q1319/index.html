@@ -2708,11 +2708,11 @@
 Detection's <code>gag_collateral</code> count measures that cost; job-granular re-run removes it, and it waits on the design's M6.</p>
 <p>M6 is two readings, from a test workflow with a matrix, a reusable workflow and a <code>needs:</code> chain:</p>
 <ul>
-<li>Whether <code>jobDisplayName</code> matches the jobs API's <code>name</code> exactly for matrix jobs and reusable-workflow jobs, and what happens when two jobs share a <code>name:</code>, which GitHub allows (from recall).
+<li>Whether <code>jobDisplayName</code> matches the jobs API's <code>name</code> exactly for matrix jobs and reusable-workflow jobs, and what happens when two jobs share a <code>name:</code>, which GitHub allows (measured on dogfood 2026-11-22, where it also breaks detection's pairing: Q1375).
   The match is how a classified job finds its job ID for a single-job re-run.</li>
 <li>What a single-job re-run does to the jobs it depends on and the jobs that depend on it, and whether the upstream jobs' outputs and artifacts survive (outputs from recall, artifacts unknown).</li>
 </ul>
-<p><a href="../Q1236/">Q1236</a> is the neighbour and a different question: its M2 asks whether a re-run carries a new job ID and the same display name, which detection's pairing keys on, while this row matches the display name to the API's, which a single-job re-run needs.
+<p>Q1236 is the neighbour and a different question: its M2 asked whether a re-run carries a new job ID and the same display name, which detection's pairing keys on, while this row matches the display name to the API's, which a single-job re-run needs.
 Run both in one session where convenient.</p>
 <p>If both hold, a class re-runs its own job and the disruption arms stay run-granular unless the readings argue otherwise; if the name match is ambiguous, the class falls back to <code>rerun-failed-jobs</code> and says so.
 The design's <a href="../../plan/q555-automatic-recovery-design/#run--or-job-granular-re-run-open-question-2">granularity section</a> and the API shape's <code>retry.scope</code> (<code>FailedJobs</code> or <code>Job</code>) are where it lands.

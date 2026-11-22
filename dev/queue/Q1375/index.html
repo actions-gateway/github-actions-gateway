@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1236/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1375/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Measure flaky-job detection on dogfood: result spelling, re-run job IDs - GitHub Actions Gateway</title>
+        <title>Jobs sharing one name: share a failure key and report false flakes - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#measure-flaky-job-detection-on-dogfood-result-spelling-re-run-job-ids" class="md-skip">
+        <a href="#jobs-sharing-one-name-share-a-failure-key-and-report-false-flakes" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Measure flaky-job detection on dogfood: result spelling, re-run job IDs
+              Jobs sharing one name: share a failure key and report false flakes
             
           </span>
         </div>
@@ -2703,17 +2703,14 @@
   
 
 
-<h1 id="measure-flaky-job-detection-on-dogfood-result-spelling-re-run-job-ids">Measure flaky-job detection on dogfood: result spelling, re-run job IDs<a class="headerlink" href="#measure-flaky-job-detection-on-dogfood-result-spelling-re-run-job-ids" title="Permanent link">&para;</a></h1>
-<p>Q555 built flaky-job detection without the dogfood turn-up its row put first, because the GKE dogfood cluster is prod-classified and the building session was not scoped to it; the design's M1, M2 and M4 are still unmeasured, and each is an assumption the code now rests on.
-- <strong>M1, the <code>result</code> vocabulary.</strong> Read <code>actions_gateway_scaleset_jobs_completed_total</code> by <code>result</code> for a red step, a cancelled run and a timed-out job; only a disruption's <code>failed</code> has been seen live.
-  Detection records any result but <code>succeeded</code> as a failure, and <code>canceled</code> only when a recovery claim names the job, so a timed-out job's spelling decides whether it is recorded.
-- <strong>M2, pairing's key.</strong> Re-run a failed job and read both completions at debug level: detection assumes the re-run carries a new <code>jobId</code> and the same <code>jobDisplayName</code>, and treats a repeat of the same <code>jobId</code> as a replay.
-  A workflow with two jobs sharing a <code>name:</code> would share one record.
-- <strong>M4, where context is read.</strong> Compare the worker pod's terminal transition and its deletion to the completion's arrival.
-  Detection snapshots the pod at its terminal transition and falls back to reading it, so a pod gone before both leaves the record with no context.
-  If the completion usually arrives first, the snapshot is never taken in time: the fallback reads a still-<code>Running</code> pod, so a runner that exits non-zero never reads as a fault, and the snapshots no completion takes fill the 1,024-entry map (independent review of Q555, 2026-10-27).
-  Also unmeasured: whether the runner container exits non-zero when its job fails, which would make every red test a <code>PlatformFaultOnFailedJob</code> Warning (the snapshot's fault reading assumes it exits 0), and whether <code>JobCompleted</code> carries <code>eventName</code> and <code>jobWorkflowRef</code> (decoded from it, never seen on it).
-  The <code>actions_gateway_*</code> series are stored in Google Managed Prometheus while dogfood runs (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-metrics/README.md"><code>deploy/dogfood-metrics/</code></a>, applied 2026-11-02).</p>
+<h1 id="jobs-sharing-one-name-share-a-failure-key-and-report-false-flakes">Jobs sharing one name: share a failure key and report false flakes<a class="headerlink" href="#jobs-sharing-one-name-share-a-failure-key-and-report-false-flakes" title="Permanent link">&para;</a></h1>
+<p>Flaky-job detection keys a failure by run ID and <code>jobDisplayName</code>, and GitHub accepts two jobs in one workflow with the same <code>name:</code>; measured on dogfood on 2026-11-22, the two then share one record, and the second job's success is paired with the first job's failure.
+In run 45052015868 the jobs <code>shared-name-red</code> and <code>shared-name-green</code> both carried <code>name: shared-name</code>: the red one failed at 18:00:19 UTC (<code>82a2530d…</code>), the green one succeeded at 18:05:32 (<code>e44b9b0b…</code>), and the AGC logged <code>scale-set job re-run completed</code> with <code>trigger=other</code>, <code>flaky=true</code>, and emitted a Normal <code>FlakyJobDetected</code> for a job nobody re-ran; the red job's record was gone after it, since that job's re-run at 18:07:02 (<code>ee99fae0…</code>) logged as a fresh failure rather than a pairing (<a href="../../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>).</p>
+<p>So a workflow with duplicate job names inflates <code>actions_gateway_scaleset_flaky_jobs_total</code> and the manual re-run rate on <code>scaleset_job_reruns_total{trigger="other"}</code>, and loses the red job's context, whenever one twin fails and the other succeeds.
+Whether matrix legs collide was not measured; their display names normally carry the matrix values, from recall.</p>
+<p>The completion carries no attempt number, so the fix cannot simply require a later attempt.
+A candidate is to pair only when the completion's job UUID was assigned after the failure was recorded, which the listener can see; whether that holds across an AGC restart is the open part.
+<a href="../Q1319/">Q1319</a> needs the same fact about duplicate names for a different reason, matching a classified job to its job ID for a single-job re-run.</p>
 
 
 

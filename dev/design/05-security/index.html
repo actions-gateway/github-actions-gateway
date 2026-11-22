@@ -3879,7 +3879,7 @@ So the GMC runs one metadata-only Secret informer per tenant namespace instead o
 <li>Enumerate every <code>ActionsGateway</code> CR in the cluster, learning each tenant's <code>gitHubAppRef</code> name and namespace.</li>
 <li><code>list</code>/<code>watch</code> and <code>get</code> the full <code>.data</code> of any Secret <strong>in a marked tenant namespace</strong>, including that tenant's GitHub App private key.</li>
 <li><code>list</code> the Pods <strong>in a marked tenant namespace</strong>, environment values included.</li>
-<li>Create/update/delete workloads, Secrets, ConfigMaps, network policies and ServiceMonitors <strong>only in marked tenant namespaces</strong> (the <code>gmc-tenant-resource-guard</code> VAP denies writes elsewhere).</li>
+<li>Create/update/delete workloads, Secrets, ConfigMaps, network policies and ServiceMonitors <strong>only in marked tenant namespaces</strong> (the <code>gmc-tenant-resource-guard</code> VAP denies writes elsewhere), and never a ServiceAccount token Secret.</li>
 <li><code>get</code> and <code>list</code> any ConfigMap <strong>in any namespace</strong>.
   Admission never runs on a read, and the grant is cluster-wide because the GMC finds its share projections by label across namespaces.</li>
 <li>Write any ConfigMap in its own install namespace, including the IP-range store, and delete a ConfigMap labelled as a proxy-share or failure-attribution projection in any namespace.</li>
@@ -3893,7 +3893,12 @@ So the GMC runs one metadata-only Secret informer per tenant namespace instead o
 <li>Secret <code>create</code>/<code>update</code> stay cluster-wide.
   Admission rejects an out-of-tenant write before the API server responds, so neither verb returns another namespace's Secret body.</li>
 <li>Unmarking a namespace ends the GMC's reads there from then on and recalls nothing.
-  A GMC compromised while the namespace was marked has already read every Secret in it, and may hold a credential minted there that outlives the unmark; a ServiceAccount token Secret is the open case, tracked as <a href="../../queue/Q1343/">Q1343</a>.</li>
+  A GMC compromised while the namespace was marked has already read every Secret in it, and may hold a credential minted there that outlives the unmark.</li>
+<li><strong>The GMC cannot mint a ServiceAccount token Secret (Q1343).</strong> Kubernetes documents that its token controller fills a Secret of type <code>kubernetes.io/service-account-token</code>, annotated <code>kubernetes.io/service-account.name: &lt;sa&gt;</code>, with a non-expiring token for that ServiceAccount; this repo has not measured that on a cluster, since envtest runs no controller manager.
+  Inside a tenant namespace the GMC could otherwise write one and read the token back through its reader binding, for any ServiceAccount there, including a tenant's own ones that hold far more than <code>agc-tenant-role</code>, and the token would keep working after the unmark.
+  The guard refuses the GMC creating or updating a Secret of that type in any namespace, and the GMC writes only TLS and Opaque Secrets, so the rule costs nothing (<code>TestGMC_TenantResourceGuard_DeniesServiceAccountTokenSecrets</code>).
+  It does not stop the GMC reading a token Secret that someone else created in a tenant namespace, which its reader binding allows like any other Secret there.
+  Nor does it stop the GMC creating a Deployment there that runs as one of those ServiceAccounts and so receives its projected tokens, a route the guard does not yet check (Q1373).</li>
 </ul>
 <p><strong>Secret-read compensating controls</strong>, inside the tenant namespaces where reads are granted:</p>
 <ul>

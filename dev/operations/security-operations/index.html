@@ -4734,7 +4734,8 @@ The abuse-specific first moves:</p>
    Existing tenant gateways keep running (the GMC is not in the data path — see <a href="../runbook/#gmc-total-failure">runbook.md § GMC Total Failure</a>); only provisioning and reconcile pause.</li>
 <li><strong>Rotate everything.</strong> A compromised GMC can read every tenant's GitHub App Secret.
    Rotate <strong>all</strong> tenant GitHub App keys.</li>
-<li><strong>Scope.</strong> Audit GMC ServiceAccount <code>get secrets</code> and <code>create</code>/<code>patch</code> calls; reconcile provisioned resources against live <code>ActionsGateway</code> CRs to find anything created off-CR.</li>
+<li><strong>Scope.</strong> Audit GMC ServiceAccount <code>get secrets</code> and <code>create</code>/<code>patch</code> calls; reconcile provisioned resources against live <code>ActionsGateway</code> CRs to find anything created off-CR.
+   In each tenant namespace, delete any Deployment the GMC created that runs as a ServiceAccount it did not provision, since its pods hold that ServiceAccount's tokens; on a release before the guard refused them, look for GMC-created Secrets of type <code>kubernetes.io/service-account-token</code> too, and delete them to revoke their tokens.</li>
 <li><strong>Verify the image.</strong> Confirm the GMC image digest against the deployed manifest before scaling back up.</li>
 </ol>
 <h3 id="proxy-saturation--slowloris">Proxy saturation / slowloris<a class="headerlink" href="#proxy-saturation--slowloris" title="Permanent link">&para;</a></h3>

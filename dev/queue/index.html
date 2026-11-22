@@ -3264,12 +3264,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Since Q1232, the scale-set abandoned arm reads the run before force-cancelling.</td>
 </tr>
 <tr>
-<td><a href="Q1236/">Q1236</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#measure-before-building">Measure flaky-job detection on dogfood: result spelling, re-run job IDs</a></td>
-<td><code>dogfood</code> <code>tests</code> <code>2.1-gate</code></td>
+<td><a href="Q1376/">Q1376</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">A failed job's recorded context is its still-Running pod (M4 measured)</a></td>
+<td><code>bug</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Flaky-job detection records a failed job's platform context from the worker snapshot taken at the pod's terminal transition, falling back …</td>
+</tr>
+<tr>
+<td><a href="Q1375/">Q1375</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#pairing-and-attribution-r1-r2-r8">Jobs sharing one name: share a failure key and report false flakes</a></td>
+<td><code>bug</code> <code>2.1-gate</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Q555 built flaky-job detection without the dogfood turn-up its row put first, because the GKE dogfood cluster is prod-classified and the …</td>
+<td>Flaky-job detection keys a failure by run ID and <code>jobDisplayName</code>, and GitHub accepts two jobs in one workflow with the same <code>name:</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1374/">Q1374</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">Detection drops timed-out jobs: JobCompleted reports them canceled</a></td>
+<td><code>bug</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A job killed by its <code>timeout-minutes</code> completes <code>canceled</code> on the scale-set message queue, the same spelling as a user's cancel, and …</td>
 </tr>
 <tr>
 <td><a href="Q1317/">Q1317</a></td>
@@ -3376,12 +3392,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Separate from <a href="Q1165/">Q1165</a>: that row's page made no load-blocking off-host request, and this one is a page that does.</td>
 </tr>
 <tr>
-<td><a href="Q1343/">Q1343</a></td>
-<td>GMC may mint ServiceAccount token Secrets in tenant namespaces</td>
+<td><a href="Q1373/">Q1373</a></td>
+<td>GMC may run a Deployment as any ServiceAccount in a tenant namespace</td>
 <td><code>security</code></td>
 <td>🔲</td>
 <td>S</td>
-<td><strong>A GMC compromised while a namespace is marked may be able to mint a token for any ServiceAccount there, and keep it after the unmark.</strong> …</td>
+<td>**A GMC compromised while a namespace is marked can create a Deployment there that runs as any ServiceAccount in it, a tenant's own …</td>
 </tr>
 <tr>
 <td><a href="Q401/">Q401</a></td>

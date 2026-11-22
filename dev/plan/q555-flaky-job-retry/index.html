@@ -2968,7 +2968,8 @@ The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a 
    The unit tests use both <code>cancelled</code> and <code>canceled</code>, so the canceled spelling is a guess on at least one side.</li>
 <li><strong>Whether a timed-out job is distinguishable</strong> from a failed one.</li>
 </ol>
-<p>All three are one dogfood turn-up to settle: fail a step, cancel a run, and time a job out, then read <code>actions_gateway_scaleset_jobs_completed_total</code> by <code>result</code>, which needs no code change.</p>
+<p>All three are one dogfood turn-up to settle: fail a step, cancel a run, and time a job out, then read <code>actions_gateway_scaleset_jobs_completed_total</code> by <code>result</code>, which needs no code change.
+That turn-up ran on 2026-11-22 (Q1236): a red step reads <code>failed</code>, and a cancelled run and a timed-out job both read <code>canceled</code>, so a timed-out job is distinguishable from a failed one but not from a cancel (<a href="../q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>).</p>
 <h2 id="how-this-splits-into-backlog-items">How this splits into backlog items<a class="headerlink" href="#how-this-splits-into-backlog-items" title="Permanent link">&para;</a></h2>
 <p>The requirements below span several separable pieces of work, filed 2026-10-10 so each can be prioritised on its own:</p>
 <table>
@@ -2986,8 +2987,8 @@ The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a 
 <td>Built without the dogfood measurement it named</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1236/">Q1236</a></td>
-<td>The dogfood readings detection rests on (M1, M2, M4)</td>
+<td>Q1236 (measured)</td>
+<td>The dogfood readings detection rests on (M1, M2, M4); three refuted assumptions became Q1374 to Q1376</td>
 <td>Q1180 (applied)</td>
 </tr>
 <tr>
