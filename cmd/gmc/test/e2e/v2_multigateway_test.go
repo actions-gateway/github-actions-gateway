@@ -124,9 +124,10 @@ var _ = Describe("E2E_V2_MultiGateway", Ordered, func() {
 	})
 
 	It("E2E_V2_PerGatewayJobIsolation: each gateway's AGC services only its own RunnerSet's jobs", func() {
-		// alpha's job → a worker pod for set-alpha that runs as alpha-worker (the
-		// per-gateway worker SA only alpha's AGC carries). That the pod exists AND
-		// runs as alpha-worker proves alpha's scoped AGC handled it.
+		// alpha's job → a new worker pod for that job on set-alpha that runs as
+		// alpha-worker (the per-gateway worker SA only alpha's AGC carries). That
+		// the job's own pod exists AND runs as alpha-worker proves alpha's scoped
+		// AGC handled it.
 		assertGatewayJobYieldsScopedWorker(tenantNS, "set-alpha", "e2e-alpha", "alpha-worker")
 		assertGatewayJobYieldsScopedWorker(tenantNS, "set-beta", "e2e-beta", "beta-worker")
 	})
@@ -223,28 +224,58 @@ func agcGatewayNameEnv(ns, deploy string) string {
 }
 
 // assertGatewayJobYieldsScopedWorker enqueues a job on runnerSet's scale set and
-// asserts a worker pod for that set appears running as wantSA — the per-gateway worker
-// ServiceAccount that only the gateway's scoped AGC carries.
+// asserts the worker pod for THAT job appears running as wantSA, the per-gateway
+// worker ServiceAccount that only the gateway's scoped AGC carries. The job's pod is
+// found by its run-id annotation and must be absent from the set's pods listed before
+// the enqueue, so a pod left by an earlier job cannot stand in for it (Q1289).
 func assertGatewayJobYieldsScopedWorker(ns, runnerSet, scaleSet, wantSA string) {
 	GinkgoHelper()
 	waitForScaleSetSession(scaleSet)
+	before := map[string]bool{}
+	for _, p := range runnerSetPods(Default, ns, runnerSet) {
+		before[p.uid] = true
+	}
 	By("enqueuing a job on " + scaleSet)
-	scaleSetEnqueue(scaleSet)
+	runID := fmt.Sprintf("%d", scaleSetEnqueue(scaleSet).WorkflowRunID)
 
-	By(fmt.Sprintf("waiting for a worker pod for %s running as %s", runnerSet, wantSA))
+	By(fmt.Sprintf("waiting for the worker pod for run %s on %s running as %s", runID, runnerSet, wantSA))
 	Eventually(func(g Gomega) {
-		out, err := utils.Run(exec.Command("kubectl", "get", "pods",
-			"-n", ns,
-			"-l", "actions-gateway.com/runner-set="+runnerSet,
-			"-o", `jsonpath={range .items[*]}{.spec.serviceAccountName}{"\n"}{end}`))
-		g.Expect(err).NotTo(HaveOccurred())
-		sas := strings.Fields(out)
-		g.Expect(sas).NotTo(BeEmpty(), "no worker pod for %s yet", runnerSet)
-		for _, sa := range sas {
-			g.Expect(sa).To(Equal(wantSA),
-				"worker pod for %s ran as %q, want %q — wrong gateway's AGC handled it (scoping breach)", runnerSet, sa, wantSA)
+		var jobPods []runnerSetPod
+		for _, p := range runnerSetPods(g, ns, runnerSet) {
+			g.Expect(p.serviceAccount).To(Equal(wantSA),
+				"worker pod for %s ran as %q, want %q — wrong gateway's AGC handled it (scoping breach)", runnerSet, p.serviceAccount, wantSA)
+			if p.runID == runID {
+				jobPods = append(jobPods, p)
+			}
 		}
+		g.Expect(jobPods).To(HaveLen(1), "want exactly one worker pod for run %s on %s", runID, runnerSet)
+		g.Expect(before).NotTo(HaveKey(jobPods[0].uid),
+			"the pod carrying run %s predates the enqueue, so it was not provisioned for this job", runID)
 	}, 3*time.Minute, 2*time.Second).Should(Succeed())
+}
+
+// runnerSetPod is the identity of one pod labelled for a RunnerSet.
+type runnerSetPod struct {
+	uid, runID, serviceAccount string
+}
+
+// runnerSetPods lists the pods labelled for runnerSet. Fields are tab-separated so an
+// absent run-id annotation reads as an empty field rather than shifting the next one.
+func runnerSetPods(g Gomega, ns, runnerSet string) []runnerSetPod {
+	out, err := utils.Run(exec.Command("kubectl", "get", "pods", "-n", ns,
+		"-l", "actions-gateway.com/runner-set="+runnerSet,
+		"-o", `jsonpath={range .items[*]}{.metadata.uid}{"\t"}{.metadata.annotations.actions-gateway\.com/run-id}{"\t"}{.spec.serviceAccountName}{"\n"}{end}`))
+	g.Expect(err).NotTo(HaveOccurred())
+	var pods []runnerSetPod
+	for _, line := range strings.Split(out, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		f := strings.Split(line, "\t")
+		g.Expect(f).To(HaveLen(3), "unparseable pod line %q", line)
+		pods = append(pods, runnerSetPod{uid: f[0], runID: f[1], serviceAccount: f[2]})
+	}
+	return pods
 }
 
 // v2MultiGatewayManifest renders the v2 object set: a shared EgressProxy, two
