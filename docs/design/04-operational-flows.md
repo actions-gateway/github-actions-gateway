@@ -601,6 +601,7 @@ ceiling  = spec.sizing.maxRequests.memory, or 2 × killed where unset
 ```
 
 It fires on a worker whose pod reached `PodFailed` with the **runner** container terminated `OOMKilled`, and which carries the `actions-gateway.com/sizing-profile` annotation, meaning the profile derived its limits when it was built.
+That is the shape a memory kill leaves on cgroup v2, which kills the whole container: reproduced on dogfood on 2026-11-22 under `Throughput` (R12), GitHub concluded the job `failure` 9 min 48 s after the kill, and the re-run at the raised limit succeeded ([the readings](../plan/q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22)).
 A sidecar killed for memory is not covered: the runner survives it to report the job's own result, so the pod's terminal transition says nothing about whether the job failed.
 
 | Shape | What happens | `reason` on `eviction_rerun_withheld_total{cause="oom"}` |
