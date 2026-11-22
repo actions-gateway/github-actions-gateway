@@ -50,7 +50,7 @@ The readings are the AGC's `scaleset: job assigned`, `job completed`, `scale-set
   A step allocating 9216Mi past the runner's 8268Mi limit took the whole container: the pod reached `Failed` with the runner `OOMKilled`, exit 137, at 17:58:21 UTC, and GitHub concluded the job `failure` at 18:08:09 with "The self-hosted runner lost communication with the server" and no step log.
   So the class fires from the pod watch, as built: 2 s after the kill it recorded the floor 8268Mi to 12416Mi, emitted `MemoryLimitRaisedForRetry` and parked the re-run, which it released at 18:09:28, 79 s after the run concluded.
   The re-run's pod carried a runner limit of 12416Mi, its request unchanged at 5568Mi since `Throughput` raises only the limit, and `actions-gateway.com/rerun-cause: oom`; its step read `memory.max` as 13019119616 bytes (12416Mi), survived the same allocation, and paired as `trigger=gag`, `cause=oom`, not flaky.
-  `Binpack`, which raises the request with the limit, was not measured: the live set runs `Throughput`.
+  `Binpack`, which raises the request with the limit, was not measured: the live set runs `Throughput` ([Q1382](../queue/Q1382.md)).
 - **`JobCompleted` carries `eventName` and `jobWorkflowRef`.** Every record holds `event: push` and the fixture's workflow ref, and the listener reads both from the completion message.
 
 ## Component 1: the failure ledger (Q555, R1 to R8)
