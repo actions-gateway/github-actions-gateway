@@ -21,6 +21,11 @@
 #     command carrying the `v` fails for the reader who trusts it.
 #   - A drafting banner outlives its release's tag: a `> **Draft` line, or one
 #     saying "before publishing", in a note whose filename is a tag here.
+#   - A backticked commit hash resolves to no commit: a release note or a plan
+#     doc names one that does not exist, as `v2.0.0-rc.1`'s was written
+#     `00b4f4e` for the real `0c0048d5a` (Q1356). The scan covers the plan docs
+#     as well as the notes when run without arguments, because that error was
+#     in a plan doc.
 #
 # Index truncation is reported, never failed, and what it reports is deliberately
 # NOT collapsed height.
@@ -61,6 +66,8 @@ usage() {
 [[ "${1:-}" == -h || "${1:-}" == --help ]] && usage
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+WORK_CITES="$(mktemp)"
+trap 'rm -f "$WORK_CITES"' EXIT INT TERM
 
 notes=()
 if (($# > 0)); then
@@ -74,6 +81,16 @@ fi
 	echo "check-release-notes: no release notes found" >&2
 	exit 2
 }
+
+# Backticked hashes are looked up in every doc the notes gate covers by default:
+# the notes themselves and the plan docs, where candidate-validation tables name
+# the commits a tag points at. Explicit arguments narrow the scan to those files.
+cite_docs=("${notes[@]}")
+if (($# == 0)); then
+	for f in "${REPO_ROOT}"/docs/plan/*.md "${REPO_ROOT}"/docs/plan/archive/*.md; do
+		[[ -e "$f" ]] && cite_docs+=("$f")
+	done
+fi
 
 findings=0
 # Reconciliation for the commit-count rule: without tags every note takes the
@@ -251,9 +268,68 @@ for note in "${notes[@]}"; do
 	fi
 done
 
+# Cited commit hashes. A backticked token of 7 to 40 hex characters is a
+# candidate; one needs both a digit and a letter, which spares an all-digit
+# number (a port, a byte count) and an all-letter word, at the price of missing a
+# fabricated hash that happens to be all one kind. A `sha256:` digest has a
+# prefix and is never a bare token. Fenced blocks are skipped, since a command
+# shown there is an example. The length is tested with length() rather than an
+# interval, which mawk on the CI runner does not take.
+#
+# A hash passes when it resolves to a commit in the fetched history, and the job
+# fetches every branch and tag, so a commit a squash merge orphaned still passes
+# while its objects are here and an invented one never does. A shallow checkout
+# cannot answer, so it reports a skip rather than a pass.
+#
+# Tokens the docs already carried that are not commits here (an abbreviated image
+# digest, another project's commit, an orphaned one) are listed per doc in
+# cited-commits-baseline.txt and exempt only there.
+BASELINE="$(dirname "${BASH_SOURCE[0]}")/cited-commits-baseline.txt"
+cites_checked=0
+cites_skipped=0
+cites_baselined=0
+if [[ "$(git -C "$REPO_ROOT" rev-parse --is-shallow-repository)" == true ]]; then
+	cites_skipped=1
+	printf 'check-release-notes: SKIP cited commits — this checkout is shallow, so no hash can be resolved\n' >&2
+else
+	for doc in "${cite_docs[@]}"; do
+		dname="${doc#"${REPO_ROOT}"/}"
+		cites="$(awk '
+			/^[ \t]*(```|~~~)/ { infence = !infence; next }
+			infence { next }
+			{
+				n = split($0, a, "`")
+				for (i = 2; i <= n; i += 2)
+					if (length(a[i]) >= 7 && length(a[i]) <= 40 && a[i] ~ /^[0-9a-f]+$/ && a[i] ~ /[0-9]/ && a[i] ~ /[a-f]/)
+						print FNR " " a[i]
+			}
+		' "$doc")"
+		[[ -n "$cites" ]] || continue
+		# One lookup per document. `<hash>^{commit}` also refuses a hash that names
+		# a blob or a tree, which a bare existence check would accept.
+		verdicts="$(awk '{ print $2 "^{commit}" }' <<<"$cites" | git -C "$REPO_ROOT" cat-file --batch-check)"
+		paste -d' ' <(printf '%s\n' "$cites") <(printf '%s\n' "$verdicts") >"$WORK_CITES"
+		while read -r line sha rest; do
+			cites_checked=$((cites_checked + 1))
+			# `<name> missing` is the invented case. `ambiguous` means the
+			# abbreviation names several objects, which only a real hash can.
+			if [[ "$rest" == *" missing" ]]; then
+				if awk -v d="$dname" -v s="$sha" '$1 == d && $2 == s { found = 1 } END { exit !found }' "$BASELINE"; then
+					cites_baselined=$((cites_baselined + 1))
+					continue
+				fi
+				# shellcheck disable=SC2016  # backticks are literal here, not substitution
+				printf '%s:%s: `%s` is not a commit in this repository\n' "$dname" "$line" "$sha" >&2
+				findings=$((findings + 1))
+			fi
+		done <"$WORK_CITES"
+	done
+fi
+
 if ((findings > 0)); then
 	printf '\ncheck-release-notes: %d finding(s)\n' "$findings" >&2
 	exit 1
 fi
-printf 'check-release-notes: ok (%d note(s); %d commit count(s) checked, %d skipped for want of tags, %d approximate, %d with no range heading)\n' \
-	"${#notes[@]}" "$counts_checked" "$counts_skipped" "$counts_approx" "$counts_unranged"
+printf 'check-release-notes: ok (%d note(s); %d commit count(s) checked, %d skipped for want of tags, %d approximate, %d with no range heading; %d cited commit hash(es) checked in %d doc(s), %d on the baseline%s)\n' \
+	"${#notes[@]}" "$counts_checked" "$counts_skipped" "$counts_approx" "$counts_unranged" \
+	"$cites_checked" "${#cite_docs[@]}" "$cites_baselined" "$( ((cites_skipped)) && printf ', skipped: shallow checkout')"

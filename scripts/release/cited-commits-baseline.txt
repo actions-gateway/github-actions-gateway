@@ -1,0 +1,58 @@
+# Backticked hex tokens that check-release-notes.sh cannot resolve to a commit in
+# this repository, and that were already in the docs when the rule was added
+# (Q1356). Each line is `<doc path> <token> <kind>`, exempt in that one doc only,
+# so a new unresolvable token still fails. The kind says why it is not a commit
+# here, read from the sentence that cites it:
+#
+#   id        a scale-set plan or job ID, not a commit at all
+#   digest    an abbreviated image digest
+#   upstream  a commit in another project that the doc compares against
+#   orphaned  a commit of this repository that a squash merge or rebase dropped
+#             from the branches and tags a CI checkout fetches; it still resolves
+#             on GitHub
+#
+# There is no kind for "this repository's commit that exists nowhere": that is
+# the defect the rule exists to catch, so correct the doc instead of adding a
+# line. The list is not checked for staleness, because whether an orphaned commit
+# resolves depends on what the checkout fetched, so an entry unused on one
+# machine can be the one CI needs.
+docs/plan/archive/gke-dogfood-turnup-findings.md 17c6c7dd id
+docs/plan/archive/gke-dogfood-turnup-findings.md 34ad8db4 id
+docs/plan/archive/gke-dogfood-turnup-findings.md 357b6d9e id
+docs/plan/archive/gke-dogfood-turnup-findings.md 62d2c792 id
+docs/plan/archive/gke-dogfood-turnup-findings.md 81b0d30 orphaned
+docs/plan/archive/gke-dogfood-turnup-findings.md 86aa1b1e digest
+docs/plan/archive/gke-dogfood-turnup-findings.md b8321da3 id
+docs/plan/archive/gke-dogfood-turnup-findings.md d160ae3 orphaned
+docs/plan/archive/gke-dogfood-turnup-findings.md eba8f94d id
+docs/plan/archive/gke-dogfood-turnup-findings.md f968c752 id
+docs/plan/archive/q260-fanout-completion-reconciliation.md 34ad8db4 id
+docs/plan/archive/q260-fanout-completion-reconciliation.md 357b6d9e id
+docs/plan/archive/q260-fanout-completion-reconciliation.md f968c752 id
+docs/plan/archive/q264-scale-set-protocol-phases.md 1b6da87 upstream
+docs/plan/archive/release-1.5.md 9bb16ae upstream
+docs/plan/archive/release-1.9.md 1945b42 upstream
+docs/plan/archive/release-1.9.md b74be8a87 orphaned
+docs/plan/competitive-analysis-2026-08.md 9bb16ae upstream
+docs/plan/gpu-and-accelerated-ci.md 4d1e78d upstream
+docs/plan/gpu-and-accelerated-ci.md 978f40d upstream
+docs/plan/q215-worker-cache.md 0494e0c orphaned
+docs/plan/q215-worker-cache.md 0c3a9c3 upstream
+docs/plan/q215-worker-cache.md 1ba885c upstream
+docs/plan/q215-worker-cache.md 6513cf2 orphaned
+docs/plan/q215-worker-cache.md 892eaea upstream
+docs/plan/q215-worker-cache.md c829dd6 upstream
+docs/plan/q224-fanout-dispatch-lever-spike.md 62d2c792 id
+docs/plan/q243-q245-q230-live-validation-campaign.md daf977b orphaned
+docs/plan/q245-fqdn-intent-backend-split.md daf977b orphaned
+docs/plan/q300-gmc-kindnet-e2e-flake.md 7a531dff orphaned
+docs/plan/q300-gmc-kindnet-e2e-flake.md 9480f29b orphaned
+docs/plan/q408-untrusted-pr-egress.md 33b6578 orphaned
+docs/plan/q539-dragonfly-mirror-backend.md ada717934e86 upstream
+docs/plan/q540-node-layer-p2p.md 79779e2683ef upstream
+docs/plan/q645-abandoned-completion.md 808639ca id
+docs/plan/secure-multi-tenant-oss-ci.md 716908e upstream
+docs/releases/v2.0.1.md 2357639a digest
+docs/releases/v2.0.1.md 25ac8f0 digest
+docs/releases/v2.0.1.md 34507eb5 digest
+docs/releases/v2.0.1.md aafe993 digest
