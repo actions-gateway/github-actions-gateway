@@ -106,7 +106,8 @@ empty_case() (
 	gcloud() { echo "gcloud $*" >>"${dir}/calls"; return "${resize_rc}"; }
 	sleep() { echo "sleep $1" >>"${dir}/calls"; }
 	kubectl() {
-		local -a seq=(${counts})
+		local -a seq
+		read -r -a seq <<<"${counts}"
 		local n v i
 		n="$(cat "${dir}/n")"
 		v="${seq[$((n < ${#seq[@]} ? n : ${#seq[@]} - 1))]}"
