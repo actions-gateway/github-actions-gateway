@@ -88,8 +88,9 @@ type workflowRunSummary struct {
 // supersedingRun returns the newest run of run's workflow, event and branch where it is a
 // newer commit from the same head repository, which supersedes run. Filtering on the
 // event and comparing the head repository keeps a fork's branch from matching
-// upstream's of the same name. Whether the branch filter matches a fork pull
-// request's head branch is unmeasured; a miss re-runs.
+// upstream's of the same name. The branch filter matches a fork pull request's head
+// branch, but one result per page lets another fork's newer run hide this fork's own
+// (measured on github/docs, 2026-11-22); a miss re-runs.
 //
 // A list that cannot be read answers false: the check only ever withholds a re-run, so
 // an unreadable answer must not withhold one.
