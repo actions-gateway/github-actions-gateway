@@ -749,17 +749,17 @@ gh run watch "$(gh run list --workflow=publish.yml --branch=vX.Y.Z -L1 --json da
 
 #### The tag push hands the site deploy to a dispatch
 
-**Expect two `pages` runs for a stable tag, and read the second.** The tag push's run deploys nothing: its `handoff` job re-runs `pages` as a `workflow_dispatch` on the same tag, and that run builds, deploys and checks the live site (Q1041).
-Every stable tag from `v1.6.0` to `v1.10.0` deployed from its push, reported success, and never served, while every dispatch of the same content served, on `main` and on the `v1.10.0` tag ref alike.
-Why a push deploy differs from a dispatch is not known.
+**Expect two `pages` runs for a stable tag, and read the second.** The tag push's run deploys nothing: its `handoff` job dispatches `pages` on `main` with `docs_ref` set to the tag, and that run builds, deploys and checks the live site (Q1355).
+It runs on `main` because a Pages deployment whose ref is a tag has not activated when its commit is already the one being served: `v1.9.0`, `v1.10.0`, `v2.0.0` and `v2.0.1` each ended `failure` after the check below timed out, and a `main` deployment of the same commit served every time.
+The dispatch has not yet been exercised by a real tag, so the first stable tag after this change is its test: if it fails, the repair below is the same command the earlier releases needed.
 
-If the dispatched run fails, dispatch it again by hand:
+If the dispatched run fails, dispatch it again by hand, with the inputs the handoff would have passed:
 
 ```bash
-gh workflow run pages --ref vX.Y.Z
+gh workflow run pages --ref main -f version=X.Y.Z -f docs_ref=vX.Y.Z -f alias=stable -f set_default=true
 ```
 
-With no inputs it resolves from the tag the way the push does, so it moves `stable` only when `X.Y.Z` is the highest release and is safe for a backport.
+Leave `alias` and `set_default` off for a backport to an older line, which must not move `stable`.
 
 **A backport tag cut from a `release-X.Y` branch older than this change deploys from its push**, because a tag push runs the `pages.yml` on its own commit.
 `release-1.4` through `release-1.7` predate the hand-off, so a tag cut from one of them needs the command above run by hand.

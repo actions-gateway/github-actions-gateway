@@ -297,6 +297,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  fetch/prepull-manifest-images-test fetch/backfill-image-content-test \
                  manifest/check-promql-test \
                  pages/verify-pages-artifact-test pages/verify-pages-live-test \
+                 pages/tag-deploy-inputs-test \
                  go/check-codegen-drift-test go/go-tidy-check-test \
                  go/check-test-cache-inputs-test \
                  go/coverage-test go/go-lint-scope-test go/go-test-run-filter-test \

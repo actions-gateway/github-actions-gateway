@@ -84,3 +84,22 @@ The repo already records that three of the four releases before 1.5.0 published 
 The gap was that it was the *last* line of defence rather than a gate, so the failure was caught by a human remembering to look, at whatever point they looked.
 That is what `verify-pages-live.sh` closes: the same question, asked by the run that caused it, within five minutes rather than whenever someone thinks to check.
 `verify-published-docs` keeps its own job, which is the pins, and stays a hand step because a tag cannot pass it.
+
+## Recurrence: every stable tag since
+
+`verify-pages-live.sh` has failed at every stable tag after `v1.6.0`, so the incident was not a one-off.
+Measured 2026-11-22 from the Pages deployments API (`gh api repos/actions-gateway/github-actions-gateway/deployments?environment=github-pages`, then each deployment's `/statuses`):
+
+| Deployment | Ref | Commit already deployed on `main` | Final status |
+|---|---|---|---|
+| `v1.9.0`, 2026-10-06 | tag | yes, 2 min earlier | repaired by a `main` deploy of the same commit |
+| `v1.10.0`, 2026-10-27 | tag | yes, 34 min earlier | `failure`; repaired by a `main` deploy of the same commit |
+| `v1.10.0`, 2026-11-02 | tag | no, the site had moved on | `success` in 1 min |
+| `v2.0.0`, 2026-11-17 | tag | yes, 6 min earlier | `failure` after 6 min `in_progress` |
+| `v2.0.1`, 2026-11-18 | tag | yes, 13 min earlier | `failure` after 6 min `in_progress` |
+
+Every `main` deployment in the same window, including the three that redeployed a commit the site was already serving, went `in_progress` to `success` in under two minutes.
+The `v2.0.0` and `v2.0.1` deployments were dispatches on the tag ref, so the earlier fix (Q1041, dispatch instead of push) did not change the outcome: what separates them is the deployment's ref being a tag.
+That is five observations and no controlled test, and why Pages behaves so is not known.
+The `handoff` job now dispatches on `main` with `docs_ref` set to the tag (Q1355).
+The first stable tag cut after that change is the test, and this section should be amended with its result.

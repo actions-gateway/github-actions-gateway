@@ -134,10 +134,11 @@ Each version is a full built copy under its own path on the `gh-pages` branch, a
 **What deploys when** (`.github/workflows/pages.yml`):
 
 - **push to `main`** → `mike deploy dev` (refreshes the unreleased `dev` docs).
-- **stable `v*` tag push** → re-runs `pages.yml` as a `workflow_dispatch` on the same tag (the `handoff` job), which deploys that release's docs, and **only if it is the highest released version** also moves the `stable` alias + the default root redirect to it (`mike set-default stable`).
+- **stable `v*` tag push** → re-runs `pages.yml` as a `workflow_dispatch` on **`main`** with `docs_ref` set to the tag (the `handoff` job), which deploys that release's docs, and **only if it is the highest released version** also moves the `stable` alias + the default root redirect to it (`mike set-default stable`).
   This is the same tag push that runs `publish.yml`.
-  The push hands off rather than deploying because no deploy made by a tag push has been seen to serve (Q1041): `v1.6.0` to `v1.10.0` each reported success and kept the previous tree live, while every dispatch of the same content served, on `main` and on the `v1.10.0` tag ref alike.
-  Why the push differs is not known.
+  The `handoff` job computes the version, alias and default with [`tag-deploy-inputs.sh`](../../scripts/pages/tag-deploy-inputs.sh), because a dispatch with an explicit version applies its alias verbatim.
+  It dispatches on `main` rather than the tag because no Pages deployment whose ref is a tag has been seen to activate when its commit is the one the site already serves (Q1355): `v1.9.0`, `v1.10.0`, `v2.0.0` and `v2.0.1` each sat `in_progress` and ended `failure`, a push for the first and a dispatch on the tag ref for the last two, while a `main` deployment of the same commit activated every time.
+  That is five observations with no controlled test, and why Pages does it is not known; the first stable tag cut after this change is the test.
 - **prerelease tag** (`0.x`, `-rc`/`-alpha`/`-beta`) → **no deploy** (the same prerelease test `publish.yml` uses, Q293).
 - **`workflow_dispatch`** → deploys the `version`/`alias` inputs verbatim (or derives from the ref when blank) — used for **seeding** already-released versions and manual redeploys.
   The `docs_ref` input picks which ref the docs *content* is built from, independently of the ref the workflow logic runs from (see § Seeding below).
