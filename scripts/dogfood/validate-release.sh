@@ -1561,6 +1561,21 @@ EOF
 	kubectl delete egressproxy soak-reading -n "${TENANT_NAMESPACE}" --ignore-not-found --wait=false || true
 }
 
+# await_publish_run — block until the candidate's whole publish.yml run has
+# succeeded, before a leg reads what chart-publish produces: the GitHub Release
+# assets (crd_smoke, fetch_gag_migrate) and the OCI chart (storage_leg's helm
+# pull). The CI wait step returns on the image jobs alone (Q1365), so this is
+# where a red chart-publish stops the gate. It runs only when the workflow sets
+# GATE_AWAIT_PUBLISH_RUN=1; unset, a missing asset fails the leg's own download.
+AWAITED_PUBLISH_RUN=0
+await_publish_run() {
+	[[ "${GATE_AWAIT_PUBLISH_RUN:-0}" == 1 && "${AWAITED_PUBLISH_RUN}" == 0 ]] || return 0
+	echo "Waiting for the whole publish run of ${GAG_IMAGE_TAG} (chart-publish)..."
+	REPO="${REPO}" WAIT_TIMEOUT="${PUBLISH_RUN_TIMEOUT:-1200}" \
+		bash "${SCRIPT_DIR}/wait-for-publish.sh" "${GAG_IMAGE_TAG}" || return 1
+	AWAITED_PUBLISH_RUN=1
+}
+
 # crd_smoke — download the RC's signed v2 CRD manifest, verify its blob signature
 # against the publish identity, apply it server-side, and assert all five v2 CRDs
 # register — the helm-free install path operators actually use. Consumes the
@@ -1568,6 +1583,7 @@ EOF
 # step returns explicitly, so the apply never follows a failed verify under a
 # caller with errexit off (bash-style.md).
 crd_smoke() {
+	await_publish_run || return 1
 	# Re-pin the cluster context (fail-closed) before the apply, independent of
 	# which child last fetched credentials.
 	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}" || return 1
@@ -1667,6 +1683,7 @@ stored_versions_not_v2() {
 # CalicoFQDN alias) are checked by its dry run, which writes nothing and names
 # what blocks it.
 storage_leg() {
+	await_publish_run || return 1
 	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
 	local context="gke_${PROJECT}_${ZONE}_${CLUSTER}"
 
