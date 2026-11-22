@@ -318,6 +318,7 @@ else
 					cites_baselined=$((cites_baselined + 1))
 					continue
 				fi
+				# shellcheck disable=SC2016  # backticks are literal here, not substitution
 				printf '%s:%s: `%s` is not a commit in this repository\n' "$dname" "$line" "$sha" >&2
 				findings=$((findings + 1))
 			fi
