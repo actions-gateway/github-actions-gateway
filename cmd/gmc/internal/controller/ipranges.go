@@ -216,8 +216,14 @@ func (f *HTTPGitHubIPRangeFetcher) FetchIPRanges(ctx context.Context) ([]net.IPN
 		return nil, fmt.Errorf("GitHub meta returned %d", resp.StatusCode)
 	}
 
+	return ParseGitHubMeta(resp.Body)
+}
+
+// ParseGitHubMeta reads a GitHub /meta response body into the merged CIDR set the
+// GMC allowlists. Malformed entries are skipped.
+func ParseGitHubMeta(r io.Reader) ([]net.IPNet, error) {
 	var meta githubMetaResponse
-	if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil {
+	if err := json.NewDecoder(r).Decode(&meta); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 

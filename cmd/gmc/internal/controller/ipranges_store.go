@@ -57,17 +57,24 @@ type IPRangeStore struct {
 	MaxAge time.Duration
 }
 
-// Save writes cidrs and the time of the fetch that returned them, creating the
-// ConfigMap on first use.
-func (s *IPRangeStore) Save(ctx context.Context, cidrs []net.IPNet, fetchedAt time.Time) error {
+// IPRangeStoreData is the ConfigMap data of a persisted set: what Save writes
+// and Load reads. The e2e suite builds the same data to seed a GMC that cannot
+// fetch its own (Q1119).
+func IPRangeStoreData(cidrs []net.IPNet, fetchedAt time.Time) map[string]string {
 	lines := make([]string, len(cidrs))
 	for i := range cidrs {
 		lines[i] = cidrs[i].String()
 	}
-	data := map[string]string{
+	return map[string]string{
 		ipRangeStoreCIDRsKey:     strings.Join(lines, "\n"),
 		ipRangeStoreFetchedAtKey: fetchedAt.UTC().Format(time.RFC3339Nano),
 	}
+}
+
+// Save writes cidrs and the time of the fetch that returned them, creating the
+// ConfigMap on first use.
+func (s *IPRangeStore) Save(ctx context.Context, cidrs []net.IPNet, fetchedAt time.Time) error {
+	data := IPRangeStoreData(cidrs, fetchedAt)
 
 	var cm corev1.ConfigMap
 	err := s.Reader.Get(ctx, types.NamespacedName{Namespace: s.Namespace, Name: s.Name}, &cm)

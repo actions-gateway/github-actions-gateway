@@ -3,11 +3,14 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -234,4 +237,65 @@ func TestIPRangeReconciler_EmptyFetchKeepsSeed(t *testing.T) {
 	got, _, err := store.Load(ctx, time.Now())
 	require.NoError(t, err)
 	assert.Empty(t, got, "an empty fetch writes nothing to the store")
+}
+
+// The e2e suite seeds the store with ConfigMap data built by IPRangeStoreData
+// from a /meta body fetched by the CI job's own token (Q1119). That data must
+// load exactly as a Save'd copy does, or the GMC would start with no ranges.
+func TestIPRangeStore_SeededFromMetaBodyLoads(t *testing.T) {
+	body := `{"api":["192.30.252.0/22"],"actions":["4.148.0.0/16"],"web":["140.82.112.0/20","not-a-cidr"]}`
+	cidrs, err := ParseGitHubMeta(strings.NewReader(body))
+	require.NoError(t, err)
+	require.Len(t, cidrs, 3, "the malformed entry is skipped")
+
+	fetchedAt := time.Now().Add(-time.Minute)
+	store, _ := newTestIPRangeStore(t, storeConfigMap(IPRangeStoreData(cidrs, fetchedAt)))
+	cache := &IPRangeCache{}
+	n, err := store.SeedCache(context.Background(), cache, time.Now())
+	require.NoError(t, err)
+	assert.Equal(t, 3, n)
+	assert.Equal(t, cidrs, cache.Snapshot())
+}
+
+// A GMC whose own /meta fetch is rate limited keeps serving the seeded set for as
+// long as the limit lasts, which is what leaves the proxy NetworkPolicy a 443 rule
+// in e2e when the runner address's quota is spent (Q1119). Every wait is a
+// rate-limit wait here, so the cache is read after more than one failed fetch.
+func TestIPRangeReconciler_RateLimitedFetchKeepsSeed(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store, fc := newTestIPRangeStore(t)
+	seeded := []net.IPNet{parseCIDR(t, "140.82.112.0/20")}
+	fetchedAt := time.Now().Add(-time.Minute)
+	require.NoError(t, store.Save(ctx, seeded, fetchedAt))
+	cache := &IPRangeCache{}
+	n, err := store.SeedCache(ctx, cache, time.Now())
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+
+	limited := fmt.Errorf("GitHub meta returned 403: %w", &httpx.RateLimitError{RetryAfter: 28 * time.Minute})
+	ff := &scriptedFetcher{errs: []error{limited, limited, limited}}
+	waits := 0
+	r := &IPRangeReconciler{
+		Client:  fc,
+		Fetcher: ff,
+		Cache:   cache,
+		Store:   store,
+		after: func(time.Duration) <-chan time.Time {
+			waits++
+			if waits == 2 {
+				cancel()
+			}
+			ch := make(chan time.Time, 1)
+			ch <- time.Time{}
+			return ch
+		},
+	}
+
+	r.reconcileInitial(ctx, slog.Default())
+
+	require.GreaterOrEqual(t, waits, 2, "the fetch must have been refused more than once")
+	assert.Equal(t, seeded, cache.Snapshot())
+	last, _ := cache.LastRefresh()
+	assert.True(t, last.Equal(fetchedAt), "a refused fetch must not stamp a refresh")
 }

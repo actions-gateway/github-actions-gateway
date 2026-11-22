@@ -4128,6 +4128,14 @@ An unreadable Deployment yields no evidence rather than an empty selector: `kube
 The v1 evidence that *was* captured sat in the output as 150 lines of JSON and the failure was still triaged off the runner-host HTTP banner above, which scored the two identical failures `BLOCKED` and `REACHABLE` minutes apart.
 Scoring is a pure function over log text (`ScoreProxyReplicaLog`/`AttributeProxyConnect`, table-tested in `proxy_connect_attribution_test.go`) so every verdict is driven by a unit test, including the two that say the banner cannot attribute the failure.
 
+**The e2e GMC is seeded with ranges fetched by the job's token (Q1119).** The GMC's `/meta` fetch is unauthenticated, so it spends the runner address's quota of 60 requests an hour, shared with every other tenant of that address.
+A spent quota answers 403 for the reset window, leaves the proxy NetworkPolicy with no `443` rule, and fails both `ProxyConnectWorks` specs with an `UPSTREAM-DIAL-FAILED` banner.
+`e2e-reusable.yml` therefore runs [`fetch-github-meta.sh`](../../scripts/e2e/fetch-github-meta.sh) before the suite, with `GH_TOKEN` set from `github.token` in that step's environment alone, and exports `E2E_GITHUB_META_FILE`.
+`setupGMC` applies the file as the GMC's `actions-gateway-gmc-ip-ranges` ConfigMap before the patches that restart the GMC pod, so the pod that outlives them seeds its cache from it and serves the seed for the 49 hours the store allows ([`wiring.go`](../../cmd/gmc/cmd/wiring.go) sets `MaxAge` to `egressStaleThreshold`).
+A failed fetch leaves the variable unset and the GMC fetches for itself, as a local `make e2e` does; a variable that names an unusable file fails the suite.
+What the unit tests drive: `TestIPRangeReconciler_RateLimitedFetchKeepsSeed` (a rate-limited fetch leaves the seeded set served) and `TestIPRangeStore_SeededFromMetaBodyLoads` (the seed's data loads).
+What nothing drives: the quota cannot be spent on demand, so no run has shown a seeded GMC surviving a spent quota end to end.
+
 #### The Calico e2e lane
 
 - **[`e2e-calico.yml`](../../.github/workflows/e2e-calico.yml)** — `kind_cni: calico` (Q119). kindnet accepts `NetworkPolicy` but its bundled enforcer does not drop egress, so the NetworkPolicy-enforcement specs self-skip on the per-PR kindnet leg; on Calico they assert real packet drops.
