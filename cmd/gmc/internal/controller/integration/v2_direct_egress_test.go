@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
@@ -33,21 +34,21 @@ import (
 // wired to a shared IP-range cache, plus an IPRangeReconciler over that cache, for the
 // duration of a test. The cache is pre-populated from the fetcher (mirroring the
 // steady state after the startup fetch). Returns the IPRangeReconciler so a test can
-// trigger a manual refresh, and the shared cache.
-func startActionsGatewayV2ReconcilerWithIPRange(t *testing.T, fetcher controller.GitHubIPRangeFetcher) (*controller.IPRangeReconciler, *controller.IPRangeCache) {
+// trigger a manual refresh, the shared cache, and the gateway reconciler's counter. A
+// nil syncPeriod keeps controller-runtime's default, so no resync lands in a test.
+func startActionsGatewayV2ReconcilerWithIPRange(t *testing.T, fetcher controller.GitHubIPRangeFetcher, syncPeriod *time.Duration) (*controller.IPRangeReconciler, *controller.IPRangeCache, *reconcileCounter) {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	t.Cleanup(mgrCancel)
 
 	skipNameValidation := true
-	syncPeriod := 2 * time.Second
 	mgr, err := ctrl.NewManager(testEnv.Config, ctrl.Options{
 		Scheme:                 testScheme,
 		Metrics:                metricsserver.Options{BindAddress: "0"},
 		HealthProbeBindAddress: "0",
 		LeaderElection:         false,
 		Controller:             config.Controller{SkipNameValidation: &skipNameValidation},
-		Cache:                  cache.Options{SyncPeriod: &syncPeriod},
+		Cache:                  cache.Options{SyncPeriod: syncPeriod},
 	})
 	require.NoError(t, err)
 
@@ -60,8 +61,9 @@ func startActionsGatewayV2ReconcilerWithIPRange(t *testing.T, fetcher controller
 		ipCache.MarkRefreshed(time.Now())
 	}
 
+	counter := newReconcileCounterFor(mgr.GetClient(), func(o client.Object) bool { _, ok := o.(*v2.ActionsGateway); return ok })
 	err = (&controller.ActionsGatewayV2Reconciler{
-		Client:   mgr.GetClient(),
+		Client:   counter,
 		Scheme:   mgr.GetScheme(),
 		AGCImage: "agc:test",
 		IPCache:  ipCache,
@@ -76,7 +78,7 @@ func startActionsGatewayV2ReconcilerWithIPRange(t *testing.T, fetcher controller
 	}
 
 	go func() { _ = mgr.Start(mgrCtx) }()
-	return ipRangeReconciler, ipCache
+	return ipRangeReconciler, ipCache, counter
 }
 
 // npHasGitHubCIDR reports whether np has an egress rule with an ipBlock peer for cidr.
@@ -104,7 +106,8 @@ func TestV2_DirectEgress_ProvisionsRestrictedControlPlane(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
 
-	startActionsGatewayV2ReconcilerWithIPRange(t, fetcher)
+	syncPeriod := 2 * time.Second
+	startActionsGatewayV2ReconcilerWithIPRange(t, fetcher, &syncPeriod)
 
 	// AGC Deployment comes up with NO proxy env (direct egress) and no proxy-CA mount.
 	var dep appsv1.Deployment
@@ -171,7 +174,9 @@ func TestV2_DirectEgress_IPRangeRefreshUpdatesDirectPolicies(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
 
-	ipRangeReconciler, _ := startActionsGatewayV2ReconcilerWithIPRange(t, fetcher)
+	// No resync: a reconcile that read the cache before the refresh would otherwise
+	// race it and write the old range back.
+	ipRangeReconciler, _, reconciles := startActionsGatewayV2ReconcilerWithIPRange(t, fetcher, nil)
 
 	// Wait for the direct AGC + workload NetworkPolicies to carry the first CIDR.
 	require.Eventually(t, func() bool {
@@ -185,19 +190,31 @@ func TestV2_DirectEgress_IPRangeRefreshUpdatesDirectPolicies(t *testing.T) {
 		return npHasGitHubCIDR(&agcNP, "140.82.112.0/20") && npHasGitHubCIDR(&workloadNP, "140.82.112.0/20")
 	}, 15*time.Second, 100*time.Millisecond, "direct NetworkPolicies should carry the initial CIDR")
 
+	// The AGC never goes Ready without a kubelet, so the gateway requeues every 15s.
+	// Two quiet seconds after the last reconcile leave the rest of that interval for
+	// the refresh and the read below.
+	last, since := reconciles.startedIn(ns), time.Now()
+	require.Eventually(t, func() bool {
+		if n := reconciles.startedIn(ns); n != last {
+			last, since = n, time.Now()
+		}
+		return time.Since(since) >= 2*time.Second
+	}, 30*time.Second, 50*time.Millisecond, "the gateway's reconciles should go quiet")
+
 	// GitHub rotates ranges: the fetcher now returns a second CIDR.
 	_, cidr2, _ := net.ParseCIDR("1.2.3.0/24")
 	fetcher.SetCIDRs([]net.IPNet{*cidr1, *cidr2})
 	ipRangeReconciler.ReconcileNow(ctx)
 
 	// The relocated refresh loop (Q168) patches the direct AGC + workload NPs with the
-	// new range — the direct-egress allowlist stays current. Read as ReconcileNow
-	// returns: the reconciler shares the cache and resyncs every 2s, so a later read
-	// cannot tell the refresh's patch from a resync's.
+	// new range — the direct-egress allowlist stays current. The reconciler shares the
+	// cache, so the read is taken as ReconcileNow returns and with no gateway reconcile
+	// since the quiet window: only the refresh can have written the new range.
 	var agcNP, workloadNP networkingv1.NetworkPolicy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-agc"}, &agcNP))
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-workload"}, &workloadNP))
 	assert.True(t, npHasGitHubCIDR(&agcNP, "1.2.3.0/24") && npHasGitHubCIDR(&workloadNP, "1.2.3.0/24") &&
 		npHasGitHubCIDR(&agcNP, "140.82.112.0/20") && npHasGitHubCIDR(&workloadNP, "140.82.112.0/20"),
 		"IP refresh must patch the direct-egress NetworkPolicies with the new CIDR")
+	assert.Equal(t, last, reconciles.startedIn(ns), "no gateway reconcile may run between the quiet window and the read")
 }

@@ -20,9 +20,10 @@ import (
 
 // TestV2_EgressProxy_IPRangeRefresh pins the IP-range reconciler's EgressProxy pass:
 // a managed pool's NetworkPolicy takes a rotated GitHub range from the refresh
-// itself, read back as ReconcileNow returns and so before any reconcile could carry
-// it, and a managedNetworkPolicy: false pool carries no GitHub range before or after
-// and is never patched. TestV2_DirectEgress_IPRangeRefreshUpdatesDirectPolicies is
+// itself, and a managedNetworkPolicy: false pool carries no GitHub range before or
+// after and is never patched. The reconciler shares the cache, so it runs without a
+// resync and is idle when the refresh fires: any reconcile after that reads the new
+// range, and only one the refresh's own write queues can run before the read. TestV2_DirectEgress_IPRangeRefreshUpdatesDirectPolicies is
 // the direct-egress half.
 func TestV2_EgressProxy_IPRangeRefresh(t *testing.T) {
 	const managedNS, unmanagedNS = "v2-ep-iprange", "v2-ep-iprange-unmanaged"
@@ -43,7 +44,7 @@ func TestV2_EgressProxy_IPRangeRefresh(t *testing.T) {
 		require.NoError(t, k8sClient.Create(ctx, ep))
 		t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ep) })
 	}
-	startEgressProxyReconciler(t, ipCache)
+	reconciles := startEgressProxyReconcilerNoResync(t, ipCache)
 
 	proxyNP := func(ns string) (*networkingv1.NetworkPolicy, error) {
 		var np networkingv1.NetworkPolicy
@@ -58,6 +59,10 @@ func TestV2_EgressProxy_IPRangeRefresh(t *testing.T) {
 	np, err := proxyNP(unmanagedNS)
 	require.NoError(t, err)
 	assert.False(t, npHasGitHubCIDR(np, cidr1.String()), "managedNetworkPolicy: false must carry no GitHub range")
+	// The pool never goes Ready without a kubelet, so it requeues every 15s; two quiet
+	// seconds leave the rest of that interval for the refresh and the read. The
+	// unmanaged pool's reconciles write no GitHub range, so it needs no wait.
+	reconciles.waitIdle(t, managedNS, 2*time.Second)
 
 	metrics := &controller.Metrics{IPRangeUpdates: prometheus.NewCounterVec(
 		prometheus.CounterOpts{Name: "q1259_ip_range_updates_total"}, []string{"namespace"})}
