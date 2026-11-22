@@ -52,6 +52,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` o
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
 - [Worker Pod Reaped While Pending After Its Job Completed (WorkerPodCompletedPending)](#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending)
+- [Worker Replaced Before It Started (WorkerReplacedBeforeStart)](#worker-replaced-before-it-started-workerreplacedbeforestart)
 - [Worker Pod Reaped While Running (WorkerPodOrphanedRunning)](#worker-pod-reaped-while-running-workerpodorphanedrunning)
 - [Worker Pod Reaped With an Idle Runner (WorkerPodRunnerIdle)](#worker-pod-reaped-with-an-idle-runner-workerpodrunneridle)
 - [Workers Left Behind by an AGC That Was Down](#workers-left-behind-by-an-agc-that-was-down)
@@ -1616,6 +1617,7 @@ Before Q575 these pods were left to the unrelated `pendingPodDeadline` (default 
   Since Q583 the listener issues the delete half of the ack once every job in a message has concluded, so a restart re-reads only work that is genuinely unfinished — and since Q603 it issues any outstanding ones as it shuts down, so a graceful stop does not strand them either.
   A burst still correlated with a restart on a current release is therefore **not** the historical replay; it is one of the three narrower causes in the resolution below.
 - **Pod startup slower than the job's own lifetime** — slow image pulls or node scale-up against very short jobs.
+- **A worker that did not start within five minutes, when a newer worker holds its job.** GitHub withdraws an assignment no runner takes in that window and re-issues the job, so this shape is reported as [`WorkerReplacedBeforeStart`](#worker-replaced-before-it-started-workerreplacedbeforestart) instead.
 
 **Diagnostics.**
 
@@ -1657,6 +1659,48 @@ Treat a *sustained* or *bursty* rate as the signal:
   Look at pod startup time (`kubectl describe pod` → image pull duration) rather than at the AGC.
 
 The thirty-second grace is a fixed constant, not a CRD field: the pod has not started, so there is no runner shutdown to wait out — the grace exists only to let a pod that was already mid-start reach `Running`, where the longer [`orphaned_running`](#worker-pod-reaped-while-running-workerpodorphanedrunning) grace takes over.
+
+---
+
+## Worker Replaced Before It Started (WorkerReplacedBeforeStart)
+
+**Symptoms.** A `Warning` Event with reason `WorkerReplacedBeforeStart` appears on the `RunnerSet`, naming a worker pod that never started, the node it was on, and the worker that replaced it.
+`actions_gateway_worker_pods_reaped_total{reason="completed_pending"}` increments with it.
+When it repeats about every five minutes for one job, that job is in a loop: each worker sticks, and each registers a runner at GitHub.
+
+**What happened.** GitHub withdraws a scale-set assignment that no runner takes within five minutes and re-issues the same workflow job under a new job ID (measured on the dogfood cluster on 2026-11-18; GitHub does not document the window).
+The withdrawal marks the stuck worker's job completed, so the AGC deletes it 30 seconds later, and the re-issue gets a new worker carrying the same run ID and job name (Q1361).
+A worker that starts within those 30 seconds takes the re-issue itself and this Event does not fire, as the slow cold start measured on 2026-11-18 did: its runner came up one second after the withdrawal.
+
+A worker that can never start loops until GitHub gives up on the job.
+`pendingPodDeadline` never fires for it, because the withdrawal always comes first.
+The AGC keeps provisioning each re-issue rather than stopping, because the next worker may land on a node that can run it.
+
+**Likely causes.**
+
+- **A node that accepts pods and cannot run them**, the Event names it: a missing runtime class (`no runtime for "kata-qemu" is configured`), a CSI driver not yet registered (`no topology key found for node`), or a broken node no autoscaler replaces.
+- **A cold start longer than five minutes and 30 seconds**: a node scale-up from zero followed by slow volume and image pulls.
+- **Not scheduled at all**, when the Event says `not scheduled`: see [Worker Pods Stuck Pending](#worker-pods-stuck-pending).
+
+**Diagnostics.**
+
+```sh
+# Every replacement, with the node each stuck worker was on
+kubectl get events -n <namespace> --field-selector reason=WorkerReplacedBeforeStart
+```
+
+```sh
+# What the node did with the worker before it was deleted (kept for about an hour)
+kubectl get events -n <namespace> --field-selector involvedObject.name=<worker-pod>
+```
+
+```sh
+# The node's own condition
+kubectl describe node <node>
+```
+
+**Resolution.** Fix or cordon the node the Event names, or add the runtime class or driver its pool lacks.
+Cordoning stops the loop at the next re-issue, since the new worker is scheduled elsewhere.
 
 ---
 

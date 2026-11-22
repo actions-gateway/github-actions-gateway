@@ -137,6 +137,7 @@ var heavyTierRoots = []string{
 var nonBoundaryFiles = map[string]string{
 	"testdata/gmc/test/e2e/e2e_test.go":                                      "a jsonpath readiness template filters out pods that are mid-delete; no assertion about the mark",
 	"../controller/integration/v2_runnerset_capacity_gate_test.go":           "skips mid-delete worker pods when counting in-flight jobs for the advertised-capacity assertion; no assertion about the mark",
+	"../controller/integration/v2_reissue_loop_test.go":                      "counts a mid-delete worker pod as reaped, since a bound pod stays Terminating with no kubelet; no assertion about the mark",
 	"testdata/gmc/internal/controller/integration/v2_teardown_test.go":       "asserts an ActionsGateway CR is mid-deletion; CR finalizers, not worker pods",
 	"testdata/gmc/internal/controller/integration/priorityclass_vap_test.go": "asserts a RunnerSet CR is held deleting by its finalizer; an admission-policy subject",
 	"testdata/gmc/internal/controller/integration/reconcile_counter_test.go": "reconcileCounter skips an EgressProxy CR that is mid-deletion; no worker pods",
