@@ -3136,14 +3136,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>A reader cannot paste the install command as written.</strong> The five pages <code>release-pins-check</code> reads carry 40 <code>sha256:&lt;component&gt;</code> …</td>
 </tr>
 <tr>
-<td><a href="Q1356/">Q1356</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-release-notes.sh">Check that every commit SHA a release note or plan doc cites resolves</a></td>
-<td><code>ci</code> <code>docs</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><strong>A commit hash in a release record can be invented, and nothing catches it.</strong> On 2026-11-17, during the <code>v2.0.0</code> cut, the draft …</td>
-</tr>
-<tr>
 <td><a href="Q1323/">Q1323</a></td>
 <td><a href="../plan/security-audit-2026-11/#confirmed-low-findings">Five low-severity confirmed findings from the November security audit</a></td>
 <td><code>security</code> <code>bug</code></td>
@@ -4686,6 +4678,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><strong>A dependency bump that changes a published image appears in neither list <code>--notes</code> prints.</strong> Measured 2026-11-22 …</td>
+</tr>
+<tr>
+<td><a href="Q1383/">Q1383</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/release/semverfloor/sources.go">semver-floor drops a Dockerfile syntax-directive digest bump</a></td>
+<td><code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>A digest bump of the <code># syntax=</code> BuildKit directive stays under <em>Withheld</em>, because the Dockerfile parser drops it as a comment.</strong> Found …</td>
 </tr>
 </tbody>
 </table>

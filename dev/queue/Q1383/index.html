@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1356/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1383/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Check that every commit SHA a release note or plan doc cites resolves - GitHub Actions Gateway</title>
+        <title>semver-floor drops a Dockerfile syntax-directive digest bump - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#check-that-every-commit-sha-a-release-note-or-plan-doc-cites-resolves" class="md-skip">
+        <a href="#semver-floor-drops-a-dockerfile-syntax-directive-digest-bump" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Check that every commit SHA a release note or plan doc cites resolves
+              semver-floor drops a Dockerfile syntax-directive digest bump
             
           </span>
         </div>
@@ -2703,21 +2703,13 @@
   
 
 
-<h1 id="check-that-every-commit-sha-a-release-note-or-plan-doc-cites-resolves">Check that every commit SHA a release note or plan doc cites resolves<a class="headerlink" href="#check-that-every-commit-sha-a-release-note-or-plan-doc-cites-resolves" title="Permanent link">&para;</a></h1>
-<p><strong>A commit hash in a release record can be invented, and nothing catches it.</strong> On 2026-11-17, during the <code>v2.0.0</code> cut, the draft candidate-validation table in <code>docs/plan/v2-ga.md</code> named <code>v2.0.0-rc.1</code> as commit <code>00b4f4e</code>.
-No such commit exists; the real one is <code>0c0048d5a</code>.
-Review caught it before merge.
-An abbreviated hash either resolves in <code>git cat-file -e &lt;sha&gt;^{commit}</code> or it does not, so this is a mechanical check that nothing runs.</p>
-<p><strong>Scope it before writing it.</strong> Three things decide the shape:</p>
-<ul>
-<li><strong>Which docs.</strong> Release notes (<code>docs/releases/*.md</code>) should cite only commits reachable from a tag, so every SHA there must resolve.
-  Plan docs also cite commits from PR branches that a squash merge later orphaned, and those resolve only while the branch's objects are fetched.</li>
-<li><strong>Which hex tokens are commits.</strong> A backticked 7-to-40-character hex token is the candidate.
-  Image digests are excluded because they carry a <code>sha256:</code> prefix.</li>
-<li><strong>History depth.</strong> CI checks out shallow, so the gate needs a deeper fetch, or it has to say it skipped rather than pass.</li>
-</ul>
-<p>This case was in a plan doc, so a check over release notes alone would have missed it.
-The smallest version that would have caught it reads both, and fails only on a hash that resolves nowhere in the fetched history: an orphaned branch commit still resolves while it is fetched, and an invented one never does.</p>
+<h1 id="semver-floor-drops-a-dockerfile-syntax-directive-digest-bump">semver-floor drops a Dockerfile syntax-directive digest bump<a class="headerlink" href="#semver-floor-drops-a-dockerfile-syntax-directive-digest-bump" title="Permanent link">&para;</a></h1>
+<p><strong>A digest bump of the <code># syntax=</code> BuildKit directive stays under <em>Withheld</em>, because the Dockerfile parser drops it as a comment.</strong> Found by rev-ci probing the Q1359 PR's head with a local commit, not measured on a real release window.
+The directive is real: <code>Dockerfile</code> line 1 is <code># syntax=docker/dockerfile:1.7@sha256:...</code>, the frontend every published image is built with, so changing it can change a published image.</p>
+<p><strong>Mechanism, read from the code.</strong> <code>logicalLines</code> in <code>devtools/release/semverfloor/sources.go</code> drops every <code>#</code> line, and <code>dockerfileChanged</code> in <code>devtools/release/semverfloor/dockerfile.go</code> compares published stage bodies built from those lines, so the directive never reaches the comparison.
+That is deliberate for ordinary comments, which must not count, and wrong for the two parser directives, <code># syntax=</code> and <code># escape=</code>, which are comments to Dockerfile syntax and instructions to BuildKit.</p>
+<p><strong>Done when</strong> a commit that changes the <code>syntax</code> or <code>escape</code> directive on the first lines of the <code>Dockerfile</code> is classified as shipping, and a commit that changes any other comment is not, with a case for each in <code>devtools/release/semverfloor/dockerfile_test.go</code>.
+Settle first whether the directive belongs in the comparison as its own preamble entry (the shape Q1359 gave a global <code>ARG</code>) or in <code>logicalLines</code>.</p>
 
 
 
