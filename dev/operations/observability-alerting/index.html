@@ -2923,6 +2923,11 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td>ScaleSet worker still Running five minutes after GitHub reported its job terminal — it never received the job, or a sidecar outlived the runner; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a></td>
 </tr>
 <tr>
+<td>Workers whose runner never got a job</td>
+<td><code>worker_pods_reaped_total{reason="idle_runner"}</code></td>
+<td>ScaleSet worker Running ten minutes with no job started, and GitHub reported its runner idle: usually a worker built after an AGC restart for a job another runner took; see the <a href="../troubleshooting/#worker-pod-reaped-with-an-idle-runner-workerpodrunneridle">runbook</a></td>
+</tr>
+<tr>
 <td>Workers reaped by a gateway teardown</td>
 <td><code>worker_pods_reaped_total{reason="gateway_deleted"}</code></td>
 <td>Someone deleted an <code>ActionsGateway</code> while its tenant had jobs running; those jobs are lost. Expected during a deliberate tenant teardown, and worth investigating otherwise — drain before deleting a gateway; see the <a href="../troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">runbook</a></td>

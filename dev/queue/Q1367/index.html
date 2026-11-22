@@ -2704,7 +2704,7 @@
 
 
 <h1 id="schedule-kata-workers-only-onto-nodes-whose-kata-qemu-runtime-is-ready">Schedule Kata workers only onto nodes whose kata-qemu runtime is ready<a class="headerlink" href="#schedule-kata-workers-only-onto-nodes-whose-kata-qemu-runtime-is-ready" title="Permanent link">&para;</a></h1>
-<p><strong>Every cold e2e node on the measured gates failed its first sandbox with <code>no runtime for "kata-qemu" is configured</code>, because the worker is scheduled before the node's Kata runtime is installed.</strong> The failure window was 37s for <code>v2.0.1-rc.1</code>'s Kata leg, 74s for <code>v2.0.0-rc.3</code>'s, and about 52s for rc.1's Dragonfly leg (<a href="../Q1360/">Q1360</a> measured that one); the kubelet's retry backoff decides when the sandbox is tried again.</p>
+<p><strong>Every cold e2e node on the measured gates failed its first sandbox with <code>no runtime for "kata-qemu" is configured</code>, because the worker is scheduled before the node's Kata runtime is installed.</strong> The failure window was 37s for <code>v2.0.1-rc.1</code>'s Kata leg, 74s for <code>v2.0.0-rc.3</code>'s, and about 52s for rc.1's Dragonfly leg (Q1360's audit-log read measured that one); the kubelet's retry backoff decides when the sandbox is tried again.</p>
 <p>Gating placement on a node label or taint that the runtime installer clears once <code>kata-qemu</code> is configured would remove the backoff part.
 How much of each window is the install itself, which no scheduling change removes, was not measured; read the installer's own log on the next cold node before choosing.
 <strong>Saving:</strong> up to the measured windows, so 1–2 minutes per gate (estimate), and the same on every cold-node Kata job outside the gate.

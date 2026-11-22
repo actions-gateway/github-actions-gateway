@@ -2711,8 +2711,8 @@ The withdrawal stamps the stuck worker <code>job-completed-at</code>, so the rea
 A Pending worker's own <code>pendingPodDeadline</code> (10 minutes by default) never fires, because the withdrawal always comes first, so the abandoned-run recovery that deadline starts (Q766) never runs either.</p>
 <p>The shape to expect is a node that accepts pods and cannot run them, such as a broken on-premises node with no autoscaler to replace it, or a runtime class the pool lacks.
 The opt-in capacity gate (<code>spec.capacityGate</code>, off by default) declines intake on scheduling signals, and a pod bound to a broken node may never produce one.</p>
-<p>This is separate from Q1360, which is an idle <code>Running</code> worker with no deadline.
-Here every worker has a deadline and the loop is the cost.</p>
+<p>This is separate from the idle-runner reap (<code>reason="idle_runner"</code>), which collects a <code>Running</code> worker whose runner started nothing.
+Here no worker reaches <code>Running</code>, every one has a deadline, and the loop is the cost.</p>
 <p><strong>Done when</strong> the loop is reproduced against <code>test/fakegithub</code> or a kind cluster with an unplaceable worker, and the AGC either stops re-provisioning a job whose earlier workers never started or surfaces it on the <code>RunnerSet</code>, with a test that goes red with the mechanism deleted.</p>
 
 

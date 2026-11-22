@@ -3160,14 +3160,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>When a set's first label is renamed, or a <code>RunnerSet</code> is deleted, the old scale set stays registered at GitHub, and the next tenant …</td>
 </tr>
 <tr>
-<td><a href="Q1360/">Q1360</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go">An idle scale-set worker that started nothing has no reap backstop</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>**A <code>Running</code> scale-set worker whose runner never starts a job is reaped only if a surplus stamp reaches it, and an AGC restart can build …</td>
-</tr>
-<tr>
 <td><a href="Q1361/">Q1361</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runner_shared.go">An unplaceable scale-set worker is re-created every five minutes</a></td>
 <td><code>bug</code></td>
