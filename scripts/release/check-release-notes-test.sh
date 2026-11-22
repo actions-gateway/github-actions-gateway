@@ -147,13 +147,13 @@ ${wrong_count} commits, some of them carrying a \`feat\` subject.
 	summary="$("$SUBJECT" "$WORK/v1.7.0.md" 2>&1)"
 	expect "the summary reports the count it checked" \
 		"1 commit count(s) checked, 0 skipped for want of tags, 0 approximate, 0 with no range heading" \
-		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
+		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\); [0-9]* cited commit.*$/\1/p')"
 
 	printf '## Everything since v9.9.8\n\n4 commits.\n' >"$WORK/v9.9.9.md"
 	summary="$("$SUBJECT" "$WORK/v9.9.9.md" 2>&1)"
 	expect "the summary reports a skip as a skip, not as a check" \
 		"0 commit count(s) checked, 1 skipped for want of tags, 0 approximate, 0 with no range heading" \
-		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
+		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\); [0-9]* cited commit.*$/\1/p')"
 
 	# A count that is gone is the case the checked/skipped pair could not see: it
 	# matched neither, incremented neither, and the ok line said nothing. So a
@@ -178,7 +178,7 @@ Over 40 commits.
 	summary="$("$SUBJECT" "$WORK/v1.7.0.md" 2>&1)"
 	expect "the summary reports an approximate figure as neither checked nor skipped" \
 		"0 commit count(s) checked, 0 skipped for want of tags, 1 approximate, 0 with no range heading" \
-		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
+		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\); [0-9]* cited commit.*$/\1/p')"
 
 	# A note with no range heading at all is not this rule's business — most
 	# fixtures in this suite are exactly that, and flagging them would make the
@@ -194,7 +194,7 @@ A claim that holds.
 	summary="$("$SUBJECT" "$WORK/v1.7.0.md" 2>&1)"
 	expect "an unranged note is counted, so the buckets still sum" \
 		"0 commit count(s) checked, 0 skipped for want of tags, 0 approximate, 1 with no range heading" \
-		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\))$/\1/p')"
+		"$(printf '%s' "$summary" | sed -n 's/.*note(s); \(.*\); [0-9]* cited commit.*$/\1/p')"
 
 	# Both figures are read from inside the section. md-reflow puts every
 	# sentence at column 0, so an unscoped match let a hedged sentence ANYWHERE
@@ -387,6 +387,102 @@ case "$early_out" in
 *"another fold would not change"*) bad "an early fold is not called useless" ;;
 *) ok "an early fold is not called useless" ;;
 esac
+
+# --- cited commit hashes (Q1356) ---------------------------------------------
+
+# Known answers, both directions: a hash taken from this tree's own HEAD must
+# resolve, and 00b4f4e is the invented one the v2.0.0 plan doc carried (the real
+# commit was 0c0048d5a), which exists nowhere. The invented case is asserted
+# absent first, so a repository that someday gains it fails here rather than
+# letting the failing case pass for a different reason.
+real_sha="$(git rev-parse --short=9 HEAD)"
+invented_sha=00b4f4e
+rc=0
+git cat-file -e "${invented_sha}^{commit}" >/dev/null 2>&1 || rc=$?
+if [[ "$rc" == 0 ]]; then
+	bad "the invented hash ${invented_sha} is absent from this repository"
+else
+	ok "the invented hash ${invented_sha} is absent from this repository"
+fi
+
+case_ "a cited hash that resolves passes" 0 "## Validation
+
+\`v2.0.0-rc.1\` is commit \`${real_sha}\`.
+"
+case_ "a cited hash that resolves nowhere fails" 1 "## Validation
+
+\`v2.0.0-rc.1\` is commit \`${invented_sha}\`.
+"
+case_ "a 40-character invented hash fails" 1 "## Validation
+
+Built from \`0123456789abcdef0123456789abcdef01234567\`.
+"
+case_ "one bad hash beside a good one still fails" 1 "## Validation
+
+\`${real_sha}\` then \`${invented_sha}\`.
+"
+cite_out="$(printf '## Validation\n\n`%s` and `%s`.\n' "$real_sha" "$invented_sha" >"$WORK/note.md"; "$SUBJECT" "$WORK/note.md" 2>&1 || true)"
+case "$cite_out" in
+*"note.md:3: \`${invented_sha}\` is not a commit"*) ok "the finding names the line and the hash" ;;
+*) bad "the finding names the line and the hash"; printf '       %s\n' "$cite_out" >&2 ;;
+esac
+
+# Each of these must NOT fire, so their assertions invert: a rule that fired on
+# them would fail every note that quotes a number or a digest.
+case_ "an unbackticked hash is not a citation" 0 "## Validation
+
+Commit ${invented_sha} is mentioned in passing.
+"
+case_ "a hash inside a fenced block is an example" 0 "## Validation
+
+\`\`\`bash
+# the hash is backticked here, so only the fence keeps it out: \`${invented_sha}\`
+\`\`\`
+"
+case_ "an all-digit token is a number, not a hash" 0 "## Validation
+
+Port \`1234567\`.
+"
+case_ "an image digest with its prefix is not a bare token" 0 "## Validation
+
+Pinned to \`sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\`.
+"
+case_ "a token over 40 characters is not a commit hash" 0 "## Validation
+
+Digest \`0123456789abcdef0123456789abcdef0123456789abcdef\`.
+"
+
+# The baseline exempts a token in one named doc only. v2.0.1's note carries
+# abbreviated image digests, so it passes on the baseline, and the same token in
+# any other doc still fails.
+rc=0
+"$SUBJECT" "$REPO_ROOT/docs/releases/v2.0.1.md" >/dev/null 2>&1 || rc=$?
+die_if_killed "a baselined token passes in its own doc" "$rc" 0
+expect "a baselined token passes in its own doc" 0 "$rc"
+case_ "a baselined token fails in any other doc" 1 "## Validation
+
+\`25ac8f0\` is pinned.
+"
+
+# A shallow checkout cannot resolve anything, so it must say it skipped rather
+# than pass or fail on hashes it cannot see.
+shallow="$WORK/shallow"
+if git clone -q --depth 1 --no-local "$REPO_ROOT" "$shallow" >/dev/null 2>&1; then
+	mkdir -p "$shallow/scripts/release"
+	cp "$SUBJECT" "$REPO_ROOT/scripts/release/cited-commits-baseline.txt" "$shallow/scripts/release/"
+	printf '## Validation\n\n`%s` is a commit.\n' "$invented_sha" >"$WORK/shallow-note.md"
+	rc=0
+	shallow_out="$("$shallow/scripts/release/check-release-notes.sh" "$WORK/shallow-note.md" 2>&1)" || rc=$?
+	die_if_killed "a shallow checkout skips the cited-commit rule" "$rc" 0
+	if [[ "$rc" == 0 && "$shallow_out" == *"SKIP cited commits"* ]]; then
+		ok "a shallow checkout skips the cited-commit rule"
+	else
+		bad "a shallow checkout skips the cited-commit rule (rc=$rc)"
+		printf '       %s\n' "$shallow_out" >&2
+	fi
+else
+	bad "a shallow clone could be made to test the skip"
+fi
 
 # --- usage and reconciliation ------------------------------------------------
 rc=0
