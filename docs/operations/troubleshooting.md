@@ -1673,8 +1673,12 @@ The withdrawal marks the stuck worker's job completed, so the AGC deletes it 30 
 A worker that starts within those 30 seconds takes the re-issue itself and this Event does not fire, as the slow cold start measured on 2026-11-18 did: its runner came up one second after the withdrawal.
 
 A worker that can never start loops until GitHub gives up on the job.
-`pendingPodDeadline` never fires for it, because the withdrawal always comes first.
+At the default ten-minute `pendingPodDeadline` the deadline never fires for it, because the withdrawal always comes first.
+A deadline under about five and a half minutes reaps the worker first under `pending_deadline`, and the AGC then cancels the run, which ends the loop.
 The AGC keeps provisioning each re-issue rather than stopping, because the next worker may land on a node that can run it.
+
+**A single occurrence can be a re-run.** Re-running a cancelled workflow keeps its run ID and job name, so a re-run whose worker exists within 30 seconds of the cancellation is named here too.
+It is a loop only when the Event repeats for the same job.
 
 **Likely causes.**
 
