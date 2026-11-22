@@ -1164,6 +1164,11 @@ The same limit reaches the [per-connection egress audit](#per-connection-egress-
 The private key stays in the provider namespace.
 That ConfigMap is GMC-owned: do not edit or delete it, and do not create one by hand expecting it to grant access, since the GMC reconciles it back.
 
+**Two pools can derive one name.** The name joins the namespace and the proxy name with `-`, so `team-a-b`/`c` and `team-a`/`b-c` both project `proxy-share-team-a-b-c`, and a consumer granted by both can hold only one of them.
+The pool that wrote it first keeps it; the other skips that consumer and records a `ProjectionNameCollision` Warning Event on its `EgressProxy`, and the consumer's reference to it fails closed with `ProxyShareNotGranted`: a `RunnerSet`'s message names the pool that holds the name, and a gateway's `defaultProxyRef` keeps reporting that the certificate "has not yet been projected here".
+Each controller that reads a projection checks the `proxy-namespace` and `proxy-name` keys inside it, so neither consumer is ever wired to the wrong pool.
+Rename one of the two proxies to clear it.
+
 ### Verifying a grant took effect
 
 ```bash

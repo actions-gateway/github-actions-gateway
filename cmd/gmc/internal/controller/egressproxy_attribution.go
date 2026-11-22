@@ -826,10 +826,12 @@ func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Cont
 		}
 		keep[ns] = true
 		if err := r.applyProxyShare(ctx, buildProxyAttributionConfigMap(ep, ns, port)); err != nil {
-			failed = append(failed, fmt.Errorf("project into %q: %w", ns, err))
+			if !r.reportProjectionCollision(ctx, ep, err) {
+				failed = append(failed, fmt.Errorf("project into %q: %w", ns, err))
+			}
 			continue
 		}
-		if err := r.applyProjectedSecret(ctx, buildProxyAttributionSecret(ep, ns, clients)); err != nil {
+		if err := r.applyProjectedSecret(ctx, buildProxyAttributionSecret(ep, ns, clients)); err != nil && !r.reportProjectionCollision(ctx, ep, err) {
 			failed = append(failed, fmt.Errorf("project client certificate into %q: %w", ns, err))
 		}
 	}
@@ -897,6 +899,9 @@ func (r *EgressProxyReconciler) applyProjectedSecret(ctx context.Context, desire
 		return r.Create(ctx, desired)
 	}
 	if err != nil {
+		return err
+	}
+	if err := r.checkProjectionOwner(ctx, &existing, desired); err != nil {
 		return err
 	}
 	mergeLabels(&existing, desired.Labels)

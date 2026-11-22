@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -275,7 +276,7 @@ func (r *EgressProxyReconciler) reconcileProxyShares(ctx context.Context, ep *gm
 		} else {
 			caPEM := encodeCertPEM(cert.Raw)
 			for _, ns := range wanted {
-				if err := r.applyProxyShare(ctx, buildProxyShareConfigMap(ep, ns, caPEM)); err != nil {
+				if err := r.applyProxyShare(ctx, buildProxyShareConfigMap(ep, ns, caPEM)); err != nil && !r.reportProjectionCollision(ctx, ep, err) {
 					projectErrs = append(projectErrs, fmt.Errorf("project proxy share into %q: %w", ns, err))
 				}
 			}
@@ -304,9 +305,53 @@ func (r *EgressProxyReconciler) applyProxyShare(ctx context.Context, desired *co
 	if err != nil {
 		return err
 	}
+	if err := r.checkProjectionOwner(ctx, &existing, desired); err != nil {
+		return err
+	}
 	mergeLabels(&existing, desired.Labels)
 	existing.Data = desired.Data
 	return r.Update(ctx, &existing)
+}
+
+// errProjectionNameCollision marks a projection another pool already holds. A
+// projection's name joins the pool's namespace and name with '-', which both may
+// contain, so ("a-b", "c") and ("a", "b-c") derive one name; overwriting would hand
+// one pool's consumer the other pool's facts (Q1323). The pool that wrote first
+// keeps it; the other skips that consumer and reports it without failing.
+var errProjectionNameCollision = errors.New("projection name collides with another EgressProxy's")
+
+// checkProjectionOwner refuses to overwrite existing when its labels name another
+// EgressProxy that exists. Labels naming no live pool are drift and are healed: a
+// tenant can write them in its own namespace, and a label it invented must not stop
+// the GMC restoring the projection.
+func (r *EgressProxyReconciler) checkProjectionOwner(ctx context.Context, existing, desired client.Object) error {
+	have, want := existing.GetLabels(), desired.GetLabels()
+	ns, name := have[labelShareProxyNS], have[labelShareProxyNam]
+	if (ns == "" && name == "") || (ns == want[labelShareProxyNS] && name == want[labelShareProxyNam]) {
+		return nil
+	}
+	var other gmcv2.EgressProxy
+	if err := r.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &other); err != nil {
+		if apierrors.IsNotFound(err) || apierrors.IsBadRequest(err) {
+			return nil
+		}
+		return err
+	}
+	return fmt.Errorf("%w: %q in namespace %q is EgressProxy %s/%s's projection, not %s/%s's",
+		errProjectionNameCollision, existing.GetName(), existing.GetNamespace(),
+		ns, name, want[labelShareProxyNS], want[labelShareProxyNam])
+}
+
+// reportProjectionCollision records a collision on ep and reports whether err was
+// one, so a caller skips that consumer rather than failing the pool on a name a
+// consumer's other pool already holds.
+func (r *EgressProxyReconciler) reportProjectionCollision(ctx context.Context, ep *gmcv2.EgressProxy, err error) bool {
+	if !errors.Is(err, errProjectionNameCollision) {
+		return false
+	}
+	logf.FromContext(ctx).Info("skipping a projection another EgressProxy holds", "error", err.Error())
+	r.recordEvent(ep, corev1.EventTypeWarning, "ProjectionNameCollision", "ProjectIntoConsumer", "%s", err.Error())
+	return true
 }
 
 // pruneProxyShares deletes this proxy's projections from every namespace not in

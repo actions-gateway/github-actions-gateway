@@ -44,6 +44,10 @@ const (
 	proxyShareHostKey    = "proxy-host"
 	proxySharePortKey    = "proxy-port"
 	proxyShareNoProxyKey = "no-proxy"
+	// proxyShareProxyNSKey and proxyShareProxyNameKey name the pool a projection
+	// is for, in the share and the attribution ConfigMap alike.
+	proxyShareProxyNSKey   = "proxy-namespace"
+	proxyShareProxyNameKey = "proxy-name"
 	// proxyShareAuditLoggingKey carries the provider's spec.auditLogging, the
 	// source half of the egress-audit join (Q1069). Absent on a projection an older
 	// GMC wrote, which reads as Off.
@@ -631,6 +635,9 @@ func applyAttributedPort(ctx context.Context, reader client.Reader, consumerNS, 
 		}
 		return refResolution{err: fmt.Errorf("read projected proxy attribution: %w", err)}
 	}
+	if !projectionIsFor(&cm, proxyNS, proxy.name) {
+		return refResolution{}
+	}
 	port, err := strconv.Atoi(cm.Data[proxyAttributionPortKey])
 	if err != nil {
 		return refResolution{err: fmt.Errorf("projected proxy attribution %q carries an unparseable %s: %w", name, proxyAttributionPortKey, err)}
@@ -661,6 +668,13 @@ type resolvedProxy struct {
 	auditLogging string
 }
 
+// projectionIsFor reports whether a projected ConfigMap names the pool its name was
+// derived from. The name joins namespace and name with '-', which both may contain,
+// so ("a-b", "c") and ("a", "b-c") derive one name (Q1323).
+func projectionIsFor(cm *corev1.ConfigMap, proxyNS, proxyName string) bool {
+	return cm.Data[proxyShareProxyNSKey] == proxyNS && cm.Data[proxyShareProxyNameKey] == proxyName
+}
+
 // resolveSharedProxy resolves a cross-namespace proxyRef through the projection the
 // GMC writes into the consumer's own namespace once the provider consents (§H.9).
 //
@@ -680,6 +694,11 @@ func resolveSharedProxy(ctx context.Context, reader client.Reader, consumerNS, p
 					"or its spec.sharing.allowedNamespaces does not list this namespace", proxyName, proxyNS, consumerNS)}
 		}
 		return nil, refResolution{err: fmt.Errorf("read projected proxy share: %w", err)}
+	}
+	if !projectionIsFor(&cm, proxyNS, proxyName) {
+		return nil, refResolution{reason: v2.ReasonProxyShareNotGranted,
+			message: fmt.Sprintf("projected proxy share %q names EgressProxy %s/%s, not %s/%s: the two pools' projection names collide",
+				name, cm.Data[proxyShareProxyNSKey], cm.Data[proxyShareProxyNameKey], proxyNS, proxyName)}
 	}
 
 	host := cm.Data[proxyShareHostKey]

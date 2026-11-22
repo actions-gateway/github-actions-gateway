@@ -519,7 +519,8 @@ const caBundleReprobeInterval = time.Minute
 const proxyShareReprobeInterval = 10 * time.Second
 
 // proxyShareProjected reports whether ep's share ConfigMap is in ns carrying a CA,
-// read uncached for the same reason as checkCABundle.
+// read uncached for the same reason as checkCABundle. A ConfigMap under that name
+// naming another pool is not ep's: two pools can derive one name (Q1323).
 func (r *ActionsGatewayV2Reconciler) proxyShareProjected(ctx context.Context, ns string, ep *gmcv2.EgressProxy) (bool, error) {
 	var cm corev1.ConfigMap
 	err := r.uncachedReader().Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyShareConfigMapName(ep.Namespace, ep.Name)}, &cm)
@@ -529,7 +530,7 @@ func (r *ActionsGatewayV2Reconciler) proxyShareProjected(ctx context.Context, ns
 	if err != nil {
 		return false, err
 	}
-	return cm.Data[shareCACertKey] != "", nil
+	return cm.Data[shareCACertKey] != "" && cm.Data[shareProxyNSKey] == ep.Namespace && cm.Data[shareProxyNamKey] == ep.Name, nil
 }
 
 // checkCABundle resolves one CA bundle ref. It returns a condition reason and message

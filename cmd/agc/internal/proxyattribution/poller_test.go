@@ -281,6 +281,7 @@ func newHarness(t *testing.T, p pki, replicaAddr string) *harness {
 	name := "proxy-attribution-provider-shared"
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Data: map[string]string{
 		readHostKey: "shared-proxy-attr.provider.svc.cluster.local", readPortKey: "8444", serverNameKey: serverName,
+		proxyNamespaceKey: "provider", proxyNameKey: "shared",
 	}}
 	sec := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Data: map[string][]byte{
 		corev1.TLSCertKey: p.clientCert, corev1.TLSPrivateKeyKey: p.clientKey, caCertKey: p.caPEM,
@@ -425,4 +426,27 @@ func TestPoller_ReadsNothingWhileTheGatewayIsOptedOut(t *testing.T) {
 	h.p.now = func() time.Time { return t0.Add(time.Minute + closedWindowRetention) }
 	require.NoError(t, h.p.poll(ctx))
 	assert.Empty(t, h.p.windows.byIP, "closed windows are swept while opted out too")
+}
+
+// Two pools can derive one projection name (Q1323), so a projection whose keys name
+// another pool is refused: nothing it would dial is read, and no record is
+// attributed through it.
+func TestPoller_RefusesAProjectionNamingAnotherPool(t *testing.T) {
+	p := newPKI(t)
+	_, addr := startReplica(t, p, "e1",
+		record{Seq: 1, Time: t0.Add(30 * time.Second), SourceIP: "10.1.0.5", Outcome: "denied", Host: "evil.example", Port: "443"},
+	)
+	h := newHarness(t, p, addr)
+	ctx := context.Background()
+	var cm corev1.ConfigMap
+	require.NoError(t, h.c.Get(ctx, types.NamespacedName{Namespace: ns, Name: "proxy-attribution-provider-shared"}, &cm))
+	cm.Data[proxyNamespaceKey] = "provider-shared"
+	cm.Data[proxyNameKey] = "pool"
+	require.NoError(t, h.c.Update(ctx, &cm))
+	h.p.onPod(ctx, workerPod("own-1", "u1", "own", "10.1.0.5", t0))
+
+	err := h.p.poll(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "names EgressProxy provider-shared/pool")
+	assert.Empty(t, h.p.Lookup("u1"), "a record read through another pool's projection must not be attributed")
 }

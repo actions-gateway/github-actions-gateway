@@ -50,10 +50,12 @@ func newProjectedShare(consumerNS, proxyNS, proxyName string) *corev1.ConfigMap 
 			Labels:    map[string]string{"actions-gateway/proxy-share": "true"},
 		},
 		Data: map[string]string{
-			"ca.crt":     "-----BEGIN CERTIFICATE-----\nstub\n-----END CERTIFICATE-----\n",
-			"proxy-host": proxyName + "-proxy." + proxyNS + ".svc.cluster.local",
-			"proxy-port": "8080",
-			"no-proxy":   "",
+			"ca.crt":          "-----BEGIN CERTIFICATE-----\nstub\n-----END CERTIFICATE-----\n",
+			"proxy-host":      proxyName + "-proxy." + proxyNS + ".svc.cluster.local",
+			"proxy-port":      "8080",
+			"proxy-namespace": proxyNS,
+			"proxy-name":      proxyName,
+			"no-proxy":        "",
 		},
 	}
 }
