@@ -89,6 +89,8 @@ The floor is a floor, and the only costly error is dropping a commit that did ch
 It still reproduces all four release windows to date as `minor`.
 
 **The surface it checks against is derived, not listed.** It reads publish.yml's image matrix, follows each image's Dockerfile stage back through its `COPY --from=` edges to the `go build` that produced the binary, and expands those with `go list -deps`; the chart trees come from the same workflow's `helm package` calls.
+The Dockerfile itself compiles no package, so it counts only for a commit that changes a stage a published image is built from: a new `FROM` base or digest, or a changed instruction, in that stage or one it copies from or chains from.
+A comment or a stage nothing published reads from does not count (Q1359).
 Add an image or a chart and it is picked up with nothing to maintain.
 The one thing not derivable is a release asset built by a script, the `gag-migrate` CLI, which is declared instead; `make semver-floor-sources-check` (part of `make check`) fails if publish.yml stops matching that declaration.
 

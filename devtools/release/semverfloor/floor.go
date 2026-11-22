@@ -41,6 +41,11 @@ func (l Level) String() string {
 type Surface struct {
 	PkgDirs map[string]bool // exact Go package directories
 	Trees   []string        // path prefixes packaged wholesale
+	// DockerfileChanged reports whether a commit changes a stage a published
+	// image is built from. The Dockerfile ships by what changed in it, so it has
+	// no path rule: nil, as in tests that classify on paths alone, means it never
+	// counts.
+	DockerfileChanged func(sha string) bool
 }
 
 // Ships reports whether a path is one a released artifact is built from.
@@ -64,7 +69,7 @@ func (s Surface) Ships(file string) bool {
 func (s Surface) ShippedFiles(c Commit) []string {
 	var out []string
 	for _, f := range c.Files {
-		if s.Ships(f) {
+		if s.Ships(f) || (f == dockerfilePath && s.DockerfileChanged != nil && s.DockerfileChanged(c.SHA)) {
 			out = append(out, f)
 		}
 	}

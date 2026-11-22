@@ -125,12 +125,14 @@ func ParsePublishWorkflow(path string) (images, charts, scripts []string, err er
 // dockerStage is one `FROM … AS name` block.
 type dockerStage struct {
 	name     string
+	base     string   // the FROM image, which is another stage's name when it chains
+	body     []string // the stage's instructions, FROM included, comments dropped
 	copyFrom []string
 	goBuilds []GoBuild
 }
 
 var (
-	fromRE     = regexp.MustCompile(`(?i)^FROM\s+\S+(?:\s+--\S+)*\s+AS\s+(\S+)`)
+	fromRE     = regexp.MustCompile(`(?i)^FROM\s+(?:--\S+\s+)*(\S+)\s+AS\s+(\S+)`)
 	copyFromRE = regexp.MustCompile(`(?i)^COPY\s+--from=(\S+)`)
 	runRE      = regexp.MustCompile(`(?i)^RUN\s+(.*)$`)
 )
@@ -236,16 +238,26 @@ func ParseDockerfile(path string) (map[string]*dockerStage, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseDockerfileSource(path, string(raw))
+}
+
+// parseDockerfileSource is ParseDockerfile over text already read, so a past
+// revision can be parsed without a file. name labels errors.
+func parseDockerfileSource(name, src string) (map[string]*dockerStage, error) {
+	path := name
 	stages := map[string]*dockerStage{}
 	var cur *dockerStage
-	for _, line := range logicalLines(string(raw)) {
+	for _, line := range logicalLines(src) {
 		if m := fromRE.FindStringSubmatch(line); m != nil {
-			cur = &dockerStage{name: m[1]}
-			stages[m[1]] = cur
+			cur = &dockerStage{name: m[2], base: m[1], body: []string{line}}
+			stages[m[2]] = cur
 			continue
 		}
 		if cur == nil {
 			continue
+		}
+		if line != "" {
+			cur.body = append(cur.body, line)
 		}
 		if m := copyFromRE.FindStringSubmatch(line); m != nil {
 			cur.copyFrom = append(cur.copyFrom, m[1])
