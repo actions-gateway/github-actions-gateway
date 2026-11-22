@@ -6,6 +6,7 @@
 #   scripts/docs/docs-preview.sh serve   # live-reload preview at http://localhost:8000
 #   scripts/docs/docs-preview.sh build   # strict build of both scopes: site/, site-dev/
 #   scripts/docs/docs-preview.sh export  # offline release-scope site, zipped, in site-export/
+#   scripts/docs/docs-preview.sh venv    # provision .venv-docs/ and stop; prints each stage's seconds
 #
 # The venv lives in .venv-docs/ (gitignored) and is reused across runs; it is
 # (re)provisioned only when requirements-docs.txt changes, so the toolchain
@@ -47,10 +48,18 @@ ensure_venv() {
   fi
 
   printf 'docs-preview: provisioning venv from %s…\n' "${requirements##*/}"
+  # Each stage reports its own seconds, so a slow provisioning names the stage
+  # (interpreter, pip upgrade, or the pinned install) instead of one lump.
+  SECONDS=0
   python3 -m venv "${venv_dir}" \
     || die "python3 -m venv failed — on Debian/Ubuntu install the python3-venv package"
+  printf 'docs-preview: venv created in %ss\n' "${SECONDS}"
+  SECONDS=0
   "${venv_dir}/bin/pip" install --quiet --upgrade pip
+  printf 'docs-preview: pip upgraded in %ss\n' "${SECONDS}"
+  SECONDS=0
   "${venv_dir}/bin/pip" install --quiet -r "${requirements}"
+  printf 'docs-preview: %s installed in %ss\n' "${requirements##*/}" "${SECONDS}"
   printf '%s' "${want}" >"${stamp}"
 }
 
@@ -92,11 +101,12 @@ main() {
   [[ -f "${requirements}" ]] || die "missing ${requirements}"
 
   case "${cmd}" in
-    serve | build | export) ;;
-    *) die "unknown command '${cmd}' (expected: serve | build | export)" ;;
+    serve | build | export | venv) ;;
+    *) die "unknown command '${cmd}' (expected: serve | build | export | venv)" ;;
   esac
 
   ensure_venv
+  [[ "${cmd}" == "venv" ]] && return 0
 
   # `serve` honors $PORT (default 8000) so parallel previews don't collide and
   # tooling can inject an auto-assigned port; `build` takes no address. serve
