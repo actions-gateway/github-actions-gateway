@@ -1,7 +1,7 @@
 # Release gate speed
 
-> **Status:** ❌ Investigation done 2026-11-18, nothing implemented.
-> Seven rows are open, ranked in the order below: [Q1363](../queue/Q1363.md), [Q1362](../queue/Q1362.md), [Q1365](../queue/Q1365.md), [Q1364](../queue/Q1364.md), [Q1366](../queue/Q1366.md), [Q1367](../queue/Q1367.md) and [Q1368](../queue/Q1368.md).
+> **Status:** 🚧 Investigation done 2026-11-18; the third option (Q1365) is implemented, the other six are not.
+> Six rows are open, ranked in the order below: [Q1363](../queue/Q1363.md), [Q1362](../queue/Q1362.md), [Q1364](../queue/Q1364.md), [Q1366](../queue/Q1366.md), [Q1367](../queue/Q1367.md) and [Q1368](../queue/Q1368.md).
 
 The release-candidate gate (`.github/workflows/validate-candidate.yml` running `scripts/dogfood/validate-release.sh`) took 115.5 minutes for `v2.0.1-rc.1` and 133.1 minutes for `v2.0.0-rc.3`, counted from the start of its gate step to its verdict.
 About a fifth of that, 21.7 and 25.3 minutes, is the gate waiting on a worker pod that finished long before.
@@ -109,7 +109,7 @@ The gate runs on `ubuntu-latest` in a public repository, so its minutes are not 
 |---|---|---|---|---|
 | 1 | [Q1363](../queue/Q1363.md) | Put the Dragonfly leg on a fresh e2e node explicitly | None: it keeps rank 2 from weakening a reading | Neutral (estimate): that leg cold-starts today too |
 | 2 | [Q1362](../queue/Q1362.md) | Release the gateway delete once the finished worker pod is reaped, not when its node goes | 20–24 min (estimate, from measured holds of 21.7 and 25.3 min) | Falls (estimate): 2 system nodes × 20–24 min ≈ 0.7–0.8 node-h, the same Actions minutes, and the e2e node's 10-min idle before scale-down |
-| 3 | [Q1365](../queue/Q1365.md) | Deploy once the image jobs succeed; require the whole publish run only before the CRD smoke | Up to 5.8 min (measured: `chart-publish` took 5m47s and 5m30s), and only when the approval beats the images | Falls by the same Actions minutes; node-hours unchanged |
+| 3 | Q1365 (shipped) | Deploy once the image jobs succeed; require the whole publish run only before the CRD smoke | Up to 5.8 min (measured: `chart-publish` took 5m47s and 5m30s), and only when the approval beats the images | Falls by the same Actions minutes; node-hours unchanged |
 | 4 | [Q1364](../queue/Q1364.md) | Bring the e2e node up during deploy instead of on the Kata dispatch | About 3 min (estimate, from rc.1's measured 3m59s dispatch-to-runner) | Falls slightly (estimate): the e2e node starts ~1–2 min early, while 2 system nodes stop ~3 min early |
 | 5 | [Q1366](../queue/Q1366.md) | Take the Dragonfly readings concurrently | About 2.5 min (estimate: 3m42s of probes measured in series, the slowest 74s) | Falls by the same minutes and system node time |
 | 6 | [Q1367](../queue/Q1367.md) | Schedule Kata workers only once a node's `kata-qemu` runtime is ready | Up to 37–74s per cold node (measured failure window), so about 1–2 min | Falls slightly |
@@ -157,6 +157,10 @@ The gate reads those only in the CRD-smoke and storage legs, about 35 minutes af
 
 So the gate can start deploying once the image jobs succeed, and check that the whole run succeeded before the CRD smoke.
 The saving applies only when the environment approval comes before the images, as in rc.1; in rc.3 the approval took 24 minutes and the wait was 1 second.
+
+Shipped as `wait-for-publish.sh --images`, which returns once every `publish (…)` job has succeeded.
+The legs that read what `chart-publish` produces wait for the whole run through `await_publish_run` in `validate-release.sh`: `crd_smoke`, and `storage_leg`, which also pulls the OCI chart (`helm pull oci://…/charts/actions-gateway`) in addition to the release assets the row named.
+The saving was not re-measured after the change; the 5m47s and 5m30s above are the `chart-publish` durations it is sized against.
 
 The risk is spending: a red `chart-publish` would now be found after the Kata leg rather than before deploy, costing about 35 minutes of node time on a candidate that cannot ship.
 How often `chart-publish` fails was not counted.

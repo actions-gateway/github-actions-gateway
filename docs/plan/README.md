@@ -62,7 +62,7 @@ Each has inline ✓ markers per item.
 
 | Plan | Scope | Status |
 |---|---|---|
-| [release-gate-speed.md](release-gate-speed.md) | Where the release-candidate gate's two hours go, measured from two runs, and seven ranked changes that shorten it without raising node-hours or Actions minutes | ❌ Investigated 2026-11-18; [Q1363](../queue/Q1363.md), [Q1362](../queue/Q1362.md), [Q1365](../queue/Q1365.md), [Q1364](../queue/Q1364.md), [Q1366](../queue/Q1366.md), [Q1367](../queue/Q1367.md) and [Q1368](../queue/Q1368.md) open |
+| [release-gate-speed.md](release-gate-speed.md) | Where the release-candidate gate's two hours go, measured from two runs, and seven ranked changes that shorten it without raising node-hours or Actions minutes | ❌ Investigated 2026-11-18; [Q1363](../queue/Q1363.md), [Q1362](../queue/Q1362.md), [Q1364](../queue/Q1364.md), [Q1366](../queue/Q1366.md), [Q1367](../queue/Q1367.md) and [Q1368](../queue/Q1368.md) open |
 | [ci-wait-time-analysis.md](ci-wait-time-analysis.md) | **Start here before scoping CI or test-tier speed work.** Dated current-state table, an index of the rounds already run, the four traps that cost an attempt each, and what is left | ⓘ Standing reference, not a work item. Records that CI execution is 5% of PR latency, that the tiers below `integration-test` are a flat profile rather than a queue, and that the suite's parallel phase was measured healthy at 4.5× in round 2. Keep the current-state table dated when a round lands |
 
 ## Deployment

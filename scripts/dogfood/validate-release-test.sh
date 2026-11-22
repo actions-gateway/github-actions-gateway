@@ -2116,6 +2116,38 @@ crd_smoke_case >"${STORAGE_DIR}/out" 2>&1 || rc=$?
 check "crd-smoke: a verified manifest is applied and checked" "0" "${rc}"
 check_contains "  ...server-side" "kubectl apply --server-side -f ${STORAGE_DIR}/work/actions-gateway-crds-v2.yaml" "$(cat "${STORAGE_LOG}")"
 
+# Q1365: the CI wait returns on the images, so a leg that reads what chart-publish
+# produces waits for the whole run itself, and a red run stops it before any read.
+AWAIT_DIR="${STORAGE_DIR}/await"
+mkdir -p "${AWAIT_DIR}"
+cat >"${AWAIT_DIR}/wait-for-publish.sh" <<STUB_BODY
+#!/usr/bin/env bash
+echo "wait-for-publish \$*" >>"${AWAIT_DIR}/calls"
+exit "\${FAKE_AWAIT_RC:-0}"
+STUB_BODY
+for leg in crd_smoke storage; do
+	storage_fixture match 0
+	: >"${AWAIT_DIR}/calls"
+	rc=0
+	(SCRIPT_DIR="${AWAIT_DIR}" GATE_AWAIT_PUBLISH_RUN=1 FAKE_AWAIT_RC=1 "${leg}_case") >"${STORAGE_DIR}/out" 2>&1 || rc=$?
+	check "await: a red publish run fails ${leg} when the workflow asks" "1" "${rc}"
+	check "  ...after asking for the whole run (no --images)" "wait-for-publish v1.10.0-rc.1" "$(cat "${AWAIT_DIR}/calls")"
+	check_not_contains "  ...before anything is downloaded" "cosign" "$(cat "${STORAGE_LOG}")"
+
+	storage_fixture match 0
+	: >"${AWAIT_DIR}/calls"
+	rc=0
+	(SCRIPT_DIR="${AWAIT_DIR}" GATE_AWAIT_PUBLISH_RUN=1 "${leg}_case") >"${STORAGE_DIR}/out" 2>&1 || rc=$?
+	check "await: a green publish run lets ${leg} pass" "0" "${rc}"
+
+	storage_fixture match 0
+	: >"${AWAIT_DIR}/calls"
+	rc=0
+	(SCRIPT_DIR="${AWAIT_DIR}" FAKE_AWAIT_RC=1 "${leg}_case") >"${STORAGE_DIR}/out" 2>&1 || rc=$?
+	check "await: without the workflow's flag ${leg} does not wait" "0" "${rc}"
+	check "  ...and never calls the wait" "" "$(cat "${AWAIT_DIR}/calls")"
+done
+
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2
 	exit 1

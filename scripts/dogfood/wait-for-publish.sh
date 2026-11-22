@@ -2,7 +2,7 @@
 # wait-for-publish.sh — hold the CI release gate until the candidate's images
 # have been published, and refuse to go on when the publish did not succeed.
 #
-#   REPO=owner/name scripts/dogfood/wait-for-publish.sh <rc-tag>
+#   REPO=owner/name scripts/dogfood/wait-for-publish.sh [--images] <rc-tag>
 #
 # validate-candidate.yml dispatches the gate the moment a candidate tag is pushed,
 # and publish.yml starts from the same push, so nothing orders the gate's deploy
@@ -17,6 +17,15 @@
 # is read once it completes: `success` returns 0, anything else returns 1, so a
 # red publish fails the gate rather than deploying what it left behind.
 #
+# --images returns as soon as every `publish (…)` image job has succeeded, without
+# waiting for `chart-publish`, which creates the GitHub Release and attaches the
+# CRD manifest and gag-migrate binaries and finishes about 5.5 minutes later
+# (Q1365). The deploy reads only the images: setup.sh installs the chart from the
+# checkout and git-archives the CRD chart at the tag. A red or cancelled image job
+# returns 1, as does a finished run with no succeeded image set (a stop-ship gate
+# that failed ahead of every image). Whatever reads the release's assets must then
+# run the plain form, which still requires the whole run to succeed.
+#
 # A wait that runs out returns 1 too. Nothing here treats "no verdict yet" as
 # "no problem": every path that is not a successful publish is non-zero.
 #
@@ -25,8 +34,13 @@
 set -euo pipefail
 shopt -s inherit_errexit
 
+images_only=0
+if [[ "${1:-}" == "--images" ]]; then
+	images_only=1
+	shift
+fi
 [[ $# -eq 1 ]] || {
-	echo "usage: REPO=owner/name $(basename "$0") <rc-tag>" >&2
+	echo "usage: REPO=owner/name $(basename "$0") [--images] <rc-tag>" >&2
 	exit 2
 }
 tag="$1"
@@ -43,6 +57,22 @@ if ! sha="$(git rev-parse --verify --quiet "refs/tags/${tag}^{commit}")"; then
 	exit 1
 fi
 
+# image_jobs_verdict <run-id> — print "success", "failed" or "pending" for the
+# run's `publish (…)` matrix jobs; "pending" also covers none listed yet and a
+# failed `gh run view`, since neither is a verdict.
+image_jobs_verdict() {
+	local jobs
+	jobs="$(gh run view "$1" --repo "${REPO}" --json jobs 2>&1)" || {
+		echo pending
+		return 0
+	}
+	jq -r '[.jobs[] | select(.name | startswith("publish ("))] as $j
+		| if ($j | length) == 0 then "pending"
+		  elif any($j[]; .status == "completed" and .conclusion != "success") then "failed"
+		  elif all($j[]; .status == "completed") then "success"
+		  else "pending" end' <<<"${jobs}" 2>/dev/null || echo pending
+}
+
 polls=$((timeout / interval))
 last="no publish run for ${tag} (${sha:0:7}) had appeared"
 for ((i = 0; i <= polls; i++)); do
@@ -51,6 +81,26 @@ for ((i = 0; i <= polls; i++)); do
 		status="$(jq -r '.[0].status // "none"' <<<"${runs}")"
 		conclusion="$(jq -r '.[0].conclusion // ""' <<<"${runs}")"
 		url="$(jq -r '.[0].url // ""' <<<"${runs}")"
+		if ((images_only)) && [[ "${status}" != none ]]; then
+			case "$(image_jobs_verdict "$(jq -r '.[0].databaseId' <<<"${runs}")")" in
+			success)
+				echo "wait-for-publish: the images of ${tag} were published (${url})"
+				exit 0
+				;;
+			failed)
+				echo "::error::an image job in publish.yml for ${tag} did not succeed, so its images are missing or unsigned and the gate would deploy what it left: ${url}"
+				exit 1
+				;;
+			esac
+			if [[ "${status}" == completed ]]; then
+				echo "::error::publish.yml for ${tag} concluded '${conclusion}' with no succeeded image jobs: ${url}"
+				exit 1
+			fi
+			last="publish run ${url} was still ${status}, image jobs not all succeeded"
+			echo "wait-for-publish: waiting (${i}/${polls}): ${last}"
+			if ((i < polls)); then sleep "${interval}"; fi
+			continue
+		fi
 		case "${status}" in
 		completed)
 			if [[ "${conclusion}" == "success" ]]; then
