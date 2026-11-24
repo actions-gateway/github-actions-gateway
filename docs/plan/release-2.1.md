@@ -6,7 +6,7 @@
 > Q1381 gated it too, settled 2026-11-22, because its re-runs landed in merge-queue runs nothing reads and each spent a `maxEvictionRetries` slot, which is the opposite of what this release is for; it and Q1320 are built, and the case it leaves is Q1391.
 > Q1389 gates it too: the out-of-memory class `v2.0.0` shipped can act on the wrong job where a worker dies before its pod names the job it ran, and Q1319 fixes only the re-run half of that, not the raised limit.
 > The wrong-job half is read from source, so its first step is reproducing it.
-> Q1395 gates it too, settled 2026-11-24: detection can name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
+> Q1395 gates it too, settled 2026-11-24: detection could name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
 > Nothing here is a commitment to a date.
 
 ## Why this release exists
@@ -42,7 +42,7 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | [Q1319](../queue/Q1319.md) | Re-run only the classified job, found by its runner's name | `2.1-gate` | 🔲 open: M6 measured 2026-11-24, job-granular re-run unbuilt |
 | [Q1315](../queue/Q1315.md) | Retry a job failed while its colocated egress proxy pool was unavailable | `2.1-gate` | 🔲 open |
 | [Q1316](../queue/Q1316.md) | Retry a job whose Docker-in-Docker sidecar crashed under it | `2.1-gate` | 🔲 open: readings taken 2026-11-24 on a local node, no discriminator found in what GAG reads; dogfood reproduction not run |
-| [Q1395](../queue/Q1395.md) | Keep a nested container's out-of-memory kill from reading as a platform fault on the sidecar | `2.1-gate` | 🔲 open |
+| Q1395 | Keep a nested container's out-of-memory kill from reading as a platform fault on the sidecar | `2.1-gate` | ✅ landed: a sidecar's `OOMKilled` is a fault only with exit code 137; not run on Kata |
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
 
 **Scoped 2026-11-09, and nothing rides yet.** `v2.1.0` follows `v2.0.0`, so nothing here waits on anything but its own row and the 2.0 tag.
