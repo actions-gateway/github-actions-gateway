@@ -103,10 +103,7 @@ func twinJob(id, runner string) ScaleSetJob {
 
 func TestReranJob(t *testing.T) {
 	job := func(attempt int, name, runner string) runJob {
-		return runJob{Name: name, RunnerName: runner, RunAttempt: attempt, Conclusion: "success"}
-	}
-	skipped := func(attempt int, name string) runJob {
-		return runJob{Name: name, RunAttempt: attempt, Conclusion: jobConclusionSkipped}
+		return runJob{Name: name, RunnerName: runner, RunAttempt: attempt}
 	}
 	for _, tc := range []struct {
 		name           string
@@ -121,15 +118,21 @@ func TestReranJob(t *testing.T) {
 		{"both re-run, the other queued", []runJob{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r2"), job(2, "build", "")}, "r2", "r1", false},
 		{"both re-run, the other not listed yet", []runJob{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r2")}, "r2", "r1", false},
 		{"both re-run, the other cancelled without a runner", []runJob{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2"), job(2, "build", "")}, "r2", "r1", false},
-		{"its re-run beside a twin that is skipped", []runJob{job(1, "build", "r1"), skipped(1, "build"), job(2, "build", "r2"), skipped(2, "build")}, "r2", "r1", true},
+		{"both re-run, the other cancelled without a runner the first time", []runJob{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2")}, "r2", "r1", false},
+		{"a twin skipped the first time, its re-run not listed yet", []runJob{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2")}, "r2", "r1", false},
+		{"a twin skipped the first time, its re-run in progress", []runJob{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2"), job(2, "build", "r3")}, "r2", "r1", false},
+		{"its re-run beside a job first listed with it", []runJob{job(1, "build", "r1"), job(2, "build", "r2"), job(2, "build", "r3")}, "r2", "r1", false},
+		{"a twin skipped both times, or the two traded places", []runJob{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2"), job(2, "build", "")}, "r2", "r1", false},
 		{"its re-run, listed again by a later attempt", []runJob{job(1, "build", "r1"), job(2, "build", "r2"), job(3, "build", "r2")}, "r2", "r1", true},
 		{"its re-run, listed newest attempt first", []runJob{job(3, "build", "r2"), job(2, "build", "r2"), job(1, "build", "r1")}, "r2", "r1", true},
 		{"its re-run after an attempt that did not re-run it", []runJob{job(1, "build", "r1"), job(2, "build", "r1"), job(3, "build", "r2")}, "r2", "r1", true},
 		{"the re-run of an attempt that is not recorded", []runJob{job(1, "build", "r1"), job(2, "build", "r2"), job(3, "build", "r3")}, "r3", "r1", false},
 		{"a twin carried under another job's name", []runJob{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r2"), job(2, "lint", "r0")}, "r2", "r1", false},
+		{"its re-run beside a queued job first listed with it", []runJob{job(1, "build", "r1"), job(2, "build", "r2"), job(2, "build", "")}, "r2", "r1", false},
 		{"a completion not listed", []runJob{job(1, "build", "r1")}, "r2", "r1", false},
 		{"a completion with no runner", []runJob{job(1, "build", "r1"), job(2, "build", "")}, "", "r1", false},
 		{"a record with no runner, its name held by one job", []runJob{job(1, "build", "r1"), job(2, "build", "r2")}, "r2", "", true},
+		{"a record with no runner, beside a queued job first listed with its re-run", []runJob{job(1, "build", ""), job(2, "build", "r2"), job(2, "build", "")}, "r2", "", false},
 		{"a record with no runner, its name shared", []runJob{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r0"), job(2, "build", "r2")}, "r2", "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -168,6 +171,27 @@ func TestFlakyJobs_AJobSharingANameIsNotItsReRun(t *testing.T) {
 	assert.Equal(t, []string{"red-2", redTwinRerun}, []string{again.JobID, again.Runner})
 	assert.Equal(t, recorded.FailedAt, again.FailedAt)
 	assert.Equal(t, []string{"/repos/org/repo/actions/runs/900/jobs?filter=all&page=1&per_page=100"}, gh.query[:1])
+}
+
+// TestFlakyJobs_ASkippedTwinThatRunsIsNotTheReRun: a job skipped beside its failing twin
+// runs in the re-run and succeeds first, so it is not the failed one's re-run, which then
+// fails.
+func TestFlakyJobs_ASkippedTwinThatRunsIsNotTheReRun(t *testing.T) {
+	ctx := context.Background()
+	_, p, target := flakyFixture(t)
+	first := []map[string]any{listed(1, "build", "runner-1"), {"name": "build", "run_attempt": 1, "conclusion": "skipped", "runner_name": nil}}
+	gh := &runJobsStub{jobs: first}
+	gh.serve(p)
+	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+	recorded := readFailures(t, p, target)["900/build"]
+
+	gh.set(append(first, listed(2, "build", "runner-2"), listed(2, "build", "runner-3")))
+	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(2), jobResultSucceeded))
+	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(3), "failed"))
+	assert.Equal(t, recorded, readFailures(t, p, target)["900/build"])
+	assert.Zero(t, rerunCount(p, rerunTriggerOther))
+	assert.Zero(t, flaky(p, rerunTriggerOther))
+	assert.Empty(t, target.events)
 }
 
 // TestFlakyJobs_AFailedTwinIsReportedButNotRecorded: the record holds the first failure

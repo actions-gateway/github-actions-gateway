@@ -3138,9 +3138,10 @@ A proxy pool shared from another namespace is recorded as `proxy.mode: shared` w
 A snapshot is held in memory, so a failure recorded after an AGC restart, or after more than 1,024 workers finished with no completion yet, has no `context`.
 An AGC restart between a job's failure and its worker's finish leaves the record's `context` at `podPhase: Running`, and so does a worker whose pod is removed before it finishes, such as a force delete.
 A re-run more than 7 days after the failure, or one that lands on another `RunnerSet`, pairs with nothing and counts nothing.
-Two jobs of one run that share a `name:` share one record, the first failure's, so a re-run counts only where it re-ran that job and no other of its name: re-running both counts nothing.
+Two jobs of one run that share a `name:` share one record, the first failure's, so a re-run counts only where it re-ran that job and no other of its name: re-running both counts nothing, and neither does any re-run of a name under which the run also skipped a job.
 Telling a re-run from a job of the same name reads the run's jobs from GitHub once per match, with the `Actions` permission.
-A re-run counts nothing where that read fails or takes over 10 seconds (the AGC log says `could not read the run's jobs`), where the run lists 1,000 jobs or more over its attempts, or where it follows a re-run that was cancelled or counted nothing.
+A re-run counts nothing where that read fails or takes over 10 seconds (the AGC log says `could not read the run's jobs`), where the run lists 1,000 jobs or more over its attempts, where it completed before GitHub listed the attempt's other jobs of its name, or where it follows a re-run that was cancelled or counted nothing.
+One false flake is left: a job that GitHub first lists under the failed job's name in a later attempt, such as a leg a dynamic matrix gains, and that completes while the failed job's own re-run still waits on its `needs`.
 
 ---
 

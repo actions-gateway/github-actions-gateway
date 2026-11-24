@@ -696,7 +696,8 @@ The cause a recovery claim names for the job is recorded with it, so a disrupted
 
 A later completion of the same key with a new job ID is the job's next attempt or another job with its `name:`, which GitHub allows in one run, and the completion carries no attempt number to tell them apart.
 So the AGC reads the run's jobs in every attempt (`GET …/actions/runs/{id}/jobs?filter=all`) and finds the completed job by its runner's name (Q1375).
-It is the failed job's re-run when its attempt replaced exactly one job of its name from the attempt before and that one ran on the failed job's runner; anything else changes no record.
+It is the failed job's re-run when the jobs of its name differ between its attempt and the one before by those two alone, the failed job's runner gone and the completed job's added; anything else changes no record.
+A job with no runner, a skipped one included, matches nothing in the other attempt, so a name that any job was skipped under never pairs: a job skipped beside its failing twin can run in the re-run.
 The rule rests on the earlier attempt, which has finished and lists every job, because the later one does not list a job whose `needs` are still running ([measured](../plan/q555-automatic-recovery-design.md#readings-for-pairing-jobs-that-share-a-name-2026-11-23)).
 The read happens only for a completion that matches a record, never for an ordinary one, and holds the listener's goroutine for at most 10 seconds.
 

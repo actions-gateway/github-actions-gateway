@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	neturl "net/url"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -20,8 +21,6 @@ const (
 	// runJobsPageSize is GitHub's maximum, and runJobsMaxPages the most pages read.
 	runJobsPageSize = 100
 	runJobsMaxPages = 10
-	// jobConclusionSkipped is a job whose `if:` kept it from running.
-	jobConclusionSkipped = "skipped"
 )
 
 // runJob is one job of one attempt of a run. A job an attempt did not re-run is listed in
@@ -30,14 +29,14 @@ type runJob struct {
 	Name       string `json:"name"`
 	RunnerName string `json:"runner_name"`
 	RunAttempt int    `json:"run_attempt"`
-	Conclusion string `json:"conclusion"`
 }
 
 // reranJob reports whether the job that ran on runner is a re-run of the one that failed
-// on failedRunner, given the jobs of every attempt of their run. It is where its attempt
-// replaced exactly one job of its name from the attempt before, and that is the failed
-// one. The earlier attempt has finished, so it lists every job; the later one need not
-// yet. A failedRunner of "" is unknown, and only a name held by one job pairs.
+// on failedRunner, given the jobs of every attempt of their run. It is where the jobs of
+// its name differ between its attempt and the one before by those two alone. The earlier
+// attempt has finished, so it lists every job; the later one need not yet. A job with no
+// runner, a skipped one included, matches nothing in the other attempt. A failedRunner of
+// "" is unknown, and pairs only a name that one job held.
 func reranJob(jobs []runJob, runner, failedRunner string) bool {
 	if runner == "" {
 		return false
@@ -48,30 +47,24 @@ func reranJob(jobs []runJob, runner, failedRunner string) bool {
 			job = j
 		}
 	}
-	current := map[string]bool{}
+	var before, after []string
 	for _, j := range jobs {
-		if j.RunAttempt == job.RunAttempt && j.Name == job.Name {
-			current[j.RunnerName] = true
+		switch {
+		case j.Name != job.Name:
+		case j.RunAttempt == job.RunAttempt-1:
+			before = append(before, j.RunnerName)
+		case j.RunAttempt == job.RunAttempt:
+			after = append(after, j.RunnerName)
 		}
 	}
-	var previous int
-	var replaced []string
-	for _, j := range jobs {
-		if j.RunAttempt != job.RunAttempt-1 || j.Name != job.Name || j.Conclusion == jobConclusionSkipped {
-			continue
-		}
-		previous++
-		if j.RunnerName == "" || !current[j.RunnerName] {
-			replaced = append(replaced, j.RunnerName)
-		}
+	without := func(a, b []string) []string {
+		return slices.DeleteFunc(slices.Clone(a), func(r string) bool { return r != "" && slices.Contains(b, r) })
 	}
-	if len(replaced) != 1 {
+	gone, added := without(before, after), without(after, before)
+	if len(gone) != 1 || len(added) != 1 {
 		return false
 	}
-	if failedRunner == "" {
-		return previous == 1
-	}
-	return replaced[0] == failedRunner
+	return gone[0] == failedRunner || (failedRunner == "" && len(before) == 1)
 }
 
 // runJobs calls GET /repos/{owner}/{repo}/actions/runs/{run_id}/jobs for the jobs of every

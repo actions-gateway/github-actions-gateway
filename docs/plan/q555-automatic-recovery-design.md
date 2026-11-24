@@ -87,8 +87,13 @@ Taken from the REST API for `already_rerun` (Q1320), over public runs somebody h
 Taken from GitHub's REST API for Q1375.
 In run 45052015868, listed with `filter=all`, both `shared-name` jobs appear in attempt 1, each with the runner the AGC registered; in attempt 2 the red twin appears on a new runner, and the green one, which nobody re-ran, appears again on attempt 1's runner.
 
-- **An attempt's carried-over jobs keep their runner, and its re-run ones do not.** Over this repository's 156 re-run runs of 2026-11-01 to 2026-11-22, 97 jobs of the latest attempt name a runner an earlier attempt had, every one with a start before its creation, and 590 name a new one, none with such a start.
-  Those are GitHub-hosted jobs; the self-hosted ones are run 45052015868's.
+- **An attempt's carried-over jobs keep their runner, and its re-run ones do not.** In dogfood runs 45052015868, 45052020040, 45325262167 and 45324839276, whose later attempts are all on the scale set, 46 carried-over listings name the runner of the attempt before and 8 re-run jobs a new one.
+  Of this repository's 172 runs of 2026-11-01 to 2026-11-22 at attempt 2 or later, all GitHub-hosted, 165 list no job in attempt 1 (a pull request waiting for approval) and say nothing; the other 7 have 97 carried-over jobs on the old runner and 13 re-run ones on a new one.
+  No exception in either.
+- **The rule, replayed on those 8 re-run jobs' final lists, pairs each of them**, two of which share a name (`shared-name`, and `dup` in 45325262167).
+  The lists as they stood at each completion were not kept.
+- **A skipped job can run in the next attempt.** In `astral-sh/ruff` run 45313563236 `security-review / security review` failed in attempt 1 and `prepare` and `report` were skipped; attempt 2 ran all three (read in review).
+  No run was found where such a job shares the failed one's name, which GitHub allows.
 - **A job is not listed until its `needs` finish.** In a unit-test run of [#2391](https://github.com/actions-gateway/github-actions-gateway/pull/2391), every job that needs `changes` is created within a second of `changes` completing, and the gate job in the second the last of them did.
   So an attempt in progress does not show which jobs it will re-run, and a rule that reads only the latest attempt calls the re-run of one twin the re-run of the other while that one waits.
 - **A list read early in an attempt is short**, over its first 14 s or so (read for Q1320).
@@ -215,7 +220,8 @@ It is also [the budget](#the-budget-is-gags-own-count-in-the-ledger-r15): `count
 ### Pairing and attribution (R1, R2, R8)
 
 On a completion for a key with a failure entry, the completion is either a later attempt of that job or another job of its name (M2), and carries no attempt number.
-The run's job list over every attempt settles it, joined by the runner's name, which both sides carry (Q1375, built): the completion's attempt must have replaced exactly one job of its name from the attempt before, and that one must be the recorded failure's.
+The run's job list over every attempt settles it, joined by the runner's name, which both sides carry (Q1375, built): the jobs of the completion's name must differ between its attempt and the one before by exactly two, the recorded failure's runner gone and the completion's added.
+A job with no runner matches nothing, so a skipped one always differs: a twin skipped beside the failure can run in the re-run and complete first, and one that is skipped both times costs its name's re-runs, an undercount.
 Anything else pairs with nothing, including a run that cannot be read: R5 accepts an undercount and not a false flake, and R6 allows the read because only a re-run or a shared name reaches it.
 
 The alternatives:
@@ -225,8 +231,12 @@ The alternatives:
 - **The run's `run_started_at` against the failure's time.** One small read and no list, but it calls a re-run of all jobs, or of the twin alone, a re-run of the failed job: two false flakes left.
 - **The message's own `queueTime`.** Free, and unmeasured on a re-run's completion; a value that did not move would end pairing without a sign.
 - **The latest attempt's job list alone.** Half the rows, and a false flake where both twins re-run and the failed one waits on its `needs`, since it is then not listed.
+- **Count a skipped twin as carried while it stays skipped.** It would keep the re-runs of a job beside a same-named placeholder, but two jobs can trade places, one skipped in each attempt, and the list does not say which is which.
 - **Match every job by name in the list**, without the runner.
   Two jobs of one name cannot be told apart that way.
+
+One false flake is left, and nothing in the list tells it from a re-run: a job first listed under the failure's name in a later attempt, completing while the failed job's re-run waits on its `needs` and is not listed.
+A job in the workflow file is listed in every finished attempt, skipped or not, so it takes a name that expands differently between attempts, such as a dynamic matrix gaining a leg whose name truncates to the failed one's.
 
 A pairing then counts as:
 
