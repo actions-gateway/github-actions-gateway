@@ -3224,14 +3224,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>A job killed by its <code>timeout-minutes</code> completes <code>canceled</code> on the scale-set message queue, the same spelling as a user's cancel, and …</td>
 </tr>
 <tr>
-<td><a href="Q1382/">Q1382</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#the-first-class-out-of-memory-under-right-sizing">Reproduce the out-of-memory retry class on a Binpack set (R12)</a></td>
-<td><code>dogfood</code> <code>tests</code> <code>2.1-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q1317 asked for the out-of-memory class's reproduction on a <code>Binpack</code> set and took it on dogfood's <code>ci</code> set, which runs <code>Throughput</code>, so …</td>
-</tr>
-<tr>
 <td><a href="Q1320/">Q1320</a></td>
 <td><a href="../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">Build the already_rerun, run_succeeded and worker_unstartable checks</a></td>
 <td><code>feature</code> <code>2.1-gate</code></td>
@@ -3241,11 +3233,19 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q1319/">Q1319</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#run--or-job-granular-re-run-open-question-2">Re-run only the classified job once job names are shown to match (M6)</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#what-the-readings-recommend">Re-run only the classified job, found by its runner's name</a></td>
 <td><code>feature</code> <code>2.1-gate</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>Every automatic re-run today uses <code>rerun-failed-jobs</code>, so a class firing on one job also re-runs every other failed job of the run …</td>
+</tr>
+<tr>
+<td><a href="Q1389/">Q1389</a></td>
+<td><a href="../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">The out-of-memory class can fire before the pod names the job it ran</a></td>
+<td><code>bug</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>GitHub gives a scale-set job to whichever runner asks first, so a worker often runs a job other than the one it was provisioned for …</td>
 </tr>
 <tr>
 <td><a href="Q1315/">Q1315</a></td>
@@ -3270,6 +3270,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The futility checks assume a merge-group run that loses its place in the queue is cancelled by GitHub and so withheld as <code>run_cancelled</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1388/">Q1388</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#readings-from-the-binpack-turn-up-2026-11-24">An out-of-memory raise no node can hold spends the run's whole budget</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Under <code>Binpack</code> the out-of-memory class raises the memory request with the limit, and nothing asks whether any node can hold the raised …</td>
 </tr>
 <tr>
 <td><a href="Q1255/">Q1255</a></td>

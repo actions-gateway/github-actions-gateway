@@ -3195,7 +3195,9 @@ The failure is silent until pods stop scheduling, so clamp first, then enable.
 Under <code>Binpack</code> and <code>Throughput</code> the AGC chose that limit, so on a scale-set <code>RunnerSet</code> it re-runs the job with a higher one (Q1183).
 The history alone cannot be relied on to raise it, because a job killed at its limit is sampled at or below that limit.</p>
 <p><strong>What it does.</strong> When a worker the profile built has its runner container killed <code>OOMKilled</code>, the job's next attempt gets the killed limit times the profile's headroom (1.4 under <code>Binpack</code>, <code>limitHeadroomPercent / 100</code> under <code>Throughput</code>), rounded up to 64Mi and capped at <code>maxRequests.memory</code>, or at twice the killed limit where you set none.
-Under <code>Binpack</code> the memory request rises with it.
+Under <code>Binpack</code> the memory request rises with it, and nothing checks that a node can hold the raised request.
+One that no node can hold leaves the re-run's worker <code>Pending</code> with <code>WorkersUnschedulable</code> set, until the AGC cancels the run; a later placement of any worker on the set then re-runs it into the same wait, on the same budget (measured on dogfood, 2026-11-24).
+So under <code>Binpack</code> set <code>maxRequests.memory</code> no higher than the memory an empty worker node has free after its DaemonSets, less what the pod's other containers request: the cap applies to each container, not to the pod.
 The run is then re-run automatically on the same per-run budget as every other recovery (<code>maxEvictionRetries</code>), and a Normal <code>MemoryLimitRaisedForRetry</code> Event on the <code>RunnerSet</code> names the job, the run and both limits.
 The re-run waits until GitHub concludes the run, because GitHub refuses one while any other job of the run is still going, so a long matrix is re-run only after its last job finishes.
 It waits up to 24 hours, then gives up with an <code>EvictionRerunFailed</code> Warning Event and <code>actions_gateway_eviction_rerun_failures_total{cause="oom",reason="run_never_concluded"}</code>; re-run it by hand then.

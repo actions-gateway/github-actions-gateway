@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1382/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1388/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Reproduce the out-of-memory retry class on a Binpack set (R12) - GitHub Actions Gateway</title>
+        <title>An out-of-memory raise no node can hold spends the run's whole budget - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#reproduce-the-out-of-memory-retry-class-on-a-binpack-set-r12" class="md-skip">
+        <a href="#an-out-of-memory-raise-no-node-can-hold-spends-the-runs-whole-budget" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Reproduce the out-of-memory retry class on a Binpack set (R12)
+              An out-of-memory raise no node can hold spends the run's whole budget
             
           </span>
         </div>
@@ -2703,16 +2703,21 @@
   
 
 
-<h1 id="reproduce-the-out-of-memory-retry-class-on-a-binpack-set-r12">Reproduce the out-of-memory retry class on a Binpack set (R12)<a class="headerlink" href="#reproduce-the-out-of-memory-retry-class-on-a-binpack-set-r12" title="Permanent link">&para;</a></h1>
-<p>Q1317 asked for the out-of-memory class's reproduction on a <code>Binpack</code> set and took it on dogfood's <code>ci</code> set, which runs <code>Throughput</code>, so half of the class's R12 reproduction is unmeasured.
-The kill itself does not depend on the profile, and that half is settled: on 2026-11-22 the runner died with the container, the pod failed, and the class fired from the pod watch and re-ran the job (<a href="../../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">the reading</a>).
-What <code>Binpack</code> changes is the arithmetic and the request: its headroom is 1.4 rather than 1.5, and because requests equal limits under it, the raised floor raises the request too, so the re-run's pod asks the scheduler for more memory where <code>Throughput</code>'s asked for the same 5568Mi.</p>
+<h1 id="an-out-of-memory-raise-no-node-can-hold-spends-the-runs-whole-budget">An out-of-memory raise no node can hold spends the run's whole budget<a class="headerlink" href="#an-out-of-memory-raise-no-node-can-hold-spends-the-runs-whole-budget" title="Permanent link">&para;</a></h1>
+<p>Under <code>Binpack</code> the out-of-memory class raises the memory request with the limit, and nothing asks whether any node can hold the raised request.
+Measured on dogfood on 2026-11-24 (run 45326748517): a raise to 12672Mi on nodes offering 12369Mi left the re-run <code>Pending</code> for 20 minutes, first beside eight worker nodes holding no worker and then, as idle nodes were removed, with none, since none the autoscaler can add holds the request; it ran through two GitHub withdrawals and re-issues, until <code>pendingPodDeadline</code> reaped the third worker and the AGC cancelled the run.
+The abandoned arm then re-ran the run because a smaller job's worker was placed on the set, which spent the second of its two slots on a third attempt at the same 12672Mi, again <code>Pending</code>.</p>
+<p>Two separate gaps, and either can be closed alone:</p>
 <ul>
-<li>Run <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q1317-oom-probe.yml"><code>q1317-oom-probe</code></a> on a set with <code>spec.sizing.profile: Binpack</code> and <code>sizingProfileState: Active</code>, with <code>ALLOC_MIB</code> re-derived to sit between the set's derived limit and 1.4 times it, rounded up to 64Mi; its <code>runs-on</code> names the <code>ci</code> set, so either switch that set's profile for the run or point the job at another set.</li>
-<li>Read the <code>MemoryLimitRaisedForRetry</code> Event's two limits, and the re-run pod's runner request and limit, which should be equal and raised.</li>
-<li>Read whether the raised request still schedules: a request a node cannot hold leaves the re-run <code>Pending</code>, which the <code>Throughput</code> reading could not show.</li>
+<li><strong>The raise.</strong> The class could withhold, or lower the raise, where <code>next</code> is above what the set's nodes can hold.
+  The scheduling constraints are on the killed pod and a node list would answer it, but the AGC's node access has not been read, and an autoscaled pool at zero nodes shows no capacity at all; a cheaper first step is an Event naming <code>maxRequests.memory</code> when the re-run's worker is unschedulable and carries a floor.</li>
+<li><strong>The release.</strong> The abandoned arm treats any placed worker of the set as capacity returned, so a worker of a different size releases a run whose own worker still fits nowhere.
+  The placement would have to be of a worker at least as large.
+  This is not the class's: any set with a per-job floor, or whose resolved size changed since, has it.</li>
 </ul>
-<p>Gated on 2.1 because Q1317 was, and this is the part of it the reading did not reach.</p>
+<p>The Q1320 futility check <code>worker_unstartable</code> does not cover it: it reads workers stuck starting, and leaves placeability out on purpose, because a full cluster also reads as unschedulable.</p>
+<p>Operators can avoid it today with <code>maxRequests.memory</code> set to what an empty node holds beside the pod's other containers (<a href="../../operations/worker-rightsizing/#when-a-job-runs-out-of-memory">worker-rightsizing.md</a>).
+Related: Q1248, which is about runs GitHub's own unstarted-job timeout cancelled.</p>
 
 
 
