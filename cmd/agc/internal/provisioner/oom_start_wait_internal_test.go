@@ -256,14 +256,9 @@ func TestOOMStartWait_GivesUp(t *testing.T) {
 	assert.Empty(t, f.p.disruptionCause(ctx, f.target, "job-lint"))
 }
 
-// TestOOMStartWait_AStaleScanReadsThePodBeforeGivingUp: the scan's cached pod can predate
-// the stamp.
-func TestOOMStartWait_AStaleScanReadsThePodBeforeGivingUp(t *testing.T) {
-	f := newWaitFixture(t, nil)
-	f.scan(t)
-	stale := f.live(t)
-	f.start(t, "build", "4242")
-	f.clock.advance(startWait)
+// scanStale is scan with stale as the only pod the cache holds.
+func (f *waitFixture) scanStale(t *testing.T, stale *corev1.Pod) {
+	t.Helper()
 	f.p.APIReader = f.c
 	f.p.Client = interceptor.NewClient(f.c, interceptor.Funcs{
 		List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
@@ -275,8 +270,38 @@ func TestOOMStartWait_AStaleScanReadsThePodBeforeGivingUp(t *testing.T) {
 		},
 	})
 	f.scan(t)
+}
+
+// TestOOMStartWait_AStaleScanReadsThePodBeforeGivingUp: the scan's cached pod can predate
+// the stamp.
+func TestOOMStartWait_AStaleScanReadsThePodBeforeGivingUp(t *testing.T) {
+	f := newWaitFixture(t, nil)
+	f.scan(t)
+	stale := f.live(t)
+	f.start(t, "build", "4242")
+	f.clock.advance(startWait)
+	f.scanStale(t, stale)
 	assert.Contains(t, readLedger(t, f.p, f.target).MemoryFloors, failureKey("4242", "build"))
 	assert.Equal(t, []string{"MemoryLimitRaisedForRetry"}, f.target.events)
+}
+
+// TestOOMStartWait_AStaleScanLeavesANamesakeAlone: a replayed assignment's pod takes the
+// killed one's name.
+func TestOOMStartWait_AStaleScanLeavesANamesakeAlone(t *testing.T) {
+	for name, start := range map[string]bool{"started": true, "not started": false} {
+		t.Run(name, func(t *testing.T) {
+			f := newWaitFixture(t, nil)
+			f.scan(t)
+			stale := f.live(t)
+			stale.UID = "the deleted pod's"
+			if start {
+				f.start(t, "build", "4242")
+			}
+			f.clock.advance(startWait)
+			f.scanStale(t, stale)
+			f.requireNothing(t)
+		})
+	}
 }
 
 // TestOOMStartWait_ARestartWaitsAgain: a new process scans before its listener has polled,
@@ -396,6 +421,8 @@ func TestHoldUnclaimedOOM(t *testing.T) {
 		{"wait over, not given up", nil, startWait, true, startWait + startWaitSlack, startWait + startWaitRetry},
 		{"stamped, not claimed", func(p *corev1.Pod) { p.Annotations[AnnotationStartedJobID] = "job-build" }, time.Minute,
 			true, startWait + startWaitSlack, time.Minute + startWaitRetry},
+		{"hold's last second", nil, startWait + startWaitSlack - time.Second, true, startWait + startWaitSlack, startWait + startWaitSlack - time.Second + startWaitRetry},
+		{"hold over", nil, startWait + startWaitSlack, false, 0, 0},
 		{"handled", func(p *corev1.Pod) { p.Annotations[AnnotationEvictionHandledAt] = "2026-11-01T00:00:00Z" }, time.Minute, false, 0, 0},
 		{"no memory limit", func(p *corev1.Pod) { p.Spec.Containers[0].Resources.Limits = nil }, time.Minute, false, 0, 0},
 		{"evicted", func(p *corev1.Pod) { p.Status.Reason = podReasonEvicted }, time.Minute, false, 0, 0},

@@ -75,7 +75,9 @@ func TestReaper_KeepsAKillAwaitingItsStart(t *testing.T) {
 		{"default TTL, past it", nil, 10 * time.Minute, nil, true, 5 * time.Minute},
 		{"a TTL longer than the hold", &metav1.Duration{Duration: time.Hour}, time.Minute, nil, true, 14 * time.Minute},
 		{"wait over and not given up", &metav1.Duration{}, 15 * time.Minute, nil, true, 30 * time.Second},
+		{"hold ending, a longer TTL", &metav1.Duration{Duration: time.Hour}, 19*time.Minute + 50*time.Second, nil, true, 30 * time.Second},
 		{"hold over", &metav1.Duration{}, 20 * time.Minute, nil, false, 0},
+		{"hold over, a longer TTL", &metav1.Duration{Duration: time.Hour}, 25 * time.Minute, nil, true, 35 * time.Minute},
 		{"stamped and not claimed", &metav1.Duration{}, time.Minute, func(p *corev1.Pod) {
 			p.Annotations[provisioner.AnnotationStartedJobID] = "job"
 		}, true, 30 * time.Second},

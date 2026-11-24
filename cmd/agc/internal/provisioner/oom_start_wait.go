@@ -110,11 +110,14 @@ func (p *Provisioner) HoldUnclaimedOOM(target Target, pod *corev1.Pod, now time.
 		return time.Time{}, time.Time{}, false
 	}
 	deadline := p.startWaits.deadline(target.Key().String(), pod, now)
+	if until = deadline.Add(startWaitSlack); !now.Before(until) {
+		return time.Time{}, time.Time{}, false
+	}
 	look = now.Add(startWaitRetry)
 	if oomAwaitingStart(pod) && deadline.After(look) {
 		look = deadline
 	}
-	return deadline.Add(startWaitSlack), look, true
+	return until, look, true
 }
 
 // awaitStart handles d's pod, an out-of-memory kill with no start recorded. It returns the
@@ -131,6 +134,9 @@ func (p *Provisioner) awaitStart(ctx context.Context, target Target, pod *corev1
 	case apierrors.IsNotFound(err):
 	case err != nil:
 		log.Warn("could not read a killed worker whose wait for its job start is over; the next scan retries", "error", err)
+		return nil
+	case live.UID != pod.UID:
+		// The name is another pod's now, and this one's deletion settles it.
 		return nil
 	case !oomAwaitingStart(live):
 		return live

@@ -261,9 +261,9 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 	// created for. Where another worker started that job, or an idle one can still take
 	// it, its run lost nothing here (Q1169). Both halves of the never-started case need a
 	// container that never ran: the started-job-id stamp lands asynchronously and is
-	// never written on a terminal pod, so a runner that took its own job and was
-	// disrupted before the stamp also reads as having started nothing, and may itself
-	// have held the job a walk would name.
+	// written on no terminal pod but a waiting memory kill's, so a runner that took its
+	// own job and was disrupted before the stamp also reads as having started nothing,
+	// and may itself have held the job a walk would name.
 	//
 	// A never-started worker whose job another runner started, with no idle worker beside
 	// it, still leaves the set one runner short, so the job left without one is named and
