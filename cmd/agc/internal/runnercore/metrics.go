@@ -110,7 +110,8 @@ type Metrics struct {
 	// a manual re-run).
 	AbandonedRunRerunWaits *prometheus.CounterVec
 	// EvictionRecoveryIdentityUnknown counts scale-set workers found disrupted that
-	// carried no workflow-run identity, so no automatic re-run could be attempted.
+	// carried no workflow-run identity, so no automatic re-run could be attempted, and
+	// runners killed for memory whose job's start was never recorded (Q1389).
 	// It is the one failure mode that makes scale-set disruption recovery silently
 	// inert, so it is counted separately from an exhausted budget rather than folded
 	// into it: a sustained non-zero rate means GitHub is not sending the assignment
@@ -212,7 +213,7 @@ func NewMetrics() *Metrics {
 
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_recovery_identity_unknown_total",
-			Help: "Disrupted scale-set worker pods carrying no workflow-run identity, so no automatic re-run could be attempted, by cause (eviction, preemption, node_shutdown, deletion, abandoned, oom). cause=abandoned is the worker removed before it ran, whose force-cancel had no run to address.",
+			Help: "Disrupted scale-set worker pods carrying no workflow-run identity, so no automatic re-run could be attempted, by cause (eviction, preemption, node_shutdown, deletion, abandoned, oom). cause=abandoned is the worker removed before it ran, whose force-cancel had no run to address. cause=oom also counts a runner killed for memory whose job's start was never recorded, so which job it ran is unknown.",
 		}, []string{"namespace", "runner_group", "cause"}),
 
 		EvictionRecoveryEvidenceLost: prometheus.NewCounterVec(prometheus.CounterOpts{

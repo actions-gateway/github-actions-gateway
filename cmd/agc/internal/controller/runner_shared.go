@@ -205,7 +205,8 @@ func reconcileRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
 // workerPodPhaseChangePredicate restricts a worker-Pod watch to this project's
 // worker pods (those carrying labelKey) and to the events that carry new status
 // for the owning CR: Create, Delete, phase-changing Updates, and the Updates where a
-// pod newly becomes a scheduler-preemption victim or restarts a container. Generic
+// pod newly becomes a scheduler-preemption victim, restarts a container, or is stamped
+// with its job's start after it failed. Generic
 // events and every other Update are dropped (status heartbeats don't change observable
 // state). labelKey is LabelRunnerGroup (v1) or LabelRunnerSet (v2).
 //
@@ -220,6 +221,9 @@ func reconcileRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
 //
 // The restart edge exists because a restarted sidecar's crash is in no later phase change:
 // the kubelet drops it from the status it writes as the pod finishes (Q1376).
+//
+// The start edge exists because a kill waiting for its job's start changes nothing but an
+// annotation when that start arrives (Q1389). A start on a running worker is not one.
 func workerPodPhaseChangePredicate(labelKey string) predicate.Predicate {
 	hasLabel := func(obj client.Object) bool {
 		_, ok := obj.GetLabels()[labelKey]
@@ -242,6 +246,9 @@ func workerPodPhaseChangePredicate(labelKey string) predicate.Predicate {
 				return true
 			}
 			if restarts(newPod) > restarts(oldPod) {
+				return true
+			}
+			if provisioner.StartedAfterFailure(oldPod, newPod) {
 				return true
 			}
 			return !provisioner.PreemptedByScheduler(oldPod) && provisioner.PreemptedByScheduler(newPod)
@@ -361,6 +368,10 @@ type reapHooks struct {
 	// no status field for it. Best-effort and non-blocking: it owns its own parsing
 	// and never changes whether a pod is reaped.
 	observeWorkerReport func(pod *corev1.Pod)
+	// holdTerminal reports whether a terminal pod must outlast its TTL because its
+	// recovery is not claimed yet, until when, and when the next reconcile should look at
+	// it (Q1389). Nil holds none.
+	holdTerminal func(pod *corev1.Pod, now time.Time) (until, look time.Time, hold bool)
 }
 
 // reapTarget binds a reap to one owning CR: which worker pods it selects, where it
@@ -500,7 +511,7 @@ func reapWorkerPodsByLabel(
 			continue
 		}
 
-		var due time.Time
+		var due, look time.Time
 		var reason string
 		switch pod.Status.Phase {
 		case corev1.PodRunning:
@@ -532,6 +543,14 @@ func reapWorkerPodsByLabel(
 			if pod.Status.Reason == podReasonDeadlineExceeded {
 				reason = reapReasonLifetimeExceeded
 			}
+			if hooks.holdTerminal != nil {
+				if until, at, hold := hooks.holdTerminal(pod, now); hold {
+					look = at
+					if until.After(due) {
+						due = until
+					}
+				}
+			}
 		case corev1.PodPending:
 			counts.pending++
 			// A Pending pod whose job is already over at GitHub will never start: its
@@ -552,6 +571,9 @@ func reapWorkerPodsByLabel(
 		}
 
 		if wait := due.Sub(now); wait > 0 {
+			if w := look.Sub(now); !look.IsZero() && w < wait {
+				wait = w
+			}
 			if next == 0 || wait < next {
 				next = wait
 			}

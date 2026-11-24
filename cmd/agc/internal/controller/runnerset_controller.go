@@ -819,6 +819,9 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 		provisioner.PendingPodDeadlineOrDefault(rs.Spec.PendingPodDeadline),
 		log, r.Metrics,
 		reapHooks{
+			holdTerminal: func(pod *corev1.Pod, now time.Time) (until, look time.Time, hold bool) {
+				return r.Provisioner.HoldUnclaimedOOM(r.provisionerTarget(rs), pod, now)
+			},
 			emitStuckPending: func(podName string, deadline time.Duration) {
 				r.recordEvent(rs, corev1.EventTypeWarning, "WorkerPodStuckPending", "ReapWorkerPods",
 					"worker pod %s was Pending for more than %s and has been deleted; "+
@@ -1023,6 +1026,7 @@ func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 		},
 		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 			r.snapshotWorkerPod(ctx, e.Object, true)
+			r.settleDeletedKill(ctx, e.Object)
 			enqueue.Delete(ctx, e, q)
 		},
 		GenericFunc: enqueue.Generic,
@@ -1087,6 +1091,31 @@ func (r *RunnerSetReconciler) recoverDisruptedWorkerPod(ctx context.Context, obj
 		}
 		if _, err := r.Provisioner.RecoverDisruptedScaleSetWorker(ctx, r.provisionerTarget(&rs), pod); err != nil {
 			r.Log.Warn("scale-set worker disruption recovery off the pod watch failed; the recovery scan retries it",
+				"namespace", key.Namespace, "name", key.Name, "podName", pod.Name, "error", err)
+		}
+	}()
+}
+
+// settleDeletedKill settles a deleted worker pod whose out-of-memory kill was not yet
+// claimed, off the reconcile queue as recoverDisruptedWorkerPod runs. A pod deleted with
+// its gateway, or whose RunnerSet is gone, has nothing left to re-run.
+func (r *RunnerSetReconciler) settleDeletedKill(ctx context.Context, obj client.Object) {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok || r.Provisioner == nil || pod.Status.Phase != corev1.PodFailed ||
+		pod.Annotations[provisioner.AnnotationDeletionReason] == reapReasonGatewayDeleted {
+		return
+	}
+	pod = pod.DeepCopy()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), disruptedWorkerRecoveryBudget)
+		defer cancel()
+		var rs v2.RunnerSet
+		key := types.NamespacedName{Namespace: pod.Namespace, Name: pod.Labels[provisioner.LabelRunnerSet]}
+		if err := r.Get(ctx, key, &rs); err != nil || !rs.DeletionTimestamp.IsZero() {
+			return
+		}
+		if _, err := r.Provisioner.SettleDeletedKill(ctx, r.provisionerTarget(&rs), pod); err != nil {
+			r.Log.Warn("deleted scale-set worker's memory kill could not be recovered; re-run its job by hand",
 				"namespace", key.Namespace, "name", key.Name, "podName", pod.Name, "error", err)
 		}
 	}()

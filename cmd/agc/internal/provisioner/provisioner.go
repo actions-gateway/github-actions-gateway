@@ -435,6 +435,8 @@ type Provisioner struct {
 	// question rather than a per-reconcile one. Its zero value is ready to use. See
 	// orphaned_scaleset.go.
 	orphanScans orphanScanState
+	// startWaits times the out-of-memory class's wait for a killed worker's start (Q1389).
+	startWaits startWaitState
 
 	// pendingSets is the sets whose ledgers hold parked retry-class re-runs, and
 	// pendingAdoptions the sets this process has already read for entries a previous
@@ -1089,7 +1091,8 @@ func surplusBefore(a, b *corev1.Pod) bool {
 // A completion stamp already on that worker came from such a completion — a stamp for
 // the worker's own job cannot precede its start, since the listener drops a JobStarted
 // for a job it has already seen complete — so it is removed: the runner that was idle
-// is running a job now. A worker that is gone or already terminal is not an error.
+// is running a job now. A worker that is gone or already terminal is not an error, and a
+// terminal one is stamped only where its out-of-memory kill waits for the start (Q1389).
 func (p *Provisioner) MarkScaleSetJobStarted(ctx context.Context, target Target, job ScaleSetJob) error {
 	found, err := p.scaleSetWorkerByRunner(ctx, target, job.RunnerName)
 	if err != nil || found == nil {
@@ -1106,7 +1109,9 @@ func (p *Provisioner) MarkScaleSetJobStarted(ctx context.Context, target Target,
 	}
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
-		return nil
+		if !oomAwaitingStart(pod) {
+			return nil
+		}
 	}
 	identity := startedRunIdentity(job, pod.Name == scaleSetPodName(target.Key().Name, job.JobID))
 	_, stamped := pod.Annotations[AnnotationJobCompletedAt]

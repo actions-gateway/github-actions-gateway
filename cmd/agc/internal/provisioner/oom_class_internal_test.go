@@ -109,7 +109,7 @@ func TestRecoverOOMKilled_RaisesTheLimitAndReruns(t *testing.T) {
 	ctx := context.Background()
 	pod := oomKilled(scaleSetWorkerPod("runner-gpu-job1", rightSizedAnnotations("4242")), "2Gi")
 	pod.Annotations[AnnotationRunnerName] = "gpu-1"
-	require.Empty(t, pod.Annotations[AnnotationStartedJobID])
+	pod.Annotations[AnnotationStartedJobID] = "job1"
 	require.True(t, podEverStarted(pod), "the fixture must model a runner that ran, not the never-started arm's shape")
 	p, target, m, rerunCount, paths := recoveryFixture(t, pod)
 	target.spec.MemoryRetry = throughputRetry()
@@ -123,7 +123,7 @@ func TestRecoverOOMKilled_RaisesTheLimitAndReruns(t *testing.T) {
 	parked := readLedger(t, p, target).Pending[failureKey("4242", "build")]
 	require.NotNil(t, parked)
 	assert.Equal(t, []killedWorker{{Job: "build", Runner: "gpu-1", Disruption: pod.Name}}, parked.Workers,
-		"the re-run is found by the worker's runner, whether or not its start was recorded")
+		"the re-run is found by the worker's runner")
 	sweepPendingAndWait(t, p, ctx, 1)
 
 	require.Equal(t, int64(1), rerunCount.Load(), "the killed run must be re-run exactly once")

@@ -80,6 +80,7 @@ const (
 func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target Target) (<-chan struct{}, error) {
 	key := target.Key()
 	log := p.logForKey(key)
+	p.startWaits.scanned(key.String(), p.nowFn())
 
 	selector := map[string]string{LabelAcquisitionProtocol: AcquisitionProtocolScaleSet}
 	for k, v := range target.PodOwnerLabels() {
@@ -202,6 +203,14 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 	// emits, and a logger-level attribute would duplicate the key on those.
 	pod, cause := d.pod, d.cause
 	podLog := log.With("podName", pod.Name)
+
+	// Ahead of the claim and of every read of the pod's identity, which names the job the
+	// worker was created for until its start is recorded.
+	if cause == recoveryCauseOOM && oomAwaitingStart(pod) {
+		if pod = p.awaitStart(ctx, target, pod, podLog); pod == nil {
+			return closedChan()
+		}
+	}
 
 	// Claim before calling GitHub, and off the pod: the claim outlives the pod the
 	// evidence was read from, so a drain that removes the object seconds after the
