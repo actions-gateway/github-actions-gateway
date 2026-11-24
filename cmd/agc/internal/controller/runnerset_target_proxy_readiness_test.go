@@ -116,8 +116,9 @@ func TestWorkerPodHandler_SnapshotsTheSetsProxyReadiness(t *testing.T) {
 	rs := &v2.RunnerSet{}
 	require.NoError(t, r.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "set"}, rs))
 	target := &eventTarget{runnerSetTarget: r.provisionerTarget(rs)}
-	require.NoError(t, r.Provisioner.RecordScaleSetJobCompleted(ctx, target,
-		provisioner.ScaleSetJob{JobID: "job-1", RunnerName: "runner-1", RunID: "900", JobName: "build"}, "failed"))
+	_, err := r.Provisioner.RecordScaleSetJobCompleted(ctx, target,
+		provisioner.ScaleSetJob{JobID: "job-1", RunnerName: "runner-1", RunID: "900", JobName: "build"}, "failed")
+	require.NoError(t, err)
 	assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, target.reasons,
 		"the unready colocated proxy in the snapshot the handler took is a platform fault")
 }
@@ -142,8 +143,9 @@ func TestWorkerPodHandler_CompletesAFailedJobsRecordWhenItsWorkerFinishes(t *tes
 	r, q, _ := podWatchFixture(t, running)
 	rs := &v2.RunnerSet{}
 	require.NoError(t, r.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "set"}, rs))
-	require.NoError(t, r.Provisioner.RecordScaleSetJobCompleted(ctx, &eventTarget{runnerSetTarget: r.provisionerTarget(rs)},
-		provisioner.ScaleSetJob{JobID: "job-1", RunnerName: "runner-1", RunID: "900", JobName: "build"}, "failed"))
+	_, err := r.Provisioner.RecordScaleSetJobCompleted(ctx, &eventTarget{runnerSetTarget: r.provisionerTarget(rs)},
+		provisioner.ScaleSetJob{JobID: "job-1", RunnerName: "runner-1", RunID: "900", JobName: "build"}, "failed")
+	require.NoError(t, err)
 	ledger := func() string {
 		cm := &corev1.ConfigMap{}
 		require.NoError(t, r.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "scaleset-failures-set"}, cm))
@@ -215,8 +217,9 @@ func TestWorkerPodHandler_ARestartedSidecarsCrashSurvivesItsShutdown(t *testing.
 			r, q, _ := podWatchFixture(t, worker(tc.completedAt))
 			rs := &v2.RunnerSet{}
 			require.NoError(t, r.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "set"}, rs))
-			require.NoError(t, r.Provisioner.RecordScaleSetJobCompleted(ctx, r.provisionerTarget(rs),
-				provisioner.ScaleSetJob{JobID: "job-1", RunnerName: "runner-1", RunID: "900", JobName: "build"}, "failed"))
+			_, err := r.Provisioner.RecordScaleSetJobCompleted(ctx, r.provisionerTarget(rs),
+				provisioner.ScaleSetJob{JobID: "job-1", RunnerName: "runner-1", RunID: "900", JobName: "build"}, "failed")
+			require.NoError(t, err)
 
 			watch, pass := r.workerPodHandler(), runnerSetWorkerPodPredicate()
 			last := len(events) - 1

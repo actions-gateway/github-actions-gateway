@@ -17,6 +17,7 @@
 //	DELETE /api/v3/.../actions/runners/{id}      — deregister runner
 //	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}  — run status/conclusion (Q811)
 //	GET  /api/v3/repos/{o}/{r}/actions/workflows/{id}/runs — newer runs, always none (Q1181)
+//	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}/jobs — a run's jobs, always none (Q1375)
 //	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}/attempts/{n}/jobs — an attempt's jobs, always none (Q1320)
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/rerun-failed-jobs — eviction auto-retry
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/force-cancel — abandoned-run fast ending (Q683)
@@ -145,6 +146,7 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1418,7 +1420,7 @@ func (s *server) handleJobStats(w http.ResponseWriter, r *http.Request) {
 
 // handleReposAPI routes the /repos/{owner}/{repo}/... REST endpoints the AGC
 // addresses directly off GITHUB_API_BASE_URL. Only the run read, the workflow-runs and
-// attempt-jobs lists, rerun-failed-jobs, force-cancel and check-run creation are served;
+// jobs lists, rerun-failed-jobs, force-cancel and check-run creation are served;
 // anything else 404s, as an unimplemented endpoint should.
 func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.URL.Path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
@@ -1441,8 +1443,8 @@ func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 		handleWorkflowRuns(w)
 		return
 	}
-	if isAttemptJobsPath(r.URL.Path) && r.Method == http.MethodGet {
-		handleAttemptJobs(w)
+	if isJobsPath(r.URL.Path) && r.Method == http.MethodGet {
+		handleJobs(w)
 		return
 	}
 	notServed(w, r)
@@ -1473,25 +1475,30 @@ func handleWorkflowRuns(w http.ResponseWriter) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"total_count": 0, "workflow_runs": []any{}})
 }
 
-// isAttemptJobsPath reports a .../actions/runs/{run_id}/attempts/{n}/jobs path.
-func isAttemptJobsPath(path string) bool {
+// isJobsPath reports a .../actions/runs/{run_id}/jobs path, or one attempt's
+// .../actions/runs/{run_id}/attempts/{n}/jobs.
+func isJobsPath(path string) bool {
 	const marker = "/actions/runs/"
 	i := strings.Index(path, marker)
 	if i < 0 {
 		return false
 	}
 	seg := strings.Split(path[i+len(marker):], "/")
-	return len(seg) == 4 && seg[0] != "" && seg[1] == "attempts" && seg[2] != "" && seg[3] == "jobs"
+	if slices.Contains(seg, "") {
+		return false
+	}
+	return len(seg) == 2 && seg[1] == "jobs" || len(seg) == 4 && seg[1] == "attempts" && seg[3] == "jobs"
 }
 
-// handleAttemptJobs serves the list the scale-set tier's already_rerun check reads once
-// a run has moved past the attempt a job failed in (Q1320):
+// handleJobs serves the lists the AGC reads a run's jobs from:
 //
+//	GET /api/v3/repos/{owner}/{repo}/actions/runs/{run_id}/jobs
 //	GET /api/v3/repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs
 //
-// It always lists no jobs, which the check reads as no answer, so a second recovery of a
+// Both always list no jobs. Flaky-job detection (Q1375) then pairs no completion with a
+// failure, and the already_rerun check (Q1320) reads no answer, so a second recovery of a
 // run the AGC has re-run still stands down on the attempt alone.
-func handleAttemptJobs(w http.ResponseWriter) {
+func handleJobs(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{"total_count": 0, "jobs": []any{}})

@@ -3103,7 +3103,7 @@ The context is the worker as it finished.
 For a job that ends on a step's result, GitHub's completion arrives while the worker's pod still runs (measured 2026-11-22), so the record first holds the pod as `Running` and is rewritten when the pod finishes (Q1376).
 A `canceled` completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing, and neither does a job that reached its `timeout-minutes`, which GitHub also reports `canceled` (Q1374).
 
-When a later attempt of the same job (same run, same job name) completes, it is paired with that record and counted in `actions_gateway_scaleset_job_reruns_total{trigger}`:
+When a later attempt of the same job (same run, same job name, and a re-run by the run's own job list) completes, it is paired with that record and counted in `actions_gateway_scaleset_job_reruns_total{trigger}`:
 
 | `trigger` | Means | Flaky? |
 |---|---|---|
@@ -3138,7 +3138,11 @@ A proxy pool shared from another namespace is recorded as `proxy.mode: shared` w
 A snapshot is held in memory, so a failure recorded after an AGC restart, or after more than 1,024 workers finished with no completion yet, has no `context`.
 An AGC restart between a job's failure and its worker's finish leaves the record's `context` at `podPhase: Running`, and so does a worker whose pod is removed before it finishes, such as a force delete.
 A re-run more than 7 days after the failure, or one that lands on another `RunnerSet`, pairs with nothing and counts nothing.
-Two jobs of one run that share a `name:` share one record, so one's success pairs with the other's failure and counts as a flake nobody re-ran (Q1375).
+Two jobs of one run that share a `name:` share one record, the first failure's, so a re-run counts only where it re-ran that job and no other of its name: re-running both counts nothing, and neither does any re-run of a name under which the run also skipped a job.
+Telling a re-run from a job of the same name reads the run's jobs from GitHub, with the `Actions` permission, at most once per run and set every 30 seconds, so a re-run is counted that long after it completes.
+A read is one request per 100 jobs the run lists over its attempts, up to 10.
+A re-run counts nothing where that read fails or takes over 10 seconds, or the run lists more than 1,000 jobs over its attempts (the AGC log says `could not read the run's jobs`), where the AGC restarts before the read, where it completed before GitHub listed the attempt's other jobs of its name, or where it follows a re-run that was cancelled or counted nothing.
+One false flake is left: a job that GitHub first lists under the failed job's name in a later attempt, such as a leg a dynamic matrix gains, and that completes while the failed job's own re-run still waits on its `needs`.
 
 ---
 

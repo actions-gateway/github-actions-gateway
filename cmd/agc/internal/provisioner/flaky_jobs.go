@@ -19,10 +19,10 @@ import (
 
 // Flaky-job detection on the scale-set tier (Q555). A failed JobCompleted records the
 // job in the failure ledger's failures map with the worker's platform context; a later
-// completion of the same job (same run, same display name, a new job ID) pairs with the
-// record and is attributed to whoever re-ran it, from GAG's own re-runs of the run in
-// the same ledger. Detection changes no behaviour. The operator-facing account is
-// docs/design/04-operational-flows.md §4.2.
+// completion of the same job (same run, same display name, a new job ID, and a re-run by
+// the run's job list) pairs with the record and is attributed to whoever re-ran it, from
+// GAG's own re-runs of the run in the same ledger. Detection changes no behaviour. The
+// operator-facing account is docs/design/04-operational-flows.md §4.2.
 
 // JobCompleted results. "canceled" is GitHub's spelling on this wire.
 const (
@@ -60,14 +60,14 @@ type failureRecord struct {
 	// JobID is the latest failed attempt's job UUID: a completion carrying it again is
 	// a replay and changes nothing.
 	JobID string `json:"jobID"`
+	// Runner is the latest failed attempt's runner, which is how GitHub's job list names
+	// it. Records written before v2.1 have none.
+	Runner string `json:"runner,omitempty"`
 	// Cause is the disruption a recovery claim names for the latest failed attempt, ""
 	// where none did. A failure with a cause is never counted flaky.
 	Cause       string `json:"cause,omitempty"`
 	Event       string `json:"event,omitempty"`
 	WorkflowRef string `json:"workflowRef,omitempty"`
-	// PairedAttempts are the keys of GAG's re-runs of the run already attributed to an
-	// earlier attempt of this job, so a later attempt does not claim them again.
-	PairedAttempts []string `json:"pairedAttempts,omitempty"`
 	// Context is the worker snapshot, kept as raw JSON so a version that knows fewer of
 	// its fields rewrites it whole. Absent means unknown: no snapshot and no pod.
 	Context json.RawMessage `json:"context,omitempty"`
@@ -75,7 +75,7 @@ type failureRecord struct {
 }
 
 // failureKey keys a job across its attempts: the job UUID changes on a re-run, the run
-// ID and the display name do not.
+// ID and the display name do not. Jobs of one run that share a display name share a key.
 func failureKey(runID, jobName string) string {
 	return runID + "/" + jobName
 }
@@ -472,40 +472,23 @@ func evictOldestFailure(l *rerunLedger) bool {
 	return true
 }
 
-// pairFailure attributes a later attempt of the job f records to whoever re-ran it,
-// from GAG's re-runs of the run, r. It returns the trigger, the cause GAG re-ran the
-// job for ("" unless the trigger is gag), and the re-run's attempt key ("" for other).
-//
-// The completion carries no run attempt, so the re-run GAG made of the attempt the job
-// failed in cannot be picked out exactly: each of GAG's re-runs not already paired with
-// this job is a candidate, latest first, and one that lists the job outranks one that
-// re-ran it as collateral.
-func pairFailure(r *rerunRecord, f *failureRecord, job string) (trigger, cause, attempt string) {
+// pairFailure attributes the attempt that re-ran job in r's run after the attempt failed,
+// from what GAG re-ran of that failed attempt. It returns the trigger and the cause GAG
+// re-ran the job for, "" unless the trigger is gag.
+func pairFailure(r *rerunRecord, failed int, job string) (trigger, cause string) {
 	if r == nil {
-		return rerunTriggerOther, "", ""
+		return rerunTriggerOther, ""
 	}
-	keys := make([]string, 0, len(r.Attempts))
-	for k, a := range r.Attempts {
-		if a != nil && !slices.Contains(f.PairedAttempts, k) {
-			keys = append(keys, k)
-		}
+	a := r.Attempts[strconv.Itoa(failed)]
+	switch {
+	case a == nil:
+		return rerunTriggerOther, ""
+	case slices.Contains(a.Jobs, job):
+		return rerunTriggerGAG, a.Cause
+	case a.Scope == rerunScopeFailedJobs:
+		return rerunTriggerGAGCollateral, ""
 	}
-	slices.SortFunc(keys, func(a, b string) int {
-		x, _ := strconv.Atoi(a)
-		y, _ := strconv.Atoi(b)
-		return y - x
-	})
-	for _, k := range keys {
-		if a := r.Attempts[k]; slices.Contains(a.Jobs, job) {
-			return rerunTriggerGAG, a.Cause, k
-		}
-	}
-	for _, k := range keys {
-		if r.Attempts[k].Scope == rerunScopeFailedJobs {
-			return rerunTriggerGAGCollateral, "", k
-		}
-	}
-	return rerunTriggerOther, "", ""
+	return rerunTriggerOther, ""
 }
 
 // rerunOutcomeEvents are the triggering events the outcome metric names; any other
@@ -530,6 +513,9 @@ func rerunOutcomeEvent(event string) string {
 type completionPairing struct {
 	// recorded: a failed attempt was written, new or over an earlier one.
 	recorded bool
+	// matched: the key holds a record of another job UUID, which the completion is not
+	// known to re-run. It changed nothing.
+	matched bool
 	// paired: a later attempt of a recorded failure completed.
 	paired  bool
 	trigger string
@@ -585,13 +571,15 @@ func ownJobCompleted(pod *corev1.Pod) bool {
 
 // RecordScaleSetJobCompleted records a scale-set job's completion in target's failure
 // ledger: a failed or disrupted completion records the job and its worker's context,
-// and a later attempt of a recorded job is attributed to whoever re-ran it. A
-// cancelled completion with no disruption behind it is a user's cancel and records
-// nothing. It is idempotent per job.JobID.
+// and a later attempt of a recorded job is attributed to whoever re-ran it. A cancelled
+// completion with no disruption behind it is a user's cancel and records nothing. It is
+// idempotent per job.JobID.
 //
 // A failed job whose worker still runs is recorded at once, so a restart cannot lose its
-// pairing, and amended when the worker finishes.
-func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Target, job ScaleSetJob, result string) error {
+// pairing, and amended when the worker finishes. A completion that matches a record is
+// paired off this call, once the run's jobs are read (queuePairing); the channel closes
+// when that ends.
+func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Target, job ScaleSetJob, result string) (<-chan struct{}, error) {
 	key := target.Key()
 	at := p.nowFn()
 	workerKey := key.Namespace + "/" + job.RunnerName
@@ -603,12 +591,11 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 	if runID == "" || jobName == "" {
 		p.logForKey(key).Debug("scale-set job completion names no run or job; not recorded for flaky-job detection",
 			"jobID", job.JobID, "result", result)
-		return nil
+		return closedChan(), nil
 	}
-	fkey := failureKey(runID, jobName)
 	failed := result != jobResultSucceeded
-	if !failed && p.failureIndex.lacks(key, fkey) {
-		return nil
+	if !failed && p.failureIndex.lacks(key, failureKey(runID, jobName)) {
+		return closedChan(), nil
 	}
 
 	var cause string
@@ -616,7 +603,7 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 	if failed {
 		cause = p.disruptionCause(ctx, target, job.JobID)
 		if result == jobResultCanceled && cause == "" {
-			return nil
+			return closedChan(), nil
 		}
 		if snap == nil && job.RunnerName != "" {
 			if pod, err := p.scaleSetWorkerByRunner(ctx, target, job.RunnerName); err == nil && pod != nil {
@@ -631,51 +618,25 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 		}
 	}
 
+	c := &jobCompletion{target: target, job: job, runID: runID, jobName: jobName, result: result, cause: cause, context: contextJSON}
 	var o completionPairing
-	err := p.updateRerunLedger(ctx, target, func(l *rerunLedger, now time.Time) bool {
-		o = completionPairing{}
-		f := l.Failures[fkey]
-		if f == nil {
-			if !failed {
-				return false
-			}
-			l.Failures[fkey] = &failureRecord{
-				ExpiresAt: now.Add(failureRecordTTL), FailedAt: now, JobID: job.JobID, Cause: cause,
-				Event: job.EventName, WorkflowRef: job.WorkflowRef, Context: contextJSON,
-			}
-			o.recorded = true
-			return true
-		}
-		if f.JobID == job.JobID {
-			return false
-		}
-		var attempt string
-		o.paired, o.event = true, f.Event
-		o.trigger, o.cause, attempt = pairFailure(l.Reruns[runID], f, jobName)
-		if !failed {
-			o.flaky = o.trigger != rerunTriggerGAG && f.Cause == ""
-			delete(l.Failures, fkey)
-			return true
-		}
-		o.recorded = true
-		f.JobID, f.Cause, f.ExpiresAt = job.JobID, cause, now.Add(failureRecordTTL)
-		if attempt != "" {
-			f.PairedAttempts = append(f.PairedAttempts, attempt)
-		}
-		return true
+	err := p.updateRerunLedger(ctx, target, func(l *rerunLedger, now time.Time) (changed bool) {
+		o, changed = c.apply(l, now, nil)
+		return changed
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	log := p.logForKey(key).With("runID", runID, "job", jobName, "jobID", job.JobID, "result", result)
-	if o.recorded {
-		p.reportFailedJob(target, runID, jobName, cause, snap, snap.faults(), log)
+	done := closedChan()
+	if o.matched && job.RunnerName != "" {
+		done = p.queuePairing(ctx, c)
 	}
-	if o.paired {
-		p.reportRerunJob(target, runID, jobName, result, o, log)
+	reported := failed && (o.recorded || o.matched)
+	if reported {
+		p.reportFailedJob(target, runID, jobName, cause, snap, snap.faults(), p.completionLog(c))
 	}
-	if !o.recorded || snap == nil || snap.ended() {
-		return nil
+	if !reported || snap == nil || snap.ended() {
+		return done, nil
 	}
 	r := &recordedFailure{target: target, runID: runID, jobName: jobName, jobID: job.JobID, cause: cause,
 		snap: snap, last: snap, context: contextJSON, at: at}
@@ -693,7 +654,7 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 	if s != nil {
 		p.amendFailedJob(ctx, r, s)
 	}
-	return nil
+	return done, nil
 }
 
 // amendFailedJob gives r's record s, its worker's terminal snapshot, and reports the

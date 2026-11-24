@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -444,6 +445,27 @@ func TestScaleSetBudget_UnwritableLedgerWithholds(t *testing.T) {
 	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
 		"team-a", "gpu", recoveryCauseEviction, rerunFailureReasonBudgetUnrecorded)))
 	assert.Contains(t, target.events, "EvictionRerunFailed")
+}
+
+// TestRerunLedger_KnownNamesAreTheDeclaredOnes: a declared field missing from its names
+// is also carried as unknown, and the stale copy is written where the field is omitted.
+func TestRerunLedger_KnownNamesAreTheDeclaredOnes(t *testing.T) {
+	for _, tc := range []struct {
+		record any
+		names  []string
+	}{
+		{rerunLedger{}, rerunLedgerNames}, {rerunRecord{}, rerunRecordNames}, {rerunAttempt{}, rerunAttemptNames},
+		{failureRecord{}, failureRecordNames}, {memoryFloor{}, memoryFloorNames}, {pendingRerun{}, pendingRerunNames},
+	} {
+		var declared []string
+		for f := range reflect.TypeOf(tc.record).Fields() {
+			if f.IsExported() {
+				name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+				declared = append(declared, name)
+			}
+		}
+		assert.ElementsMatch(t, declared, tc.names, "%T", tc.record)
+	}
 }
 
 // TestRerunLedger_OlderWriterPreservesWhatItDoesNotKnow is the rollback case: a newer

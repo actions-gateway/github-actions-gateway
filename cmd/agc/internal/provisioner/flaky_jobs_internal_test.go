@@ -1,6 +1,7 @@
 package provisioner
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -43,9 +44,17 @@ func flakyFixture(t *testing.T) (client.Client, *Provisioner, *stubTarget) {
 	return c, flakyProvisioner(c), &stubTarget{key: client.ObjectKey{Namespace: "team-a", Name: "gpu"}}
 }
 
-// flakyProvisioner is one AGC process; two on one client are a restart.
+// flakyProvisioner is one AGC process; two on one client are a restart. GitHub lists
+// attempt n of a run as one job "build" on runner-n, as buildJob(n) completes it.
 func flakyProvisioner(c client.Client) *Provisioner {
-	return NewProvisioner(c, flakyMetrics(), nil)
+	p := NewProvisioner(c, flakyMetrics(), nil)
+	p.pairingDelay = 0
+	gh := &runJobsStub{}
+	for n := 1; n <= 9; n++ {
+		gh.jobs = append(gh.jobs, listed(n, "build", fmt.Sprintf("runner-%d", n)))
+	}
+	gh.serve(p)
+	return p
 }
 
 // buildJob is attempt n of job "build" in run 900, triggered by a push.
@@ -55,6 +64,14 @@ func buildJob(n int) ScaleSetJob {
 		Owner: "org", Repository: "repo", RunID: "900", JobName: "build",
 		EventName: "push", WorkflowRef: "org/repo/.github/workflows/ci.yml@refs/heads/main",
 	}
+}
+
+// completeJob records job's completion and waits for its pairing.
+func completeJob(ctx context.Context, t *testing.T, p *Provisioner, target Target, job ScaleSetJob, result string) {
+	t.Helper()
+	done, err := p.RecordScaleSetJobCompleted(ctx, target, job, result)
+	require.NoError(t, err)
+	<-done
 }
 
 // claimDisruption records a recovery claim for jobID, as a disruption arm does.
@@ -88,8 +105,10 @@ func readFailures(t *testing.T, p *Provisioner, target Target) map[string]*failu
 func TestFlakyJobs_PairingTable(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		// attempt is GAG's re-run of the run, nil for none.
-		attempt *rerunAttempt
+		// attempt is GAG's re-run of the run, nil for none, and of the attempt that
+		// failed unless ofAttempt says another.
+		attempt   *rerunAttempt
+		ofAttempt string
 		// claim is the disruption a recovery claim names for the failed attempt.
 		claim       string
 		wantTrigger string
@@ -105,6 +124,10 @@ func TestFlakyJobs_PairingTable(t *testing.T) {
 		{name: "GAG's single-job re-run of another job did not carry it",
 			attempt:     &rerunAttempt{Scope: rerunScopeJob, Cause: recoveryCauseDeletion, Jobs: []string{"lint"}},
 			wantTrigger: rerunTriggerOther, wantFlaky: true},
+		{name: "GAG re-ran another attempt of the run",
+			attempt:     &rerunAttempt{Scope: rerunScopeFailedJobs, Cause: recoveryCauseDeletion, Jobs: []string{"build"}},
+			ofAttempt:   "4",
+			wantTrigger: rerunTriggerOther, wantFlaky: true},
 		{name: "GAG did not re-run the run",
 			wantTrigger: rerunTriggerOther, wantFlaky: true},
 		{name: "a disruption GAG did not re-run is not flaky",
@@ -116,7 +139,7 @@ func TestFlakyJobs_PairingTable(t *testing.T) {
 			if tc.attempt != nil {
 				require.NoError(t, p.updateRerunLedger(ctx, target, func(l *rerunLedger, now time.Time) bool {
 					l.Reruns["900"] = &rerunRecord{ExpiresAt: now.Add(time.Hour), Count: 1,
-						Attempts: map[string]*rerunAttempt{"1": tc.attempt}}
+						Attempts: map[string]*rerunAttempt{cmp.Or(tc.ofAttempt, "1"): tc.attempt}}
 					return true
 				}))
 			}
@@ -124,9 +147,9 @@ func TestFlakyJobs_PairingTable(t *testing.T) {
 				claimDisruption(t, p, target, "job-1", tc.claim)
 			}
 
-			require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+			completeJob(ctx, t, p, target, buildJob(1), "failed")
 			require.Contains(t, readFailures(t, p, target), "900/build", "the failure is recorded")
-			require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(2), jobResultSucceeded))
+			completeJob(ctx, t, p, target, buildJob(2), jobResultSucceeded)
 
 			assert.NotContains(t, readFailures(t, p, target), "900/build", "a succeeded pairing deletes the record")
 			for _, trigger := range []string{rerunTriggerGAG, rerunTriggerGAGCollateral, rerunTriggerOther} {
@@ -169,24 +192,23 @@ func TestFlakyJobs_ALaterFailureUpdatesTheRecord(t *testing.T) {
 	claimDisruption(t, p, target, "job-1", recoveryCauseEviction)
 	p.SnapshotScaleSetWorker(context.Background(), nil, scaleSetWorker("runner-1", corev1.PodFailed, "Evicted"), false)
 
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+	completeJob(ctx, t, p, target, buildJob(1), "failed")
 	first := readFailures(t, p, target)["900/build"]
 	require.NotNil(t, first)
 	require.Contains(t, string(first.Context), "Evicted")
 
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(2), "failed"))
+	completeJob(ctx, t, p, target, buildJob(2), "failed")
 	f := readFailures(t, p, target)["900/build"]
 	require.NotNil(t, f, "a failed later attempt keeps the record")
 	assert.Equal(t, "job-2", f.JobID)
 	assert.Empty(t, f.Cause, "the second failure had no disruption")
 	assert.Equal(t, first.Context, f.Context, "the first failure's context is kept")
 	assert.Equal(t, first.FailedAt, f.FailedAt)
-	assert.Equal(t, []string{"1"}, f.PairedAttempts)
 	assert.Equal(t, 1.0, outcome(p, recoveryCauseEviction, "failed"))
 	assert.Equal(t, 1.0, rerunCount(p, rerunTriggerGAG))
 
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(3), jobResultSucceeded))
-	assert.Equal(t, 1.0, rerunCount(p, rerunTriggerOther), "GAG's re-run was attributed already")
+	completeJob(ctx, t, p, target, buildJob(3), jobResultSucceeded)
+	assert.Equal(t, 1.0, rerunCount(p, rerunTriggerOther), "GAG re-ran attempt 1 and not attempt 2")
 	assert.Equal(t, 1.0, flaky(p, rerunTriggerOther))
 	assert.Equal(t, 1.0, outcome(p, recoveryCauseEviction, "failed"), "a human's re-run is not GAG's outcome")
 	assert.Zero(t, outcome(p, recoveryCauseEviction, jobResultSucceeded))
@@ -198,15 +220,17 @@ func TestFlakyJobs_AReplayedCompletionChangesNothing(t *testing.T) {
 	ctx := context.Background()
 	c, p, target := flakyFixture(t)
 
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+	completeJob(ctx, t, p, target, buildJob(1), "failed")
 	before := readLedgerData(t, c, target)
-	require.NoError(t, flakyProvisioner(c).RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+	replayed := flakyProvisioner(c)
+	completeJob(ctx, t, replayed, target, buildJob(1), "failed")
 	assert.Equal(t, before, readLedgerData(t, c, target), "a replayed failure rewrites nothing")
+	assert.Zero(t, replayed.HTTPClient.Transport.(*runJobsStub).gets, "and reads no job list")
 
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(2), jobResultSucceeded))
+	completeJob(ctx, t, p, target, buildJob(2), jobResultSucceeded)
 	restarted := flakyProvisioner(c)
-	require.NoError(t, restarted.RecordScaleSetJobCompleted(ctx, target, buildJob(2), jobResultSucceeded))
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(2), jobResultSucceeded))
+	completeJob(ctx, t, restarted, target, buildJob(2), jobResultSucceeded)
+	completeJob(ctx, t, p, target, buildJob(2), jobResultSucceeded)
 	assert.Equal(t, 1.0, rerunCount(p, rerunTriggerOther))
 	assert.Zero(t, rerunCount(restarted, rerunTriggerOther), "a replayed success pairs nothing")
 }
@@ -217,11 +241,11 @@ func TestFlakyJobs_AReplayedCompletionChangesNothing(t *testing.T) {
 func TestFlakyJobs_AUsersCancelRecordsNothing(t *testing.T) {
 	ctx := context.Background()
 	_, p, target := flakyFixture(t)
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), jobResultCanceled))
+	completeJob(ctx, t, p, target, buildJob(1), jobResultCanceled)
 	assert.Empty(t, readFailures(t, p, target))
 
 	claimDisruption(t, p, target, "job-1", recoveryCauseDeletion)
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), jobResultCanceled))
+	completeJob(ctx, t, p, target, buildJob(1), jobResultCanceled)
 	f := readFailures(t, p, target)["900/build"]
 	require.NotNil(t, f)
 	assert.Equal(t, recoveryCauseDeletion, f.Cause)
@@ -243,12 +267,12 @@ func TestFlakyJobs_ASucceededJobWithNoRecordCostsNoRead(t *testing.T) {
 	p := flakyProvisioner(c)
 	target := &stubTarget{key: client.ObjectKey{Namespace: "team-a", Name: "gpu"}}
 
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), jobResultSucceeded))
+	completeJob(ctx, t, p, target, buildJob(1), jobResultSucceeded)
 	require.Equal(t, 1, gets, "the first completion loads the ledger")
 	for n := 2; n < 10; n++ {
 		job := buildJob(n)
 		job.JobName = fmt.Sprintf("test-%d", n)
-		require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, job, jobResultSucceeded))
+		completeJob(ctx, t, p, target, job, jobResultSucceeded)
 	}
 	assert.Equal(t, 1, gets, "a succeeded job with no record reads nothing")
 }
@@ -263,7 +287,7 @@ func TestFlakyJobs_ASnapshotNamesThePlatformFault(t *testing.T) {
 	oom.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: runnerContainer,
 		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "OOMKilled", ExitCode: 137}}}}
 	p.SnapshotScaleSetWorker(context.Background(), nil, oom, false)
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+	completeJob(ctx, t, p, target, buildJob(1), "failed")
 	assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, target.events)
 	var snap workerSnapshot
 	require.NoError(t, json.Unmarshal(readFailures(t, p, target)["900/build"].Context, &snap))
@@ -277,7 +301,7 @@ func TestFlakyJobs_ASnapshotNamesThePlatformFault(t *testing.T) {
 	p.SnapshotScaleSetWorker(context.Background(), nil, red, false)
 	job := buildJob(1)
 	job.JobID, job.RunnerName, job.JobName = "job-x", "runner-x", "test"
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, job, "failed"))
+	completeJob(ctx, t, p, target, job, "failed")
 	assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, target.events, "a red test on a healthy worker is not a fault")
 }
 
@@ -324,7 +348,7 @@ func TestFlakyJobs_AnUnreadyColocatedProxyIsAPlatformFault(t *testing.T) {
 				} else {
 					require.NoError(t, c.Create(ctx, red))
 				}
-				require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+				completeJob(ctx, t, p, target, buildJob(1), "failed")
 				assert.Empty(t, p.workerSnapshots.recorded, "a finished worker's record waits for nothing")
 
 				var snap workerSnapshot
@@ -347,7 +371,7 @@ func TestFlakyJobs_ACompletionWithNoIdentityTakesThePods(t *testing.T) {
 	ctx := context.Background()
 	_, p, target := flakyFixture(t)
 	p.SnapshotScaleSetWorker(context.Background(), nil, scaleSetWorker("runner-1", corev1.PodSucceeded, ""), false)
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, ScaleSetJob{JobID: "job-1", RunnerName: "runner-1"}, "failed"))
+	completeJob(ctx, t, p, target, ScaleSetJob{JobID: "job-1", RunnerName: "runner-1"}, "failed")
 	assert.Contains(t, readFailures(t, p, target), "900/build")
 }
 
@@ -501,7 +525,7 @@ func TestFlakyJobs_ARunningWorkersRecordIsCompletedWhenItFinishes(t *testing.T) 
 			tc.worker(running, finished)
 			require.NoError(t, c.Create(ctx, running))
 
-			require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+			completeJob(ctx, t, p, target, buildJob(1), "failed")
 			require.Equal(t, "Running", recordedContext(t, p, target).Phase, "the failure is recorded at its completion")
 			for _, c := range recordedContext(t, p, target).Containers {
 				assert.Empty(t, c.PreviousReason, "a running sidecar's crash is its last termination")
@@ -543,7 +567,7 @@ func TestFlakyJobs_ACrashTheFinishedStatusDroppedIsReportedOnce(t *testing.T) {
 	finished.Status.InitContainerStatuses = []corev1.ContainerStatus{terminated("dind", "Error", 143, time.Now())}
 	finished.Status.InitContainerStatuses[0].RestartCount = 1
 	for _, seen := range []string{"at the completion", "while the completion was recorded", "after the completion",
-		"at the completion of a worker that finished while it was recorded",
+		"after the completion on a worker being deleted", "at the completion of a worker that finished while it was recorded",
 		"at the completion of a worker whose finish is in the cache alone"} {
 		t.Run("crash seen "+seen, func(t *testing.T) {
 			ctx := context.Background()
@@ -570,10 +594,14 @@ func TestFlakyJobs_ACrashTheFinishedStatusDroppedIsReportedOnce(t *testing.T) {
 			}).Build()
 			p = flakyProvisioner(c)
 			target := &stubTarget{key: client.ObjectKey{Namespace: "team-a", Name: "gpu"}}
-			require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+			completeJob(ctx, t, p, target, buildJob(1), "failed")
 			switch {
-			case seen == "after the completion":
-				<-p.SnapshotScaleSetWorker(ctx, nil, crashed, false)
+			case strings.HasPrefix(seen, "after the completion"):
+				pod := crashed.DeepCopy()
+				if strings.HasSuffix(seen, "being deleted") {
+					pod.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+				}
+				<-p.SnapshotScaleSetWorker(ctx, nil, pod, false)
 				fallthrough
 			case !strings.Contains(seen, "of a worker"):
 				<-p.SnapshotScaleSetWorker(ctx, nil, finished, false)
@@ -647,7 +675,7 @@ func TestFlakyJobs_AFinishedWorkersRecordKeepsTheCompletionsProxy(t *testing.T) 
 	}
 	running := scaleSetWorker("runner-1", corev1.PodRunning, "")
 	require.NoError(t, c.Create(ctx, running))
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, proxyTarget{stub, staticProxy{proxy("False", 0)}}, buildJob(1), "failed"))
+	completeJob(ctx, t, p, proxyTarget{stub, staticProxy{proxy("False", 0)}}, buildJob(1), "failed")
 	<-p.SnapshotScaleSetWorker(ctx, staticProxy{proxy("True", 2)}, finishWorker(running, time.Now()), false)
 
 	got := recordedContext(t, p, stub)
@@ -666,7 +694,7 @@ func TestFlakyJobs_AKilledWorkersSnapshotWaitsForItsCompletion(t *testing.T) {
 	killed.Status.ContainerStatuses = []corev1.ContainerStatus{terminated(runnerContainer, "OOMKilled", 137, time.Now())}
 
 	<-p.SnapshotScaleSetWorker(ctx, nil, killed, false)
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+	completeJob(ctx, t, p, target, buildJob(1), "failed")
 
 	got := recordedContext(t, p, target)
 	assert.Equal(t, "Failed", got.Phase)
@@ -693,7 +721,7 @@ func TestFlakyJobs_AWorkerFinishingDuringTheRecordCompletesIt(t *testing.T) {
 	p = flakyProvisioner(c)
 	target := &stubTarget{key: client.ObjectKey{Namespace: "team-a", Name: "gpu"}}
 
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+	completeJob(ctx, t, p, target, buildJob(1), "failed")
 	assert.Equal(t, "Succeeded", recordedContext(t, p, target).Phase)
 	assert.Empty(t, p.workerSnapshots.byID)
 	assert.Empty(t, p.workerSnapshots.recorded)
@@ -709,7 +737,7 @@ func TestFlakyJobs_AFinishedWorkerLeavesOtherRecordsAlone(t *testing.T) {
 	for n := 1; n <= 2; n++ {
 		workers[n] = scaleSetWorker(fmt.Sprintf("runner-%d", n), corev1.PodRunning, "")
 		require.NoError(t, c.Create(ctx, workers[n]))
-		require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(n), "failed"))
+		completeJob(ctx, t, p, target, buildJob(n), "failed")
 	}
 
 	second := finishWorker(workers[2], time.Now())
@@ -719,7 +747,7 @@ func TestFlakyJobs_AFinishedWorkerLeavesOtherRecordsAlone(t *testing.T) {
 	assert.Equal(t, "worker-runner-1", recordedContext(t, p, target).Pod)
 	assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, target.events, "the later attempt's fault is reported")
 
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(3), jobResultSucceeded))
+	completeJob(ctx, t, p, target, buildJob(3), jobResultSucceeded)
 	<-p.SnapshotScaleSetWorker(ctx, nil, finishWorker(workers[1], time.Now()), false)
 	assert.Empty(t, readFailures(t, p, target), "a paired record is not brought back")
 }
@@ -731,7 +759,7 @@ func TestFlakyJobs_ACompletedJobsWorkerIsNotSnapshotted(t *testing.T) {
 	c, p, target := flakyFixture(t)
 	green := scaleSetWorker("runner-1", corev1.PodRunning, "")
 	require.NoError(t, c.Create(ctx, green))
-	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), jobResultSucceeded))
+	completeJob(ctx, t, p, target, buildJob(1), jobResultSucceeded)
 	<-p.SnapshotScaleSetWorker(ctx, nil, finishWorker(green, time.Now()), false)
 	assert.Empty(t, p.workerSnapshots.byID)
 
@@ -819,7 +847,7 @@ func TestRerunLedger_CapHoldsEnoughFailures(t *testing.T) {
 	for i := range sample {
 		l.Failures[fmt.Sprintf("%d/%s", 20_000_000_000+i, strings.Repeat("j", 100))] = &failureRecord{
 			ExpiresAt: time.Now(), FailedAt: time.Now(), JobID: "6f1c0000-0000-4000-8000-000000000000", Cause: recoveryCauseEviction,
-			Event: "pull_request", WorkflowRef: strings.Repeat("w", 120), PairedAttempts: []string{"1", "2"}, Context: snap}
+			Event: "pull_request", WorkflowRef: strings.Repeat("w", 120), Runner: strings.Repeat("r", 63), Context: snap}
 	}
 	b, err := json.Marshal(l)
 	require.NoError(t, err)

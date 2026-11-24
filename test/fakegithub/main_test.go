@@ -837,7 +837,7 @@ func TestRerunFailedJobsIsRecordedAndScoped(t *testing.T) {
 	// counted as a rerun. The run itself is served since Q811, so this probes a
 	// sub-resource that is not: the point is that an unserved path answers 404,
 	// not that this particular one is unserved.
-	resp, err := http.Get(main.URL + "/repos/o/r/actions/runs/4210/jobs")
+	resp, err := http.Get(main.URL + "/repos/o/r/actions/runs/4210/logs")
 	if err != nil {
 		t.Fatalf("GET unimplemented repos endpoint: %v", err)
 	}

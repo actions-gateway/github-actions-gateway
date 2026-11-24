@@ -1,0 +1,16 @@
+{
+  "1": {"jobs": [
+    {"completed_at": "2026-11-22T17:59:23Z", "conclusion": "cancelled", "created_at": "2026-11-22T17:54:07Z", "id": 137298996158, "name": "timed-out", "run_attempt": 1, "runner_name": "gag-ci-scaleset-b31558d4-1fd5-5e76-8f9d-a77c9f5f78a0", "started_at": "2026-11-22T17:58:09Z", "status": "completed"},
+    {"completed_at": "2026-11-22T18:03:58Z", "conclusion": "failure", "created_at": "2026-11-22T17:54:07Z", "id": 137298996317, "name": "red-then-green", "run_attempt": 1, "runner_name": "gag-ci-scaleset-e44b9b0b-05b3-592e-9769-6a7893e3239e", "started_at": "2026-11-22T18:03:55Z", "status": "completed"},
+    {"completed_at": "2026-11-22T18:00:19Z", "conclusion": "failure", "created_at": "2026-11-22T17:54:07Z", "id": 137298996320, "name": "shared-name", "run_attempt": 1, "runner_name": "gag-ci-scaleset-82a2530d-68c0-562b-a11c-3b77eff9662f", "started_at": "2026-11-22T18:00:15Z", "status": "completed"},
+    {"completed_at": "2026-11-22T18:05:32Z", "conclusion": "success", "created_at": "2026-11-22T17:54:07Z", "id": 137298996338, "name": "shared-name", "run_attempt": 1, "runner_name": "gag-ci-scaleset-abe6cad3-432c-54ac-b3f9-52bfb41b8159", "started_at": "2026-11-22T18:03:59Z", "status": "completed"},
+    {"completed_at": "2026-11-22T17:54:06Z", "conclusion": "skipped", "created_at": "2026-11-22T17:54:07Z", "id": 137298997836, "name": "cancelled", "run_attempt": 1, "runner_name": null, "started_at": "2026-11-22T17:54:07Z", "status": "completed"}
+  ]},
+  "2": {"jobs": [
+    {"completed_at": "2026-11-22T18:07:02Z", "conclusion": "success", "created_at": "2026-11-22T18:06:18Z", "id": 137302495843, "name": "red-then-green", "run_attempt": 2, "runner_name": "gag-ci-scaleset-4349fbb7-3320-5cb2-aa3b-39bcd877e336", "started_at": "2026-11-22T18:06:58Z", "status": "completed"},
+    {"completed_at": "2026-11-22T18:07:02Z", "conclusion": "failure", "created_at": "2026-11-22T18:06:18Z", "id": 137302496120, "name": "shared-name", "run_attempt": 2, "runner_name": "gag-ci-scaleset-ee99fae0-6d7f-5751-98dc-c2ff56d5ad96", "started_at": "2026-11-22T18:06:58Z", "status": "completed"},
+    {"completed_at": "2026-11-22T18:08:13Z", "conclusion": "cancelled", "created_at": "2026-11-22T18:06:18Z", "id": 137302496192, "name": "timed-out", "run_attempt": 2, "runner_name": "gag-ci-scaleset-486169c1-35f3-56e9-9b45-fb704c9415ca", "started_at": "2026-11-22T18:06:59Z", "status": "completed"},
+    {"completed_at": "2026-11-22T17:54:06Z", "conclusion": "skipped", "created_at": "2026-11-22T18:06:18Z", "id": 137302496870, "name": "cancelled", "run_attempt": 2, "runner_name": null, "started_at": "2026-11-22T18:06:18Z", "status": "completed"},
+    {"completed_at": "2026-11-22T18:05:32Z", "conclusion": "success", "created_at": "2026-11-22T18:06:18Z", "id": 137302497857, "name": "shared-name", "run_attempt": 2, "runner_name": "gag-ci-scaleset-abe6cad3-432c-54ac-b3f9-52bfb41b8159", "started_at": "2026-11-22T18:03:59Z", "status": "completed"}
+  ]}
+}
