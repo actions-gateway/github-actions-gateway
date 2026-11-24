@@ -298,6 +298,53 @@ func (t *runnerSetTarget) capacityGateCondition(ctx context.Context) *metav1.Con
 	return c
 }
 
+var _ provisioner.StartupFailureReader = (*runnerSetTarget)(nil)
+
+// WorkersFailingToStart implements provisioner.StartupFailureReader on the kubelet's
+// startup verdict (podStartupBackoff), which WorkersNotStarting publishes on every set,
+// with or without a capacity gate. It is read off the pods rather than that condition,
+// which trails them by up to startupVerdictRecheck.
+//
+// It asks more than the condition does: no worker may have started since the oldest
+// failing one was placed. One that did shows the failure is not every pod's, such as a
+// single node that cannot reach the registry. The gate's placeability verdicts are left
+// out because they are not every pod's either: a full cluster reads as unschedulable.
+func (t *runnerSetTarget) WorkersFailingToStart(ctx context.Context) (string, bool) {
+	var pods corev1.PodList
+	if err := t.client.List(ctx, &pods,
+		client.InNamespace(t.key.Namespace),
+		client.MatchingLabels{provisioner.LabelRunnerSet: t.key.Name},
+	); err != nil {
+		return "", false
+	}
+	var (
+		failing      []notStartingPod
+		oldestPlaced time.Time
+		lastStarted  time.Time
+	)
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if pod.Status.Phase != corev1.PodPending {
+			if at, ok := podStartedAt(pod); ok && at.After(lastStarted) {
+				lastStarted = at
+			}
+			continue
+		}
+		backoff, detail := podStartupBackoff(pod)
+		if !backoff || !pod.DeletionTimestamp.IsZero() {
+			continue
+		}
+		failing = append(failing, notStartingPod{name: pod.Name, detail: truncate(detail, 160)})
+		if at, ok := provisioner.PodScheduledAt(pod); ok && (oldestPlaced.IsZero() || at.Before(oldestPlaced)) {
+			oldestPlaced = at
+		}
+	}
+	if len(failing) == 0 || lastStarted.After(oldestPlaced) {
+		return "", false
+	}
+	return notStartingObservation(failing), true
+}
+
 // activeWorkerPodsWithProbe counts this set's ceiling-relevant worker pods exactly
 // as countActiveWorkerPodsByLabel does — non-terminal and not being deleted — and
 // reports whether any of them was created after since, the latched gate's

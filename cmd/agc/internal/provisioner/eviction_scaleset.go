@@ -312,7 +312,16 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 		return p.recoverOOMKilled(ctx, target, spec, pod, owner, repo, runID, podLog)
 	}
 	return p.handleEviction(ctx, target, owner, repo, runID, podLog, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, cause,
-		rerunDisruption{key: pod.Name, job: pod.Annotations[annotationJobName]})
+		disruptionOf(pod))
+}
+
+// disruptionOf names one disrupted worker's job to the re-run path.
+func disruptionOf(pod *corev1.Pod) rerunDisruption {
+	d := rerunDisruption{key: pod.Name, job: pod.Annotations[annotationJobName], assignedAt: pod.CreationTimestamp.Time}
+	if pod.Annotations[AnnotationStartedJobID] != "" {
+		d.runner = pod.Annotations[AnnotationRunnerName]
+	}
+	return d
 }
 
 // disruptionAwaitingRecovery reports whether pod is a scale-set worker that lost its job

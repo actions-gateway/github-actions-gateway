@@ -80,10 +80,15 @@ var errRunNotConcluded = errors.New("the original run has not concluded")
 // job a human stopped (Q811).
 var errRunCancelled = errors.New("the run was cancelled at GitHub")
 
+// errRunSucceeded marks a run GitHub concluded `success`, whose failed jobs it refuses to
+// re-run with a 403. Retrying the refusal cannot change it.
+var errRunSucceeded = errors.New("the run concluded success at GitHub")
+
 // errRerunCovered marks a scale-set recovery that found the run already re-run past the
 // attempt its job failed in: GAG's re-run of that attempt landed, from this disruption's
 // reservation or another's, or a human re-ran it. Re-running again would be a second
-// re-run of one attempt (Q1182).
+// re-run of one attempt (Q1182). A later attempt known not to have re-run the job is not
+// covered (jobNotRerun).
 var errRerunCovered = errors.New("the run was already re-run past the attempt the job failed in")
 
 // errRunConclusionUnreadable marks a conclusion check that took no verdict for a reason
@@ -120,8 +125,11 @@ const (
 const rerunWithheldReasonRunCancelled = "run_cancelled"
 
 // runConclusionCancelled is the conclusion GitHub records for a cancelled run — the one
-// value that stands a recovery down.
+// value that stands a recovery down on both tiers.
 const runConclusionCancelled = "cancelled"
+
+// runConclusionSuccess is the conclusion whose failed jobs GitHub refuses to re-run.
+const runConclusionSuccess = "success"
 
 // runStatusCompleted is the run status at which conclusion is populated; before it,
 // conclusion is null and says nothing.
@@ -186,7 +194,7 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 			return
 		case <-time.After(retryDelay):
 		}
-		p.rerunUntilAccepted(rctx, target, owner, repo, runID, log, attempt, tier, cause, 0)
+		p.rerunUntilAccepted(rctx, target, owner, repo, runID, log, attempt, tier, cause, rerunDisruption{})
 	}()
 	return done
 }
@@ -200,10 +208,10 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 // The run is read before the retry delay. For a disruption detected live, the attempt
 // it reports is the one the job ran in: GitHub cannot conclude the run, and so cannot
 // accept another disruption's re-run, until this job has concluded too. One detected
-// late — the vanished arm, or a scan after a restart — can read an attempt another
-// re-run already started, and then reserves against that one; the design's already_rerun
-// check, not built, is what would close it. A disruption that already knows its attempt
-// (the abandoned arm's) still takes the read, for the futility checks.
+// late, by the vanished arm or a scan after a restart, can read an attempt another
+// re-run already started, which the already_rerun check tells by when the job was
+// assigned. A disruption that already knows its attempt (the abandoned arm's) still
+// takes the read, for the futility checks.
 //
 // The futility checks (futileRerun, Q1181) run on that read, before the reservation, so
 // a re-run they withhold spends no slot. The reservation then resumes, merges, refuses
@@ -251,12 +259,12 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 			p.recordRerunFailure(target, runID, cause, reason, err)
 			return
 		}
+		// A futile re-run is withheld here, before the reservation, so it spends no slot.
+		if p.futileRerun(rctx, target, owner, repo, runID, cause, run, &d, log) {
+			return
+		}
 		if d.failedAttempt == 0 {
 			d.failedAttempt = run.attempt
-		}
-		// A futile re-run is withheld here, before the reservation, so it spends no slot.
-		if p.futileRerun(rctx, target, owner, repo, runID, cause, run, log) {
-			return
 		}
 
 		var park *pendingRerun
@@ -300,7 +308,7 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 			return
 		case <-time.After(retryDelay):
 		}
-		p.rerunUntilAccepted(rctx, target, owner, repo, runID, log, number, tier, cause, d.failedAttempt)
+		p.rerunUntilAccepted(rctx, target, owner, repo, runID, log, number, tier, cause, d)
 	}()
 	return done
 }
@@ -363,14 +371,14 @@ func (p *Provisioner) recordRetryStarted(target Target, runID string, log *slog.
 // budget), so a re-run that never lands is surfaced to the operator via the
 // EvictionRerunFailures counter and an owner Event rather than retried further.
 //
-// failedAttempt, where non-zero, is the run attempt the job failed in, and a pass that
-// finds the run already past it stands down (errRerunCovered, the scale-set tier only).
-func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, attempt int, tier, cause string, failedAttempt int) {
+// d.failedAttempt, where non-zero, is the run attempt the job failed in, and a pass that
+// finds the job re-run past it stands down (errRerunCovered, the scale-set tier only).
+func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, attempt int, tier, cause string, d rerunDisruption) {
 	windowC, stopWindow := p.startRerunWindow()
 	defer stopWindow()
 
 	for call := 1; ; call++ {
-		err := p.attemptRerun(ctx, target, owner, repo, runID, log, tier, cause, failedAttempt)
+		err := p.attemptRerun(ctx, target, owner, repo, runID, log, tier, cause, d)
 		switch {
 		case err == nil:
 			log.Info("disruption auto-retry triggered",
@@ -378,12 +386,17 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 			return
 		case errors.Is(err, errRerunCovered):
 			log.Info("the run was already re-run past the attempt this job failed in; no further re-run",
-				"runID", runID, "runAttempt", failedAttempt, "cause", cause, "rerunCalls", call)
+				"runID", runID, "runAttempt", d.failedAttempt, "cause", cause, "rerunCalls", call)
 			return
 		case errors.Is(err, errRunCancelled):
 			log.Info("the run was cancelled at GitHub, so the disruption auto-retry stands down rather than undoing the cancel",
 				"runID", runID, "attempt", attempt, "cause", cause, "rerunCalls", call)
 			p.recordRerunWithheld(target, runID, cause, rerunWithheldReasonRunCancelled, runCancelledMessage(runID, cause))
+			return
+		case errors.Is(err, errRunSucceeded):
+			log.Info("the run concluded success at GitHub, which refuses to re-run it; the disruption auto-retry stands down",
+				"runID", runID, "attempt", attempt, "cause", cause, "rerunCalls", call)
+			p.recordRerunWithheld(target, runID, cause, rerunWithheldReasonRunSucceeded, runSucceededMessage(runID, cause))
 			return
 		case !errors.Is(err, errRunNotConcluded) && !errors.Is(err, errRunConclusionUnreadable):
 			log.Error("disruption auto-retry failed; manual rerun may be required",
@@ -447,20 +460,28 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 // and the abandoned arm's re-run would merge into that withheld one (Q1182).
 //
 // The scale-set tier reads the run on every pass, whatever the cause, for the coverage
-// check: a run already past failedAttempt has been re-run for this job (errRerunCovered).
+// check: a run already past d.failedAttempt has been re-run for this job
+// (errRerunCovered), unless its jobs show that attempt did not re-run this one.
 // It takes the cancel check on every cause too, because selfCancelledAttempt tells GAG's
 // own cancel from anyone else's, so a user's or a concurrency group's cancel is honoured
-// on every arm without an exemption for the abandoned one (Q1181).
-func (p *Provisioner) attemptRerun(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, tier, cause string, failedAttempt int) error {
-	covering := failedAttempt > 0
+// on every arm without an exemption for the abandoned one (Q1181). A success conclusion
+// stands it down on every cause as well, since the call would only be refused.
+func (p *Provisioner) attemptRerun(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, tier, cause string, d rerunDisruption) error {
+	covering := d.failedAttempt > 0
 	checksCancel := cause == recoveryCauseDeletion || tier == evictionTierScaleSet
 	if (covering || checksCancel) && p.canReadRun(owner, repo) {
 		run, err := p.runConclusion(ctx, owner, repo, runID)
 		if err != nil {
 			return fmt.Errorf("read the run's conclusion before re-running it: %w", err)
 		}
-		if covering && run.attempt > failedAttempt {
-			return errRerunCovered
+		if covering && run.attempt > d.failedAttempt {
+			verdict, err := p.jobRerunSince(ctx, owner, repo, runID, run, d)
+			if errors.Is(err, errRunConclusionUnreadable) {
+				return err
+			}
+			if verdict != jobNotRerun {
+				return errRerunCovered
+			}
 		}
 		if checksCancel && run.status == runStatusCompleted && run.conclusion == runConclusionCancelled {
 			if tier != evictionTierScaleSet || run.attempt == 0 ||
@@ -469,6 +490,9 @@ func (p *Provisioner) attemptRerun(ctx context.Context, target Target, owner, re
 			}
 			log.Info("the run was cancelled by GAG's own force-cancel of this attempt, not by a user; re-running it",
 				"runID", runID, "runAttempt", run.attempt)
+		}
+		if tier == evictionTierScaleSet && run.status == runStatusCompleted && run.conclusion == runConclusionSuccess {
+			return errRunSucceeded
 		}
 	}
 	return p.rerunFailedJobs(ctx, owner, repo, runID, log)
@@ -487,9 +511,9 @@ func (p *Provisioner) canReadRun(owner, repo string) bool {
 //
 // Its reasons: run_cancelled from attemptRerun's conclusion check (every cause on the
 // scale-set tier, deletion only on the classic) and from the scale-set abandoned arm's
-// read before its force-cancel (Q1232), own_limit from withholdOwnLimitRerun
-// (eviction only, Q1177), and the scale-set tier's pre-reservation futility checks
-// (futileRerun, Q1181).
+// read before its force-cancel (Q1232), run_succeeded from attemptRerun's conclusion
+// check (scale-set tier only), own_limit from withholdOwnLimitRerun (eviction only,
+// Q1177), and the scale-set tier's pre-reservation futility checks (futileRerun, Q1181).
 func (p *Provisioner) recordRerunWithheld(target Target, runID, cause, reason, message string) {
 	key := target.Key()
 	if p.Metrics != nil && p.Metrics.EvictionRerunWithheld != nil {
@@ -681,9 +705,11 @@ type runState struct {
 	attempt            int
 	workflowID         int64
 	createdAt          time.Time
-	event              string
-	headBranch         string
-	headSHA            string
+	// startedAt is run_started_at: when attempt started, equal to createdAt on attempt 1.
+	startedAt  time.Time
+	event      string
+	headBranch string
+	headSHA    string
 	// headRepo is head_repository.full_name: a fork's for a pull request from one.
 	headRepo string
 }
@@ -735,6 +761,7 @@ func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID stri
 		RunAttempt     int       `json:"run_attempt"`
 		WorkflowID     int64     `json:"workflow_id"`
 		CreatedAt      time.Time `json:"created_at"`
+		RunStartedAt   time.Time `json:"run_started_at"`
 		Event          string    `json:"event"`
 		HeadBranch     string    `json:"head_branch"`
 		HeadSHA        string    `json:"head_sha"`
@@ -747,7 +774,7 @@ func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID stri
 	}
 	return runState{
 		status: run.Status, conclusion: run.Conclusion, attempt: run.RunAttempt,
-		workflowID: run.WorkflowID, createdAt: run.CreatedAt, event: run.Event,
+		workflowID: run.WorkflowID, createdAt: run.CreatedAt, startedAt: run.RunStartedAt, event: run.Event,
 		headBranch: run.HeadBranch, headSHA: run.HeadSHA, headRepo: run.HeadRepository.FullName,
 	}, nil
 }

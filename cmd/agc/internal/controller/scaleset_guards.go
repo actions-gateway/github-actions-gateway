@@ -228,6 +228,7 @@ func orphanedWorkers(inFlight []scalesetlistener.InFlightJob) []provisioner.Orph
 			Repository: j.Repository,
 			RunID:      j.RunID,
 			Started:    j.Started,
+			AssignedAt: j.ProvisionedAt,
 		})
 	}
 	return out

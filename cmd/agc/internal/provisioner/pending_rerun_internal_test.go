@@ -202,6 +202,56 @@ func TestPendingRerun_SurvivesARestart(t *testing.T) {
 	assert.Empty(t, after.pendingSets.snapshot(), "adoption is once per process; an emptied set is not re-added")
 }
 
+// TestPendingRerun_SurvivesAnUnrelatedJobsReRun: somebody re-running another job of the
+// run moves its attempt without re-running the parked one, so the entry waits for the new
+// attempt to conclude and is then released; a re-run of the job itself drops it.
+func TestPendingRerun_SurvivesAnUnrelatedJobsReRun(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		jobs         []map[string]any
+		jobsStatus   int
+		wantReruns   int64
+		wantReleased int
+	}{
+		{"another job was re-run", []map[string]any{
+			ranInAttempt(time.Now(), "lint", "gpu-new", "success"), carriedJob(time.Now(), "build", "gpu-old", "failure")}, 0, 1, 1},
+		{"this job was re-run", []map[string]any{ranInAttempt(time.Now(), "build", "gpu-new", "failure")}, 0, 0, 0},
+		{"the list is refused", nil, http.StatusForbidden, 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			concluded := false
+			api := &futilityAPI{jobs: tc.jobs, jobsStatus: tc.jobsStatus, runAt: func(call int) map[string]any {
+				switch {
+				case call == 1:
+					return failedRun(time.Now(), map[string]any{"status": "in_progress", "conclusion": nil})
+				case !concluded:
+					return secondAttempt(time.Now(), map[string]any{"status": "in_progress", "conclusion": nil})
+				}
+				return secondAttempt(time.Now(), nil)
+			}}
+			p, target := futilityFixture(t, api)
+			target.spec = &ResolvedSpec{MaxEvictionRetries: 2}
+			clock := newTestClock()
+			p.now = clock.now
+			parkOOM(p, target, "pod-a")
+
+			clock.advance(time.Minute)
+			sweepPendingAndWait(t, p, ctx, 0)
+			require.Zero(t, api.reruns.Load(), "the new attempt is still running")
+			concluded = true
+			clock.advance(time.Minute)
+			sweepPendingAndWait(t, p, ctx, tc.wantReleased)
+
+			assert.Equal(t, tc.wantReruns, api.reruns.Load())
+			l, _, err := p.readRerunLedger(ctx, target)
+			require.NoError(t, err)
+			assert.Empty(t, l.Pending)
+			assert.Equal(t, 1, l.Reruns["4242"].Count, "the release resumes the parked slot")
+		})
+	}
+}
+
 // TestPendingRerun_ExpiresAfterADay: a run that never concludes is reported
 // run_never_concluded and its entry dropped, rather than polled forever.
 func TestPendingRerun_ExpiresAfterADay(t *testing.T) {

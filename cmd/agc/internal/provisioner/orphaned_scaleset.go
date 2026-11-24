@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -81,6 +82,8 @@ type OrphanedWorker struct {
 	RunID      string
 	// Started is the listener's record that some runner took the job (Q1195).
 	Started bool
+	// AssignedAt is when the listener provisioned the job's worker.
+	AssignedAt time.Time
 }
 
 // orphanScanState records which owners have already had their stored in-flight set
@@ -184,7 +187,7 @@ func (p *Provisioner) RecoverOrphanedScaleSetWorkers(ctx context.Context, target
 		recoveries = append(recoveries,
 			p.handleEviction(ctx, target, w.Owner, w.Repository, w.RunID, podLog,
 				spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, recoveryCauseVanished,
-				rerunDisruption{key: podName}))
+				rerunDisruption{key: podName, assignedAt: w.AssignedAt}))
 	}
 
 	done := make(chan struct{})

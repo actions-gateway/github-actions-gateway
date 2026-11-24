@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -27,6 +28,39 @@ import (
 // worker pod recoveryFixture's helpers name.
 func orphan(jobID string) OrphanedWorker {
 	return OrphanedWorker{JobID: jobID, Owner: "myorg", Repository: "myrepo", RunID: "4242"}
+}
+
+// TestRecoverOrphanedScaleSetWorkers_AHumansReRunIsLeftAlone: while the AGC was down
+// somebody re-ran the run its record names, so the job is not re-run again. The record's
+// assignment time is what dates the job to the earlier attempt.
+func TestRecoverOrphanedScaleSetWorkers_AHumansReRunIsLeftAlone(t *testing.T) {
+	now := time.Now()
+	for _, tc := range []struct {
+		name       string
+		assignedAt time.Time
+		wantReruns int64
+	}{
+		{"assigned before the re-run", now.Add(-time.Hour), 0},
+		{"assigned by the re-run", now.Add(-9 * time.Minute), 1},
+		{"a record with no assignment time", time.Time{}, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := &futilityAPI{run: secondAttempt(now, nil), jobs: []map[string]any{ranInAttempt(now, "build", "gpu-new", "failure")}}
+			p, target := futilityFixture(t, api)
+			target.spec = &ResolvedSpec{MaxEvictionRetries: 2}
+			w := orphan("job1")
+			w.AssignedAt = tc.assignedAt
+
+			done, err := p.RecoverOrphanedScaleSetWorkers(context.Background(), target, []OrphanedWorker{w})
+			require.NoError(t, err)
+			<-done
+
+			assert.Equal(t, tc.wantReruns, api.reruns.Load())
+			if tc.wantReruns == 0 {
+				assertWithheld(t, p, target, api, recoveryCauseVanished, rerunWithheldReasonAlreadyRerun, false)
+			}
+		})
+	}
 }
 
 // TestRecoverOrphanedScaleSetWorkers_RerunsAWorkerThatIsGone is the headline behaviour:

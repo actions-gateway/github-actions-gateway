@@ -312,7 +312,7 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 		}
 		log.Warn("could not read a parked re-run's run; will retry", "runID", e.RunID, "error", err)
 		return nil, false
-	case run.attempt > e.FailedAttempt:
+	case run.attempt > e.FailedAttempt && !p.stillFailedSince(ctx, owner, repo, run, e, log):
 		if !p.pendingSets.claimRelease(entry) {
 			return nil, false
 		}
@@ -344,6 +344,20 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 		p.pendingSets.settle(entry, p.dropPendingRerun(context.WithoutCancel(ctx), target, key, e.Disruption, log))
 	}()
 	return done, true
+}
+
+// stillFailedSince reports whether run, past the attempt e's job failed in, did not
+// re-run that job, so e still has its re-run to make. An answer a later poll could change
+// keeps the entry; any other unknown drops it, since a second re-run of one attempt is
+// the worse outcome.
+func (p *Provisioner) stillFailedSince(ctx context.Context, owner, repo string, run runState, e pendingRerun, log *slog.Logger) bool {
+	rctx, cancel := context.WithTimeout(ctx, evictionRecoveryAPIBudget)
+	defer cancel()
+	verdict, err := p.jobRerunSince(rctx, owner, repo, e.RunID, run, rerunDisruption{job: e.Job})
+	if err != nil {
+		log.Warn("could not list the latest attempt's jobs for a parked re-run", "runID", e.RunID, "error", err)
+	}
+	return verdict == jobNotRerun || errors.Is(err, errRunConclusionUnreadable)
 }
 
 // dropPendingRerun deletes the entry at key where it is still disruption's, reporting

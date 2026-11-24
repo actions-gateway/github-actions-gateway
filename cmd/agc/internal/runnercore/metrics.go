@@ -52,9 +52,11 @@ type Metrics struct {
 	//     delete its pod, which supplies the deletion mark that arm keys on. It usually
 	//     accompanies a spent budget slot: the reservation is taken at detection, minutes
 	//     before GitHub concludes the run, so the conclusion cannot be read first.
-	//   - attempt_limit, run_too_old, superseded (scale-set only, Q1181): a re-run GitHub
-	//     would refuse or a newer commit has made pointless. Decided on the run read
-	//     before the reservation, so no slot is spent.
+	//   - already_rerun, run_succeeded, attempt_limit, run_too_old, superseded,
+	//     worker_unstartable (scale-set only, Q1181, Q1320): a re-run somebody already
+	//     made, GitHub would refuse, a newer commit has made pointless, or no worker could
+	//     start for. Decided on the run read before the reservation, so no slot is spent,
+	//     except a success seen in the re-run loop.
 	//   - own_limit (cause eviction, Q1177): the kubelet evicted the worker for exceeding
 	//     its own ephemeral-storage or emptyDir limit, which a re-run with the same limit
 	//     repeats. Decided at detection, so no slot is spent. With cause oom (scale-set
@@ -187,7 +189,7 @@ func NewMetrics() *Metrics {
 
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_rerun_withheld_total",
-			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom) and reason (run_cancelled: the run concluded cancelled by someone other than GAG, so a re-run would undo that cancel — Q1181, no operator action needed; own_limit: cause eviction, the kubelet evicted the worker for exceeding its own ephemeral-storage or emptyDir limit, which a re-run repeats — Q1177, with no slot spent, and the fix is a higher limit, or with cause oom, Q1183, a runner killed at a memory limit no sizing profile can raise; same_class_again, breaker_open: cause oom, Q1183, the job was killed again after a retry raised its limit, or more than 10 runs were re-run for it within 10 minutes; attempt_limit, run_too_old, superseded: Q1181, decided before the budget is reserved so no slot is spent — the run is past GitHub's 50 re-runs, older than its 30-day re-run window, or a newer commit's run of the same workflow, event and branch has started).",
+			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom) and reason (run_cancelled: the run concluded cancelled by someone other than GAG, so a re-run would undo that cancel — Q1181, no operator action needed; own_limit: cause eviction, the kubelet evicted the worker for exceeding its own ephemeral-storage or emptyDir limit, which a re-run repeats — Q1177, with no slot spent, and the fix is a higher limit, or with cause oom, Q1183, a runner killed at a memory limit no sizing profile can raise; same_class_again, breaker_open: cause oom, Q1183, the job was killed again after a retry raised its limit, or more than 10 runs were re-run for it within 10 minutes; attempt_limit, run_too_old, superseded: Q1181, decided before the budget is reserved so no slot is spent — the run is past GitHub's 50 re-runs, older than its 30-day re-run window, or a newer commit's run of the same workflow, event and branch has started; already_rerun, run_succeeded, worker_unstartable: Q1320, decided there too — a later attempt already re-ran the job, the run concluded success, which GitHub refuses to re-run, or the set's workers are placed and fail to start, the one of the three needing action: fix the image or its pull credentials, then re-run by hand).",
 		}, []string{"namespace", "runner_group", "cause", "reason"}),
 
 		AutoRetryPaused: prometheus.NewGaugeVec(prometheus.GaugeOpts{

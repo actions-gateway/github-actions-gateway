@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,7 +24,8 @@ import (
 // disruption through handleEviction against a fake GitHub and asserts both halves of a
 // withhold: no re-run call, and no budget slot spent.
 
-// futilityAPI fakes the run GET, the workflow-runs list and the rerun POST.
+// futilityAPI fakes the run GET, the workflow-runs list, an attempt's job list and the
+// rerun POST, which it refuses for a successful run as GitHub does.
 type futilityAPI struct {
 	mu sync.Mutex
 	// run is the run GET's body; runAt, where set, replaces it per GET by call number.
@@ -32,9 +34,16 @@ type futilityAPI struct {
 	// newest is the list's only run, nil for an empty list; listStatus overrides 200.
 	newest     map[string]any
 	listStatus int
+	// jobs is the attempt's job list; jobsStatus overrides 200, and jobsStatusAt replaces
+	// it per call by call number. jobPage, where set, serves the list in pages that size.
+	jobs         []map[string]any
+	jobsStatus   int
+	jobsStatusAt func(call int) int
+	jobPage      int
 
-	gets, lists, reruns atomic.Int64
-	lastListQuery       string
+	gets, lists, jobLists, reruns atomic.Int64
+	lastJobsPath                  string
+	lastListQuery                 string
 }
 
 func (a *futilityAPI) server(t *testing.T) *httptest.Server {
@@ -45,7 +54,29 @@ func (a *futilityAPI) server(t *testing.T) *httptest.Server {
 		switch {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/rerun-failed-jobs"):
 			a.reruns.Add(1)
+			if a.run["conclusion"] == "success" {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
 			w.WriteHeader(http.StatusCreated)
+		case strings.HasSuffix(r.URL.Path, "/jobs"):
+			a.lastJobsPath = r.URL.Path
+			status := a.jobsStatus
+			if a.jobsStatusAt != nil {
+				status = a.jobsStatusAt(int(a.jobLists.Load()) + 1)
+			}
+			a.jobLists.Add(1)
+			if status != 0 {
+				w.WriteHeader(status)
+				return
+			}
+			page := a.jobs
+			if a.jobPage > 0 {
+				n, _ := strconv.Atoi(r.URL.Query().Get("page"))
+				from := min((n-1)*a.jobPage, len(a.jobs))
+				page = a.jobs[from:min(from+a.jobPage, len(a.jobs))]
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"total_count": len(a.jobs), "jobs": page})
 		case strings.Contains(r.URL.Path, "/actions/workflows/"):
 			a.lists.Add(1)
 			a.lastListQuery = r.URL.RawQuery
@@ -181,6 +212,240 @@ func TestFutileRerun_ReRunsAtEachBoundary(t *testing.T) {
 			assert.Equal(t, int64(1), api.reruns.Load())
 			assert.Equal(t, tc.wantLists, api.lists.Load())
 			assert.NotContains(t, target.events, "EvictionRerunWithheld")
+		})
+	}
+}
+
+// secondAttempt is failedRun re-run ten minutes ago, for a job assigned an hour ago.
+func secondAttempt(now time.Time, overrides map[string]any) map[string]any {
+	run := failedRun(now, map[string]any{"run_attempt": 2, "run_started_at": now.Add(-10 * time.Minute).Format(time.RFC3339)})
+	for k, v := range overrides {
+		run[k] = v
+	}
+	return run
+}
+
+// ranInAttempt is a job secondAttempt ran, and carriedJob one it did not, in the shapes
+// GitHub lists them: a carried job has the new attempt's created_at and the old one's
+// runner and completed_at (run 45310657002, 2026-11-23).
+func ranInAttempt(now time.Time, name, runner, conclusion string) map[string]any {
+	return map[string]any{"name": name, "runner_name": runner, "conclusion": conclusion, "run_attempt": 2,
+		"created_at":   now.Add(-10 * time.Minute).Format(time.RFC3339),
+		"completed_at": now.Add(-5 * time.Minute).Format(time.RFC3339)}
+}
+
+func carriedJob(now time.Time, name, runner, conclusion string) map[string]any {
+	return map[string]any{"name": name, "runner_name": runner, "conclusion": conclusion, "run_attempt": 2,
+		"created_at":   now.Add(-10 * time.Minute).Format(time.RFC3339),
+		"completed_at": now.Add(-50 * time.Minute).Format(time.RFC3339)}
+}
+
+// TestFutileRerun_AlreadyRerun covers a run that moved past the attempt the job failed in:
+// the re-run is withheld only where the latest attempt's jobs show the job has one after
+// it, whatever the run's attempt says.
+func TestFutileRerun_AlreadyRerun(t *testing.T) {
+	now := time.Now()
+	lost := rerunDisruption{key: "pod-a", job: "build", runner: "gpu-old", assignedAt: now.Add(-time.Hour)}
+	for _, tc := range []struct {
+		name string
+		d    rerunDisruption
+		jobs []map[string]any
+	}{
+		{"the job ran again on another runner", lost, []map[string]any{
+			ranInAttempt(now, "build", "gpu-new", "failure"), carriedJob(now, "lint", "gpu-x", "success")}},
+		{"the job is queued again, named differently by the jobs API", lost, []map[string]any{
+			{"name": "caller / build", "runner_name": nil, "conclusion": nil, "created_at": now.Format(time.RFC3339), "completed_at": nil},
+			carriedJob(now, "lint", "gpu-x", "failure")}},
+		{"the vanished arm, which knows no name or runner, and every failure was re-run",
+			rerunDisruption{key: "pod-a", assignedAt: now.Add(-time.Hour)},
+			[]map[string]any{ranInAttempt(now, "build", "gpu-new", "failure"), carriedJob(now, "lint", "gpu-x", "success")}},
+		{"a known attempt, and the job ran again while another's failure was carried",
+			rerunDisruption{key: "pod-a", job: "build", failedAttempt: 1},
+			[]map[string]any{ranInAttempt(now, "build", "gpu-new", "failure"), carriedJob(now, "lint", "gpu-x", "failure")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := &futilityAPI{run: secondAttempt(now, nil), jobs: tc.jobs}
+			p, target := futilityFixture(t, api)
+
+			evictScaleSet(p, target, "4242", 2, recoveryCauseVanished, tc.d)
+
+			assertWithheld(t, p, target, api, recoveryCauseVanished, rerunWithheldReasonAlreadyRerun, false)
+			assert.Equal(t, "/repos/myorg/myrepo/actions/runs/4242/attempts/2/jobs", api.lastJobsPath)
+		})
+	}
+}
+
+// TestFutileRerun_ReRunsAJobTheLaterAttemptDidNotRun is the other side: somebody re-ran
+// an unrelated job, or nothing says the job was re-run, and the re-run goes ahead.
+func TestFutileRerun_ReRunsAJobTheLaterAttemptDidNotRun(t *testing.T) {
+	now := time.Now()
+	lost := rerunDisruption{key: "pod-a", job: "build", runner: "gpu-old", assignedAt: now.Add(-time.Hour)}
+	unrelated := []map[string]any{ranInAttempt(now, "lint", "gpu-new", "success"), carriedJob(now, "build", "gpu-old", "failure")}
+	for _, tc := range []struct {
+		name       string
+		d          rerunDisruption
+		run        map[string]any
+		jobs       []map[string]any
+		jobsStatus int
+		jobPage    int
+		wantLists  int64
+	}{
+		{name: "an unrelated job was re-run", d: lost, jobs: unrelated, wantLists: 1},
+		{name: "an unrelated job was re-run, found on the second page", d: lost, jobs: unrelated, jobPage: 1, wantLists: 2},
+		{name: "an unrelated job was re-run, and the attempt is known", d: rerunDisruption{key: "pod-a", job: "build", failedAttempt: 1},
+			jobs: unrelated, wantLists: 1},
+		{name: "an idle runner took the job in the latest attempt", d: lost,
+			jobs: []map[string]any{ranInAttempt(now, "build", "gpu-old", "failure")}, wantLists: 1},
+		{name: "two jobs share the name, and one failure was carried", d: rerunDisruption{key: "pod-a", job: "build", assignedAt: now.Add(-time.Hour)},
+			jobs: []map[string]any{ranInAttempt(now, "build", "gpu-new", "success"), carriedJob(now, "build", "gpu-old", "failure")}, wantLists: 1},
+		{name: "the vanished arm, with a failure carried", d: rerunDisruption{key: "pod-a", assignedAt: now.Add(-time.Hour)},
+			jobs: unrelated, wantLists: 1},
+		{name: "an unreadable list does not withhold", d: lost, jobsStatus: http.StatusInternalServerError, wantLists: 1},
+		{name: "a forbidden list does not withhold", d: lost, jobsStatus: http.StatusForbidden, wantLists: 1},
+		{name: "an empty list does not withhold", d: lost, wantLists: 1},
+		{name: "the attempt did not move, so no list is read", d: lost, run: failedRun(now, nil),
+			jobs: []map[string]any{ranInAttempt(now, "build", "gpu-new", "failure")}},
+		{name: "the attempt started before the job was assigned", d: rerunDisruption{key: "pod-a", job: "build", runner: "gpu-old", assignedAt: now.Add(-9 * time.Minute)},
+			jobs: []map[string]any{ranInAttempt(now, "build", "gpu-new", "failure")}},
+		{name: "the attempt started within the clock skew of the assignment", d: rerunDisruption{key: "pod-a", job: "build", runner: "gpu-old", assignedAt: now.Add(-10*time.Minute - attemptStartSkew + 2*time.Second)},
+			jobs: []map[string]any{ranInAttempt(now, "build", "gpu-new", "failure")}},
+		{name: "GitHub sent no run_started_at", d: lost, run: secondAttempt(now, map[string]any{"run_started_at": nil}),
+			jobs: []map[string]any{ranInAttempt(now, "build", "gpu-new", "failure")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			run := tc.run
+			if run == nil {
+				run = secondAttempt(now, nil)
+			}
+			api := &futilityAPI{run: run, jobs: tc.jobs, jobsStatus: tc.jobsStatus, jobPage: tc.jobPage}
+			p, target := futilityFixture(t, api)
+
+			evictScaleSet(p, target, "4242", 2, recoveryCauseEviction, tc.d)
+
+			assert.Equal(t, int64(1), api.reruns.Load())
+			assert.Equal(t, tc.wantLists, api.jobLists.Load())
+			assert.NotContains(t, target.events, "EvictionRerunWithheld")
+			l, _, err := p.readRerunLedger(context.Background(), target)
+			require.NoError(t, err)
+			require.Contains(t, l.Reruns, "4242")
+			assert.Contains(t, l.Reruns["4242"].Attempts, strconv.Itoa(run["run_attempt"].(int)),
+				"the slot is keyed by the attempt the re-run starts from")
+		})
+	}
+}
+
+// TestFutileRerun_AnUndecidedMoveDoesNotReRunAKnownAttempt: the pre-reservation check
+// decides nothing on a list it cannot read, but an arm that knows its attempt still
+// stands down in the loop rather than risk a second re-run of it.
+func TestFutileRerun_AnUndecidedMoveDoesNotReRunAKnownAttempt(t *testing.T) {
+	api := &futilityAPI{run: secondAttempt(time.Now(), nil), jobsStatus: http.StatusForbidden}
+	p, target := futilityFixture(t, api)
+
+	evictScaleSet(p, target, "4242", 2, recoveryCauseAbandoned, rerunDisruption{key: "pod-a", job: "build", failedAttempt: 1})
+
+	assert.Equal(t, int64(0), api.reruns.Load())
+	assert.NotContains(t, target.events, "EvictionRerunWithheld")
+	assert.NotContains(t, target.events, "EvictionRerunFailed")
+}
+
+// TestFutileRerun_TheLoopAsksAboutTheJobToo covers a run re-run while the recovery waits
+// for GitHub to accept its own: an unrelated job's re-run does not cover this one, and a
+// list GitHub fails to serve is asked for again.
+func TestFutileRerun_TheLoopAsksAboutTheJobToo(t *testing.T) {
+	now := time.Now()
+	lost := rerunDisruption{key: "pod-a", job: "build", runner: "gpu-old", assignedAt: now.Add(-time.Hour)}
+	for _, tc := range []struct {
+		name       string
+		jobs       []map[string]any
+		wantReruns int64
+	}{
+		{"an unrelated job was re-run", []map[string]any{ranInAttempt(now, "lint", "gpu-new", "success"), carriedJob(now, "build", "gpu-old", "failure")}, 1},
+		{"the job was re-run", []map[string]any{ranInAttempt(now, "build", "gpu-new", "failure")}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := &futilityAPI{
+				runAt: func(call int) map[string]any {
+					if call == 1 {
+						return failedRun(now, nil)
+					}
+					return secondAttempt(now, nil)
+				},
+				jobs: tc.jobs,
+				jobsStatusAt: func(call int) int {
+					if call == 1 {
+						return http.StatusBadGateway
+					}
+					return 0
+				},
+			}
+			p, target := futilityFixture(t, api)
+
+			evictScaleSet(p, target, "4242", 2, recoveryCauseEviction, lost)
+
+			assert.Equal(t, tc.wantReruns, api.reruns.Load())
+			assert.Equal(t, int64(2), api.jobLists.Load())
+			assert.NotContains(t, target.events, "EvictionRerunFailed")
+		})
+	}
+}
+
+// TestFutileRerun_RunSucceeded covers both reads: a run already successful when it is
+// detected spends no slot, and one that succeeds while the recovery waits makes no call.
+func TestFutileRerun_RunSucceeded(t *testing.T) {
+	now := time.Now()
+	succeeded := failedRun(now, map[string]any{"conclusion": "success"})
+
+	t.Run("at detection", func(t *testing.T) {
+		api := &futilityAPI{run: succeeded}
+		p, target := futilityFixture(t, api)
+		evictScaleSet(p, target, "4242", 2, recoveryCauseVanished, rerunDisruption{key: "pod-a"})
+		assertWithheld(t, p, target, api, recoveryCauseVanished, rerunWithheldReasonRunSucceeded, false)
+		assert.NotContains(t, target.events, "EvictionRerunFailed")
+	})
+	t.Run("while waiting", func(t *testing.T) {
+		api := &futilityAPI{run: succeeded, runAt: func(call int) map[string]any {
+			if call == 1 {
+				return failedRun(now, map[string]any{"status": "in_progress", "conclusion": nil})
+			}
+			return succeeded
+		}}
+		p, target := futilityFixture(t, api)
+		evictScaleSet(p, target, "4242", 2, recoveryCauseEviction, rerunDisruption{key: "pod-a"})
+		assertWithheld(t, p, target, api, recoveryCauseEviction, rerunWithheldReasonRunSucceeded, true)
+		assert.NotContains(t, target.events, "EvictionRerunFailed")
+	})
+}
+
+// startupTarget is a stubTarget whose set answers the startup verdict.
+type startupTarget struct {
+	*stubTarget
+	failing bool
+}
+
+func (s startupTarget) WorkersFailingToStart(context.Context) (string, bool) {
+	return "1 worker pod(s) were placed on a node but could not be started", s.failing
+}
+
+func TestFutileRerun_WorkerUnstartable(t *testing.T) {
+	for _, failing := range []bool{true, false} {
+		t.Run("failing="+strconv.FormatBool(failing), func(t *testing.T) {
+			api := &futilityAPI{run: failedRun(time.Now(), map[string]any{"conclusion": "cancelled", "run_attempt": 3})}
+			p, target := futilityFixture(t, api)
+			require.NoError(t, p.recordSelfCancel(context.Background(), target, "4242", 3))
+
+			evictScaleSet(p, startupTarget{target, failing}, "4242", 2, recoveryCauseAbandoned, rerunDisruption{key: "pod-a", failedAttempt: 3})
+
+			if !failing {
+				assert.Equal(t, int64(1), api.reruns.Load())
+				assert.NotContains(t, target.events, "EvictionRerunWithheld")
+				return
+			}
+			assert.Equal(t, int64(0), api.reruns.Load())
+			assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunWithheld.WithLabelValues(
+				"team-a", "gpu", recoveryCauseAbandoned, rerunWithheldReasonWorkerUnstartable)))
+			assert.Contains(t, target.events, "EvictionRerunWithheld")
+			assert.Equal(t, float64(0), testutil.ToFloat64(p.Metrics.EvictionRetries.WithLabelValues(
+				"team-a", "gpu", recoveryCauseAbandoned)), "no slot is spent")
 		})
 	}
 }

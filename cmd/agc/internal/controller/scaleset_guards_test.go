@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
@@ -131,9 +132,10 @@ func TestRunnerSetTarget_InFlightJobsReadsTheListenersRecord(t *testing.T) {
 	rs := testRunnerSet()
 	c := fake.NewClientBuilder().WithScheme(guardScheme()).Build()
 	r := &RunnerSetReconciler{Client: c}
+	assigned := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
 	require.NoError(t, r.scaleSetGuardStore(rs).Save(ctx, scalesetlistener.GuardState{
 		InFlight: []scalesetlistener.InFlightJob{
-			{JobID: "job-b", Owner: "myorg", Repository: "repo-b", RunID: "222"},
+			{JobID: "job-b", Owner: "myorg", Repository: "repo-b", RunID: "222", ProvisionedAt: assigned},
 			{JobID: "job-c", Owner: "myorg", Repository: "repo-c", RunID: "333", Started: true},
 		},
 	}))
@@ -141,7 +143,7 @@ func TestRunnerSetTarget_InFlightJobsReadsTheListenersRecord(t *testing.T) {
 	jobs, err := r.provisionerTarget(rs).InFlightJobs(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, []provisioner.OrphanedWorker{
-		{JobID: "job-b", Owner: "myorg", Repository: "repo-b", RunID: "222"},
+		{JobID: "job-b", Owner: "myorg", Repository: "repo-b", RunID: "222", AssignedAt: assigned},
 		{JobID: "job-c", Owner: "myorg", Repository: "repo-c", RunID: "333", Started: true},
 	}, jobs)
 }
