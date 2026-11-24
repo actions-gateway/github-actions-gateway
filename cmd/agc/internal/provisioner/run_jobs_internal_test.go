@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -434,4 +435,29 @@ func TestPairing_ABatchPairsInArrivalOrder(t *testing.T) {
 		assert.Equal(t, "job-4", f["900/build"].JobID, "a failure after the one that passed is a first one")
 		assert.Equal(t, "job-2-901", f["901/build"].JobID)
 	})
+}
+
+// TestAttemptJobs_WhatALaterReadCouldAnswer: GitHub unreachable or failing is worth a
+// later read, and a refusal is not.
+func TestAttemptJobs_WhatALaterReadCouldAnswer(t *testing.T) {
+	for name, tc := range map[string]struct {
+		gh   *runJobsStub
+		want bool
+	}{
+		"unreachable":    {gh: &runJobsStub{hang: true}, want: true},
+		"a server error": {gh: &runJobsStub{status: http.StatusBadGateway}, want: true},
+		"a refusal":      {gh: &runJobsStub{status: http.StatusForbidden}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				p := flakyProvisioner(nil)
+				tc.gh.serve(p)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				_, err := p.attemptJobs(ctx, "org", "repo", "900", 2)
+				require.Error(t, err)
+				assert.Equal(t, tc.want, errors.Is(err, errRunConclusionUnreadable))
+			})
+		})
+	}
 }
