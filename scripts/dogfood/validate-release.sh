@@ -811,6 +811,29 @@ dragonfly_take() {
 	"dragonfly_${reading}_reading" >"${dir}/${reading}.out" 2>&1 || true
 }
 
+# stop_tree PID — TERM PID and every process descended from it. Each is stopped
+# before its children are listed, so none can fork one the listing misses.
+stop_tree() {
+	local child
+	kill -STOP "$1" 2>/dev/null || return 0
+	for child in $(ps -A -o pid= -o ppid= | awk -v parent="$1" '$2 == parent { print $1 }'); do
+		stop_tree "${child}"
+	done
+	kill -TERM "$1" 2>/dev/null || true
+	kill -CONT "$1" 2>/dev/null || true
+}
+
+# dragonfly_interrupted STATUS PID... — end the gate with STATUS, after the lanes
+# at PID: teardown must not run beside a lane still creating probe pods.
+dragonfly_interrupted() {
+	local status="$1" pid
+	shift
+	trap - INT TERM HUP
+	for pid in "$@"; do stop_tree "${pid}"; done
+	wait "$@" 2>/dev/null || true
+	exit "${status}"
+}
+
 # dragonfly_readings — the readings that make a Dragonfly leg say something
 # about Dragonfly: Phase 3 of the Q539 plan, beside the matrix and the census. Readings, not gates: each records
 # pass, finding or not-taken and the function returns 0 whatever it finds,
@@ -822,28 +845,34 @@ dragonfly_take() {
 # serial: p2p counts the seed's log lines, which the battery's fetches add to
 # and connect's CONNECTs would. At most three probe pods share the e2e tenant,
 # which with its AGC and two workers is its ResourceQuota's six.
+#
+# The traps are what lets Ctrl-C end the gate here: bash starts a background lane
+# with INT ignored, so nothing under it dies of the signal.
 dragonfly_readings() {
 	echo "Dragonfly back-end readings (Q539, Q1160)..."
 	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
 	local dir="${WORKDIR}/dragonfly-readings" reading
-	local -a readings=(battery p2p worker connect) pids=()
+	local lane
+	local -a readings=(battery p2p worker connect) lanes=("battery p2p connect" worker) pids=()
 	rm -rf "${dir}"
 	mkdir -p "${dir}"
-	(for reading in battery p2p connect; do dragonfly_take "${dir}" "${reading}"; done) &
-	pids+=("$!")
-	dragonfly_take "${dir}" worker &
-	pids+=("$!")
 	# The node clients run on the tainted e2e pool alone, where no probe pod can
 	# land, so no probe adds to the log node_p2p counts.
 	if [[ "${E2E_DRAGONFLY_NODES:-0}" == 1 ]]; then
 		readings+=(node_p2p node_worker)
-		dragonfly_take "${dir}" node_p2p &
-		pids+=("$!")
-		dragonfly_take "${dir}" node_worker &
-		pids+=("$!")
+		lanes+=(node_p2p node_worker)
 	fi
+	trap 'dragonfly_interrupted 130 "${pids[@]}"' INT
+	trap 'dragonfly_interrupted 143 "${pids[@]}"' TERM
+	trap 'dragonfly_interrupted 129 "${pids[@]}"' HUP
+	for lane in "${lanes[@]}"; do
+		# Off the gate's output, which a lane would otherwise hold open.
+		(for reading in ${lane}; do dragonfly_take "${dir}" "${reading}"; done) >/dev/null 2>&1 &
+		pids+=("$!")
+	done
 	# By pid: capture_worker_sizing is e2e_leg's to wait for.
 	wait "${pids[@]}" || true
+	trap - INT TERM HUP
 	for reading in "${readings[@]}"; do
 		cat "${dir}/${reading}.out" || true
 		if [[ -s "${dir}/${reading}.jsonl" ]]; then

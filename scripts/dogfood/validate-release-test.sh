@@ -1898,6 +1898,8 @@ concurrent_readings() (
 	local other="$!"
 	dragonfly_readings 2>&1
 	if kill -0 "${other}" 2>/dev/null; then : >"${RDV}/other-job-left"; fi
+	# By name: a suite started in the background inherits INT ignored, which shows here too.
+	trap -p INT TERM HUP | { grep -o dragonfly_interrupted || true; } >"${RDV}/traps-left"
 	: >"${RDV}/readings-returned"
 )
 mkdir -p "${RDV}"
@@ -1919,12 +1921,79 @@ check_contains "battery: its credential fetch writes a kubeconfig of its own" \
 	"/mirror-battery-kubeconfig" "$(grep '^kubeconfig=' <<<"${out}" || true)"
 if [[ -e "${RDV}/other-job-left" ]]; then got=left; else got=waited; fi
 check "readings: another background job is left to its owner" "left" "${got}"
+check "readings: their interrupt traps end with them" "" "$(cat "${RDV}/traps-left")"
 
 # With the stream disabled there is no file to append to, and no reading fails.
 rm -rf "${RDV}" && mkdir -p "${RDV}"
 rc=0
 (RELEASE_READINGS_FILE="" concurrent_readings >/dev/null 2>&1) || rc=$?
 check "readings: a disabled readings file does not fail the gate" "0" "${rc}"
+
+# An interrupt ends the gate while the readings run, with no lane or probe left
+# for teardown to run beside. The gate here is a process of its own, in a session
+# of its own with INT at its default: a background bash ignores INT, and so would
+# everything it starts. Each probe is a foreground child, as kubectl is, and
+# outlives the test unless something stops it.
+export REPO_ROOT
+cat >"${SCRATCH}/interrupted-gate.sh" <<'GATE'
+set -euo pipefail
+shopt -s inherit_errexit
+echo "$$" >"${RDV}/gate"
+source "${REPO_ROOT}/scripts/dogfood/validate-release.sh"
+PROJECT=p ZONE=z CLUSTER=c WORKDIR="${RDV}" SCRIPT_DIR="${RDV}" E2E_DRAGONFLY_NODES=1
+gke_get_credentials_and_verify() { :; }
+kubectl() { [[ "$*" != *hostIP* ]] || echo 10.142.0.16; }
+dragonfly_probe() { bash "${RDV}/probe.sh" "$2"; }
+teardown() {
+	local rc="$?" i pid alive
+	for ((i = 0; i < 50; i++)); do
+		alive=0
+		while read -r pid; do
+			[[ ! "$(ps -o stat= -p "${pid}" || true)" =~ ^[^Z] ]] || alive=1
+		done < <(cat "${RDV}"/probing-*)
+		((alive)) || break
+		sleep 0.1
+	done
+	echo "teardown rc=${rc} probes-alive=${alive}" >>"${RDV}/events"
+}
+trap teardown EXIT
+dragonfly_readings
+echo "carried on" >>"${RDV}/events"
+GATE
+interrupted_readings() { # SIGNAL — signal the gate mid-readings; events and eof land in RDV.
+	local target i
+	rm -rf "${RDV}" && mkdir -p "${RDV}"
+	# shellcheck disable=SC2016 # expanded by the probe's own shell
+	printf '%s\n' 'echo "$$" >"${RDV}/probing-$1"' 'exec sleep 60' >"${RDV}/probe.sh"
+	# shellcheck disable=SC2016 # expanded by the battery's own shell
+	printf '%s\n' 'bash "${RDV}/probe.sh" battery' 'exit 0' >"${RDV}/e2e-mirror-validate.sh"
+	python3 -c 'import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+os.setsid()
+os.execvp("bash", ["bash", sys.argv[1]])' "${SCRATCH}/interrupted-gate.sh" 2>/dev/null | {
+		cat >/dev/null
+		: >"${RDV}/eof"
+	} &
+	rdv_wait probing-battery probing-dragonfly-worker-probe probing-dragonfly-node-worker-probe || true
+	target="$(cat "${RDV}/gate")"
+	# Ctrl-C reaches the terminal's whole process group; kill names one process.
+	if [[ "$1" == INT ]]; then kill -INT -- "-${target}"; else kill "-$1" "${target}"; fi
+	for ((i = 0; i < 100; i++)); do
+		[[ ! -e "${RDV}/eof" ]] || break
+		command sleep 0.1
+	done
+	[[ -e "${RDV}/eof" ]] || echo "output held open" >>"${RDV}/events"
+	kill -KILL -- "-${target}" 2>/dev/null || true
+	wait "$!" 2>/dev/null || true
+}
+for sig in INT:130 TERM:143 HUP:129; do
+	interrupted_readings "${sig%:*}"
+	check "readings: ${sig%:*} ends the gate, and its probes with it" \
+		"teardown rc=${sig#*:} probes-alive=0" "$(paste -sd'|' - <"${RDV}/events")"
+done
+interrupted_readings KILL
+check "readings: a killed gate's lanes do not hold its output open" "closed" \
+	"$(cat "${RDV}/events" 2>/dev/null || echo closed)"
 
 # --- --legs: run one leg alone, record each leg, mark the candidate once all pass ---
 
