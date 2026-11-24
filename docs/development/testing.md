@@ -4136,7 +4136,7 @@ A failed fetch leaves the variable unset and the GMC fetches for itself, as a lo
 What the unit tests drive: `TestIPRangeReconciler_RateLimitedFetchKeepsSeed` (a rate-limited fetch leaves the seeded set served) and `TestIPRangeStore_SeededFromMetaBodyLoads` (the seed's data loads).
 What nothing drives: the quota cannot be spent on demand, so no run has shown a seeded GMC surviving a spent quota end to end.
 The seed has no owner reference, so a seeded GMC whose own fetch is rate-limited would fail the chart uninstall/reinstall check's "has no Deployment owner" assertion; the GMC adopts the copy at startup (`IPRangeStore.AdoptOwner`, Q1386) so the owner does not depend on the quota.
-The check passes if either adoption or a successful fetch's save supplies the owner, so it cannot tell them apart: `TestSeedIPRanges` pins the startup call, `TestIPRangeStore_AdoptOwner` the write, and `TestIPRangeStore_SaveWritesOwner` the save.
+The check passes if either adoption or a successful fetch's save supplies the owner, so it cannot tell them apart: `TestSeedIPRanges` pins `seedIPRanges` adopting (nothing pins `registerControllers` calling it), `TestIPRangeStore_AdoptOwner` the write, and `TestIPRangeStore_SaveWritesOwner` the save.
 
 #### The Calico e2e lane
 
