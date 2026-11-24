@@ -39,6 +39,8 @@ type jobsAPI struct {
 	jobs    []runJob
 	attempt int
 	running bool
+	// past is the jobs of each attempt before the latest, as it ended.
+	past map[int][]runJob
 	// next is the conclusion each re-run job ends with, "success" where unset.
 	next map[string]string
 	// jobsStatus, where set, answers that many lists with its status.
@@ -56,14 +58,16 @@ type jobsAPI struct {
 	calls []string
 }
 
-func (a *jobsAPI) jobID(i int) int { return a.attempt*1000 + i }
-
 func (a *jobsAPI) failed(i int) bool {
 	return a.jobs[i].conclusion != "success" && a.jobs[i].conclusion != "skipped"
 }
 
 // rerun starts the next attempt with the jobs at indexes.
 func (a *jobsAPI) rerun(call string, indexes ...int) {
+	if a.past == nil {
+		a.past = map[int][]runJob{}
+	}
+	a.past[a.attempt] = slices.Clone(a.jobs)
 	a.attempt++
 	a.running = true
 	a.calls = append(a.calls, call)
@@ -139,20 +143,25 @@ func (a *jobsAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			a.rerun(a.jobs[id%1000].runner, id%1000)
 			w.WriteHeader(http.StatusCreated)
 		}
-	case path == fmt.Sprintf("runs/4242/attempts/%d/jobs", a.attempt) && r.Method == http.MethodGet:
+	case strings.HasPrefix(path, "runs/4242/attempts/") && r.Method == http.MethodGet:
+		attempt, _ := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(path, "runs/4242/attempts/"), "/jobs"))
+		jobs := a.jobs
+		if attempt != a.attempt {
+			jobs = a.past[attempt]
+		}
 		if a.jobsFailures > 0 {
 			a.jobsFailures--
 			w.WriteHeader(a.jobsStatus)
 			return
 		}
 		rows := []map[string]any{}
-		for i, j := range a.jobs {
+		for i, j := range jobs {
 			if a.emptyList {
 				break
 			}
 			at := time.Now().Add(-time.Duration(100-10*max(j.ranIn, 1)) * time.Minute)
-			rows = append(rows, map[string]any{"id": a.jobID(i), "name": j.name, "runner_name": j.runner,
-				"conclusion": j.conclusion, "run_attempt": a.attempt, "completed_at": at.Format(time.RFC3339)})
+			rows = append(rows, map[string]any{"id": attempt*1000 + i, "name": j.name, "runner_name": j.runner,
+				"conclusion": j.conclusion, "run_attempt": attempt, "completed_at": at.Format(time.RFC3339)})
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"total_count": len(rows), "jobs": rows})
 	case path == "runs/4242" && r.Method == http.MethodGet:
