@@ -112,7 +112,7 @@ The gate runs on `ubuntu-latest` in a public repository, so its minutes are not 
 | 3 | Q1365 (shipped) | Deploy once the image jobs succeed; require the whole publish run only before the CRD smoke | Up to 5.8 min (measured: `chart-publish` took 5m47s and 5m30s), and only when the approval beats the images | Falls by the same Actions minutes; node-hours unchanged |
 | 4 | Q1364 (shipped) | Bring the e2e node up during deploy instead of on the Kata dispatch | About 3 min (estimate, from rc.1's measured 3m59s dispatch-to-runner) | Falls slightly (estimate): the e2e node starts ~1–2 min early, while 2 system nodes stop ~3 min early |
 | 5 | Q1366 (shipped) | Take the Dragonfly readings concurrently | About 2.5 min (estimate: 3m42s of probes measured in series, the slowest 74s) | Falls by the same minutes and system node time |
-| 6 | Q1367 (closed, not built) | Schedule Kata workers only once a node's `kata-qemu` runtime is ready | 3–5s per cold node (measured over 11 nodes against a two-sample control); the 37–74s failure window is mostly the installer's image pull | Neutral |
+| 6 | Q1367 (closed, not built) | Schedule Kata workers only once a node's `kata-qemu` runtime is ready | 3–5s per cold node (measured over 11 nodes against a two-sample control); the rest of the 37–74s failure window is time placement cannot remove | Neutral |
 | 7 | [Q1368](../queue/Q1368.md) | Scope running the Kata and DinD legs at the same time on dogfood | About 20 min (estimate: the DinD leg's length once rank 2 lands) | Unpriced: peak e2e nodes rise from 1 to 2 inside the quota the gate already reserves, node-hours are expected to fall |
 
 Ranks 1 to 5 together bring a gate like rc.1's from 115.5 minutes to roughly 88 (estimate), plus up to 5.8 minutes off tag-to-gate.
@@ -243,8 +243,10 @@ Those five are taken to be DinD workers, which mount no block volume; their pod 
 Against that saving, gating needs a startup taint on the shared `e2e` pool, a component with rights to patch nodes to clear it (the pinned kata-deploy 3.32.0 chart has none), and a toleration on the DinD template, whose workers need no Kata runtime and would otherwise wait for the install too.
 So the row's done-when is given up: a cold Kata worker's events keep showing `FailedCreatePodSandBox` for a missing runtime, and nothing else here removes them.
 
-What costs the window is the installer's image pull, 24–84s.
-A node that is already up has paid it, which is what the pre-warm in section 4 does for the Kata leg.
+From the first failed sandbox to the first container pull took 30–76s on these nodes (median 50s).
+After the runtime was ready came 23–43s of it, more than half in 7 of the 11, where the control took 23s and 26s from scheduling.
+The rest is whatever was left of the installer's image pull when the sandbox first failed, 0–46s (median 17.5s), and 2–5s of install.
+A node that is already up has paid for the pull and the install, which is what the pre-warm in section 4 does for the Kata leg.
 The Dragonfly leg empties the pool on purpose and starts cold; [Q1387](../queue/Q1387.md) is the same pre-warm there.
 
 ### 7. Kata and DinD at the same time (Q1368)
