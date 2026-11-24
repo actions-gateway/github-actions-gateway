@@ -3,7 +3,7 @@
 > **Status: scoped 2026-11-09; the ledger below says what has landed.** The maintainer made flaky-job detection and automatic retry for more platform failures the `v2.1.0` headline on 2026-11-09.
 > Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22), and Q1382's dogfood reading (2026-11-24); the ledger's open rows still gate the tag and nothing rides yet.
 > Three of them are the readings' refutations, Q1374 to Q1376, gated on 2026-11-22 because each breaks a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the `trigger="other"` rate this release measures success by, biased in opposite directions.
-> Q1381 gated it too, settled 2026-11-22, because its re-runs land in merge-queue runs nothing reads and each spends a `maxEvictionRetries` slot, which is the opposite of what this release is for; it and Q1320 are built.
+> Q1381 gated it too, settled 2026-11-22, because its re-runs landed in merge-queue runs nothing reads and each spent a `maxEvictionRetries` slot, which is the opposite of what this release is for; it and Q1320 are built, and the case it leaves is Q1391.
 > Q1389 gates it too: the out-of-memory class `v2.0.0` shipped can act on the wrong job where a worker dies before its pod names the job it ran, and Q1319 fixes only the re-run half of that, not the raised limit.
 > The wrong-job half is read from source, so its first step is reproducing it.
 > Nothing here is a commitment to a date.
@@ -37,7 +37,7 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | [Q1389](../queue/Q1389.md) | Keep the out-of-memory class from acting before the pod names the job it ran | `2.1-gate` | 🔲 open: reproduce first, since the wrong-job half is read from source |
 | Q1320 | Build the `already_rerun`, `run_succeeded` and `worker_unstartable` checks | `2.1-gate` | ✅ landed on the scale-set tier; `worker_unstartable` reads the startup verdict only, not placeability |
 | Q1318 | Measure the `superseded` check on a fork PR whose branch is `main` (M5) | `2.1-gate` | ✅ measured 2026-11-22 from the API: the `event` filter separates a fork's `main` from upstream's; a displaced merge-group run is not cancelled, filed as Q1381 |
-| Q1381 | Withhold the re-run of a merge-group run displaced from the queue, which GitHub does not cancel | `2.1-gate` | ✅ landed: withheld once the pull request has a newer group, which 5 of 106 failed runs measured had as they concluded; a removed one not queued again is [Q1391](../queue/Q1391.md), not gated |
+| Q1381 | Withhold the re-run of a merge-group run displaced from the queue, which GitHub does not cancel | `2.1-gate` | ✅ landed: withheld once the pull request has a newer group, which 5 of 106 measured had as they concluded (the failed ones among 373 runs that never merged); a removed one not queued again is [Q1391](../queue/Q1391.md), not gated |
 | [Q1319](../queue/Q1319.md) | Re-run only the classified job, found by its runner's name | `2.1-gate` | 🔲 open: M6 measured 2026-11-24, job-granular re-run unbuilt |
 | [Q1315](../queue/Q1315.md) | Retry a job failed while its colocated egress proxy pool was unavailable | `2.1-gate` | 🔲 open |
 | [Q1316](../queue/Q1316.md) | Retry a job whose Docker-in-Docker sidecar crashed under it | `2.1-gate` | 🔲 open: the likeliest punt, since its discriminator may not exist |
