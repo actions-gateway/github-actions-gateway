@@ -16,7 +16,7 @@ Retry classes then fire off that context through the re-run path the disruption 
 ## Measure before building
 
 Each of these decides a component's shape.
-M1 to M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)), and M5 from GitHub's API the same day ([the readings](#readings-from-githubs-api-2026-11-22)); M6 has not been observed beyond the jobs-list half of [a single-job re-run](#readings-from-githubs-api-2026-11-23):
+M1 to M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)), and M5 from GitHub's API the same day ([the readings](#readings-from-githubs-api-2026-11-22)); M6 was measured on dogfood on 2026-11-24 ([the readings](#m6-readings-from-the-job-granular-probe-2026-11-24)):
 
 | # | Unknown | Decides | How to settle |
 |---|---|---|---|
@@ -25,7 +25,7 @@ M1 to M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-t
 | M3 | Whether a container killed at its memory limit takes the runner with it (the pod fails, and GitHub concludes the job only when the job lock lapses, about 10 minutes later) or only a step's process (the runner survives and reports a failed step) | Whether the out-of-memory class fires from the pod watch, like the disruption arms, or from `JobCompleted` | Measured under `Throughput`: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
 | M4 | Whether a finished worker's pod object still exists when its `JobCompleted` arrives | Where platform context is read | Measured: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
 | M5 | The `superseded` check's answer for a pull request from a fork whose branch is `main` | Whether the check needs more than the filters below | Measured from the API: [the readings](#readings-from-githubs-api-2026-11-22) |
-| M6 | Whether `jobDisplayName` matches the jobs API's `name` exactly, for matrix jobs and reusable workflows, and what a single-job re-run does to the jobs it depends on and that depend on it | Whether a classified retry can re-run only its own job ([granularity](#run--or-job-granular-re-run-open-question-2)) | A test workflow with a matrix, a reusable workflow and a `needs:` chain, re-run one job at a time |
+| M6 | Whether `jobDisplayName` matches the jobs API's `name` exactly, for matrix jobs and reusable workflows, and what a single-job re-run does to the jobs it depends on and that depend on it | Whether a classified retry can re-run only its own job ([granularity](#run--or-job-granular-re-run-open-question-2)) | Measured: [the readings](#m6-readings-from-the-job-granular-probe-2026-11-24) |
 
 M3 rested on recall that kubelets on cgroup v2 kill a container's whole process group on an out-of-memory event; the reading below confirms it on dogfood's nodes.
 The breaker thresholds, the 7-day ledger expiry and the deferred path's 24-hour expiry are proposals, not measurements; R14's metrics are what will move them.
@@ -564,7 +564,7 @@ Nothing in this section ships with the first rows; it fixes the shape the first 
   Every `match` field is optional, its values OR together, and the fields AND together; an absent field matches anything.
 - **Why a list and not a field per axis.** A new axis (an environment, a branch) is a new optional `match` field, which every stored object lacks and so reads as "any": no existing rule changes meaning.
   Top-level per-axis fields could not say "never for `release.yml`, retry with `scope: Job` for everything else", which is what an ordered list of matches buys.
-- **A discriminated union for the verb.** `action` is the discriminator, `Retry` or `Never`, and `retry` is the member that only `Retry` carries, holding `scope` (`FailedJobs` or `Job`), which is where [granularity](#run--or-job-granular-re-run-open-question-2) becomes configurable per rule if M6 allows it.
+- **A discriminated union for the verb.** `action` is the discriminator, `Retry` or `Never`, and `retry` is the member that only `Retry` carries, holding `scope` (`FailedJobs` or `Job`), which is where [granularity](#run--or-job-granular-re-run-open-question-2) becomes configurable per rule; M6's readings allow it.
   One CEL rule on the list item ties `retry` to `action: Retry`, the same shape as `WorkerSizing`'s `nodeShare` tied to its `profile`; a future verb gets its own member and its own clause.
 - **Enum values are additive, and a skewed AGC fails safe on verbs.** CRD enum validation runs only on writes, so an AGC older than its stored objects can still read a value it does not know.
   It treats an unknown `action` or `scope` as `Never`.
@@ -636,7 +636,8 @@ None of these ships until someone asks for it; each then lands as one optional m
 
 ## Run- or job-granular re-run (open question 2)
 
-**Research**, with the maintainer's preference recorded: re-run only the job GAG classified, unless something rules it out (2026-10-12).
+**Decide**, with the maintainer's preference recorded: re-run only the job GAG classified, unless something rules it out (2026-10-12).
+M6's readings rule nothing out, and they change how the job is found: by its runner's name rather than its own ([below](#what-the-readings-recommend)).
 GitHub re-runs no finer than a job, through three endpoints:
 
 - `POST …/runs/{id}/rerun` re-runs every job: the UI's "Re-run all jobs".
@@ -648,15 +649,49 @@ Only the third leaves a failed sibling alone.
 Run-granular re-runs a sibling's real failure too, and hides it if it passes, which is the masking R1 exists to measure.
 Job-granular avoids that, and costs:
 
-- **A jobs-list call per retry** (`GET …/runs/{id}/attempts/{n}/jobs`), to turn the job's display name into the numeric id the endpoint takes; the job message carries only a UUID.
+- **A jobs-list call per retry** (`GET …/runs/{id}/attempts/{n}/jobs`), to find the numeric id the endpoint takes; the job message carries only a UUID.
   Retries are rare, so the cost is small.
-- **A name match that may not hold** (M6): if `jobDisplayName` and the API's `name` differ for matrix or reusable-workflow jobs, or two jobs share a name, the match is ambiguous.
-  An ambiguous match falls back to `rerun-failed-jobs`, counted as `trigger="gag_collateral"`.
+- **A match that can be ambiguous by name**: the names agree exactly, and two jobs of one run can still share one ([measured](#m6-readings-from-the-job-granular-probe-2026-11-24)).
+  Matching on the runner's name avoids that; a job neither identifies falls back to `rerun-failed-jobs`, counted as `trigger="gag_collateral"`.
+- **One re-run at a time**: GitHub refuses a single-job re-run while the run is in progress, so two classified jobs of one run need two attempts in turn where `rerun-failed-jobs` takes one.
+- **Dependents that passed run again**: `needs:` dependents re-run with the job, whether or not they had failed.
 - **The external-state case**: a job whose passed upstream jobs set state it depends on (a staging deploy, a lock, a published artifact) can fail again on a single-job re-run where a whole-run re-run would pass.
-  GitHub keeps the upstream jobs' outputs for the re-run, from recall; whether it keeps their artifacts is part of M6.
+  GitHub keeps the upstream jobs' outputs and artifacts for the re-run ([measured](#m6-readings-from-the-job-granular-probe-2026-11-24)), so the case is state outside GitHub only.
   The fallback for this case is the same `rerun-failed-jobs`, and choosing it needs a signal GAG does not have, so the first version does not try; `same_class_again` stops the repeat.
 
-M6 settles it; until then, detection's `gag_collateral` count measures what run-granular costs on the existing arms.
+Until it is built, detection's `gag_collateral` count measures what run-granular costs on the existing arms.
+
+### M6 readings from the job-granular probe, 2026-11-24
+
+Taken for Q1319 on the `ci` set in `gag-dogfood`, AGC `v2.0.1-rc.2`, with the [`q1319-rerun-probe`](../../.github/workflows/q1319-rerun-probe.yml) fixture.
+The `names` runs are 45325262167 (attempts 1 to 4) and 45326925782 (attempt 1, a second set of shapes); the `chain` run is 45325687478 (attempts 1 to 4).
+While the second `names` run and the chain run's attempts 3 and 4 ran, the set's `minRequests.memory` was raised to 9024Mi for another reading; nothing here depends on memory.
+The AGC's `scaleset: job assigned` lines give `jobDisplayName` and the jobs API gives `name`.
+The two were joined on the runner the AGC logs at start or completion against the API's `runner_name`, so the join does not use the names it tests.
+
+- **The names match exactly** for all 35 jobs that ran in attempt 1 of the two `names` runs (16 and 19), including those that share a name with another job.
+  The shapes: a default matrix (`matrix-default (a, x64)`); a matrix with a fixed `name:`, which GitHub suffixes (`matrix-same-name (a)`); an object value (`matrix-object (linux, 1.1)`); an expression name (`Named a / 1`); a reusable workflow (`reusable / inner`, `reusable / inner-matrix (a)`); a matrixed, named caller (`Called a / inner`); two levels of nesting (`Called a / deeper / innermost`); and names with Unicode, quotes and interior whitespace, whose edge whitespace GitHub trims on both sides.
+- **A name is ambiguous in two shapes.** Two jobs with the same `name:` (`dup`), and two matrix legs whose default names pass 100 characters: GitHub cuts both sides to 97 characters and `...`, so run 45326925782's jobs 138218641923 and 138218642212 have one name and different matrix values.
+- **`runner_name` identifies the job.** It told the twins of both shapes apart, and the API kept it for a job whose runner was killed: the out-of-memory kill of run 45324839276 the same day lists the pod's `actions-gateway.com/runner-name` annotation exactly.
+  It is the runner's name and not the job's: the two often differ, since GitHub gives a job to whichever runner asks first, and 2 of 16 and 4 of 19 jobs of the two runs' first attempts ran on the runner provisioned for them.
+- **A single-job re-run runs that job and its `needs:` dependents, and nothing else.** In run 45325687478 (`up`; `mid` and `beside`, which need `up`; `down` and `down-always`, which need `mid`; and `sibling-red` and `sibling-slow`, which need nothing), re-running the failed `mid` (attempt 2) ran `mid`, `down` and `down-always`, although `down-always` had succeeded; `up`, `beside` and the siblings did not run, and the run stayed `failure` because `sibling-red` was not re-run.
+  Re-running `sibling-red` ran it alone.
+- **Upstream outputs and artifacts survive.** `mid` in attempt 2 saw `up`'s attempt 1 output (`up-attempt1-134267612`) and the same artifact content, and `down` saw `up`'s attempt 1 output and `mid`'s attempt 2 output.
+  A successful job can be re-run the same way: re-running `up` (attempt 3) ran everything downstream on its new output and artifact.
+- **GitHub refuses two calls**, both 403: "The workflow run containing this job is already running" while any job of the run is going, and "Only jobs from the current attempt can be re-run" for an earlier attempt's job ID.
+- **An attempt lists every job of the run under a new ID**, with the new attempt in `run_attempt`.
+  A job the attempt did not run, a failed one included, keeps the `started_at` and `runner_name` of the attempt it ran in: `dup`'s red leg is 138213206154 in attempt 1 and 138215428065 in attempt 2, both started at 04:18:50 on one runner.
+  So the ID to call with is the latest attempt's, and only a re-executed job gets a new `JobAssigned`.
+- **A skipped matrix job shows its name unexpanded** (`Named ${{ matrix.leg }} / ${{ matrix.n }}`), so a name read from a skipped job is not comparable.
+
+Not covered: nesting past two levels, an upload without `overwrite: true` on a re-run (the fixture sets it), and state outside GitHub.
+
+### What the readings recommend
+
+Re-run the classified job by its ID from the **latest** attempt's jobs list, found by `runner_name` equal to the dead worker's, and by display name only where the runner name is absent; fall back to `rerun-failed-jobs` where neither names exactly one job.
+Wait for the run to conclude, as the parked out-of-memory re-run already does.
+One job per attempt is the cost: a run with two classified jobs needs its second re-run after the first attempt concludes, and each spends a slot.
+The disruption arms stay run-granular; nothing in the readings argues otherwise.
 
 ## Failure modes
 
@@ -690,14 +725,14 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 - **Deleting the mechanism:**
   - each futility check's test goes red with the check removed;
   - the merge's test goes red with the merge removed, which also reproduces today's double re-run.
-- **Dogfood:** M1 to M6, and each class's R12 reproduction, before its class merges.
+- **Dogfood:** M1 to M6 (all measured), and each class's R12 reproduction, before its class merges.
 
 ## Order of work
 
-1. The dogfood turn-up of 2026-11-22 settled M1 to M4 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)), and the API settled M5 ([the readings](#readings-from-githubs-api-2026-11-22)); M6 needs its own test workflow.
+1. The dogfood turn-up of 2026-11-22 settled M1 to M4 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)), and the API settled M5 ([the readings](#readings-from-githubs-api-2026-11-22)); M6 was measured on 2026-11-24 ([the readings](#m6-readings-from-the-job-granular-probe-2026-11-24)).
 2. Q1182 (built) created the ledger store, with its version rules, `reruns` map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as `selfCancelledAttempt`.
 3. Q1181 (built): `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the widened run read, honouring `selfCancelledAttempt`, between the run read and the reservation in `handleScaleSetEviction`; Q1320 (built) added `already_rerun`, `run_succeeded` and `worker_unstartable` there, and the classic tier takes none.
 4. Q555 (built) added the `failures` map, the snapshot, the pairing and the metrics on that store.
    Two departures from Component 1: event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.
-5. Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the `pending` map, Q1245 (built) added the alert, the gauge and the annotation, and job-granular re-run still waits on M6.
+5. Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the `pending` map, Q1245 (built) added the alert, the gauge and the annotation, and job-granular re-run (Q1319) is unbuilt, with M6 measured.
 6. Q1178 and Q1184 (built).
