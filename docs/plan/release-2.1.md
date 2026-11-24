@@ -29,7 +29,7 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | Q1236 | Measure flaky-job detection on dogfood: result spelling, re-run job IDs (M1, M2, M4) | `2.1-gate` | ✅ measured 2026-11-22; three refuted assumptions filed as Q1374 to Q1376 |
 | Q1376 | Record a failed job's context from its terminated pod, not the still-`Running` one (M4) | `2.1-gate` | ✅ landed: the record is amended when the worker finishes |
 | Q1375 | Keep jobs that share one `name:` from pairing as a false flake (M2) | `2.1-gate` | ✅ landed: the run's job list tells a re-run from a job of the same name |
-| [Q1374](../queue/Q1374.md) | Record a job killed by `timeout-minutes`, which `JobCompleted` reports `canceled` (M1) | `2.1-gate` | 🔲 open |
+| Q1374 | Record a job killed by `timeout-minutes`, which `JobCompleted` reports `canceled` (M1) | `2.1-gate` | ✅ settled as a stated blind spot: telling it from a cancel takes a read per cancelled job |
 | Q1317 | Reproduce the out-of-memory retry class on dogfood (M3, R12) | `2.1-gate` | ✅ reproduced 2026-11-22 under `Throughput`: the kill takes the runner, and the class fires and re-runs as built; `Binpack` is Q1382 |
 | [Q1382](../queue/Q1382.md) | Reproduce the out-of-memory retry class on a `Binpack` set (R12) | `2.1-gate` | 🔲 open |
 | [Q1320](../queue/Q1320.md) | Build the `already_rerun`, `run_succeeded` and `worker_unstartable` checks | `2.1-gate` | 🔲 open |

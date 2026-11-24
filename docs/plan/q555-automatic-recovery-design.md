@@ -38,7 +38,7 @@ The readings are the AGC's `scaleset: job assigned`, `job completed`, `scale-set
 `scaleset_jobs_completed_total` itself was not queried: the listener increments it with the same `result` it logs, in the same once-per-job block.
 
 - **M1.** A red step completes `failed` (jobs `82a2530d…`, `abe6cad3…`, `ee99fae0…`).
-  A job killed by `timeout-minutes` completes `canceled` (`b31558d4…`, `486169c1…`; the jobs API says `cancelled`), exactly as a user's cancel does (`3762586f…`), so detection records no timed-out job and never counts its later success as flaky ([Q1374](../queue/Q1374.md)).
+  A job killed by `timeout-minutes` completes `canceled` (`b31558d4…`, `486169c1…`; the jobs API says `cancelled`), exactly as a user's cancel does (`3762586f…`), so detection records no timed-out job and never counts its later success as flaky, an [R5 blind spot](#timed-out-jobs-an-r5-blind-spot-q1374) since.
   A job whose runner an out-of-memory kill ended completes `failed`, 9 min 48 s after the kill, when the job lock lapses (`ff028f4b…`, run 45052020040).
 - **M2.** A re-run of the failed job arrives with a new job UUID (`abe6cad3…`, then `4349fbb7…`) under the same run ID and `jobDisplayName`, and pairs as `trigger=other`, flaky, as designed.
   GitHub accepts two jobs sharing one `name:`, and they share one failure key: the green twin's success paired with the red twin's failure and emitted a false `FlakyJobDetected` (18:05:32 UTC), and the red twin's re-run at 18:07:02 logged as a fresh failure rather than a pairing, so its record was gone.
@@ -259,6 +259,26 @@ A pairing then counts as:
 Attribution happens when the later attempt completes, so the order of a disruption arm and a failed `JobCompleted` does not matter: an evicted job's failure arrives about 10 minutes after the eviction, a deleted one's 15 to 26 seconds after.
 A succeeded pairing deletes the failure entry.
 A disruption whose pod belongs to another `RunnerSet` marks that set's ledger, not this one's, so a run spread across sets reads its collateral re-runs here as `other`: an R5 blind spot, overcounting the manual rate for multi-set runs.
+
+### Timed-out jobs: an R5 blind spot (Q1374)
+
+A job killed by `timeout-minutes` completes `canceled` and is not recorded.
+Settled as a stated blind spot, because each fact that could tell it from a cancel costs more than the count is worth:
+
+- **The run's conclusion, on the next attempt's completion.** It does not separate them: attempt 1 of run 45052015868, which timed out, and run 45053166409, which a user cancelled, both conclude `cancelled`, and so do their jobs and the steps that were running.
+  Nor would a later completion be known for one, since it carries no attempt and the first left no record.
+- **The check run's annotation, read per cancelled job.** It does: `The job has exceeded the maximum execution time of 1m0s` against `The run was canceled by @…`.
+  It is a read for every cancelled job, which R6 rules out: over this repository's 111 cancelled runs of 2026-11-08 to 2026-11-21, 4 of 321 cancelled jobs were timeouts and 251 were superseded by a newer push.
+  Skipping the jobs no runner started leaves 87 reads for the same 4.
+  It also needs the App's `Checks` permission, which is [optional](../operations/tenant-onboarding.md#0a-create-the-app-web-ui), so the count would change meaning with it.
+- **Recording every `canceled` completion**, and reading the annotation only if a later attempt succeeds.
+  A ledger write for each cancel, on the listener, and cancels would evict real failures from a capped map; a superseded run's jobs are the bulk of them and are never re-run.
+- **The job's own limit, against how long it ran.** `timeout-minutes` is in no message the AGC receives (Q438).
+
+So the undercount stands, and a workflow can end it: a step-level `timeout-minutes` fails its step (the runner sets `TaskResult.Failed`, `StepsRunner.cs` at v2.338.2), and the job concludes `failure`.
+Measured from the API: in `home-assistant/core` run 45247954762 the step `Run pytest` timed out after 60 minutes, `failure`, and its job concluded `failure` with no other failed step.
+A job that concludes `failure` on a step completes `failed` on the wire (M1); one that did so on a step's timeout was not seen there.
+Look again if GitHub's completion ever carries a reason.
 
 ### What the operator sees (R3, R4, R8)
 

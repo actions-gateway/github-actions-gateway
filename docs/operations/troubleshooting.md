@@ -3101,7 +3101,7 @@ When a scale-set job completes `failed`, the AGC records it in the set's failure
 The record holds the worker's state (`context`): pod phase, reason and a truncated message, its conditions, the node and pod IP, and each container's termination reason, exit code and restart count, with the termination before it (`previousReason`, `previousExitCode`) for a sidecar that crashed, restarted and then exited.
 The context is the worker as it finished.
 For a job that ends on a step's result, GitHub's completion arrives while the worker's pod still runs (measured 2026-11-22), so the record first holds the pod as `Running` and is rewritten when the pod finishes (Q1376).
-A `canceled` completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing, and neither does a job that reached its `timeout-minutes`, which GitHub also reports `canceled` (Q1374).
+A `canceled` completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing, and neither does a job that reached its `timeout-minutes`, which GitHub also reports `canceled` ([what to do about it](#a-timed-out-job-is-not-counted)).
 
 When a later attempt of the same job (same run, same job name, and a re-run by the run's own job list) completes, it is paired with that record and counted in `actions_gateway_scaleset_job_reruns_total{trigger}`:
 
@@ -3143,6 +3143,36 @@ Telling a re-run from a job of the same name reads the run's jobs from GitHub, w
 A read is one request per 100 jobs the run lists over its attempts, up to 10.
 A re-run counts nothing where that read fails or takes over 10 seconds, or the run lists more than 1,000 jobs over its attempts (the AGC log says `could not read the run's jobs`), where the AGC restarts before the read, where it completed before GitHub listed the attempt's other jobs of its name, or where it follows a re-run that was cancelled or counted nothing.
 One false flake is left: a job that GitHub first lists under the failed job's name in a later attempt, such as a leg a dynamic matrix gains, and that completes while the failed job's own re-run still waits on its `needs`.
+
+### A Timed-Out Job Is Not Counted
+
+A job killed by its job-level `timeout-minutes` is never recorded as a failure, so its later success is never a flake, and its re-run is missing from `actions_gateway_scaleset_job_reruns_total` and from the manual re-run rate.
+GitHub completes it `canceled`, as it does a user's cancel (measured 2026-11-22), and tells them apart only in an annotation on the job's check run (Q1374).
+
+To have a hang counted, put `timeout-minutes` on the step that can hang, shorter than the job's:
+
+```yaml
+jobs:
+  test:
+    timeout-minutes: 30 # the backstop; GitHub reports this one as a cancel
+    steps:
+      - run: make test
+        timeout-minutes: 20 # a hang fails the step, and so the job
+```
+
+A step that times out fails, so its job completes `failed` and is recorded like any other failure.
+A step with `continue-on-error: true` does not fail its job, so its timeout is not recorded either.
+
+To find the timed-out jobs of a run by hand, read its annotations:
+
+```bash
+gh run view <run-id> --json jobs \
+  --jq '.jobs[] | select(.conclusion == "cancelled") | "\(.databaseId) \(.name)"' |
+  while read -r id name; do
+    gh api "repos/<owner>/<repo>/check-runs/$id/annotations" --jq '.[].message' |
+      grep -q 'exceeded the maximum execution time' && echo "$name"
+  done
+```
 
 ---
 
