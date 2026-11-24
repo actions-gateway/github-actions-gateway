@@ -1673,8 +1673,9 @@ When it repeats about every five minutes for one job, that job is in a loop: eac
 The withdrawal marks the stuck worker's job completed, so the AGC deletes it 30 seconds later, and the re-issue gets a new worker carrying the same run ID and job name (Q1361).
 A worker that starts within those 30 seconds takes the re-issue itself and this Event does not fire, as the slow cold start measured on 2026-11-18 did: its runner came up one second after the withdrawal.
 
-A worker that can never start loops until GitHub gives up on the job.
-At the default ten-minute `pendingPodDeadline` the deadline never fires for it, because the withdrawal always comes first.
+A worker that can never start loops this way for as long as GitHub keeps withdrawing.
+Each withdrawal comes before the default ten-minute `pendingPodDeadline`, so the deadline does not fire while it lasts.
+GitHub can stop: on 2026-11-24 it withdrew a job's first two assignments and left the third, whose worker the deadline reaped ten minutes in, and the AGC then cancelled the run.
 A deadline under about five and a half minutes reaps the worker first under `pending_deadline`, and the AGC then cancels the run, which ends the loop.
 The AGC keeps provisioning each re-issue rather than stopping, because the next worker may land on a node that can run it.
 

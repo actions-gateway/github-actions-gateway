@@ -626,7 +626,7 @@ ceiling  = spec.sizing.maxRequests.memory, or 2 × killed where unset
 ```
 
 It fires on a worker whose pod reached `PodFailed` with the **runner** container terminated `OOMKilled`, and which carries the `actions-gateway.com/sizing-profile` annotation, meaning the profile derived its limits when it was built.
-That is the shape a memory kill leaves on cgroup v2, which kills the whole container: reproduced on dogfood on 2026-11-22 under `Throughput` (R12), GitHub concluded the job `failure` 9 min 48 s after the kill, and the re-run at the raised limit succeeded ([the readings](../plan/q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22)).
+That is the shape a memory kill leaves on cgroup v2, which kills the whole container: reproduced on dogfood under `Throughput` on 2026-11-22 and under `Binpack` on 2026-11-24 (R12), GitHub concluded the job `failure` 9 min 43 s to 9 min 48 s after the kill, and the re-run at the raised limit succeeded ([the first readings](../plan/q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22), [the second](../plan/q555-automatic-recovery-design.md#readings-from-the-binpack-turn-up-2026-11-24)).
 A sidecar killed for memory is not covered: the runner survives it to report the job's own result, so the pod's terminal transition says nothing about whether the job failed.
 
 | Shape | What happens | `reason` on `eviction_rerun_withheld_total{cause="oom"}` |
@@ -642,6 +642,7 @@ Every withhold spends no slot and emits the **Normal** `EvictionRerunWithheld` E
 
 **The raised limit is a per-job floor in the failure ledger**, under `memoryFloors["<runID>/<job name>"]` for 7 days.
 Provisioning a scale-set worker looks it up by the assignment's run ID and job display name and raises the runner's memory limit to it where the resolved limit is lower; under `Binpack` the memory request rises with it, since that profile sets the two equal.
+Nothing checks that a node can hold the raised request: one no node can hold leaves the re-run `Pending`, and `maxRequests.memory` is what caps it ([measured](../plan/q555-automatic-recovery-design.md#readings-from-the-binpack-turn-up-2026-11-24)).
 It applies to the job's next attempt whoever starts it, so a manual re-run after the budget is spent gets the memory too.
 The lookup reads the in-memory index of the ledger, so a job with no floor costs no API call once the process has read that set's ledger, and one read before that; a floor another replica wrote since that read is missed, and the attempt then runs at the resolved limit.
 That window is a rolling update in which the new process read the ledger before the old one wrote the floor: the re-run spends a slot at the killed limit, and its kill is then withheld as `same_class_again` though no raise ever applied.
@@ -671,8 +672,9 @@ The `RunnerSet` reconciler hands every scale-set set to the sweep once per proce
 Two replicas can both release one entry: the second reservation resumes the same slot and its re-run loop stands down once the first re-run moves the run past the recorded attempt, as for any resumed disruption.
 The disruption arms keep their 15-minute window.
 
-**The shape is read from source, not reproduced on dogfood** ([R12](../plan/q555-flaky-job-retry.md#classified-platform-retry-phase-2)).
-What it rests on, from recall of the kubelet rather than measured here: on cgroup v2 the kubelet has the kernel kill a container's whole process group on an out-of-memory kill, which ends the runner along with the step that used the memory; on cgroup v1, or with the kubelet's `singleProcessOOMKill`, only the largest process dies, the runner can survive to report the step's failure, and that pod is not recognised.
+**The shape is the cgroup v2 one, measured on dogfood** ([R12](../plan/q555-flaky-job-retry.md#classified-platform-retry-phase-2)).
+On cgroup v2 with `memory.oom.group` at 1, as on its worker nodes (kubelet `v1.35.8-gke.1796000`, `singleProcessOOMKill` unset), an out-of-memory kill takes the whole container, so it ends the runner along with the step that used the memory.
+On cgroup v1, or with the kubelet's `singleProcessOOMKill`, only the largest process dies, the runner can survive to report the step's failure, and that pod is not recognised; this half is from recall of the kubelet, not measured here.
 
 #### Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)
 
@@ -986,7 +988,8 @@ The `Pending` grace is far shorter than the `Running` one because there is no ru
 
 **A withdrawal reads like a cancellation unless the reaper looks for the re-issue** (Q1361).
 GitHub's withdrawal of an assignment no runner took is the same `JobCompleted` naming no runner, so a worker that cannot start, on a node that accepts pods and cannot run them, is stamped and reaped as `completed_pending` every five minutes while each re-issue's worker sticks the same way.
-At the default ten-minute `pendingPodDeadline` the deadline never fires for any of them, so neither does the abandoned-run recovery it starts (Q766), which is correct here: GitHub still holds the job.
+While that repeats, the default ten-minute `pendingPodDeadline` does not fire, because the withdrawal comes first, so neither does the abandoned-run recovery it starts (Q766), which is correct then: GitHub still holds the job.
+GitHub does not withdraw every assignment: on 2026-11-24 a job whose workers could not be scheduled had two withdrawn and the third left, so the deadline reaped the third and Q766 cancelled the run ([the reading](../plan/q555-automatic-recovery-design.md#readings-from-the-binpack-turn-up-2026-11-24)).
 A deadline under about five and a half minutes, the withdrawal plus the 30-second grace, reaps first under `pending_deadline`, and Q766 then cancels the run, which ends the loop.
 The check also matches a re-run of a cancelled run whose new worker exists when the 30-second grace ends: a re-run keeps the run ID and job name, and the job message carries no run attempt to tell them apart, so that cancellation is named `WorkerReplacedBeforeStart`; the reap is the same either way.
 The reaper therefore checks a `completed_pending` worker that never started for a newer worker of the set with the same `run-id` and `job-name` annotations, which is the re-issue's, and records `WorkerReplacedBeforeStart` naming the stuck worker's node and its replacement in place of `WorkerPodCompletedPending`.
