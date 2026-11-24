@@ -111,10 +111,11 @@ Taken from the REST API for the `merge_group` half of `superseded` (Q1381).
   So the ref would show a displacement in time, but reading it needs `Contents: read`, which the tenant's App does not have, and a merged group's ref is deleted too, sometimes before its optional runs end (#2344's e2e-calico run ended 370 s after).
 - **GitHub accepts a re-run after the ref is gone, and it runs.** `rust-lang/cargo` run 43427210034 was re-run 4 min 42 s after its ref's deletion; its checkout succeeded and so did the attempt.
   The queue did not use it: the pull request was queued again and built as a new group.
-- **No merged group had a newer group for its pull request, in three repositories.** The built check (`newerMergeGroupRun`), fed every later run of the workflow, matched 0 of 2,924 runs whose commit is on the default branch, and 369 of the 374 whose commit is not.
-  Each repository contributes one workflow: this one's `unit-test.yml` since 2026-08-12 (945 merged, 173 not), `rust-lang/cargo`'s `main.yml` (712, 107) and `rust-lang/rust-analyzer`'s `ci.yaml` (1,267, 94) since 2025-12-28.
-- **The check sees what has happened by the time it asks.** With only the runs created by then, and its own page limit, it matches 62 of the 374 at the run's conclusion, 161 ten minutes later, 265 after an hour and 342 after a day, still with no merged match.
+- **No merged group had a newer group for its pull request, in three repositories.** The built check (`newerMergeGroupRun`), fed every later run of the workflow, matched 0 of 2,925 runs whose commit is on the default branch, and 369 of the 373 whose commit is not.
+  Each repository contributes one workflow: this one's `unit-test.yml` since 2026-08-12 (946 merged, 172 not), `rust-lang/cargo`'s `main.yml` (712, 107) and `rust-lang/rust-analyzer`'s `ci.yaml` (1,267, 94) since 2025-12-28.
+- **The check sees what has happened by the time it asks.** With only the runs created by then, and its own page limit, it matches 62 of the 373 at the run's conclusion, 161 ten minutes later, 265 after an hour and 342 after a day, still with no merged match.
   The rest are pull requests removed and not yet queued again ([Q1391](../queue/Q1391.md)).
+  Of the 106 that concluded `failure`, the nearest the sample has to a lost required job, it matches 5 at the conclusion and 38 ten minutes later.
 - **The base commit in the branch name does not identify a group.** In `cilium/cilium`, whose queue merges by rebase, two live groups share it (#48687 and #48686), and one pull request queued twice on one base repeats its branch name at another commit, as cargo run 43427210034's did; so the check compares the pull request's number and the commit.
 
 ## Component 1: the failure ledger (Q555, R1 to R8)

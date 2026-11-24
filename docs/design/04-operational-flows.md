@@ -480,7 +480,7 @@ On the scale-set tier every arm takes it (Q1181), because that tier already read
 ##### Futile re-runs are withheld before a slot is spent (scale-set)
 
 Some re-runs cannot help, and before Q1181 each one spent a budget slot, a node and queue time, then ended in an Event asking for a manual re-run that would not help either.
-The scale-set tier now judges the run read it takes before reserving a slot ([`rerun_futility.go`](../../cmd/agc/internal/provisioner/rerun_futility.go)) and withholds a futile re-run there, so it spends nothing: `actions_gateway_eviction_rerun_withheld_total` counts the `reason`, and a **Normal** `EvictionRerunWithheld` Event names the run, the reason and what would fix it.
+The scale-set tier now judges the run read it takes before reserving a slot ([`rerun_futility.go`](../../cmd/agc/internal/provisioner/rerun_futility.go)) and withholds a futile re-run there, so it spends nothing, except where the table says the re-run loop found it: `actions_gateway_eviction_rerun_withheld_total` counts the `reason`, and a **Normal** `EvictionRerunWithheld` Event names the run, the reason and what would fix it.
 
 | `reason` | Withheld when | What the Event says to do |
 |---|---|---|
@@ -520,6 +520,8 @@ A pull request holds one place in a queue, so a newer group for it means no queu
 The check matches the two on the branch name, `gh-readonly-queue/<base>/pr-<number>-<sha>`, up to the commit at its end.
 It does not ask whether the group's branch still exists: that needs `Contents: read`, which the tenant's App [does not have](../operations/tenant-onboarding.md#0a-create-the-app-web-ui), and a merged group's branch is deleted too.
 It asks a second time just before the re-run call, because a disrupted required job is itself what makes the queue drop the group, as the run concludes.
+So for a group still queued when its job is lost, only that second ask can find a newer group, and the slot is already spent.
+It usually finds none, because somebody has to queue the pull request again first: of 106 failed runs measured, 5 had a newer group as they concluded ([readings](../plan/q555-automatic-recovery-design.md#readings-for-the-merge-group-check-2026-11-23)).
 A pull request removed from the queue and not yet queued again has no newer group, so its re-run goes ahead ([Q1391](../queue/Q1391.md), with the figures).
 
 A support ticket can raise GitHub's re-run cap for an organisation, and the check does not know that; such an organisation sees `attempt_limit` where GitHub would have accepted the re-run.

@@ -3075,7 +3075,7 @@ That is checked on every cause, and GAG's own force-cancel of an abandoned run i
 No call is made, `eviction_rerun_withheld_total{reason="run_cancelled"}` increments, and a Normal `EvictionRerunWithheld` Event names the run (Q811, Q1181).
 See [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod).
 
-**Fires and is withheld as futile**, before any budget slot is spent (Q1181, Q1320).
+**Fires and is withheld as futile**, before any budget slot is spent unless the table says otherwise (Q1181, Q1320).
 The `EvictionRerunWithheld` Event names the reason and, where one is needed, the fix:
 
 | `reason` | Why no re-run | What to do |
@@ -3084,11 +3084,12 @@ The `EvictionRerunWithheld` Event names the reason and, where one is needed, the
 | <code class="gag-nowrap">run_succeeded</code> | The run concluded `success`, and GitHub refuses to re-run it | Nothing; seen after detection, it has spent its slot |
 | <code class="gag-nowrap">attempt_limit</code> | The run is past GitHub's 50 re-runs | Start a new run |
 | <code class="gag-nowrap">run_too_old</code> | The run was created more than 30 days ago | Start a new run |
-| <code class="gag-nowrap">superseded</code> | A newer commit's run of the same workflow, event and branch has started, or the merge queue has built another group for the pull request | Nothing; a newer group seen after detection has spent its slot |
+| <code class="gag-nowrap">superseded</code> | A newer commit's run of the same workflow, event and branch has started, or the merge queue has built another group for the pull request | Nothing; a newer group seen after detection, as it is for a group still queued when its job was lost, has spent its slot |
 | <code class="gag-nowrap">worker_unstartable</code> | A worker of the set is placed and stuck in `ImagePullBackOff`, and no worker still present has started since | [Fix the image or its pull credentials](#the-reason-is-podsnotstarting-the-image-will-not-pull), then re-run by hand |
 
 GitHub leaves the runs of a group dropped from the merge queue going, so a job in one can still be disrupted.
-Its re-run is withheld once the queue has built a newer group for the pull request (Q1381); a pull request removed from the queue and not queued again has none, so its job is re-run and spends a budget slot on a result nothing reads.
+Its re-run is withheld once the queue has built a newer group for the pull request (Q1381); a pull request removed from the queue and not yet queued again has none, so its job is re-run and spends a budget slot on a result nothing reads.
+A group dropped because of the lost job is usually that case, since the AGC asks as the run concludes: of 106 failed runs measured, 5 had a newer group by then.
 
 A quota-blocked job is deliberately absent from this table: it is **never claimed** in the first place, so it stays queued at GitHub with no re-run needed — see [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion).
 
