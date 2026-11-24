@@ -48,6 +48,12 @@
 #      selector matches nothing and exits 0, so a template moved to a new
 #      apiVersion leaves the overlay's cluster specifics unapplied while rule 7
 #      still holds (the base is intact). Measured on kubectl v1.36.3.
+#   9. Every overlay sets its own workerImage to the build-capable e2e runner
+#      (Q980). No library entry sets one, so an overlay without the patch
+#      gap-fills the AGC's default runner, which has no helm, kubectl or jq, and
+#      the suite dies mid-run instead of at image pull. Read twice: from the
+#      overlay's patches, which needs no kubectl and is blind to an entry that
+#      sets the same image itself, and from the render, which is what applies.
 #
 # Backs `make template-library-check`; assertions in check-template-library-test.sh
 # under `make scripts-test`.
@@ -57,7 +63,7 @@
 #   --overlays-dir PATH    the dogfood e2e overlays
 #   --start-script PATH    the script whose accepted variants define reachability
 #   --readme PATH          the library README that must name every entry
-#   --no-render            skip rule 7 even when kubectl is present
+#   --no-render            skip every render assertion even when kubectl is present
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -82,6 +88,10 @@ RENDER=1
 #           security gap-fill is written against, so a dedicated e2e variant
 #           would exercise the provisioner rather than the template.
 INERT_ENTRIES=(plain)
+
+# The image scripts/dogfood/e2e-runner/Dockerfile builds. The tag moves with the
+# runner, so it is not pinned here.
+E2E_RUNNER_IMAGE="ghcr.io/actions-gateway/dogfood-e2e-runner"
 
 while (($# > 0)); do
 	case "$1" in
@@ -318,6 +328,24 @@ check_patch_form() {
 	done <<<"$report"
 }
 
+# patched_worker_images KUSTOMIZATION — the value of every JSON 6902 op that
+# sets /spec/workerImage, one per line. Empty for a removed or commented-out op.
+patched_worker_images() {
+	awk '
+		/^[[:space:]]+- op: / { op = $3; path = "" }
+		/^[[:space:]]+path: / { path = $2 }
+		/^[[:space:]]+value: / && path == "/spec/workerImage" && op != "remove" && op != "test" { print $2; path = "" }
+	' "$1"
+}
+
+# check_worker_image OVERLAY WHERE IMAGES — rule 9. Fails unless IMAGES is one
+# line naming a tag or digest of the e2e runner. WHERE says which reading it is.
+check_worker_image() {
+	local overlay="$1" where="$2" images="$3"
+	[[ "$images" =~ ^"$E2E_RUNNER_IMAGE"[:@][^[:space:]]+$ ]] && return 0
+	fail "overlay '$overlay' $where workerImage '${images:-<none>}', want one $E2E_RUNNER_IMAGE tag. The library base sets none, so without it the AGC's default runner is used, which lacks helm, kubectl and jq, and the e2e suite dies mid-run."
+}
+
 # check_patch_indent KUSTOMIZATION — fails when a `patches:` item sits anywhere
 # but two spaces in. check_patch_form and patch_targets key on `^  - `, so an
 # item at column 0 (valid YAML, accepted by kustomize) or any other indent is
@@ -399,6 +427,9 @@ for overlay in "${overlays[@]}"; do
 
 	# Rule 5.
 	check_patch_form "$kust"
+
+	# Rule 9, from the overlay itself.
+	check_worker_image "$overlay" "patches in" "$(patched_worker_images "$kust")"
 done
 
 # ------------------------------------------------------------ rule 3, both ----
@@ -480,6 +511,17 @@ if ((RENDER)) && command -v kubectl >/dev/null 2>&1; then
 		' "$1"
 	}
 
+	# rendered_worker_images — stdin: kustomize output; stdout: spec.workerImage of
+	# each ClusterRunnerTemplate. kustomize prints kind ahead of spec.
+	rendered_worker_images() {
+		awk '
+			/^---/ { kind = ""; in_spec = 0 }
+			/^kind: / { kind = $2 }
+			/^[^[:space:]]/ { in_spec = ($0 == "spec:") }
+			in_spec && kind == "ClusterRunnerTemplate" && /^  workerImage: / { print $2 }
+		'
+	}
+
 	for entry in "${entries[@]}"; do
 		if ! kubectl kustomize "$TEMPLATES_DIR/$entry" >/dev/null 2>&1; then
 			fail "\`kubectl kustomize $TEMPLATES_DIR/$entry\` does not render; an operator cannot apply this entry"
@@ -495,6 +537,9 @@ if ((RENDER)) && command -v kubectl >/dev/null 2>&1; then
 $render"
 			continue
 		}
+
+		# Rule 9, from what the overlay applies.
+		check_worker_image "$overlay" "renders" "$(rendered_worker_images <<<"$render")"
 
 		# Rule 8: every targeted patch selects a resource the render holds.
 		docs_in_render="$(render_docs <<<"$render")"

@@ -141,7 +141,7 @@ build_fixture() {
 			      # a comment ahead of the ops
 			      - op: replace
 			        path: /spec/workerImage
-			        value: ghcr.io/example/runner:1
+			        value: ghcr.io/actions-gateway/dogfood-e2e-runner:1
 		EOF
 	done
 
@@ -454,6 +454,92 @@ if command -v kubectl >/dev/null 2>&1; then
 	fi
 else
 	printf 'skip %-46s %s\n' "render assertions" "kubectl not on PATH"
+fi
+
+# --- rule 9: an overlay supplies its own workerImage (Q980) ------------------
+
+# strip_worker_image KUSTOMIZATION — drop the three lines of the op that sets it.
+strip_worker_image() {
+	awk '
+		/^[[:space:]]+- op: / { held = $0; next }
+		held != "" && /^[[:space:]]+path: \/spec\/workerImage$/ { held = ""; skip = 1; next }
+		held != "" { print held; held = "" }
+		skip && /^[[:space:]]+value: / { skip = 0; next }
+		{ print }
+		END { if (held != "") print held }
+	' "$1" >"$F/t" && mv "$F/t" "$1"
+}
+
+# Each overlay alone, so reading one of the two is not enough.
+for overlay in kata dind; do
+	build_fixture "$F"
+	strip_worker_image "$F/overlays/$overlay/kustomization.yaml"
+	expect_red "$overlay without its workerImage op" "$F" "overlay '$overlay' patches in workerImage '<none>'"
+done
+
+build_fixture "$F"
+sed 's|dogfood-e2e-runner:1|dogfood-runner:1|' "$F/overlays/dind/kustomization.yaml" >"$F/t" &&
+	mv "$F/t" "$F/overlays/dind/kustomization.yaml"
+expect_red "an image without the e2e tools" "$F" "patches in workerImage 'ghcr.io/actions-gateway/dogfood-runner:1'"
+
+build_fixture "$F"
+sed 's|dogfood-e2e-runner:1|dogfood-e2e-runner|' "$F/overlays/dind/kustomization.yaml" >"$F/t" &&
+	mv "$F/t" "$F/overlays/dind/kustomization.yaml"
+expect_red "an untagged image" "$F" "patches in workerImage 'ghcr.io/actions-gateway/dogfood-e2e-runner'"
+
+# The library entry supplying the image itself renders correctly, so only the
+# overlay's own patches show it is missing there.
+build_fixture "$F"
+strip_worker_image "$F/overlays/kata/kustomization.yaml"
+sed 's|^spec:$|spec:\n  workerImage: ghcr.io/actions-gateway/dogfood-e2e-runner:1|' \
+	"$F/templates/kata-dind/template.yaml" >"$F/t" && mv "$F/t" "$F/templates/kata-dind/template.yaml"
+expect_red "an image from the library entry" "$F" "overlay 'kata' patches in workerImage '<none>'"
+
+if command -v kubectl >/dev/null 2>&1; then
+	# A later op undoes the patch: the overlay still names the image, and what
+	# it applies has none.
+	build_fixture "$F"
+	cat >>"$F/overlays/dind/kustomization.yaml" <<-'EOF'
+		  - target:
+		      group: actions-gateway.com
+		      version: v2beta1
+		      kind: ClusterRunnerTemplate
+		      name: privileged-dind
+		    patch: |
+		      - op: remove
+		        path: /spec/workerImage
+	EOF
+	run_gate "$F"
+	die_if_killed "a workerImage the render loses" "$RC"
+	if ((RC == 0)); then
+		bad "a workerImage the render loses" "gate PASSED an overlay that renders no workerImage"
+	elif [[ "$GATE_OUT" != *"overlay 'dind' renders workerImage '<none>'"* ]]; then
+		bad "a workerImage the render loses" "failed for another reason: $GATE_OUT"
+	else
+		ok "a workerImage the render loses" "reported from the render"
+	fi
+
+	# The tracked overlays, each with the op removed, so both readings are known
+	# to reach the files that ship and not only the fixture's shape.
+	for overlay in kata dind; do
+		rm -rf "$F"
+		mkdir -p "$F"
+		cp -R deploy/templates deploy/dogfood-e2e "$F/"
+		strip_worker_image "$F/dogfood-e2e/overlays/$overlay/kustomization.yaml"
+		set +e
+		"$GATE" --templates-dir "$F/templates" --overlays-dir "$F/dogfood-e2e/overlays" >"$FIXTURE_ROOT/gate.log" 2>&1
+		RC=$?
+		set -e
+		GATE_OUT="$(<"$FIXTURE_ROOT/gate.log")"
+		die_if_killed "tracked $overlay overlay, op removed" "$RC"
+		if ((RC == 0)); then
+			bad "tracked $overlay overlay, op removed" "gate PASSED it"
+		elif [[ "$GATE_OUT" != *"overlay '$overlay' patches in workerImage '<none>'"*"overlay '$overlay' renders workerImage '<none>'"* || "$GATE_OUT" != *"2 template-library check(s) failed"* ]]; then
+			bad "tracked $overlay overlay, op removed" "failed for another reason: $GATE_OUT"
+		else
+			ok "tracked $overlay overlay, op removed" "both readings report it and nothing else does"
+		fi
+	done
 fi
 
 # --- the tracked tree ---------------------------------------------------------

@@ -17,7 +17,7 @@ That inversion is the point: an operator applying `deploy/templates/kata-dind` g
 Two consequences worth knowing before editing an overlay:
 
 - **Patch the template with JSON 6902, never a strategic merge.** kustomize has no schema for a CRD, so a strategic merge degrades to an RFC 7386 JSON merge patch and replaces lists wholesale: a patch naming `initContainers` drops the dind container's image, restartPolicy, capabilities and probe, at exit 0.
-  `make template-library-check` fails on it, and also on an overlay that stops consuming the library.
+  `make template-library-check` fails on it, on an overlay that stops consuming the library, and on one that stops setting `workerImage` to the build-capable e2e runner.
 - The template objects are named for the library entry (`kata-dind`, `privileged-dind`), not for this tenant.
 
 ## The two variants
