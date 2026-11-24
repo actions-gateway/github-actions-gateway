@@ -22,7 +22,7 @@ M1 to M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-t
 |---|---|---|---|
 | M1 | The `result` vocabulary for a red step, a cancelled run and a timed-out job | Which completions the ledger records | Measured: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
 | M2 | Whether a re-run job's `JobAssigned` carries a new job UUID and the same `jobDisplayName`, and whether two jobs in one run can share a display name | Pairing's key | Measured: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
-| M3 | Whether a container killed at its memory limit takes the runner with it (the pod fails, and GitHub concludes the job only when the job lock lapses, about 10 minutes later) or only a step's process (the runner survives and reports a failed step) | Whether the out-of-memory class fires from the pod watch, like the disruption arms, or from `JobCompleted` | Measured under `Throughput`: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
+| M3 | Whether a container killed at its memory limit takes the runner with it (the pod fails, and GitHub concludes the job only when the job lock lapses, about 10 minutes later) or only a step's process (the runner survives and reports a failed step) | Whether the out-of-memory class fires from the pod watch, like the disruption arms, or from `JobCompleted` | Measured under [`Throughput`](#readings-from-the-dogfood-turn-up-2026-11-22) and [`Binpack`](#readings-from-the-binpack-turn-up-2026-11-24) |
 | M4 | Whether a finished worker's pod object still exists when its `JobCompleted` arrives | Where platform context is read | Measured: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
 | M5 | The `superseded` check's answer for a pull request from a fork whose branch is `main` | Whether the check needs more than the filters below | Measured from the API: [the readings](#readings-from-githubs-api-2026-11-22) |
 | M6 | Whether `jobDisplayName` matches the jobs API's `name` exactly, for matrix jobs and reusable workflows, and what a single-job re-run does to the jobs it depends on and that depend on it | Whether a classified retry can re-run only its own job ([granularity](#run--or-job-granular-re-run-open-question-2)) | A test workflow with a matrix, a reusable workflow and a `needs:` chain, re-run one job at a time |
@@ -52,8 +52,49 @@ The readings are the AGC's `scaleset: job assigned`, `job completed`, `scale-set
   A step allocating 9216Mi past the runner's 8268Mi limit took the whole container: the pod reached `Failed` with the runner `OOMKilled`, exit 137, at 17:58:21 UTC, and GitHub concluded the job `failure` at 18:08:09 with "The self-hosted runner lost communication with the server" and no step log.
   So the class fires from the pod watch, as built: 2 s after the kill it recorded the floor 8268Mi to 12416Mi, emitted `MemoryLimitRaisedForRetry` and parked the re-run, which it released at 18:09:28, 79 s after the run concluded.
   The re-run's pod carried a runner limit of 12416Mi, its request unchanged at 5568Mi since `Throughput` raises only the limit, and `actions-gateway.com/rerun-cause: oom`; its step read `memory.max` as 13019119616 bytes (12416Mi), survived the same allocation, and paired as `trigger=gag`, `cause=oom`, not flaky.
-  `Binpack`, which raises the request with the limit, was not measured: the live set runs `Throughput` ([Q1382](../queue/Q1382.md)).
+  `Binpack`, which raises the request with the limit, was measured two days later ([the readings](#readings-from-the-binpack-turn-up-2026-11-24)).
 - **`JobCompleted` carries `eventName` and `jobWorkflowRef`.** Every record holds `event: push` and the fixture's workflow ref, and the listener reads both from the completion message.
+
+### Readings from the `Binpack` turn-up, 2026-11-24
+
+Taken for Q1382 on the same set and the same `v2.0.1-rc.2` AGC, with the set's profile switched to `Binpack` for the runs and restored after them.
+The out-of-memory class, its ledger and the sizing code are unchanged between that tag and `main` at `b3d225743`; `main` would name the two reaps of withdrawn workers below `WorkerReplacedBeforeStart` (Q1361), where `v2.0.1-rc.2` recorded `WorkerPodCompletedPending`.
+Both runs dispatched the [`q1317-oom-probe`](../../.github/workflows/q1317-oom-probe.yml) fixture unedited: its 9216 MiB allocation sits between the set's derived limit and the raised one in each.
+Times are UTC.
+
+**The raise fits, and the re-run succeeds** (run 45324839276):
+
+- The first worker's memory request and limit were both 7744Mi, 1.4 times the set's 5512Mi peak rounded up to 64Mi, and the pod was `Guaranteed`.
+- Its runner was `OOMKilled`, exit 137, at 04:16:17; the class fired 7 s later with the floor 10880Mi, 1.4 times 7744Mi rounded up, and emitted `MemoryLimitRaisedForRetry` naming both.
+- GitHub concluded the job `failure` at 04:26:05, 9 min 48 s after the kill, the interval under `Throughput` too; the second run's was 9 min 43 s.
+  Counted from the job's `started_at` the three are 10 min 0 s, 0 s and 1 s; every kill came in the job's first 17 s, so these do not say what a kill later in a job would show.
+  The re-run was released at 04:27:49.
+- Its pod's request and limit were both 10880Mi, so `Binpack` raised the request with the limit, and the pod was scheduled in the second it was created (04:27:52).
+  The node, an `e2-standard-4`, had 12369Mi unrequested and held no other worker; a node already holding one 7744Mi worker had about 4625Mi.
+- Inside the job `memory.max` read 11408506880 bytes (10880Mi) and the same allocation survived; the attempt paired as `trigger=gag`, `cause=oom`, not flaky.
+- On the worker's own node the kubelet's `singleProcessOOMKill` is unset (`configz`, kubelet `v1.35.8-gke.1796000`), which the 2026-11-22 reading had for the system pool's node only.
+
+**The raise fits no node, and the re-run never starts** (run 45326748517).
+The set's `minRequests.memory` was set to 9024Mi for this run, so the raise asked for 12672Mi where an empty worker node offers 12369Mi.
+That was a change to the live `ci` set beyond the agreed dogfood scope: raised from 1Gi at 04:29:17 and restored at 05:02:33, the spec diffed identical.
+The 31 job assignments inside that window were all from this work's own probe runs.
+
+- The class fired, parked and re-ran exactly as above; it does not ask whether any node can hold the raised request.
+- The re-run's pod (04:40:23) was unschedulable with all eight worker nodes `Ready` and holding no worker: "8 Insufficient memory", plus two system-pool nodes its selector excludes.
+  The autoscaler added no node: its `NotTriggerScaleUp` gave the pool's maximum size at 04:40:23, and, once the pool was below it, "1 node(s) had untolerated taint(s), 1 Insufficient memory" at 04:45:24.
+  `WorkersUnschedulable` went `True` at 04:45:23.
+- GitHub withdrew the untaken assignment at 04:45:22 and 04:50:23, five minutes after each, and re-issued the job; each re-issue's pod asked for 12672Mi again, because the floor is keyed by run and job name.
+- The third assignment was not withdrawn.
+  Its pod reached the ten-minute `pendingPodDeadline` at 05:00:24, and the abandoned arm cancelled the run.
+- At 05:02:19 the abandoned arm re-ran the run, because a 9024Mi worker of another run had been placed on the set.
+  That spent the second of the run's two slots on a third attempt whose pod was again 12672Mi and `Pending`; the run was then cancelled by hand, so how a third attempt ends was not read.
+
+So the class works under `Binpack` as under `Throughput`, and a raise no node can hold cost this run 20 minutes of `Pending` and both its slots ([Q1388](../queue/Q1388.md)).
+An operator prevents it with `maxRequests.memory`, which caps the raise (from source; not run here).
+Why GitHub withdrew two assignments and kept the third was not measured, and this is one run.
+
+**The class fired before the job's `JobStarted` was handled** (run 45324839276): the first at 04:16:24, the second at 04:16:35, 30 s after the job started.
+Until that message the pod names the job it was provisioned for, which need not be the job its runner took; here the two were the same ([Q1389](../queue/Q1389.md)).
 
 ### Readings from GitHub's API, 2026-11-22
 
@@ -451,7 +492,7 @@ next     = min(roundUp64Mi(killedLimit × headroom), ceiling)
 
 If `next <= killedLimit` (a ceiling reached, or `limitHeadroomPercent: 100`), the fire is withheld as `own_limit`.
 **A job gets one bump.** A second out-of-memory kill on the same job is `same_class_again`, so growth is bounded by the ceiling, at most 2× the limit that first failed when `maxRequests` is unset, whatever `maxEvictionRetries` and `limitHeadroomPercent` allow (up to 10 and 1000% respectively).
-Under `Binpack`, requests equal limits, so the request rises with it; under `Throughput`, only the limit.
+Under `Binpack`, requests equal limits, so the request rises with it ([measured](#readings-from-the-binpack-turn-up-2026-11-24)); under `Throughput`, only the limit.
 Clamping the bump is deliberate, because a retry must not buy memory a profile would refuse; `Throughput`'s own limit is clamped by `maxRequests` too (Q1327).
 
 **The override needs a per-job hook, which does not exist.** `Target.Resolve(ctx)` takes no job, and `buildPod` uses the job only for annotations.
@@ -667,7 +708,7 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 | The budget reservation write fails | No slot is reserved | The re-run is withheld; never a re-run without a slot |
 | GitHub's API is unreachable | No run read, so no re-run | Fail closed, as the deletion arm does today |
 | A class is misdeclared | Its re-runs keep failing | `same_class_again` stops each job's repeat, and the alert names the cause |
-| A floor's pod cannot be placed | The worker stays Pending past its deadline | The abandoned arm's existing path, which waits for capacity |
+| A floor's pod cannot be placed | GitHub withdraws and re-issues the job about every five minutes, each worker `Pending` at the same floor, until one outlasts its deadline ([measured once](#readings-from-the-binpack-turn-up-2026-11-24)) | The abandoned arm cancels the run, then re-runs it when any worker of the set is placed, which says nothing about a pod this size: the run's second slot is spent on another `Pending` worker |
 | Two AGC pods during a rollout | Both may see one disruption | The reservation is a compare-and-swap on one object keyed by the disruption, so the second resumes the first's reservation rather than taking another |
 
 ## Test plan
