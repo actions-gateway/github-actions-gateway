@@ -123,6 +123,7 @@ R2 and R3 are the kill [Q1400](../queue/Q1400.md) describes, a runner killed for
 They settle whether the pod reads `Failed` with the runner `OOMKilled` at the API server, what the AGC then says and does, and when its `PlatformFaultOnFailedJob` comes.
 R8 is the kill they are told apart from, a runner past its own limit, and the AGC is expected to treat it alike.
 [M3](q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22) read that kill's status and not its counters or Events.
+Each container's `current` and `peak` beside its `max` say how far below its own limit a node-killed runner was, which is the claim Q1400 makes.
 What separates them is expected to be the pod's `oom`, 1 for R8 and 0 for R2 and R3; `kubepods`' `oom` then tells R3 from R2, and the `SystemOOM` Event R2 from the rest.
 None of those reaches the AGC today, so the readings say what honest wording can rest on and what a class would need.
 The set is `NodeShare`, so what is read is the withheld `own_limit` branch.
@@ -345,7 +346,7 @@ while time.time() < end:
     for d in ["/h", "/h/kubepods.slice", "/h/docker"] + sorted(glob.glob("/h/kubepods.slice/**/*pod*.slice", recursive=True)):
         print(" ", d[3:], *(rd(d + "/memory." + f) + " |" for f in ("current", "max", "oom.group", "events", "events.local")))
         for c in sorted(glob.glob(d + "/cri-*.scope")):
-            print("   ", c[-20:], *(rd(c + "/memory." + f) + " |" for f in ("max", "oom.group", "events.local")), flush=True)
+            print("   ", c[-20:], *(rd(c + "/memory." + f) + " |" for f in ("current", "peak", "max", "oom.group", "events.local")), flush=True)
     time.sleep(1)
 ```
 
