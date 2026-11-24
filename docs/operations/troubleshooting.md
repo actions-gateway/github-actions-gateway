@@ -3080,12 +3080,12 @@ The `EvictionRerunWithheld` Event names the reason and, where one is needed, the
 
 | `reason` | Why no re-run | What to do |
 |---|---|---|
-| `already_rerun` | A later attempt of the run already re-ran the job | Nothing |
-| `run_succeeded` | The run concluded `success`, and GitHub refuses to re-run it | Nothing; seen after detection, it has spent its slot |
-| `attempt_limit` | The run is past GitHub's 50 re-runs | Start a new run |
-| `run_too_old` | The run was created more than 30 days ago | Start a new run |
-| `superseded` | A newer commit's run of the same workflow, event and branch has started | Nothing |
-| `worker_unstartable` | A worker of the set is placed and stuck in `ImagePullBackOff`, and none has started since | [Fix the image or its pull credentials](#the-reason-is-podsnotstarting-the-image-will-not-pull), then re-run by hand |
+| <code class="gag-nowrap">already_rerun</code> | A later attempt of the run already re-ran the job | Nothing |
+| <code class="gag-nowrap">run_succeeded</code> | The run concluded `success`, and GitHub refuses to re-run it | Nothing; seen after detection, it has spent its slot |
+| <code class="gag-nowrap">attempt_limit</code> | The run is past GitHub's 50 re-runs | Start a new run |
+| <code class="gag-nowrap">run_too_old</code> | The run was created more than 30 days ago | Start a new run |
+| <code class="gag-nowrap">superseded</code> | A newer commit's run of the same workflow, event and branch has started | Nothing |
+| <code class="gag-nowrap">worker_unstartable</code> | A worker of the set is placed and stuck in `ImagePullBackOff`, and none has started since | [Fix the image or its pull credentials](#the-reason-is-podsnotstarting-the-image-will-not-pull), then re-run by hand |
 
 A merge-queue run has no `superseded` check, and GitHub leaves a group displaced from the queue running rather than cancelling it, so a disrupted job in one is re-run and spends a budget slot on a result nothing reads (measured 2026-11-22, Q1381).
 
