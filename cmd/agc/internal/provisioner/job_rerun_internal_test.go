@@ -445,6 +445,33 @@ func TestJobRerun_ARefusedReleaseEndsWithTheWait(t *testing.T) {
 	assert.Empty(t, api.accepted())
 }
 
+// TestJobRerun_ACancelledSiblingIsReRunWithTheKilledLeg: a fail-fast matrix cancels the
+// killed leg's siblings, and one call takes them all where nothing failed on its own.
+func TestJobRerun_ACancelledSiblingIsReRunWithTheKilledLeg(t *testing.T) {
+	for _, tc := range []struct {
+		name, lint string
+		want       []string
+		sibling    string
+	}{
+		{"nothing else failed", "success", []string{"failed-jobs"}, "success"},
+		{"beside a genuine failure", "failure", []string{"r-a"}, "cancelled"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, api, target, clock, _ := jobsFixture(t,
+				runJob{name: "lint", runner: "r-lint", conclusion: tc.lint},
+				runJob{name: "a", runner: "r-a", conclusion: "failure"},
+				runJob{name: "b", runner: "r-b", conclusion: "cancelled"})
+			parkKill(p, target, "pod-a", "a", "r-a")
+			release(t, p, api, clock, 1)
+			assert.Equal(t, tc.want, api.accepted())
+			assert.Equal(t, tc.sibling, api.jobs[2].conclusion)
+			l := readLedger(t, p, target)
+			assert.Empty(t, l.Pending)
+			assert.Equal(t, 1, l.Reruns["4242"].Count)
+		})
+	}
+}
+
 // TestJobRerun_AHumansReRunLeavesTheOthersParked: somebody re-ran one of two killed jobs,
 // so only the other is.
 func TestJobRerun_AHumansReRunLeavesTheOthersParked(t *testing.T) {
@@ -686,7 +713,10 @@ func TestPlanJobRerun(t *testing.T) {
 		want      []killedWorker
 	}{
 		{"one of two failures", []killedWorker{a}, jobs, rerunScopeJob, []killedWorker{a}},
-		{"a sibling its matrix or its timeout cancelled", []killedWorker{a}, []workflowJobSummary{row(1, "a", "r-a", "failure"), row(2, "b", "r-b", "cancelled")}, rerunScopeJob, []killedWorker{a}},
+		{"a sibling its matrix or its timeout cancelled", []killedWorker{a}, []workflowJobSummary{row(1, "a", "r-a", "failure"), row(2, "b", "r-b", "cancelled")}, rerunScopeFailedJobs, []killedWorker{a}},
+		{"a cancelled sibling beside a failure", []killedWorker{a}, append(jobs[:2:2], row(4, "c", "r-c", "cancelled")), rerunScopeJob, []killedWorker{a}},
+		{"a killed job GitHub cancelled", []killedWorker{a}, []workflowJobSummary{row(1, "a", "r-a", "cancelled")}, rerunScopeFailedJobs, []killedWorker{a}},
+		{"nothing but a cancelled sibling", []killedWorker{{Job: "a", Runner: "gone"}}, []workflowJobSummary{row(2, "b", "r-b", "cancelled")}, rerunScopeFailedJobs, nil},
 		{"every failure", []killedWorker{a, b}, jobs, rerunScopeFailedJobs, []killedWorker{a, b}},
 		{"one whose runner is not listed beside one that is", []killedWorker{{Job: "b", Runner: "gone"}, a}, jobs, rerunScopeJob, []killedWorker{a}},
 		{"none listed", []killedWorker{{Job: "a", Runner: "gone"}}, jobs, rerunScopeJob, nil},

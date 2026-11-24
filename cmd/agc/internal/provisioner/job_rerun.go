@@ -61,12 +61,13 @@ func (w killedWorker) find(jobs []workflowJobSummary) (job workflowJobSummary, f
 // stands in that attempt, none of them where nothing is left to re-run.
 //
 // rerunScopeJob re-runs the first of them alone. rerunScopeFailedJobs is for the cases
-// where that call takes no other job, because every failed job of the attempt is one of
-// them, or where the list does not say which jobs they are: an unread or empty one, or a
-// worker matched by a name that does not name one job.
+// where every other failed job of the attempt was cancelled, so that call re-runs no job
+// that ended failure on its own, or where the list does not say which jobs they are: an
+// unread or empty one, or a worker matched by a name that does not name one job.
 //
-// A cancelled job is one that failed: the list does not say whether a fail-fast matrix
-// cancelled it or its own timeout did, and a timeout is not the class's to re-run.
+// rerun-failed-jobs takes the cancelled jobs too, which are a fail-fast matrix's siblings
+// of a killed leg. The list spells a job past its own timeout the same way, and that one
+// is re-run with them.
 func planJobRerun(workers []killedWorker, jobs []workflowJobSummary) (scope string, standing []killedWorker) {
 	if len(jobs) == 0 || len(workers) == 0 {
 		return rerunScopeFailedJobs, workers
@@ -83,7 +84,7 @@ func planJobRerun(workers []killedWorker, jobs []workflowJobSummary) (scope stri
 		}
 	}
 	for _, j := range jobs {
-		if j.failed() && !killed[j.ID] {
+		if j.failed() && j.Conclusion != runConclusionCancelled && !killed[j.ID] {
 			return rerunScopeJob, standing
 		}
 	}
