@@ -80,14 +80,15 @@ patches:
       # Build-capable runner image (docker CLI + buildx + helm + kubectl + jq on
       # the dogfood base — scripts/dogfood/e2e-runner/Dockerfile).
       #
-      # THIS PATCH IS LOAD-BEARING AND NOTHING FAILS LOUDLY WITHOUT IT. The
+      # THIS PATCH IS LOAD-BEARING AND THE CLUSTER ACCEPTS ITS ABSENCE. The
       # library base sets no workerImage, so an overlay that dropped this op
       # would silently gap-fill the AGC's default runner — which has a docker
       # client but none of helm, kubectl or jq — and the suite would die
       # mid-run rather than at image pull. `op: replace` against an absent
       # member is not an error here either: kustomize creates it (measured on
       # kubectl v1.36.3 / kustomize v5.8.1, the pair check-template-library.sh
-      # pins). Nothing asserts this today; Q980 carries it.
+      # pins). `make template-library-check` fails on its absence, here and in
+      # the render (Q980).
       - op: replace
         path: /spec/workerImage
         value: ghcr.io/actions-gateway/dogfood-e2e-runner:2.338.2-1
