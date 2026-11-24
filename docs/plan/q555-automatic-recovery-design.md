@@ -881,7 +881,7 @@ What it does is in [04-operational-flows.md](../design/04-operational-flows.md#t
   The common cost is a job that aggregates the others (`if: always()`, red when one it needs is): it is another failure, since the jobs list carries no `needs:`, so three killed legs of a matrix behind one recover two where `rerun-failed-jobs` recovers three.
   The alternatives: one `rerun-failed-jobs` for the set, which recovers them all on one slot and re-runs the genuine failure, as this release [must not](release-2.1.md#what-this-release-must-not-do); or one slot for the whole set, which lets one reservation start an attempt for each kill, up to 15.
 - **A cancelled job is another failure**, so a killed leg of a fail-fast matrix is re-run alone and its cancelled siblings are not, where `rerun-failed-jobs` re-ran them.
-  Treating `cancelled` as not a failure would restore them and re-run a timeout, which the list spells the same ([readings](#readings-for-a-cancelled-sibling-2026-11-24)); telling them apart is [Q1399](../queue/Q1399.md).
+  Treating `cancelled` as not a failure would restore them where nothing else failed, and re-run a timeout, which the list spells the same ([readings](#readings-for-a-cancelled-sibling-2026-11-24)); telling them apart is [Q1399](../queue/Q1399.md).
 - **A dependent the single-job re-run took along counts as `gag_collateral`**, since GAG's re-run took it and no person did.
 
 ### M6 readings from the job-granular probe, 2026-11-24
@@ -914,21 +914,25 @@ Not covered: nesting past two levels; an upload without `overwrite: true` on a r
 
 ### Readings for a cancelled sibling, 2026-11-24
 
-Which fact tells a job a fail-fast matrix cancelled from one that timed out, read from public runs and from this repository's run 45052015868 (M1).
-The jobs list gives `conclusion: cancelled` for all three shapes below; the failure-level annotations of the job's check run name the cause.
+Which fact tells a job a fail-fast matrix cancelled from one that timed out, and how common each is.
+Read from the API: the newest 50 failed runs of each of 12 public repositories (600 runs, 594 read, the first 100 jobs of the 23 that have more), and the newest 1,000 of this repository's 1,546 failed runs, 2026-07-24 to 2026-11-24.
+The jobs list gives `conclusion: cancelled` for every shape below; the failure-level annotations of the job's check run name the cause, up to 12 jobs of a public run read.
 
-| Shape | Run | First annotation |
-|---|---|---|
-| Fail-fast sibling | `rust-lang/cargo` 45352018885, 45348465962, 45343173665; `prometheus/prometheus` 45427763111 | `The strategy configuration was canceled because "test.Windows_x86_64_gnu_nightl" failed` |
-| Past `timeout-minutes` | this repository's 45052015868, job 137302496192 | `The job has exceeded the maximum execution time of 1m0s` |
-| A concurrency group | `pandas-dev/pandas` 45290894194, 45209779277, 45001328916 | `Canceling since a higher priority waiting request for refs/pull/72292/merge-asv-benchmarks exists` |
+| Shape | First annotation | Public runs | This repository's runs |
+|---|---|---|---|
+| Fail-fast sibling | `The strategy configuration was canceled because "test.Windows_x86_64_gnu_nightl" failed` | 63, of 4 repositories | 0 |
+| Past `timeout-minutes` | `The job has exceeded the maximum execution time of 1m0s` (scale-set run 45052015868) | 1 | 10 |
+| A concurrency group | `Canceling since a higher priority waiting request for refs/pull/72292/merge-asv-benchmarks exists` | 3 | 0 |
+| Never started | `The job was not acquired by Runner of type hosted …`, or an internal error | 0 | 4, one of them beside a timeout |
 
-Each is followed by `The operation was canceled.` Fifteen fail-fast siblings were read, the first three or four of each run, and all ended 13 to 21 s after the run's first failure.
-The time does not separate the shapes: pandas' four cancelled jobs ended after their run's first failure too, 87 s to 13 minutes after.
-All of these jobs had a runner; one cancelled while queued was not read.
-Nor was a matrix whose failed leg lost its runner, which is taken to cancel its siblings as any failed leg does, nor `rerun-failed-jobs` on a cancelled sibling, which this repository has recorded as re-run without a reading.
+- **The annotation separates them and the jobs list does not.** Reading it takes `Checks: read`, which the App has only where the optional `Checks: Read and write` that posts a fork refusal's check run is granted, and it is one call for each cancelled job.
+- **The time does not.** All 329 fail-fast siblings read ended at or after their run's first failure, but so did 12 of the 14 timeouts read and all 4 concurrency cancels.
+- **Most fail-fast runs hold another failed job too.** 12 of the 63 had one failed job and cancelled siblings alone; the other 51 also had a job that concluded `failure`, in 30 of `rust-lang/cargo`'s 38 an aggregate (`conclusion`) and one leg.
+  A rule that lets `cancelled` through still meets those as another failure.
+- **This repository's matrices mostly set `fail-fast: false`**, so its 0 is not a rate for a tenant that leaves the default.
 
-Reading annotations takes `Checks: read`, which the App has only where the optional `Checks: Read and write` that posts a fork refusal's check run is granted, and it is one call for each cancelled job.
+None of these runs lost a runner.
+Not read: a matrix whose failed leg lost its runner, which is taken to cancel its siblings as any failed leg does; `rerun-failed-jobs` on a cancelled sibling, which this repository has recorded as re-run without a reading; and how often a run the class acts on holds either shape, since every kill it has acted on was a probe's.
 
 ### What the readings recommend
 
