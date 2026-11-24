@@ -43,9 +43,9 @@ const (
 	// be a later one, since the two times come from different clocks.
 	attemptStartSkew = time.Minute
 	// jobListSettle is how old a running attempt must be before a job missing from its list
-	// is one it re-ran. GitHub fills the list over the attempt's first seconds: 33 re-run
-	// attempts across 8 repositories had every carried job listed within 14 s of the start
-	// (2026-11-23). The rest allows for the AGC's clock running ahead.
+	// is one it re-ran. GitHub fills the list over the attempt's first seconds: in 62 re-run
+	// attempts across 15 repositories, every carried job was created within 15 s of the
+	// start (2026-11-23). The rest allows for the AGC's clock running ahead.
 	jobListSettle = 2 * time.Minute
 	// githubRerunWindow is how long after a run is created GitHub lets it be re-run.
 	githubRerunWindow = 30 * 24 * time.Hour
