@@ -20,6 +20,10 @@ import (
 // reservation, so a withheld re-run spends nothing. The classic tier makes no read before
 // its in-memory reservation and is not covered.
 
+// errJobsUnsettled marks a moved attempt too young for its jobs list to be complete. A
+// later read can answer, so it wraps errRunConclusionUnreadable.
+var errJobsUnsettled = fmt.Errorf("the latest attempt's jobs list may still be filling: %w", errRunConclusionUnreadable)
+
 // Reason labels on EvictionRerunWithheld for the futility checks.
 const (
 	rerunWithheldReasonAlreadyRerun      = "already_rerun"
@@ -38,6 +42,11 @@ const (
 	// attemptStartSkew is how much later than a job's assignment an attempt must start to
 	// be a later one, since the two times come from different clocks.
 	attemptStartSkew = time.Minute
+	// jobListSettle is how old a running attempt must be before a job missing from its list
+	// is one it re-ran. GitHub fills the list over the attempt's first seconds: 33 re-run
+	// attempts across 8 repositories had every carried job listed within 14 s of the start
+	// (2026-11-23). The rest allows for the AGC's clock running ahead.
+	jobListSettle = 2 * time.Minute
 	// githubRerunWindow is how long after a run is created GitHub lets it be re-run.
 	githubRerunWindow = 30 * 24 * time.Hour
 )
@@ -55,19 +64,12 @@ var supersedableEvents = map[string]bool{"push": true, "pull_request": true}
 // failed in without re-running the job: the failure stands in the latest attempt too, so
 // that is the attempt a re-run starts from.
 func (p *Provisioner) futileRerun(ctx context.Context, target Target, owner, repo, runID, cause string, run runState, d *rerunDisruption, log *slog.Logger) bool {
-	if attemptMoved(run, *d) {
-		verdict, err := p.jobRerunSince(ctx, owner, repo, runID, run, *d)
-		if err != nil {
-			log.Warn("could not list the latest attempt's jobs; re-running without the already_rerun check",
-				"runID", runID, "runAttempt", run.attempt, "error", err)
-		}
-		switch verdict {
-		case jobRerun:
-			return p.withholdFutileRerun(target, runID, cause, run.attempt, log, rerunWithheldReasonAlreadyRerun, fmt.Sprintf("worker pod for run %s was lost to %s, but the run has been re-run since, up to attempt %d, and that re-run covers the lost job, so no automatic re-run was requested; nothing to do",
-				runID, cause, run.attempt))
-		case jobNotRerun:
-			d.failedAttempt = run.attempt
-		}
+	switch run.rerun {
+	case jobRerun:
+		return p.withholdFutileRerun(target, runID, cause, run.attempt, log, rerunWithheldReasonAlreadyRerun, fmt.Sprintf("worker pod for run %s was lost to %s, but the run has been re-run since, up to attempt %d, and that re-run covers the lost job, so no automatic re-run was requested; nothing to do",
+			runID, cause, run.attempt))
+	case jobNotRerun:
+		d.failedAttempt = run.attempt
 	}
 	switch {
 	case run.status == runStatusCompleted && run.conclusion == runConclusionCancelled &&
@@ -157,16 +159,16 @@ type workflowJobSummary struct {
 	Name        string    `json:"name"`
 	Conclusion  string    `json:"conclusion"`
 	RunnerName  string    `json:"runner_name"`
-	CreatedAt   time.Time `json:"created_at"`
 	CompletedAt time.Time `json:"completed_at"`
 }
 
-// carried reports a job the attempt did not run: GitHub lists every job of the run under
-// each attempt with a new created_at, and one the attempt did not re-run keeps the
-// runner_name and completed_at of the attempt it ran in (measured on this repository's
-// run 45310657002, 2026-11-23).
-func (j workflowJobSummary) carried() bool {
-	return !j.CompletedAt.IsZero() && j.CompletedAt.Before(j.CreatedAt)
+// carried reports a job that run's attempt did not run: GitHub lists every job of the run
+// under each attempt, and one the attempt did not re-run keeps the runner_name and
+// completed_at of the attempt it ran in (measured on this repository's run 45325262167,
+// 2026-11-23). Its created_at is new and no guide: a job that never ran is listed as
+// completed a second before it was created.
+func (j workflowJobSummary) carried(run runState) bool {
+	return !j.CompletedAt.IsZero() && j.CompletedAt.Before(run.startedAt)
 }
 
 func (j workflowJobSummary) failed() bool {
@@ -180,15 +182,13 @@ func (j workflowJobSummary) failed() bool {
 // jobRerunSince lists the jobs of run's latest attempt to say whether d's job, which
 // failed in an earlier one, was re-run. A worker whose runner took the job is matched by
 // runner name, which a carried job keeps; otherwise the job was re-run where the attempt
-// carries no failed job at all, or by display name. An error means jobRerunUnknown, and
-// wraps errRunConclusionUnreadable where a later read could answer.
+// carries no failed job at all, or by display name. Anything that rests on a job missing
+// from the list waits until the list is complete (errJobsUnsettled). An error means
+// jobRerunUnknown, and wraps errRunConclusionUnreadable where a later read could answer.
 func (p *Provisioner) jobRerunSince(ctx context.Context, owner, repo, runID string, run runState, d rerunDisruption) (jobRerunVerdict, error) {
 	jobs, err := p.attemptJobs(ctx, owner, repo, runID, run.attempt)
 	if err != nil {
 		return jobRerunUnknown, err
-	}
-	if len(jobs) == 0 {
-		return jobRerunUnknown, nil
 	}
 	var carriedFailure, carriedByName, rerunByName bool
 	for _, j := range jobs {
@@ -197,7 +197,7 @@ func (p *Provisioner) jobRerunSince(ctx context.Context, owner, repo, runID stri
 		}
 		named := d.job != "" && j.Name == d.job
 		switch {
-		case !j.carried():
+		case !j.carried(run):
 			rerunByName = rerunByName || named
 		case j.failed():
 			carriedFailure = true
@@ -205,11 +205,13 @@ func (p *Provisioner) jobRerunSince(ctx context.Context, owner, repo, runID stri
 		}
 	}
 	switch {
-	case d.runner != "", !carriedFailure:
-		return jobRerun, nil
-	case carriedByName:
+	case d.runner == "" && carriedByName:
 		return jobNotRerun, nil
-	case rerunByName:
+	case run.status != runStatusCompleted && time.Since(run.startedAt) < jobListSettle:
+		return jobRerunUnknown, errJobsUnsettled
+	case len(jobs) == 0 || run.startedAt.IsZero():
+		return jobRerunUnknown, nil
+	case d.runner != "", !carriedFailure, rerunByName:
 		return jobRerun, nil
 	}
 	return jobRerunUnknown, nil

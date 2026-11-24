@@ -248,7 +248,7 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 				"runID", runID, "cause", cause)
 			return
 		}
-		run, err := p.readRerunCandidate(rctx, owner, repo, runID)
+		run, err := p.readRerunCandidate(rctx, owner, repo, runID, d, log)
 		if err != nil {
 			reason := rerunFailureReasonAPIError
 			if errors.Is(err, errRunConclusionUnreadable) {
@@ -315,15 +315,26 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 
 // readRerunCandidate reads the run, retrying an unreadable answer on the re-run loop's
 // interval until its window closes. A 4xx is terminal at once, as it is in the loop.
-func (p *Provisioner) readRerunCandidate(ctx context.Context, owner, repo, runID string) (runState, error) {
+// Where the run moved past the attempt d's job failed in, it also asks whether that
+// re-ran the job, waiting for the jobs list to settle; any other list it cannot read
+// leaves the verdict unknown, which does not withhold.
+func (p *Provisioner) readRerunCandidate(ctx context.Context, owner, repo, runID string, d rerunDisruption, log *slog.Logger) (runState, error) {
 	windowC, stopWindow := p.startRerunWindow()
 	defer stopWindow()
 	for {
 		run, err := p.runConclusion(ctx, owner, repo, runID)
-		if err == nil && run.attempt == 0 {
+		switch {
+		case err == nil && run.attempt == 0:
 			// Every disruption of every attempt would merge into one key, so a run
 			// that names no attempt cannot be budgeted; it will not name one later.
 			return runState{}, errors.New("the run carried no run_attempt")
+		case err == nil && attemptMoved(run, d):
+			run.rerun, err = p.jobRerunSince(ctx, owner, repo, runID, run, d)
+			if err != nil && !errors.Is(err, errJobsUnsettled) {
+				log.Warn("could not list the latest attempt's jobs; re-running without the already_rerun check",
+					"runID", runID, "runAttempt", run.attempt, "error", err)
+				err = nil
+			}
 		}
 		if err == nil {
 			return run, nil
@@ -712,6 +723,8 @@ type runState struct {
 	headSHA    string
 	// headRepo is head_repository.full_name: a fork's for a pull request from one.
 	headRepo string
+	// rerun is set by readRerunCandidate where attempt is past the one the job failed in.
+	rerun jobRerunVerdict
 }
 
 // runConclusion calls GET /repos/{owner}/{repo}/actions/runs/{run_id} and returns the

@@ -490,7 +490,7 @@ The scale-set tier now judges the run read it takes before reserving a slot ([`r
 | `attempt_limit` | `run_attempt` is past 50, so the run has already been re-run 50 times, GitHub's cap on re-runs of a run, full or partial ([changelog, 2026-04-10](https://github.blog/changelog/2026-04-10-actions-workflows-are-limited-to-50-reruns/)) | Start a new run |
 | `run_too_old` | The run was created more than 30 days ago, outside GitHub's re-run window | Start a new run |
 | `superseded` | A `push` or `pull_request` run, and the newest run of the same workflow, event and branch is from a newer commit in the same head repository | Nothing: the newer commit is building |
-| `worker_unstartable` | A worker pod of the set is bound and in `ImagePullBackOff`, and no worker of the set has started since the oldest such pod was placed | Fix the image or its pull credentials, then re-run by hand |
+| `worker_unstartable` | A worker pod of the set is bound and in `ImagePullBackOff`, and no worker of the set still present has started since the oldest such pod was placed | Fix the image or its pull credentials, then re-run by hand |
 
 A field GitHub did not send skips its check rather than withholding.
 Two checks cost a call, and neither withholds on an answer it cannot read, because each only ever withholds: `superseded` lists the workflow's runs, filtered to the branch and event, newest first; `already_rerun` lists a moved attempt's jobs.
@@ -499,11 +499,13 @@ Two checks cost a call, and neither withholds on an answer it cannot read, becau
 An arm that knows its attempt compares it; every other arm compares the run's `run_started_at` against when the job's worker was provisioned, allowing a minute of clock skew, and a worker with no such time is taken as unmoved.
 A moved attempt is then read from its jobs, because a single-job re-run moves `run_attempt` and leaves the failed siblings standing ([measured](../plan/q555-automatic-recovery-design.md#readings-from-githubs-api-2026-11-23)).
 GitHub lists every job of the run under each attempt, and one the attempt did not run keeps the runner and the `completed_at` of the attempt it ran in.
+It fills a new attempt's list over its first seconds, so a job missing from the list counts only once the attempt has concluded or is 2 minutes old; until then the read is retried, before the reservation as in the loop, and a parked re-run is kept.
 So the worker's runner name still on the list means the job was not re-run, and its absence means it was; with no recorded start the answer comes from whether any carried job is a failure, then from the job's display name.
 A job found not re-run is recovered from the latest attempt, where its failure still stands.
 Where the jobs do not say, the pre-reservation check lets the re-run through, and the re-run loop and the parked re-runs stand down on the attempt alone, since there a second re-run of one attempt is the worse mistake.
 
 `worker_unstartable` reads the worker pods, not the capacity gate, so it holds on a set with no `spec.capacityGate`: it is the startup half of the verdict [`WorkersNotStarting`](../operations/troubleshooting.md#the-reason-is-podsnotstarting-the-image-will-not-pull) publishes on every set, plus the requirement that nothing started since, so one node that cannot reach the registry does not withhold (Q1320).
+A started worker counts only until it is deleted (`completedPodTTL`, 5 minutes by default), and a failing pod counts until it is reaped (`pendingPodDeadline`, 10 minutes by default) even if its image reference has been fixed since, so either can withhold a re-run that would have worked for a few minutes.
 Every scale-set arm asks it, and it matters most to the abandoned arm, which is released by any pod of the set binding, one stuck pulling an image included; that release still counts `capacity_returned`.
 The gate's placeability verdicts are not consulted: a cluster that is merely full reads as unschedulable, and withholding is final where a re-run's job would only have waited.
 The reaped worker itself is not evidence, because it is being deleted, so a set whose only failing worker was the reaped one re-runs.

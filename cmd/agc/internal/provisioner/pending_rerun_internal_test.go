@@ -206,17 +206,19 @@ func TestPendingRerun_SurvivesARestart(t *testing.T) {
 // run moves its attempt without re-running the parked one, so the entry waits for the new
 // attempt to conclude and is then released; a re-run of the job itself drops it.
 func TestPendingRerun_SurvivesAnUnrelatedJobsReRun(t *testing.T) {
+	lint, lost := ranInAttempt(time.Now(), "lint", "gpu-new", "success"), carriedJob(time.Now(), "build", "gpu-old", "failure")
 	for _, tc := range []struct {
-		name         string
-		jobs         []map[string]any
+		name string
+		// first, where set, is the first list, read of an attempt seconds old.
+		first, jobs  []map[string]any
 		jobsStatus   int
 		wantReruns   int64
 		wantReleased int
 	}{
-		{"another job was re-run", []map[string]any{
-			ranInAttempt(time.Now(), "lint", "gpu-new", "success"), carriedJob(time.Now(), "build", "gpu-old", "failure")}, 0, 1, 1},
-		{"this job was re-run", []map[string]any{ranInAttempt(time.Now(), "build", "gpu-new", "failure")}, 0, 0, 0},
-		{"the list is refused", nil, http.StatusForbidden, 0, 0},
+		{"another job was re-run", nil, []map[string]any{lint, lost}, 0, 1, 1},
+		{"another job was re-run, and this one is not listed yet", []map[string]any{lint}, []map[string]any{lint, lost}, 0, 1, 1},
+		{"this job was re-run", nil, []map[string]any{ranInAttempt(time.Now(), "build", "gpu-new", "failure")}, 0, 0, 0},
+		{"the list is refused", nil, nil, http.StatusForbidden, 0, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -226,10 +228,22 @@ func TestPendingRerun_SurvivesAnUnrelatedJobsReRun(t *testing.T) {
 				case call == 1:
 					return failedRun(time.Now(), map[string]any{"status": "in_progress", "conclusion": nil})
 				case !concluded:
-					return secondAttempt(time.Now(), map[string]any{"status": "in_progress", "conclusion": nil})
+					run := secondAttempt(time.Now(), map[string]any{"status": "in_progress", "conclusion": nil})
+					if tc.first != nil {
+						run["run_started_at"] = time.Now().Add(-3 * time.Second).Format(time.RFC3339)
+					}
+					return run
 				}
 				return secondAttempt(time.Now(), nil)
 			}}
+			if tc.first != nil {
+				api.jobsAt = func(call int) []map[string]any {
+					if call == 1 {
+						return tc.first
+					}
+					return tc.jobs
+				}
+			}
 			p, target := futilityFixture(t, api)
 			target.spec = &ResolvedSpec{MaxEvictionRetries: 2}
 			clock := newTestClock()

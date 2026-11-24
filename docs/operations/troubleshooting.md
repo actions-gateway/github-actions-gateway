@@ -1565,7 +1565,7 @@ Two bounds apply, and both are visible:
   After 30 minutes the wait is given up and counted as `actions_gateway_abandoned_run_rerun_waits_total{outcome="expired"}`; the successful case is `{outcome="capacity_returned"}`.
 
 Fixing the root cause is still yours to do: the re-run is a recovery, not a repair.
-While another worker of the set is stuck in `ImagePullBackOff` and none has started since, the re-run is withheld with `reason="worker_unstartable"` instead, and needs a manual re-run once the image pulls (Q1320); with no such worker left to read, a re-run into an unchanged unpullable image is abandoned again until the budget runs out.
+While another worker of the set is stuck in `ImagePullBackOff` and no worker still present has started since, the re-run is withheld with `reason="worker_unstartable"` instead, and needs a manual re-run once the image pulls (Q1320); with no such worker left to read, a re-run into an unchanged unpullable image is abandoned again until the budget runs out.
 
 **Timing.** `pendingPodDeadline` is a floor, not an instant.
 The AGC arms a timer for it on the reconcile that last saw the pod, and a reconcile that ends in an error — an optimistic-lock conflict on the owner's status is the routine one — hands the wake-up to the work queue's retry instead.
@@ -3085,7 +3085,7 @@ The `EvictionRerunWithheld` Event names the reason and, where one is needed, the
 | <code class="gag-nowrap">attempt_limit</code> | The run is past GitHub's 50 re-runs | Start a new run |
 | <code class="gag-nowrap">run_too_old</code> | The run was created more than 30 days ago | Start a new run |
 | <code class="gag-nowrap">superseded</code> | A newer commit's run of the same workflow, event and branch has started | Nothing |
-| <code class="gag-nowrap">worker_unstartable</code> | A worker of the set is placed and stuck in `ImagePullBackOff`, and none has started since | [Fix the image or its pull credentials](#the-reason-is-podsnotstarting-the-image-will-not-pull), then re-run by hand |
+| <code class="gag-nowrap">worker_unstartable</code> | A worker of the set is placed and stuck in `ImagePullBackOff`, and no worker still present has started since | [Fix the image or its pull credentials](#the-reason-is-podsnotstarting-the-image-will-not-pull), then re-run by hand |
 
 A merge-queue run has no `superseded` check, and GitHub leaves a group displaced from the queue running rather than cancelling it, so a disrupted job in one is re-run and spends a budget slot on a result nothing reads (measured 2026-11-22, Q1381).
 

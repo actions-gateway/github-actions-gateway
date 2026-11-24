@@ -1280,7 +1280,7 @@ The command is in [Which Disruptions Auto-Re-Run a Job](troubleshooting.md#which
 **Who is affected:** a tenant whose scale-set workers are stuck in `ImagePullBackOff` when another of the set's jobs loses its worker.
 
 **What changed.** The re-run of a disrupted job used to fire anyway, and its worker would fail to start too, spending a slot of `maxEvictionRetries`.
-While a worker of the set is placed and in `ImagePullBackOff`, and none has started since the oldest such worker was placed, the AGC now withholds the re-run (Q1320).
+While a worker of the set is placed and in `ImagePullBackOff`, and no worker still present has started since the oldest such worker was placed, the AGC now withholds the re-run (Q1320).
 A re-run of a job a later attempt already re-ran, or of a run that concluded `success`, is withheld too.
 
 **What you will see.** `actions_gateway_eviction_rerun_withheld_total` increments with `reason="worker_unstartable"`, `"already_rerun"` or `"run_succeeded"`, and a **Normal** `EvictionRerunWithheld` Event names the run and the reason.

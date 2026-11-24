@@ -71,12 +71,14 @@ No fork pull request was disrupted end to end, so the AGC's own decode of a fork
 
 Taken from the REST API for `already_rerun` (Q1320), over public runs somebody had already re-run.
 
-- **An attempt's jobs list holds every job of the run, and a job the attempt did not run keeps its old times and runner.** This repository's run 45310657002, attempt 2 by `rerun-failed-jobs`: each of the attempt's jobs carries `run_attempt: 2`, a new `id` and a new `created_at` (03:25:44 UTC), so none of those tells a re-run job from a carried one.
-  `validate`, which the attempt did not run, keeps attempt 1's `runner_name`, `started_at` and `completed_at`, so `completed_at` before `created_at` does.
-  The run read's `run_started_at` is the latest attempt's (03:25:41 against attempt 1's 02:12:24).
-- **A single-job re-run moves `run_attempt` and carries its siblings' failures.** Run 45325262167's attempt 2 re-ran `reusable / inner` alone (`POST …/jobs/{id}/rerun`), and lists `dup` and `matrix-default (b, x64)` as `failure` with the runner and times of attempt 1 (`dup` completed 04:18:54 UTC under a `created_at` of 04:22:28).
-  `apache/airflow` run 44861166633 shows the same shape on somebody else's repository.
-- **`runner_name` is GAG's runner name.** Run 45051967354's jobs list `gag-ci-scaleset-<job UUID>`.
+- **An attempt's jobs list, once it is complete, holds every job of the run, and a job the attempt did not run keeps its old times and runner.** Run 45325262167's attempt 2 re-ran `reusable / inner` alone (`POST …/jobs/{id}/rerun`).
+  All its 23 jobs carry `run_attempt: 2`, a new `id` and a new `created_at`, so none of those tells a re-run job from a carried one.
+  `dup` and `matrix-default (b, x64)`, which failed in attempt 1, are listed as `failure` with attempt 1's `runner_name` and times (`dup` completed 04:18:54 UTC, before attempt 2's `run_started_at` of 04:22:25), so a single-job re-run moves `run_attempt` and carries its siblings' failures.
+- **`completed_at` before the attempt's `run_started_at` is the test for carried; before the job's own `created_at` is not.** GitHub lists a job that never got a runner as completed a second before it was created, in the attempt that skipped or cancelled it (`apache/airflow` run 45322354372, `Notify Slack`).
+- **The list fills over the attempt's first seconds.** Over 33 re-run attempts in 8 repositories, the last carried job was created at most 14 s after `run_started_at` (median 4 s); a job that waits on `needs` is created when its turn comes, which can be an hour later.
+  That a row cannot be read before its `created_at` is inferred; no list was read while filling.
+- **`runner_name` is GAG's runner name**, `gag-ci-scaleset-<job UUID>`, and a job whose runner was lost keeps it in its own attempt (run 45052020040, the out-of-memory kill).
+  A lost job carried into a later attempt was not observed; every carried failure read was an ordinary red step.
 
 ## Component 1: the failure ledger (Q555, R1 to R8)
 
