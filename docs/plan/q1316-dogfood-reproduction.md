@@ -56,7 +56,7 @@ The scripts are at [the end](#the-probe).
 One e2e node, two workers on it at once, on a throwaway branch `claude/q1316-probe-run` whose workflow runs only on a push of that branch with `[q1316-probe]` in the commit message, has `permissions: {}` and checks nothing out.
 
 Both jobs sample the host's cgroup tree every second to their logs: each pod's `memory.current`, `memory.events` and `memory.events.local`, the same and `memory.max` for `kubepods.slice`, `/sys/fs/cgroup/docker`'s `memory.current`, and `/proc/vmstat`'s `oom_kill`.
-The two pods are scored alike, so a kill can take either; the survivor's log holds both pods' counters.
+The two pods are scored alike, so a kill can take either; the survivor's log holds both pods' counters, and is the record: the fill's own summary line is lost where its worker is the one killed.
 Both do the same actions, except the fill, which one of them starts.
 Each job ends in failure once its sampler ends, after 2.5 minutes for R0, R1, R6 and R7 and 8 for a fill, so its end is observable.
 R1, R6 and R7 use one worker.
@@ -68,7 +68,7 @@ If the two land on different nodes, the reading is void and repeated once.
 ## Readings
 
 "Predicted" is from source or the local readings.
-R0 is a gate: where a job cannot read `memory.events` of `kubepods` and of another pod, does not find exactly two workers by their sidecar's 4Gi `memory.max`, or reads a worker's `oom_score_adj` more than 10 from the table above, the run stops and the plan is recomputed.
+R0 is a gate: where a job cannot read `memory.events` of `kubepods` and of another pod, does not find exactly two workers by their sidecar's 4Gi `memory.max`, or reads the `oom_score_adj` of a runner's `Runner.Listener` or `Runner.Worker`, or of dockerd, more than 10 from the table above (a step may be at 500, which the runner asks for), the run stops and the plan is recomputed.
 R0 also reads, by read-only `kubectl`, the QoS class, requests and priority class of every pod on the node, and lists the ones whose computed score is above a runner's.
 
 | ID | Runs | What is done | Platform or tenant | Predicted |
@@ -214,7 +214,7 @@ jobs:
         env:
           MSG: ${{ github.event.head_commit.message }}
           W: ${{ matrix.worker }}
-          I: python:3.13-alpine
+          I: python@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e # 3.13-alpine
         run: |
           set -uo pipefail
           R=${MSG##*\[q1316-probe\] }
@@ -232,7 +232,7 @@ jobs:
           host() { docker run --rm -i --privileged --pid=host -v /sys/fs/cgroup:/h:ro "$I" "$@"; }
           case $R in R0|R1|R6*|R7*) secs=150 ;; *) secs=480 ;; esac
           host python3 - "$secs" < sample.py &
-          own=$(cat /proc/self/oom_score_adj)
+          own=$(cat /proc/1/oom_score_adj)
           case $R in
             R3t) host sh -c "echo $own > /proc/\$(pidof dockerd)/oom_score_adj" ;;
             R4|R5) host sh -c 'echo 1000 > /proc/$(pidof dockerd)/oom_score_adj' ;;
@@ -271,8 +271,8 @@ end = time.time() + int(sys.argv[1])
 while time.time() < end:
     node = rd("/proc/vmstat").split()
     print("T", time.strftime("%T"), "oom_kill", node[node.index("oom_kill") + 1])
-    for d in ["/h/kubepods.slice", "/h/docker"] + sorted(glob.glob("/h/kubepods.slice/**/*pod*.slice", recursive=True)):
-        print(" ", d[3:], *(rd(d + "/memory." + f) + " |" for f in ("current", "max", "events", "events.local")))
+    for d in ["/h", "/h/kubepods.slice", "/h/docker"] + sorted(glob.glob("/h/kubepods.slice/**/*pod*.slice", recursive=True)):
+        print(" ", d[3:], *(rd(d + "/memory." + f) + " |" for f in ("current", "max", "oom.group", "events", "events.local")))
         for c in sorted(glob.glob(d + "/cri-*.scope")):
             print("   ", c[-20:], *(rd(c + "/memory." + f) + " |" for f in ("max", "oom.group", "events.local")), flush=True)
     time.sleep(1)
