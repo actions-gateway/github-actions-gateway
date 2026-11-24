@@ -2783,6 +2783,7 @@ A failing run's GMC log is the first read: <code>GitHub meta returned 403</code>
 <p>The e2e suite seeds the GMC's <code>actions-gateway-gmc-ip-ranges</code> ConfigMap from a <code>/meta</code> response the workflow fetches with the job's own token (<code>scripts/e2e/fetch-github-meta.sh</code>, <code>seedGitHubIPRanges</code> in <code>e2e_suite_test.go</code>), so a spent unauthenticated quota on the runner address no longer empties the proxy NetworkPolicy.
 The mechanism is the 2026-11-07 measurement below; no run has shown the seeded GMC surviving a spent quota, because the quota cannot be spent on demand, and the unit tests drive the store and a rate-limited fetch only.
 The seed is served for 49 hours, far longer than any spec.
+The seed carries no owner reference, which failed the chart-reinstall step until the GMC adopted the copy at startup (Q1386).
 Authenticating the GMC's own fetch and bundling a fallback in the image are product changes the row does not ask for and are not built.
 That points the fix at the e2e GMC's IP-range source, which must not depend on the runner address's API quota, rather than at the spec's retry window.</p>
 <p><code>E2E_V2_ProxyConnectWorks: a workload pod reaches GitHub through the v2 EgressProxy</code> (<code>[real-github-egress]</code>) failed in the merge group and the queue evicted the PR.

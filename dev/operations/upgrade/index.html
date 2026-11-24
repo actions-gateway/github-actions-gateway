@@ -6353,6 +6353,8 @@ Nothing to do.</p>
 The GMC now writes each successful fetch to a ConfigMap named <code>actions-gateway-gmc-ip-ranges</code> in its own namespace and seeds itself from it at startup (Q1227).
 A copy as old as the <code>EgressRulesStale</code> window (49 hours on the default refresh) is not used, and a seeded copy stops being used at that age even if no fetch has succeeded.
 The ConfigMap is created on the first successful fetch after the upgrade and is owned by the GMC's Deployment, so <code>helm uninstall</code> deletes it with the Deployment.
+A GMC that finds the ConfigMap without that owner adds it at startup, so the owner does not wait on a fetch that a rate-limited <code>/meta</code> can withhold (Q1386).
+The attempt is made once per start, and a failure is logged as <code>not adopting the persisted GitHub IP ranges</code>.
 An install that does not set the chart's <code>DEPLOYMENT_NAME</code> environment variable on the GMC writes it with no owner, and it is left behind on uninstall.
 Anything that recreates the Deployment rather than updating it (<code>helm upgrade --force-replace</code>, renaming the release, or <code>kubectl delete deployment</code>) deletes the ConfigMap too, so the next GMC start waits for its first fetch.</p>
 <p><strong>Rolling back</strong> returns a restart to waiting for the first fetch; the older GMC ignores the ConfigMap.</p>
