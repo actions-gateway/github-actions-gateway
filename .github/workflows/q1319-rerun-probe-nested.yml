@@ -1,0 +1,13 @@
+# Called by q1319-rerun-probe-reusable.yml for a twice-nested job name. Never runs on its own.
+name: q1319-rerun-probe (nested)
+on:
+  workflow_call: {}
+
+permissions: {}
+
+jobs:
+  innermost:
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT}"
