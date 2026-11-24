@@ -171,11 +171,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	}
 	seedCtx, cancelSeed := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelSeed()
-	if n, err := ipStore.SeedCache(seedCtx, ipCache, time.Now()); err != nil {
-		setupLog.Error(err, "not seeding GitHub IP ranges from the persisted copy; egress waits for the first fetch")
-	} else if n > 0 {
-		setupLog.Info("seeded GitHub IP ranges from the persisted copy", "cidrs", n)
-	}
+	seedIPRanges(seedCtx, ipStore, ipCache)
 
 	secretWatches := &controller.TenantSecretWatches{
 		Config:     mgr.GetConfig(),
@@ -354,4 +350,20 @@ func deploymentOwnerRef(ctx context.Context, r client.Reader, namespace, name st
 		return nil, fmt.Errorf("read Deployment %s/%s: %w", namespace, name, err)
 	}
 	return &metav1.OwnerReference{APIVersion: "apps/v1", Kind: "Deployment", Name: d.Name, UID: d.UID}, nil
+}
+
+// seedIPRanges seeds cache from the persisted GitHub IP ranges, then adds the GMC's
+// Deployment as owner of that ConfigMap whether or not the copy was usable, so the
+// owner does not wait on a fetch that a rate-limited /meta can withhold (Q1386).
+// Neither step's failure stops startup, and the adoption is tried once per start.
+func seedIPRanges(ctx context.Context, store *controller.IPRangeStore, cache *controller.IPRangeCache) {
+	if n, err := store.SeedCache(ctx, cache, time.Now()); err != nil {
+		setupLog.Error(err, "not seeding GitHub IP ranges from the persisted copy; egress waits for the first fetch")
+	} else if n > 0 {
+		setupLog.Info("seeded GitHub IP ranges from the persisted copy", "cidrs", n)
+	}
+	if err := store.AdoptOwner(ctx); err != nil {
+		setupLog.Error(err, "not adopting the persisted GitHub IP ranges; helm uninstall may leave the ConfigMap behind",
+			"configMap", controller.IPRangeStoreName)
+	}
 }
