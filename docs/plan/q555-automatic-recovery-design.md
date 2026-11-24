@@ -652,7 +652,7 @@ Job-granular avoids that, and costs:
 - **A jobs-list call per retry** (`GET …/runs/{id}/attempts/{n}/jobs`), to find the numeric id the endpoint takes; the job message carries only a UUID.
   Retries are rare, so the cost is small.
 - **A match that can be ambiguous by name**: the names agree exactly, and two jobs of one run can still share one ([measured](#m6-readings-from-the-job-granular-probe-2026-11-24)).
-  Matching on the runner's name avoids that; a job neither identifies falls back to `rerun-failed-jobs`, counted as `trigger="gag_collateral"`.
+  Matching on the runner's name avoids that; the fallback is `rerun-failed-jobs`, counted as `trigger="gag_collateral"` ([when](#what-the-readings-recommend)).
 - **One re-run at a time**: GitHub refuses a single-job re-run while the run is in progress, so two classified jobs of one run need two attempts in turn where `rerun-failed-jobs` takes one.
 - **Dependents that passed run again**: `needs:` dependents re-run with the job, whether or not they had failed.
 - **The external-state case**: a job whose passed upstream jobs set state it depends on (a staging deploy, a lock, a published artifact) can fail again on a single-job re-run where a whole-run re-run would pass.
@@ -664,8 +664,8 @@ Until it is built, detection's `gag_collateral` count measures what run-granular
 ### M6 readings from the job-granular probe, 2026-11-24
 
 Taken for Q1319 on the `ci` set in `gag-dogfood`, AGC `v2.0.1-rc.2`, with the [`q1319-rerun-probe`](../../.github/workflows/q1319-rerun-probe.yml) fixture.
-The `names` runs are 45325262167 (attempts 1 to 4) and 45326925782 (attempt 1, a second set of shapes); the `chain` run is 45325687478 (attempts 1 to 4).
-While the second `names` run and the chain run's attempts 3 and 4 ran, the set's `minRequests.memory` was raised to 9024Mi for another reading; nothing here depends on memory.
+The `names` runs are 45325262167 (attempts 1 to 4) and 45326925782 (attempt 1, a second set of shapes); the `chain` run is 45325687478 (attempts 1 to 4; attempt 5 re-ran `sibling-red` alone, to place a worker for another reading, and nothing here uses it).
+The jobs of the second `names` run and of the chain run's attempts 3 and 4 were assigned while the set's `minRequests.memory` was raised to 9024Mi for another reading; nothing here depends on memory.
 The AGC's `scaleset: job assigned` lines give `jobDisplayName` and the jobs API gives `name`.
 The two were joined on the runner the AGC logs at start or completion against the API's `runner_name`, so the join does not use the names it tests.
 
@@ -679,8 +679,10 @@ The two were joined on the runner the AGC logs at start or completion against th
 - **Upstream outputs and artifacts survive.** `mid` in attempt 2 saw `up`'s attempt 1 output (`up-attempt1-134267612`) and the same artifact content, and `down` saw `up`'s attempt 1 output and `mid`'s attempt 2 output.
   A successful job can be re-run the same way: re-running `up` (attempt 3) ran everything downstream on its new output and artifact.
 - **GitHub refuses two calls**, both 403: "The workflow run containing this job is already running" while any job of the run is going, and "Only jobs from the current attempt can be re-run" for an earlier attempt's job ID.
-- **An attempt lists every job of the run under a new ID**, with the new attempt in `run_attempt`.
-  A job the attempt did not run, a failed one included, keeps the `started_at` and `runner_name` of the attempt it ran in: `dup`'s red leg is 138213206154 in attempt 1 and 138215428065 in attempt 2, both started at 04:18:50 on one runner.
+- **A concluded attempt lists every job of the run under a new ID**, with the new attempt in `run_attempt`.
+  The rows are not all there when the attempt starts: run 45325262167's attempt 2 started at 04:22:25 and its rows' `created_at` run from 04:22:28 to 04:22:37, and a dependent's waits for its `needs:` (`down`, chain attempt 2: 04:29:09, 48 s in).
+  Every list here was read after its attempt concluded; that a row is missing before its `created_at` is inferred.
+  A job that ran in an earlier attempt and not in this one, a failed one included, keeps the `started_at` and `runner_name` of the attempt it ran in: `dup`'s red leg is 138213206154 in attempt 1 and 138215428065 in attempt 2, both started at 04:18:50 on one runner.
   So the ID to call with is the latest attempt's, and only a re-executed job gets a new `JobAssigned`.
 - **A skipped matrix job shows its name unexpanded** (`Named ${{ matrix.leg }} / ${{ matrix.n }}`), so a name read from a skipped job is not comparable.
 
@@ -688,8 +690,12 @@ Not covered: nesting past two levels, an upload without `overwrite: true` on a r
 
 ### What the readings recommend
 
-Re-run the classified job by its ID from the **latest** attempt's jobs list, found by `runner_name` equal to the dead worker's, and by display name only where the runner name is absent; fall back to `rerun-failed-jobs` where neither names exactly one job.
-Wait for the run to conclude, as the parked out-of-memory re-run already does.
+Wait for the run to conclude, as the parked out-of-memory re-run already does, which is also when the jobs list is complete.
+Then re-run the classified job by its ID from the **latest** attempt's jobs list, found by `runner_name` equal to the dead worker's.
+The display name is a fallback only where that worker's pod carries no runner name.
+A runner name that no job in the list carries is not a reason to try the name: the job has run again on another runner, or the worker never took one, and its annotation may then name a job some other worker ran.
+That case re-runs nothing.
+Fall back to `rerun-failed-jobs` where the display name does not name exactly one job.
 One job per attempt is the cost: a run with two classified jobs needs its second re-run after the first attempt concludes, and each spends a slot.
 The disruption arms stay run-granular; nothing in the readings argues otherwise.
 
