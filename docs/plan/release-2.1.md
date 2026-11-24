@@ -9,6 +9,7 @@
 > Q1395 gates it too, settled 2026-11-24: detection could name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
 > Q1400 gates it too, settled 2026-11-24, for the same reason in the out-of-memory class `v2.0.0` shipped: it reads a runner killed for its node's memory as one killed at its own limit, so the Event and the raised limit name a cause it did not check.
 > That is read from source, so its first step is reproducing it.
+> Q1401 gates it too: job-granular re-run (Q1319) recovers less than `v2.0.0` on a fail-fast matrix behind an aggregate job, and this release adds recovery rather than taking any away.
 > Nothing here is a commitment to a date.
 
 ## Why this release exists
@@ -42,6 +43,7 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | Q1318 | Measure the `superseded` check on a fork PR whose branch is `main` (M5) | `2.1-gate` | ✅ measured 2026-11-22 from the API: the `event` filter separates a fork's `main` from upstream's; a displaced merge-group run is not cancelled, filed as Q1381 |
 | Q1381 | Withhold the re-run of a merge-group run displaced from the queue, which GitHub does not cancel | `2.1-gate` | ✅ landed: withheld once the pull request has a newer group, which 5 of 106 measured had as they concluded (the failed ones among 373 runs that never merged); a removed one not queued again is [Q1391](../queue/Q1391.md), not gated |
 | Q1319 | Re-run only the classified job, found by its runner's name | `2.1-gate` | ✅ landed: M6 measured 2026-11-24, and the out-of-memory retry re-runs the killed job alone |
+| [Q1401](../queue/Q1401.md) | Recover a fail-fast matrix's siblings behind an aggregate job | `2.1-gate` | 🔲 open: Q1319 leaves them cancelled, where `v2.0.0` re-runs them |
 | [Q1315](../queue/Q1315.md) | Retry a job failed while its colocated egress proxy pool was unavailable | `2.1-gate` | 🔲 open |
 | [Q1316](../queue/Q1316.md) | Retry a job whose Docker-in-Docker sidecar crashed under it | `2.1-gate` | 🔲 open: readings taken 2026-11-24 on a local node, no discriminator found in what GAG reads; dogfood reproduction not run |
 | Q1395 | Keep a nested container's out-of-memory kill from reading as a platform fault on the sidecar | `2.1-gate` | ✅ landed: a sidecar's `OOMKilled` is a fault only with exit code 137; not run on Kata |
