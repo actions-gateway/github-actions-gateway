@@ -263,21 +263,39 @@ A disruption whose pod belongs to another `RunnerSet` marks that set's ledger, n
 ### Timed-out jobs: an R5 blind spot (Q1374)
 
 A job killed by `timeout-minutes` completes `canceled` and is not recorded.
-Settled as a stated blind spot, because each fact that could tell it from a cancel costs more than the count is worth:
+It is a stated blind spot, and the one fact found that tells it from a cancel is read by an option kept for a scale-set reading to justify.
+
+What it misses, over every run of this repository created 2026-11-08 to 2026-11-21 (5,343 runs, jobs of all attempts; the 275 re-run, cancelled or failed ones read):
+
+- 8 jobs timed out, in 8 runs between 16 November 21:01 and 18 November 00:03 UTC; 7 were hung in `actions/checkout`.
+  4 of them were re-run, and all 4 passed.
+- 4 failed jobs passed on a re-run, and they are the same 4 runs: each is the required gate over the others, red because `a gating job concluded 'cancelled'`.
+  So every red job a re-run turned green there followed a timeout, and recording failures alone would have counted 4 re-runs of 8, under the gate's name.
+- All of it ran on `ubuntu-latest`, so nothing here says how often a scale set's job times out, and one cluster in 27 hours says nothing of a rate.
+
+The facts that could tell it from a cancel:
 
 - **The run's conclusion, on the next attempt's completion.** It does not separate them: attempt 1 of run 45052015868, which timed out, and run 45053166409, which a user cancelled, both conclude `cancelled`, and so do their jobs and the steps that were running.
   Nor would a later completion be known for one, since it carries no attempt and the first left no record.
 - **The check run's annotation, read per cancelled job.** It does: `The job has exceeded the maximum execution time of 1m0s` against `The run was canceled by @…`.
-  It is a read for every cancelled job, which R6 rules out: over this repository's 111 cancelled runs of 2026-11-08 to 2026-11-21, 4 of 321 cancelled jobs were timeouts and 251 were superseded by a newer push.
-  Skipping the jobs no runner started leaves 87 reads for the same 4.
-  It also needs the App's `Checks` permission, which is [optional](../operations/tenant-onboarding.md#0a-create-the-app-web-ui), so the count would change meaning with it.
-- **Recording every `canceled` completion**, and reading the annotation only if a later attempt succeeds.
+  It is a read for every cancelled job, which R6 rules out: 325 in that window for 8 timeouts, or 91 for the ones a runner started.
+- **Recording every `canceled` completion in the ledger**, and reading the annotation only if a later attempt completes.
   A ledger write for each cancel, on the listener, and cancels would evict real failures from a capped map; a superseded run's jobs are the bulk of them and are never re-run.
 - **The job's own limit, against how long it ran.** `timeout-minutes` is in no message the AGC receives (Q438).
+- **Hold each cancel in memory under a cap of its own, and read the annotation only when a later completion of that run and name succeeds.** The option to build if the gap is worth closing; not built or tried.
+  A superseded run's jobs never match, so in that window it is 4 annotation reads, beside a job list those 4 runs already cost for their gate.
+  Each re-run of a cancelled job is one read: 100 of a run's 200 legs, cancelled and re-run together, are 104 requests where they are none now (from the code), and a run at the 1,000-row cap adds at most 500 to the list's 1,200 an hour.
+  The batch's 10-second budget covers the list alone, so the reads need one of their own.
+  Against it: an AGC restart loses every held cancel, which is why [the ledger is not in memory](#where-the-ledger-lives-open-question-1); reading only on a success leaves a timed-out job whose re-run fails out of the manual re-run rate; and it matches GitHub's prose, which no contract covers.
+  It also needs `Checks: read`, which is [optional](../operations/tenant-onboarding.md#0a-create-the-app-web-ui): a public repository's annotations need no permission (HTTP 200 with no credential, 2026-11-24), a private one's do by GitHub's documentation.
+  A refusal could raise an Event, as a fork refusal's check run does, but only when a cancelled job is re-run, so an install without it and one with no such re-run read the same until then.
+
+It is worth building once a scale set's own runs show it: cancelled jobs whose annotation is the timeout, re-run to green, at a tenth or more of `actions_gateway_scaleset_job_reruns_total{trigger="other"}` over 30 days.
 
 So the undercount stands, and a workflow can end it: a step-level `timeout-minutes` fails its step (the runner sets `TaskResult.Failed`, `StepsRunner.cs` at v2.338.2), and the job concludes `failure`.
 Measured from the API: in `home-assistant/core` run 45247954762 the step `Run pytest` timed out after 60 minutes, `failure`, and its job concluded `failure` with no other failed step.
 A job that concludes `failure` on a step completes `failed` on the wire (M1); one that did so on a step's timeout was not seen there.
+A job with no `timeout-minutes` has a limit of 360 minutes by GitHub's documentation; that it ends the same way is not measured.
 Look again if GitHub's completion ever carries a reason.
 
 ### What the operator sees (R3, R4, R8)

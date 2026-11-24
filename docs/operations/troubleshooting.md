@@ -3148,29 +3148,35 @@ One false flake is left: a job that GitHub first lists under the failed job's na
 
 A job killed by its job-level `timeout-minutes` is never recorded as a failure, so its later success is never a flake, and its re-run is missing from `actions_gateway_scaleset_job_reruns_total` and from the manual re-run rate.
 GitHub completes it `canceled`, as it does a user's cancel (measured 2026-11-22), and tells them apart only in an annotation on the job's check run (Q1374).
+A job that declares no `timeout-minutes` still has one, 360 minutes by GitHub's documentation.
+A job that fails because the timed-out one did not succeed, such as a required gate over the others, is recorded, so one timeout and its re-run can show as a flake of that job instead.
 
-To have a hang counted, put `timeout-minutes` on the step that can hang, shorter than the job's:
+To have a hang counted, put `timeout-minutes` on each step that can hang, shorter than the job's:
 
 ```yaml
 jobs:
   test:
     timeout-minutes: 30 # the backstop; GitHub reports this one as a cancel
     steps:
+      - uses: actions/checkout@v7
+        timeout-minutes: 3 # a hang fails the step, and so the job
       - run: make test
-        timeout-minutes: 20 # a hang fails the step, and so the job
+        timeout-minutes: 20
 ```
 
 A step that times out fails, so its job completes `failed` and is recorded like any other failure.
 A step with `continue-on-error: true` does not fail its job, so its timeout is not recorded either.
 
-To find the timed-out jobs of a run by hand, read its annotations:
+A hang outside a step, such as while the job is set up, still ends as a cancel.
+
+To find the timed-out jobs of a run by hand, over all its attempts, read its annotations:
 
 ```bash
-gh run view <run-id> --json jobs \
-  --jq '.jobs[] | select(.conclusion == "cancelled") | "\(.databaseId) \(.name)"' |
-  while read -r id name; do
+gh api --paginate "repos/<owner>/<repo>/actions/runs/<run-id>/jobs?filter=all&per_page=100" \
+  --jq '.jobs[] | select(.conclusion == "cancelled") | "\(.id) \(.run_attempt) \(.name)"' |
+  while read -r id attempt name; do
     gh api "repos/<owner>/<repo>/check-runs/$id/annotations" --jq '.[].message' |
-      grep -q 'exceeded the maximum execution time' && echo "$name"
+      grep -q 'exceeded the maximum execution time' && echo "attempt $attempt: $name"
   done
 ```
 
