@@ -602,6 +602,7 @@ That a job can fake the status shows it cannot be trusted, but a job that does s
   They are cumulative, so a pod `oom` of 0 says the kill came from above the pod, and 1 does not say it came from inside: an earlier nested kill leaves it at 1.
 - **Who filled the node**, which `kubepods`' own counter says in part and nothing reads today.
   The kubelet caps `kubepods` at the node's allocatable memory by default (`DefaultNodeAllocatableEnforcement`, v1.35.5), and `privileged-dind`'s job containers are outside it ([Q1396](../queue/Q1396.md)), so reaching that limit is a fill by pods, this one's runner and sidecar among them.
+  It counts the whole node's kills since the node started, so only a rise across the crash says anything.
   A job's containers, or another worker's, push the node itself to its out-of-memory killer, which raises no `oom` on `kubepods`.
   The limit above `kubepods` stands in for that killer, which was not run, and no node's `kubepods` was read.
 - **Whether a node kill reaches the sidecar at all.** It takes one process by its score, and one of the job's containers has to hold about nine tenths of the node to outscore the daemon: with the sidecar at an `oom_score_adj` of 900, dockerd ran at 900 and a container it started at 0 (dockerd 28.5.2, measured).
