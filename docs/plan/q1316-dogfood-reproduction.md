@@ -116,6 +116,14 @@ The template's entrypoint is not one: on its restart it can read its own pod's c
 A node agent could, which is a new privileged component, and a message a container the job controls could write meets R9's "nothing tenant code writes".
 So a run in which R4 and R5 differ leaves the class to a design decision rather than building it.
 
+## What it decides for Q1400
+
+R2 and R3 are the kill [Q1400](../queue/Q1400.md) describes, a runner killed for the node's memory, so one window serves both.
+They settle whether the pod reads `Failed` with the runner `OOMKilled` at the API server, what the AGC then says and does, when its `PlatformFaultOnFailedJob` comes, and whether the `SystemOOM` Event and the pod's `oom` counter separate the two fills.
+The set is `NodeShare`, so what is read is the withheld `own_limit` branch.
+Not read: a raise under `Binpack` or `Throughput`, which starts from the same two facts, and a runner with no limit.
+An own-limit kill, the reading it should look different from, is [M3](q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22)'s and is not repeated.
+
 ## Mutations
 
 Environment, every command: `PROJECT=actions-gateway-dogfood CLUSTER=gag-dogfood ZONE=us-east1-b REPO=actions-gateway/github-actions-gateway`, `CTX=gke_actions-gateway-dogfood_us-east1-b_gag-dogfood`, and `KUBECONFIG` set to a file of this run's own.
@@ -124,7 +132,8 @@ The values are the runbook's ([gke-dogfood.md](gke-dogfood.md#variables)) and ar
 
 | # | Command | Changes |
 |---|---|---|
-| 1 | `E2E_VARIANT=dind E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | Writes the `KUBECONFIG` file; system pool to its running size, which brings up the always-on gateways; the `dind` overlay (namespace labels, template, open egress policy, gateway); registry mirrors up |
+| 0 | `gcloud container clusters get-credentials $CLUSTER --project=$PROJECT --zone=$ZONE`, then [take the release gate's lease](#the-lease) | Writes the `KUBECONFIG` file; creates one Lease, `default/actions-gateway-release-gate` |
+| 1 | `E2E_VARIANT=dind E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | System pool to its running size, which brings up the always-on gateways; the `dind` overlay (namespace labels, template, open egress policy, gateway); registry mirrors up |
 | 2 | `git push origin HEAD:claude/q1316-probe-run`, one push per reading | One workflow run of the file below; the e2e pool scales 0 to 1 |
 | 3 | `kubectl --context $CTX -n gag-dogfood-e2e create configmap q1316-fill --from-file=fill.py`, once, then `apply -f hog.yaml` with `NODE` set, per R3, R3t and R4 | One ConfigMap, and one non-root, unprivileged pod with the host's `/sys/fs/cgroup` mounted read-only, which is how it sees a worker die |
 | 4 | `kubectl --context $CTX -n gag-dogfood-e2e delete pod/q1316-hog` after each, `configmap/q1316-fill` after the last | Removes them |
@@ -133,6 +142,7 @@ The values are the runbook's ([gke-dogfood.md](gke-dogfood.md#variables)) and ar
 | 7 | `GAG_ROUTE_VARS=0 scripts/dogfood/stop.sh`, only where the system pool read 0 before step 1 | Drains every tenant's workers, then system pool to 0 |
 | 8 | `kubectl --context $CTX delete clusterrunnertemplate privileged-dind`, only where it was absent before step 1 | Removes the template step 1 created |
 | 9 | `git push origin --delete claude/q1316-probe-run` | Removes the branch |
+| 10 | [Release the lease](#the-lease) | Deletes the Lease |
 
 `start.sh` is not used: it dispatches unit and integration runs onto the cluster, and `e2e-start.sh` resizes the system pool and waits for the GMC itself.
 A system pool brought up from 0 runs the always-on gateways, so a job already queued for them would be served.
@@ -141,14 +151,57 @@ The App Secret in the namespace is used by the AGC as it is, and is not read.
 
 **Before step 1**, read-only: the active project, `scripts/dogfood/ops.sh at-rest`, each pool's node count, the release lease (`kubectl --context $CTX -n default get lease actions-gateway-release-gate`), whether `clusterrunnertemplate/privileged-dind` exists, pods in `gag-dogfood-e2e`, and open runs on `gag-ci-e2e`.
 Any lease, worker or queued run there means the cluster is taken: stop before step 1.
-The lease is read again before each of steps 1, 2, 3 and 5, and is never taken, because its holder is the release gate's own process.
-The orchestrator keeps a gate from starting during the window; a lease that appears anyway is an abort.
+
+prod-guard, the hook that checks an agent session's commands, refuses a direct mutating `kubectl` on this cluster, which steps 0, 3, 4, 8 and 10 are and the scripts are not.
+The documented way through is a `PROD_GUARD_OVERRIDE=<reason>` prefix on each ([kind-iteration.md](../development/kind-iteration.md#verify-the-resolved-target-before-any-mutating-command)), so the grant has to name it, or a maintainer runs those commands by hand.
+
+### The lease
+
+The release gate takes `default/actions-gateway-release-gate` before it touches the cluster and refuses where one exists, so this run takes the same one.
+It does not take it as a gate does.
+A gate's holder is `host/pid`, and a pid whose command is not `validate-release.sh` reads as an orphan that the next gate, or `--reclaim`, tears the cluster down for; a probe that copied the form would invite that.
+A holder with no `/` in it reads `foreign`, which both refuse and neither acts on (`lease_judge`, run on this holder, and `lease-test.sh`).
+So there is no renewal and no expiry, and a run that dies leaves a record that blocks gates until somebody deletes it, which [release.md](../operations/release.md) says how to do.
+
+Take it, which fails where one exists:
+
+```bash
+H="q1316-dogfood-reproduction-$(date +%s)"
+kubectl --context "$CTX" -n default create -f - <<EOF
+apiVersion: coordination.k8s.io/v1
+kind: Lease
+metadata:
+  name: actions-gateway-release-gate
+  annotations:
+    actions-gateway.com/release-gate-rc: "Q1316 reproduction, no RC"
+spec:
+  holderIdentity: "$H"
+EOF
+```
+
+Before each of steps 1 to 8, the holder still reads `$H`:
+
+```bash
+kubectl --context "$CTX" -n default get lease actions-gateway-release-gate -o jsonpath='{.spec.holderIdentity}'
+```
+
+Release it, which changes nothing unless `$H` still holds it; between the two calls the record is still one no gate acts on:
+
+```bash
+kubectl --context "$CTX" -n default patch lease actions-gateway-release-gate --type=json \
+  -p '[{"op":"test","path":"/spec/holderIdentity","value":"'"$H"'"},{"op":"replace","path":"/spec/holderIdentity","value":"q1316-released"}]' &&
+  kubectl --context "$CTX" -n default delete lease actions-gateway-release-gate
+```
+
+The lease stops a gate, and not a hand-run `e2e-start.sh`, `start.sh` or `stop.sh`, nor a run dispatched to `gag-ci-e2e`, none of which read it.
+So before each of steps 1, 2, 3 and 5 the pods in `gag-dogfood-e2e`, each pool's node count and the runs queued on `gag-ci-e2e` are read as well, and anything this run did not make is an abort.
+A gate started in the window refuses, and a candidate tagged in it fails its validation and needs a re-run.
 
 ## Abort
 
 Stop, run the restore, and report what was read, on any of:
 
-- another session's job or the release gate reaches the e2e set;
+- another session's job reaches the e2e set, or the lease is gone or another's;
 - the e2e node is `NotReady` for 5 minutes, or a pod other than the two workers, the plain pod or a DaemonSet's is on it;
 - a container on any other node restarts during a reading;
 - Spot preemption twice;
@@ -162,6 +215,8 @@ The system pool is a different pool.
 ## Restore
 
 1. Delete the plain pod and its ConfigMap, and cancel any probe run.
+   Where the lease reads another holder, stop here and report: the cluster is that holder's, and the rest would tear down what it is using.
+   Where there is no lease, take it again; if that fails, the same.
 2. Step 5, which leaves the tenant on its default overlay, then step 6.
    Where step 5 itself fails, `kubectl --context $CTX -n gag-dogfood-e2e delete networkpolicy e2e-open-egress` by hand, since `e2e-stop.sh` leaves it.
 3. Where step 6's drain times out it stops before deleting the gateway: read what it reports, cancel the probe run it names and re-run it.
@@ -169,6 +224,8 @@ The system pool is a different pool.
 4. Steps 7 and 8 where they apply, and step 9.
    Where step 7's drain times out the system pool stays up; that is reported with what is running, and not forced.
 5. `scripts/dogfood/ops.sh at-rest`, compared with the reading taken before step 1; the e2e pool scales to 0 on the autoscaler's schedule, so it is read again 35 minutes later.
+6. Step 10, once the pools are back.
+   Where a drain did not finish the lease is kept, as the gate's teardown keeps its own, and the report says so.
 
 ## Time and cost
 
