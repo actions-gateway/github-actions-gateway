@@ -84,6 +84,17 @@ var errRunCancelled = errors.New("the run was cancelled at GitHub")
 // re-run with a 403. Retrying the refusal cannot change it.
 var errRunSucceeded = errors.New("the run concluded success at GitHub")
 
+// supersededError marks a merge-group run the queue has built a newer group for, whose
+// result nothing reads.
+type supersededError struct {
+	run   runState
+	newer workflowRunSummary
+}
+
+func (e *supersededError) Error() string {
+	return fmt.Sprintf("the merge queue built a newer group, run %d", e.newer.ID)
+}
+
 // errRerunCovered marks a scale-set recovery that found the run already re-run past the
 // attempt its job failed in: GAG's re-run of that attempt landed, from this disruption's
 // reservation or another's, or a human re-ran it. Re-running again would be a second
@@ -390,6 +401,7 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 
 	for call := 1; ; call++ {
 		err := p.attemptRerun(ctx, target, owner, repo, runID, log, tier, cause, d)
+		var superseded *supersededError
 		switch {
 		case err == nil:
 			log.Info("disruption auto-retry triggered",
@@ -408,6 +420,11 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 			log.Info("the run concluded success at GitHub, which refuses to re-run it; the disruption auto-retry stands down",
 				"runID", runID, "attempt", attempt, "cause", cause, "rerunCalls", call)
 			p.recordRerunWithheld(target, runID, cause, rerunWithheldReasonRunSucceeded, runSucceededMessage(runID, cause))
+			return
+		case errors.As(err, &superseded):
+			log.Info("the merge queue built a newer group for the pull request; the disruption auto-retry stands down",
+				"runID", runID, "attempt", attempt, "cause", cause, "rerunCalls", call, "newerRunID", superseded.newer.ID)
+			p.recordRerunWithheld(target, runID, cause, rerunWithheldReasonSuperseded, supersededMessage(runID, cause, superseded.run, superseded.newer))
 			return
 		case !errors.Is(err, errRunNotConcluded) && !errors.Is(err, errRunConclusionUnreadable):
 			log.Error("disruption auto-retry failed; manual rerun may be required",
@@ -502,8 +519,17 @@ func (p *Provisioner) attemptRerun(ctx context.Context, target Target, owner, re
 			log.Info("the run was cancelled by GAG's own force-cancel of this attempt, not by a user; re-running it",
 				"runID", runID, "runAttempt", run.attempt)
 		}
-		if tier == evictionTierScaleSet && run.status == runStatusCompleted && run.conclusion == runConclusionSuccess {
-			return errRunSucceeded
+		if tier == evictionTierScaleSet && run.status == runStatusCompleted {
+			if run.conclusion == runConclusionSuccess {
+				return errRunSucceeded
+			}
+			// Asked again here for a merge group alone: the queue abandons one when a
+			// required job fails, as the disrupted job does when the run concludes.
+			if run.event == mergeGroupEvent {
+				if newer, ok := p.supersedingRun(ctx, owner, repo, runID, run, log); ok {
+					return &supersededError{run: run, newer: newer}
+				}
+			}
 		}
 	}
 	return p.rerunFailedJobs(ctx, owner, repo, runID, log)
@@ -523,8 +549,9 @@ func (p *Provisioner) canReadRun(owner, repo string) bool {
 // Its reasons: run_cancelled from attemptRerun's conclusion check (every cause on the
 // scale-set tier, deletion only on the classic) and from the scale-set abandoned arm's
 // read before its force-cancel (Q1232), run_succeeded from attemptRerun's conclusion
-// check (scale-set tier only), own_limit from withholdOwnLimitRerun (eviction only,
-// Q1177), and the scale-set tier's pre-reservation futility checks (futileRerun, Q1181).
+// check (scale-set tier only), superseded from attemptRerun's merge-group check (Q1381),
+// own_limit from withholdOwnLimitRerun (eviction only, Q1177), and the scale-set tier's
+// pre-reservation futility checks (futileRerun, Q1181).
 func (p *Provisioner) recordRerunWithheld(target Target, runID, cause, reason, message string) {
 	key := target.Key()
 	if p.Metrics != nil && p.Metrics.EvictionRerunWithheld != nil {

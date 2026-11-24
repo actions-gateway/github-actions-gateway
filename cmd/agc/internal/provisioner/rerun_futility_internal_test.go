@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	neturl "net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,8 +32,10 @@ type futilityAPI struct {
 	// run is the run GET's body; runAt, where set, replaces it per GET by call number.
 	run   map[string]any
 	runAt func(call int) map[string]any
-	// newest is the list's only run, nil for an empty list; listStatus overrides 200.
+	// newest is the list's only run, nil for an empty list, and runsAt replaces it per call
+	// by call number and query; listStatus overrides 200.
 	newest     map[string]any
+	runsAt     func(call int, query neturl.Values) []map[string]any
 	listStatus int
 	// jobs is the attempt's job list, and jobsAt replaces it per call by call number;
 	// jobsStatus overrides 200, and jobsStatusAt replaces it the same way. jobPage, where
@@ -93,6 +96,9 @@ func (a *futilityAPI) server(t *testing.T) *httptest.Server {
 			runs := []map[string]any{}
 			if a.newest != nil {
 				runs = append(runs, a.newest)
+			}
+			if a.runsAt != nil {
+				runs = a.runsAt(int(a.lists.Load()), r.URL.Query())
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"total_count": len(runs), "workflow_runs": runs})
 		default:
@@ -554,6 +560,125 @@ func TestFutileRerun_WorkerUnstartable(t *testing.T) {
 			assert.Equal(t, float64(0), testutil.ToFloat64(p.Metrics.EvictionRetries.WithLabelValues(
 				"team-a", "gpu", recoveryCauseAbandoned)), "no slot is spent")
 			assert.Contains(t, strings.Join(target.messages, "\n"), "fix the image or its pull credentials, then re-run it by hand")
+		})
+	}
+}
+
+const groupBase = "cccccccccccccccccccccccccccccccccccccccc"
+
+// groupRun is a merge-group run on branch, at sha, created age before now.
+func groupRun(now time.Time, branch, sha string, age time.Duration) map[string]any {
+	return map[string]any{"id": 5000, "event": "merge_group", "head_branch": branch, "head_sha": sha,
+		"created_at": now.Add(-age).Format(time.RFC3339), "head_repository": map[string]any{"full_name": "myorg/myrepo"}}
+}
+
+// failedGroupRun is failedRun in the merge queue, for pull request 217.
+func failedGroupRun(now time.Time, overrides map[string]any) map[string]any {
+	run := failedRun(now, map[string]any{"event": "merge_group", "head_branch": "gh-readonly-queue/main/pr-217-" + groupBase})
+	for k, v := range overrides {
+		run[k] = v
+	}
+	return run
+}
+
+// TestFutileRerun_ADisplacedMergeGroup covers the queue abandoning a group: it builds
+// another for the same pull request, on the same base or another, and leaves this one's
+// runs going. Found at detection no slot is spent; found in the loop one already is.
+func TestFutileRerun_ADisplacedMergeGroup(t *testing.T) {
+	now := time.Now()
+	for name, newer := range map[string]map[string]any{
+		"rebuilt on another base":  groupRun(now, "gh-readonly-queue/main/pr-217-dddddddddddddddddddddddddddddddddddddddd", "bbbbbbbbbbbbbbbb", time.Minute),
+		"requeued on the same one": groupRun(now, "gh-readonly-queue/main/pr-217-"+groupBase, "bbbbbbbbbbbbbbbb", time.Minute),
+	} {
+		for _, inLoop := range []bool{false, true} {
+			t.Run(name+", in the loop="+strconv.FormatBool(inLoop), func(t *testing.T) {
+				api := &futilityAPI{
+					run: failedGroupRun(now, nil),
+					runsAt: func(call int, _ neturl.Values) []map[string]any {
+						if inLoop && call == 1 {
+							return nil
+						}
+						return []map[string]any{newer}
+					},
+				}
+				p, target := futilityFixture(t, api)
+
+				evictScaleSet(p, target, "4242", 2, recoveryCauseEviction, rerunDisruption{key: "pod-a"})
+
+				assertWithheld(t, p, target, api, recoveryCauseEviction, rerunWithheldReasonSuperseded, inLoop)
+				assert.Contains(t, strings.Join(target.messages, "\n"), "another group for the pull request (run 5000, commit bbbbbbb)")
+				q, err := neturl.ParseQuery(api.lastListQuery)
+				require.NoError(t, err)
+				assert.Equal(t, neturl.Values{"event": {"merge_group"}, "per_page": {"30"}, "page": {"1"},
+					"created": {">=" + now.Add(-time.Hour).UTC().Format(time.RFC3339)}}, q)
+			})
+		}
+	}
+}
+
+// TestFutileRerun_AMergeGroupNothingDisplacedIsReRun is the other side: no newer group of
+// this pull request exists, so the queue still waits on this one or has merged it.
+func TestFutileRerun_AMergeGroupNothingDisplacedIsReRun(t *testing.T) {
+	now := time.Now()
+	const other = "bbbbbbbbbbbbbbbb"
+	for _, tc := range []struct {
+		name       string
+		run        map[string]any
+		newer      map[string]any
+		listStatus int
+		wantLists  int64
+	}{
+		{"no newer run", nil, nil, 0, 2},
+		{"another pull request's group", nil, groupRun(now, "gh-readonly-queue/main/pr-21-"+groupBase, other, time.Minute), 0, 2},
+		{"a pull request of that number in another queue", nil, groupRun(now, "gh-readonly-queue/release/pr-217-"+groupBase, other, time.Minute), 0, 2},
+		{"a group at the same commit", nil, groupRun(now, "gh-readonly-queue/main/pr-217-"+groupBase, "aaaaaaaaaaaaaaaa", time.Minute), 0, 2},
+		{"an older group", nil, groupRun(now, "gh-readonly-queue/main/pr-217-"+groupBase, other, 2*time.Hour), 0, 2},
+		{"a branch that is not a queue's", nil, groupRun(now, "pr-217-"+groupBase, other, time.Minute), 0, 2},
+		{"an unreadable list does not withhold", nil, nil, http.StatusInternalServerError, 2},
+		{"a run still going is asked about once", map[string]any{"status": "in_progress", "conclusion": nil}, nil, 0, 1},
+		{"its own branch is not a queue's", map[string]any{"head_branch": "pr-217-" + groupBase},
+			groupRun(now, "pr-217-"+groupBase, other, time.Minute), 0, 0},
+		{"GitHub sent no created_at", map[string]any{"created_at": nil},
+			groupRun(now, "gh-readonly-queue/main/pr-217-"+groupBase, other, time.Minute), 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := &futilityAPI{run: failedGroupRun(now, tc.run), newest: tc.newer, listStatus: tc.listStatus}
+			p, target := futilityFixture(t, api)
+
+			evictScaleSet(p, target, "4242", 2, recoveryCauseEviction, rerunDisruption{key: "pod-a"})
+
+			assert.Equal(t, int64(1), api.reruns.Load())
+			assert.Equal(t, tc.wantLists, api.lists.Load(), "once at detection, once before a concluded run's re-run call")
+			assert.NotContains(t, target.events, "EvictionRerunWithheld")
+		})
+	}
+}
+
+// TestFutileRerun_TheMergeGroupSearchIsPagedAndBounded: a busy queue's newer runs fill
+// several pages, newest first, and the search reads only so many.
+func TestFutileRerun_TheMergeGroupSearchIsPagedAndBounded(t *testing.T) {
+	now := time.Now()
+	for _, tc := range []struct {
+		onPage     int
+		wantReruns int64
+	}{{maxMergeGroupRunPages, 0}, {maxMergeGroupRunPages + 1, 1}} {
+		t.Run("on page "+strconv.Itoa(tc.onPage), func(t *testing.T) {
+			api := &futilityAPI{run: failedGroupRun(now, nil), runsAt: func(_ int, q neturl.Values) []map[string]any {
+				runs := make([]map[string]any, mergeGroupRunsPerPage)
+				for i := range runs {
+					runs[i] = groupRun(now, "gh-readonly-queue/main/pr-300-"+groupBase, "eeeeeeeeeeeeeeee", time.Minute)
+				}
+				if q.Get("page") == strconv.Itoa(tc.onPage) {
+					runs[7] = groupRun(now, "gh-readonly-queue/main/pr-217-"+groupBase, "bbbbbbbbbbbbbbbb", time.Minute)
+				}
+				return runs
+			}}
+			p, target := futilityFixture(t, api)
+
+			evictScaleSet(p, target, "4242", 2, recoveryCauseEviction, rerunDisruption{key: "pod-a"})
+
+			assert.Equal(t, tc.wantReruns, api.reruns.Load())
+			assert.LessOrEqual(t, api.lists.Load(), int64(2*maxMergeGroupRunPages))
 		})
 	}
 }
