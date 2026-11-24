@@ -113,38 +113,38 @@ func twinJob(id, runner string) ScaleSetJob {
 }
 
 func TestReranIn(t *testing.T) {
-	job := func(attempt int, name, runner string) runJob {
-		return runJob{Name: name, RunnerName: runner, RunAttempt: attempt}
+	job := func(attempt int, name, runner string) workflowJobSummary {
+		return workflowJobSummary{Name: name, RunnerName: runner, RunAttempt: attempt}
 	}
 	for _, tc := range []struct {
 		name           string
-		jobs           []runJob
+		jobs           []workflowJobSummary
 		runner, failed string
 		want           int
 	}{
-		{"its re-run", []runJob{job(1, "build", "r1"), job(1, "lint", "r0"), job(2, "build", "r2"), job(2, "lint", "r3")}, "r2", "r1", 2},
-		{"a job sharing its name, in the attempt it failed in", []runJob{job(1, "build", "r1"), job(1, "build", "r2")}, "r2", "r1", 0},
-		{"its re-run beside a twin not re-run", []runJob{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r0"), job(2, "build", "r2")}, "r2", "r1", 2},
-		{"the twin re-run alone", []runJob{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r1"), job(2, "build", "r2")}, "r2", "r1", 0},
-		{"both re-run, the other queued", []runJob{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r2"), job(2, "build", "")}, "r2", "r1", 0},
-		{"both re-run, the other not listed yet", []runJob{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r2")}, "r2", "r1", 0},
-		{"both re-run, the other cancelled without a runner", []runJob{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2"), job(2, "build", "")}, "r2", "r1", 0},
-		{"both re-run, the other cancelled without a runner the first time", []runJob{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2")}, "r2", "r1", 0},
-		{"a twin skipped the first time, its re-run not listed yet", []runJob{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2")}, "r2", "r1", 0},
-		{"a twin skipped the first time, its re-run in progress", []runJob{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2"), job(2, "build", "r3")}, "r2", "r1", 0},
-		{"its re-run beside a job first listed with it", []runJob{job(1, "build", "r1"), job(2, "build", "r2"), job(2, "build", "r3")}, "r2", "r1", 0},
-		{"a twin skipped both times, or the two traded places", []runJob{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2"), job(2, "build", "")}, "r2", "r1", 0},
-		{"its re-run, listed again by a later attempt", []runJob{job(1, "build", "r1"), job(2, "build", "r2"), job(3, "build", "r2")}, "r2", "r1", 2},
-		{"its re-run, listed newest attempt first", []runJob{job(3, "build", "r2"), job(2, "build", "r2"), job(1, "build", "r1")}, "r2", "r1", 2},
-		{"its re-run after an attempt that did not re-run it", []runJob{job(1, "build", "r1"), job(2, "build", "r1"), job(3, "build", "r2")}, "r2", "r1", 3},
-		{"the re-run of an attempt that is not recorded", []runJob{job(1, "build", "r1"), job(2, "build", "r2"), job(3, "build", "r3")}, "r3", "r1", 0},
-		{"a twin carried under another job's name", []runJob{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r2"), job(2, "lint", "r0")}, "r2", "r1", 0},
-		{"its re-run beside a queued job first listed with it", []runJob{job(1, "build", "r1"), job(2, "build", "r2"), job(2, "build", "")}, "r2", "r1", 0},
-		{"a completion not listed", []runJob{job(1, "build", "r1")}, "r2", "r1", 0},
-		{"a completion with no runner", []runJob{job(1, "build", "r1"), job(2, "build", "")}, "", "r1", 0},
-		{"a record with no runner, its name held by one job", []runJob{job(1, "build", "r1"), job(2, "build", "r2")}, "r2", "", 2},
-		{"a record with no runner, beside a queued job first listed with its re-run", []runJob{job(1, "build", ""), job(2, "build", "r2"), job(2, "build", "")}, "r2", "", 0},
-		{"a record with no runner, its name shared", []runJob{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r0"), job(2, "build", "r2")}, "r2", "", 0},
+		{"its re-run", []workflowJobSummary{job(1, "build", "r1"), job(1, "lint", "r0"), job(2, "build", "r2"), job(2, "lint", "r3")}, "r2", "r1", 2},
+		{"a job sharing its name, in the attempt it failed in", []workflowJobSummary{job(1, "build", "r1"), job(1, "build", "r2")}, "r2", "r1", 0},
+		{"its re-run beside a twin not re-run", []workflowJobSummary{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r0"), job(2, "build", "r2")}, "r2", "r1", 2},
+		{"the twin re-run alone", []workflowJobSummary{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r1"), job(2, "build", "r2")}, "r2", "r1", 0},
+		{"both re-run, the other queued", []workflowJobSummary{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r2"), job(2, "build", "")}, "r2", "r1", 0},
+		{"both re-run, the other not listed yet", []workflowJobSummary{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r2")}, "r2", "r1", 0},
+		{"both re-run, the other cancelled without a runner", []workflowJobSummary{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2"), job(2, "build", "")}, "r2", "r1", 0},
+		{"both re-run, the other cancelled without a runner the first time", []workflowJobSummary{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2")}, "r2", "r1", 0},
+		{"a twin skipped the first time, its re-run not listed yet", []workflowJobSummary{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2")}, "r2", "r1", 0},
+		{"a twin skipped the first time, its re-run in progress", []workflowJobSummary{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2"), job(2, "build", "r3")}, "r2", "r1", 0},
+		{"its re-run beside a job first listed with it", []workflowJobSummary{job(1, "build", "r1"), job(2, "build", "r2"), job(2, "build", "r3")}, "r2", "r1", 0},
+		{"a twin skipped both times, or the two traded places", []workflowJobSummary{job(1, "build", "r1"), job(1, "build", ""), job(2, "build", "r2"), job(2, "build", "")}, "r2", "r1", 0},
+		{"its re-run, listed again by a later attempt", []workflowJobSummary{job(1, "build", "r1"), job(2, "build", "r2"), job(3, "build", "r2")}, "r2", "r1", 2},
+		{"its re-run, listed newest attempt first", []workflowJobSummary{job(3, "build", "r2"), job(2, "build", "r2"), job(1, "build", "r1")}, "r2", "r1", 2},
+		{"its re-run after an attempt that did not re-run it", []workflowJobSummary{job(1, "build", "r1"), job(2, "build", "r1"), job(3, "build", "r2")}, "r2", "r1", 3},
+		{"the re-run of an attempt that is not recorded", []workflowJobSummary{job(1, "build", "r1"), job(2, "build", "r2"), job(3, "build", "r3")}, "r3", "r1", 0},
+		{"a twin carried under another job's name", []workflowJobSummary{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r2"), job(2, "lint", "r0")}, "r2", "r1", 0},
+		{"its re-run beside a queued job first listed with it", []workflowJobSummary{job(1, "build", "r1"), job(2, "build", "r2"), job(2, "build", "")}, "r2", "r1", 0},
+		{"a completion not listed", []workflowJobSummary{job(1, "build", "r1")}, "r2", "r1", 0},
+		{"a completion with no runner", []workflowJobSummary{job(1, "build", "r1"), job(2, "build", "")}, "", "r1", 0},
+		{"a record with no runner, its name held by one job", []workflowJobSummary{job(1, "build", "r1"), job(2, "build", "r2")}, "r2", "", 2},
+		{"a record with no runner, beside a queued job first listed with its re-run", []workflowJobSummary{job(1, "build", ""), job(2, "build", "r2"), job(2, "build", "")}, "r2", "", 0},
+		{"a record with no runner, its name shared", []workflowJobSummary{job(1, "build", "r1"), job(1, "build", "r0"), job(2, "build", "r0"), job(2, "build", "r2")}, "r2", "", 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want, reranIn(tc.jobs, tc.runner, tc.failed))
@@ -235,7 +235,7 @@ func TestFlakyJobs_AnUnreadableRunPairsNothing(t *testing.T) {
 		"an error status":        func(gh *runJobsStub, _ *Provisioner, _ *ScaleSetJob) { gh.status = http.StatusBadGateway },
 		"a list that ends early": func(gh *runJobsStub, _ *Provisioner, _ *ScaleSetJob) { gh.unlisted = 1 },
 		"more jobs than it reads": func(gh *runJobsStub, _ *Provisioner, _ *ScaleSetJob) {
-			for len(gh.jobs) <= runJobsPageSize*runJobsMaxPages {
+			for len(gh.jobs) <= jobsPerPage*maxJobPages {
 				gh.jobs = append(gh.jobs, listed(1, "other", "r"))
 			}
 		},
@@ -279,14 +279,14 @@ func TestRunJobs_ReadsEveryPage(t *testing.T) {
 	p := flakyProvisioner(nil)
 	gh := &runJobsStub{}
 	gh.serve(p)
-	for len(gh.jobs) < runJobsPageSize {
+	for len(gh.jobs) < jobsPerPage {
 		gh.jobs = append(gh.jobs, listed(1, "other", "r"))
 	}
 	gh.jobs = append(gh.jobs, listed(2, "build", "runner-2"))
 	jobs, err := p.runJobs(context.Background(), "org", "repo", "900")
 	require.NoError(t, err)
-	require.Len(t, jobs, runJobsPageSize+1)
-	assert.Equal(t, "runner-2", jobs[runJobsPageSize].RunnerName)
+	require.Len(t, jobs, jobsPerPage+1)
+	assert.Equal(t, "runner-2", jobs[jobsPerPage].RunnerName)
 	assert.Equal(t, 2, gh.gets)
 	assert.LessOrEqual(t, gh.slowest, runJobsBudget)
 }

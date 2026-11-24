@@ -150,15 +150,18 @@ const (
 const (
 	// jobsPerPage is the jobs API's page size limit.
 	jobsPerPage = 100
-	// maxJobPages bounds how much of an attempt's job list is read.
+	// maxJobPages bounds how much of a job list is read.
 	maxJobPages = 10
 )
 
-// workflowJobSummary is the part of a listed job the already_rerun check reads.
+// workflowJobSummary is the part read of one job of one attempt of a run. A job an
+// attempt did not re-run is listed in it again on the runner that ran it. RunnerName is
+// "" until the job has a runner.
 type workflowJobSummary struct {
 	Name        string    `json:"name"`
 	Conclusion  string    `json:"conclusion"`
 	RunnerName  string    `json:"runner_name"`
+	RunAttempt  int       `json:"run_attempt"`
 	CompletedAt time.Time `json:"completed_at"`
 }
 
@@ -219,35 +222,47 @@ func (p *Provisioner) jobRerunSince(ctx context.Context, owner, repo, runID stri
 
 // attemptJobs lists every job of one attempt of a run.
 func (p *Provisioner) attemptJobs(ctx context.Context, owner, repo, runID string, attempt int) ([]workflowJobSummary, error) {
-	if err := p.githubReady(owner, repo, "attempt-jobs"); err != nil {
+	apiURL := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%s/attempts/%d/jobs",
+		p.GitHubAPIURL, neturl.PathEscape(owner), neturl.PathEscape(repo), neturl.PathEscape(runID), attempt)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build attempt-jobs request: %w", err)
+	}
+	return p.listJobs(ctx, owner, repo, "attempt-jobs", req, neturl.Values{})
+}
+
+// listJobs reads every page of the jobs list req asks for, or none past maxJobPages of
+// them. An error wraps errRunConclusionUnreadable where a later read could answer.
+func (p *Provisioner) listJobs(ctx context.Context, owner, repo, what string, req *http.Request, query neturl.Values) ([]workflowJobSummary, error) {
+	if err := p.githubReady(owner, repo, what); err != nil {
 		return nil, err
 	}
+	query.Set("per_page", strconv.Itoa(jobsPerPage))
 	var jobs []workflowJobSummary
 	for page := 1; page <= maxJobPages; page++ {
-		apiURL := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%s/attempts/%d/jobs",
-			p.GitHubAPIURL, neturl.PathEscape(owner), neturl.PathEscape(repo), neturl.PathEscape(runID), attempt)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-		if err != nil {
-			return nil, fmt.Errorf("build attempt-jobs request: %w", err)
-		}
-		req.URL.RawQuery = neturl.Values{"per_page": {strconv.Itoa(jobsPerPage)}, "page": {strconv.Itoa(page)}}.Encode()
+		query.Set("page", strconv.Itoa(page))
+		req := req.Clone(ctx)
+		req.URL.RawQuery = query.Encode()
 		status, body, err := p.githubSend(ctx, req)
 		switch {
 		case errors.Is(err, errGitHubUnreachable):
-			return nil, fmt.Errorf("attempt-jobs API call: %v: %w", err, errRunConclusionUnreadable)
+			return nil, fmt.Errorf("%s API call: %v: %w", what, err, errRunConclusionUnreadable)
 		case err != nil:
 			return nil, err
 		case status >= 500:
-			return nil, fmt.Errorf("attempt-jobs API returned %d: %w", status, errRunConclusionUnreadable)
+			return nil, fmt.Errorf("%s API returned %d: %w", what, status, errRunConclusionUnreadable)
 		case status < 200 || status > 299:
-			return nil, fmt.Errorf("attempt-jobs API returned %d", status)
+			return nil, fmt.Errorf("%s API returned %d", what, status)
 		}
 		var list struct {
 			TotalCount int                  `json:"total_count"`
 			Jobs       []workflowJobSummary `json:"jobs"`
 		}
 		if err := json.Unmarshal(body, &list); err != nil {
-			return nil, fmt.Errorf("decode attempt jobs: %w", err)
+			return nil, fmt.Errorf("decode %s: %w", what, err)
+		}
+		if list.TotalCount > maxJobPages*jobsPerPage {
+			return nil, fmt.Errorf("%s lists %d jobs, more than the %d read", what, list.TotalCount, maxJobPages*jobsPerPage)
 		}
 		jobs = append(jobs, list.Jobs...)
 		if len(jobs) >= list.TotalCount {
@@ -257,7 +272,7 @@ func (p *Provisioner) attemptJobs(ctx context.Context, owner, repo, runID string
 			break
 		}
 	}
-	return nil, fmt.Errorf("attempt %d lists more jobs than the %d read", attempt, len(jobs))
+	return nil, fmt.Errorf("%s list ended early, at %d jobs", what, len(jobs))
 }
 
 // workflowRunSummary is the part of a listed run the superseded check compares.
