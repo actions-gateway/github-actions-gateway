@@ -96,7 +96,15 @@ An operator prevents it with `maxRequests.memory`, which caps the raise containe
 Why GitHub withdrew two assignments and kept the third was not measured, and this is one run.
 
 **The class fired before the job's `JobStarted` was handled** (run 45324839276): the first at 04:16:24, the second at 04:16:35, 30 s after the job started.
-Until that message the pod names the job it was provisioned for, which need not be the job its runner took; here the two were the same ([Q1389](../queue/Q1389.md)).
+Until that message the pod names the job it was provisioned for, which need not be the job its runner took; here the two were the same.
+The class now waits for that message ([as built](../design/04-operational-flows.md#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183), Q1389).
+A probe of the class without the wait, run as a unit test against a fake GitHub on `3048c2c3c`, gave for a worker created for `lint` of run 4242 and killed unstamped while its runner held another job:
+
+| The runner held | Limit raised for | Slot spent of |
+|---|---|---|
+| `build` of run 4242 | `4242/lint` | 4242 |
+| The same, with `lint` already started by another worker | none, with no Event | none |
+| `build` of run 9999 | `4242/lint` | 4242 |
 
 ### Readings from GitHub's API, 2026-11-22
 

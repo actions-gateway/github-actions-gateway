@@ -60,6 +60,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically](#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically)
   - [A timed-out job whose re-run passes counts as flaky](#a-timed-out-job-whose-re-run-passes-counts-as-flaky)
   - [Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run](#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run)
+  - [Non-breaking: an out-of-memory retry waits for its job's start](#non-breaking-an-out-of-memory-retry-waits-for-its-jobs-start)
   - [A disrupted job is not re-run while its set's workers cannot pull their image](#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image)
   - [A worker evicted for its own storage limit is no longer re-run](#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run)
   - [Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once](#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once)
@@ -1306,6 +1307,19 @@ Where such jobs are legs of one `fail-fast: true` matrix that a red job reports 
 `actions_gateway_eviction_rerun_withheld_total` can carry `reason="job_not_found"`.
 
 **Rolling back** returns the retry to `rerun-failed-jobs`, for the re-runs still waiting too.
+
+### Non-breaking: an out-of-memory retry waits for its job's start
+
+**Who is affected:** a tenant with a `Binpack` or `Throughput` `RunnerSet`.
+Nothing to do.
+
+**What changed.** A runner killed for memory within seconds of taking a job could have the wrong job's limit raised and the wrong run's budget spent, because its pod still named the job it was created for.
+The AGC now [waits for the message naming the job](worker-rightsizing.md#when-a-job-runs-out-of-memory) first, up to 15 minutes (Q1389).
+
+**What you will see.** A worker killed that early stays `Failed` past `completedPodTTL` until the AGC has acted.
+Where the message never comes, `actions_gateway_eviction_recovery_identity_unknown_total{cause="oom"}` increments and nothing is re-run.
+
+**Rolling back** acts at once again, on the job the pod names.
 
 ### A disrupted job is not re-run while its set's workers cannot pull their image
 
