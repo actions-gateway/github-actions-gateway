@@ -4,6 +4,8 @@
 > Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22), and Q1382's dogfood reading (2026-11-24); the ledger's open rows still gate the tag and nothing rides yet.
 > Three of them are the readings' refutations, Q1374 to Q1376, gated on 2026-11-22 because each breaks a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the `trigger="other"` rate this release measures success by, biased in opposite directions.
 > Q1381 gates it too, settled 2026-11-22: its re-runs land in merge-queue runs nothing reads and each spends a `maxEvictionRetries` slot, which is the opposite of what this release is for.
+> Q1389 gates it too: the classes this release adds read the same record as the out-of-memory class, and if that record names the wrong job they re-run a genuine failure.
+> The wrong-job half is read from source, so its first step is reproducing it.
 > Nothing here is a commitment to a date.
 
 ## Why this release exists
@@ -32,6 +34,7 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | [Q1374](../queue/Q1374.md) | Record a job killed by `timeout-minutes`, which `JobCompleted` reports `canceled` (M1) | `2.1-gate` | 🔲 open |
 | Q1317 | Reproduce the out-of-memory retry class on dogfood (M3, R12) | `2.1-gate` | ✅ reproduced 2026-11-22 under `Throughput`: the kill takes the runner, and the class fires and re-runs as built; `Binpack` is Q1382's |
 | Q1382 | Reproduce the out-of-memory retry class on a `Binpack` set (R12) | `2.1-gate` | ✅ reproduced 2026-11-24: the request rises with the limit and the re-run succeeds; a raise no node can hold is filed as Q1388 |
+| [Q1389](../queue/Q1389.md) | Keep the out-of-memory class from acting before the pod names the job it ran | `2.1-gate` | 🔲 open: reproduce first, since the wrong-job half is read from source |
 | [Q1320](../queue/Q1320.md) | Build the `already_rerun`, `run_succeeded` and `worker_unstartable` checks | `2.1-gate` | 🔲 open |
 | Q1318 | Measure the `superseded` check on a fork PR whose branch is `main` (M5) | `2.1-gate` | ✅ measured 2026-11-22 from the API: the `event` filter separates a fork's `main` from upstream's; a displaced merge-group run is not cancelled, filed as Q1381 |
 | [Q1381](../queue/Q1381.md) | Withhold the re-run of a merge-group run displaced from the queue, which GitHub does not cancel | `2.1-gate` | 🔲 open |
