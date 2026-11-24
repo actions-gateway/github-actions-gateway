@@ -6584,7 +6584,8 @@ The job was abandoned because its worker could not be scheduled, so re-running a
 <li><strong>The wait window.</strong> Capacity may never return, because <code>pending_deadline</code> also reaps a pod no amount of waiting will place (an unpullable image, a constraint no node satisfies).
   After 30 minutes the wait is given up and counted as <code>actions_gateway_abandoned_run_rerun_waits_total{outcome="expired"}</code>; the successful case is <code>{outcome="capacity_returned"}</code>.</li>
 </ul>
-<p>Fixing the root cause is still yours to do: the re-run is a recovery, not a repair, and a re-run into an unchanged unpullable image will be abandoned again until the budget runs out.</p>
+<p>Fixing the root cause is still yours to do: the re-run is a recovery, not a repair.
+While another worker of the set is stuck in <code>ImagePullBackOff</code> and no worker still present has started since, the re-run is withheld with <code>reason="worker_unstartable"</code> instead, and needs a manual re-run once the image pulls (Q1320); with no such worker left to read, a re-run into an unchanged unpullable image is abandoned again until the budget runs out.</p>
 <p><strong>Timing.</strong> <code>pendingPodDeadline</code> is a floor, not an instant.
 The AGC arms a timer for it on the reconcile that last saw the pod, and a reconcile that ends in an error — an optimistic-lock conflict on the owner's status is the routine one — hands the wake-up to the work queue's retry instead.
 That retry is capped at 30s, so on a contended cluster a reap can land up to about half a minute past the deadline, and the <code>WorkerPodStuckPending</code> event with it.</p>
@@ -7191,7 +7192,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>EvictionRerunWithheld</code></td>
 <td>Normal</td>
-<td>Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded <code>cancelled</code> by someone other than GAG, so the cancel stands (Q811, Q1181); or the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> or <code>emptyDir</code> limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181); or a runner killed for memory that a re-run would repeat, or while out-of-memory retries are paused (Q1183). Only a cancel seen after detection spends a slot.</td>
+<td>Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded <code>cancelled</code> by someone other than GAG, so the cancel stands (Q811, Q1181); or the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> or <code>emptyDir</code> limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181); or already re-run by a later attempt, of a run that concluded <code>success</code>, or for a set whose workers are placed and cannot pull their image, which needs the image fixed and a manual re-run (Q1320); or a runner killed for memory that a re-run would repeat, or while out-of-memory retries are paused (Q1183). Only a cancel or a success seen after detection spends a slot.</td>
 <td><a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>; <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a></td>
 </tr>
 <tr>
@@ -7263,7 +7264,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>OrphanedWorkerRecovered</code></td>
 <td>Warning</td>
-<td>A scale-set worker pod for an unconcluded job was already gone when this AGC process started, so the disruption happened while nothing was watching and its cause was lost with the pod (Q844). The run is re-run through the shared per-run retry budget as <code>cause="vanished"</code>. Expected after an AGC restart that overlapped a node drain or a preemption; a steady trickle with no restarts is not.</td>
+<td>A scale-set worker pod for an unconcluded job was already gone when this AGC process started, so the disruption happened while nothing was watching and its cause was lost with the pod (Q844). The run is re-run through the shared per-run retry budget as <code>cause="vanished"</code>, unless an <code>EvictionRerunWithheld</code> Event says why not. Expected after an AGC restart that overlapped a node drain or a preemption; a steady trickle with no restarts is not.</td>
 <td><a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a></td>
 </tr>
 <tr>
@@ -7964,7 +7965,7 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
   A drain catching a still-<code>Pending</code> pod, the <code>pendingPodDeadline</code> reap, or a node shutdown while the worker was still pulling its image leaves no reportable failure for <code>rerun-failed-jobs</code> to act on.
   It is not lost, though: the run is force-cancelled and then re-run once capacity returns, which is the out-of-table <code>abandoned</code> cause named above.
   One case does take the <code>vanished</code> row instead: a never-started worker removed while the AGC was down, because whether a container ever ran is a fact about the pod.
-  GitHub refuses a re-run for a run with no failed job, which is logged and dropped, so the outcome is a manual re-run rather than a wrong one.
+  A run with no failed job gets no re-run: one that concluded <code>success</code> is withheld as <code>run_succeeded</code>, and any other refusal of GitHub's is logged and dropped, so the outcome is a manual re-run rather than a wrong one.
   See <a href="#worker-pod-reaped-while-pending-workerpodstuckpending">Worker Pod Reaped While Pending</a>.</li>
 </ul>
 <p><strong>Fires but can come up short</strong> — each has its own runbook below:</p>
@@ -7978,9 +7979,50 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 That is checked on every cause, and GAG's own force-cancel of an abandoned run is told apart and still re-run.
 No call is made, <code>eviction_rerun_withheld_total{reason="run_cancelled"}</code> increments, and a Normal <code>EvictionRerunWithheld</code> Event names the run (Q811, Q1181).
 See <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>.</p>
-<p><strong>Fires and is withheld as futile</strong>, before any budget slot is spent (Q1181): <code>reason="attempt_limit"</code> (the run is past GitHub's 50 re-runs), <code>reason="run_too_old"</code> (created more than 30 days ago), or <code>reason="superseded"</code> (a newer commit's run of the same workflow, event and branch has started).
-The <code>EvictionRerunWithheld</code> Event names the reason; for the first two, start a new run, and for the third nothing is needed.
-A merge-queue run has no <code>superseded</code> check, and GitHub leaves a group displaced from the queue running rather than cancelling it, so a disrupted job in one is re-run and spends a budget slot on a result nothing reads (measured 2026-11-22, Q1381).</p>
+<p><strong>Fires and is withheld as futile</strong>, before any budget slot is spent (Q1181, Q1320).
+The <code>EvictionRerunWithheld</code> Event names the reason and, where one is needed, the fix:</p>
+<table>
+<thead>
+<tr>
+<th><code>reason</code></th>
+<th>Why no re-run</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code class="gag-nowrap">already_rerun</code></td>
+<td>A later attempt of the run already re-ran the job</td>
+<td>Nothing</td>
+</tr>
+<tr>
+<td><code class="gag-nowrap">run_succeeded</code></td>
+<td>The run concluded <code>success</code>, and GitHub refuses to re-run it</td>
+<td>Nothing; seen after detection, it has spent its slot</td>
+</tr>
+<tr>
+<td><code class="gag-nowrap">attempt_limit</code></td>
+<td>The run is past GitHub's 50 re-runs</td>
+<td>Start a new run</td>
+</tr>
+<tr>
+<td><code class="gag-nowrap">run_too_old</code></td>
+<td>The run was created more than 30 days ago</td>
+<td>Start a new run</td>
+</tr>
+<tr>
+<td><code class="gag-nowrap">superseded</code></td>
+<td>A newer commit's run of the same workflow, event and branch has started</td>
+<td>Nothing</td>
+</tr>
+<tr>
+<td><code class="gag-nowrap">worker_unstartable</code></td>
+<td>A worker of the set is placed and stuck in <code>ImagePullBackOff</code>, and no worker still present has started since</td>
+<td><a href="#the-reason-is-podsnotstarting-the-image-will-not-pull">Fix the image or its pull credentials</a>, then re-run by hand</td>
+</tr>
+</tbody>
+</table>
+<p>A merge-queue run has no <code>superseded</code> check, and GitHub leaves a group displaced from the queue running rather than cancelling it, so a disrupted job in one is re-run and spends a budget slot on a result nothing reads (measured 2026-11-22, Q1381).</p>
 <p>A quota-blocked job is deliberately absent from this table: it is <strong>never claimed</strong> in the first place, so it stays queued at GitHub with no re-run needed — see <a href="#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a>.</p>
 <hr />
 <h2 id="flaky-jobs-and-platform-faults-on-failed-jobs">Flaky Jobs and Platform Faults on Failed Jobs<a class="headerlink" href="#flaky-jobs-and-platform-faults-on-failed-jobs" title="Permanent link">&para;</a></h2>

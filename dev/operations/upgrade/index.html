@@ -2225,6 +2225,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A disrupted job is not re-run while its set's workers cannot pull their image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4584,6 +4595,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A disrupted job is not re-run while its set's workers cannot pull their image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5421,6 +5443,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner">Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner</a></li>
 <li><a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run</a></li>
 <li><a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically">Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically</a></li>
+<li><a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image">A disrupted job is not re-run while its set's workers cannot pull their image</a></li>
 <li><a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run</a></li>
 <li><a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once">Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once</a></li>
 <li><a href="#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets">Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets</a></li>
@@ -6385,6 +6408,14 @@ A worker the AGC had already deleted itself (a reaper delete, or a reclaimed <co
 A <code>NotReady</code> node with no taint is unchanged: its worker stays <code>Running</code> until you taint the node or delete its Node object, because a node that is only partitioned may still be running the job.
 The command is in <a href="../troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a>.</p>
 <p><strong>Rolling back</strong> returns the job on such a node to staying failed.</p>
+<h3 id="a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image">A disrupted job is not re-run while its set's workers cannot pull their image<a class="headerlink" href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> a tenant whose scale-set workers are stuck in <code>ImagePullBackOff</code> when another of the set's jobs loses its worker.</p>
+<p><strong>What changed.</strong> The re-run of a disrupted job used to fire anyway, and its worker would fail to start too, spending a slot of <code>maxEvictionRetries</code>.
+While a worker of the set is placed and in <code>ImagePullBackOff</code>, and no worker still present has started since the oldest such worker was placed, the AGC now withholds the re-run (Q1320).
+A re-run of a job a later attempt already re-ran, or of a run that concluded <code>success</code>, is withheld too.</p>
+<p><strong>What you will see.</strong> <code>actions_gateway_eviction_rerun_withheld_total</code> increments with <code>reason="worker_unstartable"</code>, <code>"already_rerun"</code> or <code>"run_succeeded"</code>, and a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event names the run and the reason.</p>
+<p><strong>What to do.</strong> Nothing at upgrade time.
+On <code>worker_unstartable</code>, <a href="../troubleshooting/#the-reason-is-podsnotstarting-the-image-will-not-pull">fix the image or its pull credentials</a>, then re-run the job by hand; the withhold is final for that disruption.</p>
 <h3 id="a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run<a class="headerlink" href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> a tenant whose jobs outgrow the worker's own <code>ephemeral-storage</code> limit, one container's limit, or an <code>emptyDir</code> <code>sizeLimit</code>.</p>
 <p><strong>What changed.</strong> The kubelet marks a pod that exceeds its own storage limit <code>Failed</code> with <code>reason: Evicted</code>, the same phase and reason it writes for node pressure, and eviction recovery used to re-run both.

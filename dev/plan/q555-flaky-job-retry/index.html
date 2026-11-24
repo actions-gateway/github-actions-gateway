@@ -3225,7 +3225,7 @@ It also gives the person who has to act a reason, where today an exhausted budge
 <tr>
 <td>The worker's <em>shape</em> cannot run: an unpullable image, or a pod no node can host</td>
 <td>The capacity gate's startup and placeability verdicts (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/worker_startup_verdict.go"><code>worker_startup_verdict.go</code></a>, Q714)</td>
-<td>Built for intake: the gate stops new work when every next pod would fail the same way. Whether the re-run paths consult it is unverified</td>
+<td>Built for intake: the gate stops new work when every next pod would fail the same way. On the scale-set tier the startup half withholds a re-run as <code>worker_unstartable</code>, on every set (Q1320); a pod no node can host does not, since a full cluster reads the same way</td>
 </tr>
 <tr>
 <td>The job exceeded its own limit</td>
@@ -3239,8 +3239,8 @@ It also gives the person who has to act a reason, where today an exhausted budge
 </tr>
 <tr>
 <td>GitHub will refuse the re-run</td>
-<td><code>run_attempt</code> past 50 (GitHub caps a run at 50 re-runs), a run older than 30 days, a <code>cancelled</code> conclusion</td>
-<td>Withheld on the scale-set tier as <code>attempt_limit</code>, <code>run_too_old</code> and <code>run_cancelled</code> on every arm (Q1181); the classic tier checks only <code>cancelled</code>, on the deletion arm (Q811)</td>
+<td><code>run_attempt</code> past 50 (GitHub caps a run at 50 re-runs), a run older than 30 days, a <code>cancelled</code> or <code>success</code> conclusion</td>
+<td>Withheld on the scale-set tier as <code>attempt_limit</code>, <code>run_too_old</code> and <code>run_cancelled</code> (Q1181) and <code>run_succeeded</code> (Q1320) on every arm; the classic tier checks only <code>cancelled</code>, on the deletion arm (Q811)</td>
 </tr>
 <tr>
 <td>The same class failed this job again</td>
