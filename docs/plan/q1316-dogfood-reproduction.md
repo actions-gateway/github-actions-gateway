@@ -59,7 +59,7 @@ Both jobs sample the host's cgroup tree every second to their logs: each pod's `
 The two pods are scored alike, so a kill can take either; the survivor's log holds both pods' counters, and is the record: the fill's own summary line is lost where its worker is the one killed.
 Both do the same actions, except the fill, which one of them starts.
 Each job ends in failure once its sampler ends, after 2.5 minutes for R0, R1, R6 and R7 and 8 for a fill, so its end is observable.
-R1, R6 and R7 use one worker.
+R1, R6 and R7 use one worker; R8 uses the pair, so the other worker's log survives the kill.
 
 Both are ordinary `gag-ci-e2e` jobs, at the template's 4Gi of memory requested and 7Gi of limits, and 2.5 CPU requested after `NodeShare`'s sizing, so two fit one `n2-standard-8`.
 A job does nothing on a run attempt above 1, so a re-run an arm makes of it repeats no reading.
@@ -76,6 +76,7 @@ R0 also reads, by read-only `kubectl`, the QoS class, requests and priority clas
 | R0 | 1 | Nothing: cgroup paths; `oom_score_adj` and resident memory of dockerd, the runner's processes and a nested container; node memory, kernel, `memory.oom.group`, `kubepods.slice`'s `memory.max` | | Nested containers outside the pod; 969, 907, 0; `kubepods` capped. Also answers Q1396's first step |
 | R1 | 1 | A job runs a container past its own `-m 64m` | Tenant, honest | `Completed`, exit 0; nothing raised |
 | R6 | 2 | A job sends dockerd SIGKILL, then in a second run SIGABRT, from a `--pid=host` container | Tenant, deliberate | `Error` 137 and `Error` 2; the job fails with the runner alive |
+| R8 | 1 | One worker's step allocates 4 GiB, past the runner's own 3Gi limit | Tenant, honest | The runner `OOMKilled`, 137; pod `Failed`; withheld as `own_limit`, as R2 is; pod `oom` 1, `kubepods.slice` `oom` 0, no `SystemOOM` |
 | R2 | 1 | A job's own container fills the node: eight 4 GiB processes | Tenant, honest | One runner dies; pod `Failed`; the AGC withholds as `own_limit`, which is Q1400's reading; `kubepods.slice` `oom` 0; a `SystemOOM` Event |
 | R3 | 2 | A plain pod on the same node, 12Gi requested and no limit, fills: seven 4 GiB processes | Platform: a neighbour over its request | One runner dies; `kubepods.slice` `oom` above 0; no `SystemOOM` |
 | R3t | 2 | R3, with each worker's dockerd set to its runner's `oom_score_adj`, the tie a 3Gi runner request gives | Platform, tie | The larger process of the two goes, by R0's resident memory |
@@ -119,10 +120,13 @@ So a run in which R4 and R5 differ leaves the class to a design decision rather 
 ## What it decides for Q1400
 
 R2 and R3 are the kill [Q1400](../queue/Q1400.md) describes, a runner killed for the node's memory, so one window serves both.
-They settle whether the pod reads `Failed` with the runner `OOMKilled` at the API server, what the AGC then says and does, when its `PlatformFaultOnFailedJob` comes, and whether the `SystemOOM` Event and the pod's `oom` counter separate the two fills.
+They settle whether the pod reads `Failed` with the runner `OOMKilled` at the API server, what the AGC then says and does, and when its `PlatformFaultOnFailedJob` comes.
+R8 is the kill they are told apart from, a runner past its own limit, and the AGC is expected to treat it alike.
+[M3](q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22) read that kill's status and not its counters or Events.
+What separates them is expected to be the pod's `oom`, 1 for R8 and 0 for R2 and R3; `kubepods`' `oom` then tells R3 from R2, and the `SystemOOM` Event R2 from the rest.
+None of those reaches the AGC today, so the readings say what honest wording can rest on and what a class would need.
 The set is `NodeShare`, so what is read is the withheld `own_limit` branch.
 Not read: a raise under `Binpack` or `Throughput`, which starts from the same two facts, and a runner with no limit.
-An own-limit kill, the reading it should look different from, is [M3](q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22)'s and is not repeated.
 
 ## Mutations
 
@@ -132,7 +136,8 @@ The values are the runbook's ([gke-dogfood.md](gke-dogfood.md#variables)) and ar
 
 | # | Command | Changes |
 |---|---|---|
-| 0 | `gcloud container clusters get-credentials $CLUSTER --project=$PROJECT --zone=$ZONE`, then [take the release gate's lease](#the-lease) | Writes the `KUBECONFIG` file; creates one Lease, `default/actions-gateway-release-gate` |
+| 0a | `gcloud container clusters get-credentials $CLUSTER --project=$PROJECT --zone=$ZONE` | Writes the `KUBECONFIG` file |
+| 0b | [Take the release gate's lease](#the-lease) | Creates one Lease, `default/actions-gateway-release-gate` |
 | 1 | `E2E_VARIANT=dind E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | System pool to its running size, which brings up the always-on gateways; the `dind` overlay (namespace labels, template, open egress policy, gateway); registry mirrors up |
 | 2 | `git push origin HEAD:claude/q1316-probe-run`, one push per reading | One workflow run of the file below; the e2e pool scales 0 to 1 |
 | 3 | `kubectl --context $CTX -n gag-dogfood-e2e create configmap q1316-fill --from-file=fill.py`, once, then `apply -f hog.yaml` with `NODE` set, per R3, R3t and R4 | One ConfigMap, and one non-root, unprivileged pod with the host's `/sys/fs/cgroup` mounted read-only, which is how it sees a worker die |
@@ -149,10 +154,11 @@ A system pool brought up from 0 runs the always-on gateways, so a job already qu
 No repository variable, Secret, CRD, chart or AGC image changes.
 The App Secret in the namespace is used by the AGC as it is, and is not read.
 
-**Before step 1**, read-only: the active project, `scripts/dogfood/ops.sh at-rest`, each pool's node count, the release lease (`kubectl --context $CTX -n default get lease actions-gateway-release-gate`), whether `clusterrunnertemplate/privileged-dind` exists, pods in `gag-dogfood-e2e`, and open runs on `gag-ci-e2e`.
-Any lease, worker or queued run there means the cluster is taken: stop before step 1.
+**Between steps 0a and 0b**, read-only: the active project, `scripts/dogfood/ops.sh at-rest`, each pool's node count, the release lease (`kubectl --context $CTX -n default get lease actions-gateway-release-gate`), whether `clusterrunnertemplate/privileged-dind` exists, pods in `gag-dogfood-e2e`, and open runs on `gag-ci-e2e`.
+Any lease, worker or queued run there means the cluster is taken: stop, with nothing taken.
+After 0b the pods and the queued runs are read once more, since something can start between; a stop there runs step 10 and nothing else.
 
-prod-guard, the hook that checks an agent session's commands, refuses a direct mutating `kubectl` on this cluster, which steps 0, 3, 4, 8 and 10 are and the scripts are not.
+prod-guard, the hook that checks an agent session's commands, refuses a direct mutating `kubectl` on this cluster, which steps 0b, 3, 4, 8 and 10 and the restore's NetworkPolicy deletion are and the scripts are not.
 The documented way through is a `PROD_GUARD_OVERRIDE=<reason>` prefix on each ([kind-iteration.md](../development/kind-iteration.md#verify-the-resolved-target-before-any-mutating-command)), so the grant has to name it, or a maintainer runs those commands by hand.
 
 ### The lease
@@ -166,7 +172,8 @@ So there is no renewal and no expiry, and a run that dies leaves a record that b
 Take it, which fails where one exists:
 
 ```bash
-H="q1316-dogfood-reproduction-$(date +%s)"
+mkdir -p tmp/q1316 && echo "q1316-dogfood-reproduction-$(date +%s)" > tmp/q1316/holder
+H="$(cat tmp/q1316/holder)"
 kubectl --context "$CTX" -n default create -f - <<EOF
 apiVersion: coordination.k8s.io/v1
 kind: Lease
@@ -179,19 +186,25 @@ spec:
 EOF
 ```
 
-Before each of steps 1 to 8, the holder still reads `$H`:
+The holder is kept in a file because a shell variable does not outlive one command of an agent session.
+Before each of steps 1 to 8, this exits 0, which an empty holder or an empty read cannot make it do:
 
 ```bash
-kubectl --context "$CTX" -n default get lease actions-gateway-release-gate -o jsonpath='{.spec.holderIdentity}'
+H="$(cat tmp/q1316/holder)"
+GOT="$(kubectl --context "$CTX" -n default get lease actions-gateway-release-gate -o jsonpath='{.spec.holderIdentity}')"
+[[ -n "$H" && "$GOT" == "$H" ]]
 ```
 
 Release it, which changes nothing unless `$H` still holds it; between the two calls the record is still one no gate acts on:
 
 ```bash
+H="$(cat tmp/q1316/holder)"
 kubectl --context "$CTX" -n default patch lease actions-gateway-release-gate --type=json \
   -p '[{"op":"test","path":"/spec/holderIdentity","value":"'"$H"'"},{"op":"replace","path":"/spec/holderIdentity","value":"q1316-released"}]' &&
   kubectl --context "$CTX" -n default delete lease actions-gateway-release-gate
 ```
+
+Where the delete fails after the patch, the block cannot be run again, because its test now fails: once the holder reads `q1316-released`, delete the Lease by name.
 
 The lease stops a gate, and not a hand-run `e2e-start.sh`, `start.sh` or `stop.sh`, nor a run dispatched to `gag-ci-e2e`, none of which read it.
 So before each of steps 1, 2, 3 and 5 the pods in `gag-dogfood-e2e`, each pool's node count and the runs queued on `gag-ci-e2e` are read as well, and anything this run did not make is an abort.
@@ -205,7 +218,7 @@ Stop, run the restore, and report what was read, on any of:
 - the e2e node is `NotReady` for 5 minutes, or a pod other than the two workers, the plain pod or a DaemonSet's is on it;
 - a container on any other node restarts during a reading;
 - Spot preemption twice;
-- 3.5 hours from step 1, which leaves the restore inside 4.
+- 4 hours from step 1, which leaves the restore inside 4.5.
 
 R2, R3, R4 and R5 exhaust the e2e node on purpose.
 The pool's taint keeps other workloads off it, and it is Spot and disposable.
@@ -229,18 +242,18 @@ The system pool is a different pool.
 
 ## Time and cost
 
-Estimated at 2.5 to 3 hours with the cluster held: 25 minutes to start and read the baseline, 30 for R0, R1 and R6, 5 fills at about 12 minutes, 2 more if R4 and R5 run, 20 for the switch to Kata and R7, 20 to restore.
+Estimated at 2 hours 45 minutes to 3 hours 15 with the cluster held: 25 minutes to start and read the baseline, 30 for R0, R1 and R6, R8 and 5 fills at about 12 minutes each, 2 more if R4 and R5 run, 20 for the switch to Kata and R7, 20 to restore.
 A fill is 12 because a runner that dies holds its job about 10 minutes, until the lock lapses ([M1](q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22)), each uses both worker slots, and none overlaps another.
 
-Estimated from third-party price listings read on 2026-11-24 (Google's own page was not read), over 4 hours, the abort limit:
+Estimated from third-party price listings read on 2026-11-24 (Google's own page was not read), over 4.5 hours, the abort limit and the restore:
 
 | Item | Rate | Estimate |
 |---|---|---|
-| One `n2-standard-8` Spot (two in the worst case) | $0.138 an hour ([listing](https://www.devzero.io/instances/gcp/n2-standard-8)); $0.388 on demand | $0.55 to $1.10; $3.10 at the on-demand rate for two |
-| Two `e2-standard-2` system nodes | $0.067 an hour each ([listing](https://www.devzero.io/instances/gcp/e2-standard-2)) | $0.54 |
+| One `n2-standard-8` Spot (two in the worst case) | $0.138 an hour ([listing](https://www.devzero.io/instances/gcp/n2-standard-8)); $0.388 on demand | $0.62 to $1.24; $3.49 at the on-demand rate for two |
+| Two `e2-standard-2` system nodes | $0.067 an hour each ([listing](https://www.devzero.io/instances/gcp/e2-standard-2)) | $0.60 |
 | Boot disks and one 100Gi volume for the Kata worker | not priced | cents, unverified |
 
-So under $2, and under $4 at the on-demand rate, with nothing priced for disks.
+So under $2, and about $4.10 at the on-demand rate, with nothing priced for disks.
 The cluster's own fee is paid either way.
 
 ## The probe
@@ -306,6 +319,7 @@ jobs:
             R6a) host sh -c 'kill -KILL $(pidof dockerd)' ;;
             R6b) host sh -c 'kill -ABRT $(pidof dockerd)' ;;
             R7b) docker run --rm "$I" python3 -c 'b = bytearray(b"\1") * (9 << 30)'; echo "exit $?" ;;
+            R8) if [[ $W == a ]]; then python3 -c 'b = bytearray(b"\1") * (4 << 30)'; echo "exit $?"; fi ;;
             R2|R5) if [[ $W == a ]]; then host python3 - 8 4096 45 < fill.py; fi ;;
           esac
           wait
