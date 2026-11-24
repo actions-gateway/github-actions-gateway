@@ -7988,8 +7988,9 @@ A merge-queue run has no <code>superseded</code> check, and GitHub leaves a grou
 <p>Detection reads <code>JobCompleted</code> messages, is on for every <code>RunnerSet</code> with no field, and changes no behaviour.</p>
 </blockquote>
 <p>When a scale-set job completes <code>failed</code>, the AGC records it in the set's failure ledger, ConfigMap <code>scaleset-failures-&lt;runnerset&gt;</code>, key <code>failures.json</code>, under <code>failures["&lt;runID&gt;/&lt;job name&gt;"]</code>.
-The record holds the worker's state (<code>context</code>): pod phase, reason and a truncated message, its conditions, the node and pod IP, and each container's termination reason, exit code and restart count.
-For a job that ends on a step's result, GitHub's completion arrives before the worker's pod finishes, so the context is the pod while still <code>Running</code>, often before any container has terminated; a worker killed out from under its job, such as by an out-of-memory kill, is recorded as it finished (measured 2026-11-22, Q1376).
+The record holds the worker's state (<code>context</code>): pod phase, reason and a truncated message, its conditions, the node and pod IP, and each container's termination reason, exit code and restart count, with the termination before it (<code>previousReason</code>, <code>previousExitCode</code>) for a sidecar that crashed, restarted and then exited.
+The context is the worker as it finished.
+For a job that ends on a step's result, GitHub's completion arrives while the worker's pod still runs (measured 2026-11-22), so the record first holds the pod as <code>Running</code> and is rewritten when the pod finishes (Q1376).
 A <code>canceled</code> completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing, and neither does a job that reached its <code>timeout-minutes</code>, which GitHub also reports <code>canceled</code> (Q1374).</p>
 <p>When a later attempt of the same job (same run, same job name) completes, it is paired with that record and counted in <code>actions_gateway_scaleset_job_reruns_total{trigger}</code>:</p>
 <table>
@@ -8019,7 +8020,8 @@ A <code>canceled</code> completion is recorded only when a disruption recovery c
 </tbody>
 </table>
 <p>A flaky verdict counts <code>actions_gateway_scaleset_flaky_jobs_total</code> and emits a Normal <code>FlakyJobDetected</code> Event.</p>
-<p><strong>Read a failure's context</strong> from the AGC log, which carries it on every failed job, at Warn when it shows a platform fault and Info otherwise:</p>
+<p><strong>Read a failure's context</strong> from the AGC log, which carries it on every failed job, at Warn when it shows a platform fault and Info otherwise.
+A job recorded while its worker still ran is logged twice: at its completion, and with <code>workerFinished=true</code> once the worker finishes, where a Warn names only a fault the first line did not.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-130-1" name="__codelineno-130-1" href="#__codelineno-130-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;agc-namespace&gt;<span class="w"> </span>deploy/&lt;agc-deployment&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'scale-set job failed'</span>
 </code></pre></div>
 <p>or from the ledger while the record is open (7 days, or until the job succeeds):</p>
@@ -8027,12 +8029,14 @@ A <code>canceled</code> completion is recorded only when a disruption recovery c
 </code></pre></div>
 <p><strong>A <code>PlatformFaultOnFailedJob</code> Warning</strong> names the fault.
 <code>OOMKilled</code> means the job needs more memory than the worker template gives it; a <code>DisruptionTarget</code> condition or a <code>Failed</code> pod means the node or the scheduler removed the worker, which the <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">disruption arms</a> recover on their own.
-<code>EgressProxy &lt;name&gt; has no ready replicas</code> means no proxy pod could carry the job's egress when the worker finished.
+A fault that came after the job's completion, such as a node drain while the runner shut down, stays in the context and raises no Warning.
+<code>EgressProxy &lt;name&gt; has no ready replicas</code> means no proxy pod could carry the job's egress when the job completed, or when the worker finished if that came first.
 <code>EgressProxy &lt;name&gt; not Ready</code>, with its ready count, means the pool had fewer ready pods than its floor (<code>spec.minReplicas</code>, or the Deployment's replicas under bring-your-own autoscaling), as during a rolling update or after an eviction, so the remaining pods may still have carried the job's egress.
 Read the pool with <code>kubectl get egressproxy -n &lt;namespace&gt; &lt;name&gt;</code>.</p>
 <p><strong>What detection cannot see.</strong> Node conditions are not recorded (the AGC has no <code>nodes</code> read), nor is a registry mirror's readiness.
 A proxy pool shared from another namespace is recorded as <code>proxy.mode: shared</code> with no readiness, since the AGC's cache does not reach that namespace.
 A snapshot is held in memory, so a failure recorded after an AGC restart, or after more than 1,024 workers finished with no completion yet, has no <code>context</code>.
+An AGC restart between a job's failure and its worker's finish leaves the record's <code>context</code> at <code>podPhase: Running</code>, and so does a worker whose pod is removed before it finishes, such as a force delete.
 A re-run more than 7 days after the failure, or one that lands on another <code>RunnerSet</code>, pairs with nothing and counts nothing.
 Two jobs of one run that share a <code>name:</code> share one record, so one's success pairs with the other's failure and counts as a flake nobody re-ran (Q1375).</p>
 <hr />

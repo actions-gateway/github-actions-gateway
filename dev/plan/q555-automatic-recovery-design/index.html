@@ -3112,7 +3112,7 @@
 
 <h1 id="q555-automatic-recovery-design">Q555 automatic recovery: design<a class="headerlink" href="#q555-automatic-recovery-design" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; so is Q1181's <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the scale-set tier (<code>rerun_futility.go</code>); so is Q555's detection (<code>flaky_jobs.go</code>): the <code>failures</code> map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up whose <a href="#readings-from-the-dogfood-turn-up-2026-11-22">readings</a> (Q1236) refute three of its assumptions, with the colocated proxy's readiness added by Q1237; the rest is not.
+Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; so is Q1181's <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the scale-set tier (<code>rerun_futility.go</code>); so is Q555's detection (<code>flaky_jobs.go</code>): the <code>failures</code> map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up whose <a href="#readings-from-the-dogfood-turn-up-2026-11-22">readings</a> (Q1236) refute three of its assumptions, one of them since corrected (Q1376), with the colocated proxy's readiness added by Q1237; the rest is not.
 It turns <a href="../q555-flaky-job-retry/">the requirements draft</a> into components against the code as it stands, one per backlog row, and answers the draft's <a href="../q555-flaky-job-retry/#open-questions-for-the-design-session">open questions</a>.
 Each answer is marked <strong>Decided</strong> (the maintainer chose it, 2026-10-12), <strong>Decide</strong> (a recommendation still awaiting sign-off) or <strong>Research</strong> (needs a measurement before anyone can choose).
 The draft says <em>what</em> and <em>why</em>; this says <em>how</em>.
@@ -3186,7 +3186,8 @@ The readings are the AGC's <code>scaleset: job assigned</code>, <code>job comple
 <li><strong>M2.</strong> A re-run of the failed job arrives with a new job UUID (<code>abe6cad3…</code>, then <code>4349fbb7…</code>) under the same run ID and <code>jobDisplayName</code>, and pairs as <code>trigger=other</code>, flaky, as designed.
   GitHub accepts two jobs sharing one <code>name:</code>, and they share one failure key: the green twin's success paired with the red twin's failure and emitted a false <code>FlakyJobDetected</code> (18:05:32 UTC), and the red twin's re-run at 18:07:02 logged as a fresh failure rather than a pairing, so its record was gone (<a href="../../queue/Q1375/">Q1375</a>).</li>
 <li><strong>M4.</strong> A job that ends on a step's result completes before its pod's terminal transition: the completion is logged in the same second as <code>job started</code>, and every such record's <code>context</code> reads <code>podPhase: Running</code> (three in these runs, and <code>44325908424/scripts-test</code> from 2026-11-18); in two of the three no container had terminated yet, and in <code>ee99fae0…</code> the runner had just terminated <code>Completed</code>, exit 0.
-  So <code>Completed</code> reads the running pod every time, and the snapshot the terminal transition takes moments later is never taken by any completion; it waits in the 1,024-entry map until evicted (<a href="../../queue/Q1376/">Q1376</a>).
+  So <code>Completed</code> read the running pod every time, and the snapshot the terminal transition took moments later was never taken by any completion; it waited in the 1,024-entry map until evicted.
+  Q1376 fixed both since (<a href="#what-a-failed-job-records-r7">What a failed job records</a>).
   The runner exits 0 when its job fails: both red jobs' pods, and the timed-out job's, were reaped <code>Succeeded</code>, so a red test on its own never reads as a fault.
   A kill that ends the runner inverts the order: run 45052020040's out-of-memory worker failed at 17:58:21 UTC, was reaped at 18:03:23, and its completion at 18:08:09 took the terminal snapshot, so that record shows the fault and raised <code>PlatformFaultOnFailedJob</code>.</li>
 <li><strong>M3.</strong> The worker's cgroup is v2 (<code>cgroup2fs</code>) and its <code>memory.oom.group</code> reads 1, both read from inside the job; the kubelet's <code>singleProcessOOMKill</code> is unset on the system pool's node (<code>configz</code>, kubelet <code>v1.35.8-gke.1796000</code>), and the worker pool's kubelet was not read.
@@ -3221,11 +3222,22 @@ A rolling update can briefly run two AGC pods, so the ledger is written with a c
 <p>The pod is the evidence, and nothing maps a job to its pod once the pod is deleted.
 So the runner-set controller, whose pod watch already sees every worker reach a terminal phase (it drives <code>RecoverDisruptedScaleSetWorker</code>), snapshots each worker at that transition into a bounded in-memory map keyed by runner name.
 <code>Completed</code> takes the snapshot for its runner, falling back to reading the pod if it is still there.
-Measured (M4), the fallback is the common path and reads a pod still <code>Running</code>: only a kill that ends the runner lets the snapshot arrive first (<a href="../../queue/Q1376/">Q1376</a>).</p>
+Measured (M4), the fallback is the common path and reads a pod still <code>Running</code>: only a kill that ends the runner lets the snapshot arrive first.</p>
+<p>So the record is written from whichever is known at the completion, and amended at the terminal transition where that comes later (Q1376, built).
+The alternatives:</p>
+<ul>
+<li><strong>Wait for the transition before recording.</strong> On the listener's goroutine, each failed job would delay every message behind it, new assignments included, by the worker's shutdown; off it, a restart during the wait loses the failure and its pairing, since the message has been deleted, and a worker that never exits needs a timeout that records the running pod anyway.</li>
+<li><strong>Record only at the transition.</strong> A pod's transition carries no job result, so every worker would need a ledger write, against the rule that writes track failures and not throughput.</li>
+<li><strong>Only stop snapshotting a completed job's worker.</strong> That fixes the map and leaves the record as it was.</li>
+</ul>
+<p>The amendment costs one ledger write per job that fails while its worker runs, and none for a succeeded job.
+A worker's later reads are merged, not swapped in: the kubelet drops a restarted sidecar's crash from the status it writes as the pod finishes (kubelet v1.35.5, <code>testdata/sidecar_restart_statuses.json</code>), so the pod watch passes a container's restart as well as a phase change, and each read carries forward the terminations the next one has lost.
+A pod deleted while it runs is waited for: its finish amends the record, or its deletion event where it never finishes.
+The amendment keeps the completion's proxy reading, and adds a fault only where its container or condition is dated before the completion, because a worker that outlives its job can be drained or killed without having failed it.</p>
 <p>A snapshot holds only bounded fields, all read from objects the AGC can already see:</p>
 <ul>
 <li>pod phase, reason and message (message truncated to 256 bytes), its conditions (<code>DisruptionTarget</code> included), <code>spec.nodeName</code>, pod IP and start time;</li>
-<li>per container, sidecars included: name, terminated reason, exit code, restart count;</li>
+<li>per container, sidecars included: name, terminated reason, exit code, restart count, and the termination before the last where a restarted container has since exited, carried from an earlier read where the kubelet has dropped it;</li>
 <li>for a colocated egress proxy, the EgressProxy's <code>Ready</code> condition and <code>readyReplicas</code>.</li>
 </ul>
 <p><strong>Two things R7 lists are left out, deliberately:</strong></p>
@@ -3252,7 +3264,7 @@ That is one of R5's stated blind spots.</p>
 The AGC loads the ledger once at start and keeps an in-memory copy, updated on each of its own writes and re-read when a compare-and-swap loses.
 Lookups, including the per-provision floor lookup below, read that copy and cost nothing.
 Q1182 ships without the copy: its only reads are a reservation's own compare-and-swap and the deletion arm's <code>selfCancelledAttempt</code> check on a cancelled run, both rare, so each reads uncached; the copy arrives with the first lookup on a hot path, Q1183's floor.
-Writes happen on a failed completion, a GAG re-run (its budget reservation) and a pairing, never on a succeeded job with no record, so the write rate tracks failures and not throughput.</p>
+Writes happen on a failed completion and its worker's finish, a GAG re-run (its budget reservation) and a pairing, never on a succeeded job with no record, so the write rate tracks failures and not throughput.</p>
 <p>It holds a version and three maps, every entry carrying its own <code>expiresAt</code> so any AGC version can age any map, including one it does not understand:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">"version"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
@@ -3517,6 +3529,16 @@ The <code>EvictionRerunWithheld</code> Event names the reason and the fix.</p>
 <p>It runs where M3 says the evidence is first complete: on the worker's terminal transition, beside the disruption arms, if the class's failure kills the runner; on <code>Completed</code> if the runner survives to report.
 An out-of-memory kill takes the runner with it (M3, <a href="#readings-from-the-dogfood-turn-up-2026-11-22">measured</a>), so the first class fires from the terminal transition, as built.
 Either way it reads the same snapshot detection records, which is why Q1183 waits on Q555.</p>
+<p>For a class whose job ends on a step's result (<a href="../../queue/Q1315/">Q1315</a>, <a href="../../queue/Q1316/">Q1316</a>), the completion is where it fires, and the amendment (<code>amendFailedJob</code>, Q1376) adds what only a later read of the pod shows:</p>
+<ul>
+<li><strong>The proxy class</strong> fires from <code>Completed</code>, which holds the result and the proxy readiness together.
+  The amendment never replaces that reading, so it changes nothing for the class, and a restart after the record is written costs it nothing.</li>
+<li><strong>The sidecar class</strong> fires from <code>Completed</code> where the running pod already shows the crash, as a restarted container's last termination.
+  A crash the pod reports later, which the near-simultaneous end of a sidecar and the step that used it makes likely, is first known to the amendment, so the class also judges the record there, and the crash's time tells one before the job's end from one after.
+  It cannot read the crash from the finished pod alone: the kubelet drops a restarted container's earlier termination from the status it writes as the pod finishes (measured on kubelet v1.35.5, 2026-11-23), so the AGC carries it from the events before.</li>
+<li><strong>A restart between the two</strong> loses only what the completion had not seen: a sidecar crash reported after it does not fire the class.
+  Fewer re-runs, never a wrong one.</li>
+</ul>
 <h3 id="how-it-waits">How it waits<a class="headerlink" href="#how-it-waits" title="Permanent link">&para;</a></h3>
 <p>Classes go through one deferred path, built beside the abandoned arm's (Q691, <code>abandoned_rerun.go</code>) but persistent:</p>
 <ul>
@@ -3785,8 +3807,8 @@ Job-granular avoids that, and costs:</p>
 </tr>
 <tr>
 <td>The AGC restarts</td>
-<td>Snapshots, breakers and the abandoned arm's waiting set are lost; the ledger, its pending class re-runs and the scale-set budget are not</td>
-<td>Context reads <code>unknown</code>; breakers close and the budget still bounds; an abandoned run waiting for capacity needs a manual re-run, as today</td>
+<td>Snapshots, failures awaiting their worker's finish, breakers and the abandoned arm's waiting set are lost; the ledger, its pending class re-runs and the scale-set budget are not</td>
+<td>Context reads <code>unknown</code>, or stays the running pod's; breakers close and the budget still bounds; an abandoned run waiting for capacity needs a manual re-run, as today</td>
 </tr>
 <tr>
 <td>The budget reservation write fails</td>
