@@ -534,7 +534,7 @@ In the order the CI history and existing machinery make cheapest:
 
 ### Readings for the `dockerd` sidecar class (Q1316)
 
-The class is open: nothing GAG reads today separates a platform's crash of the Docker-in-Docker sidecar from the job's own, and no dogfood reproduction has been run.
+The class is open: nothing GAG reads today separates a platform's crash of the Docker-in-Docker sidecar from the job's own, a kernel counter that separates part of it has no path to the AGC, and no dogfood reproduction has been run.
 R10 wants a cause outside the tenant's code and R12 a discriminator shown to separate it.
 The crash with an ordinary cause, running out of memory, is the job's own under `kata-dind` and reads the same whether the job or the node caused it under `privileged-dind`; the shapes no job causes by accident have no known platform cause, on the shipped templates, that leaves a serving runner alive.
 The exception is a daemon that fails its first start, which is on record once and which a startup probe keeps from reaching a job ([below](#what-is-left-open-q1316)).
@@ -587,10 +587,23 @@ That a job can fake the status shows it cannot be trusted, but a job that does s
 - **A platform-caused crash, reproduced on dogfood (R12).** The one on record is a daemon that failed its first start on a fresh volume (2026-07-16, above), which no job can cause.
   A startup probe keeps the runner from starting, so for that shape [Q1397](../queue/Q1397.md) prevents the failure where a class would re-run it.
   None is recorded for a daemon that had served, and the readings are from one local node image on runc, so GKE's nodes, Kata and the API server's copy of the status are unread.
-- **A fact that separates an out-of-memory crash under `privileged-dind`.** The kernel keeps one that neither the status nor the sampler carries: a cgroup's `oom` counts its limit being reached, and its `oom_kill` counts its processes killed by any out-of-memory killer (kernel `cgroup-v2` documentation; not run).
-  By that text a kill with `oom` at 0 came from above the cgroup, such as the node's.
-  Whether the counter outlives the sidecar's restart, and how the AGC would read it, is part of the reproduction.
-  It would not say who used up the node's memory, which under `privileged-dind` can be the job's own containers ([Q1396](../queue/Q1396.md)).
+- **How a class would read the fact that separates part of the memory case.** The kernel keeps one that neither the status nor the sampler carries: a cgroup's `oom` counts its limit being reached, and its `oom_kill` counts its processes killed by any out-of-memory killer (kernel `cgroup-v2` documentation).
+  Measured on 2026-11-24 in one container's cgroup tree (kernel 6.12.76, `memory.oom.group` set on the sidecar's as the kubelet sets it, twice with the same zeros), read from the pod's cgroup and the sidecar's:
+
+  | What killed the sidecar | Pod `oom` | Pod `oom_kill` | Sidecar's own (`.local`) `oom_kill` |
+  |---|---|---|---|
+  | Its own limit | 1 | 2 | 2 |
+  | A limit above the pod, a neighbour filling it | 0 | 2 or 3 | 2 or 3 |
+  | A limit above the pod, the job's container outside the pod filling it | 0 | 2 or 3 | 2 or 3 |
+  | Nothing: a nested container hit its own limit | 1 | 1 | 0 |
+
+  The pod's counters were unchanged after the sidecar's cgroup was removed, as a restart removes it, so a restarted sidecar could still read them where it sees the host's cgroup tree.
+  A limit above the pod stands in for the node running out; the node's own out-of-memory killer was not run.
+- **Who filled the node**, which the counters do not say: rows two and three read the same.
+  Under `privileged-dind` the job's containers are outside the pod ([Q1396](../queue/Q1396.md)) and can be the filler, and one process of theirs has to hold about nine tenths of the node to outscore the daemon: with the sidecar at an `oom_score_adj` of 900, dockerd ran at 900 and a container it started at 0 (dockerd 28.5.2, measured).
+  The runner scores above the daemon in turn: the kubelet never scores a native sidecar above the least-requesting regular container (`pkg/kubelet/qos/policy.go`, v1.35.5), which on a 32 GiB node gives `privileged-dind`'s runner 969 and its sidecar 907 (computed), so a node that runs out is expected to take the runner first, and that fails the pod, which the existing arms see (not run).
+  A job's containers kept under the sidecar's limit would turn that row into the first one.
+- **A path from the counter to the AGC** (R9): nothing GAG reads carries it today.
 - **Evidence from ordinary runs.** Detection already records a failed job's sidecar reason, exit code and restart count, so a job whose record shows dockerd restarted with `Error`, and which passed when somebody re-ran it, would be the first on record.
 - **What a build needs beyond a discriminator.** The record does not hold the crash's time past an AGC restart, when the runner started, or any crash before the last.
 
