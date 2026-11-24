@@ -1564,7 +1564,8 @@ Two bounds apply, and both are visible:
 - **The wait window.** Capacity may never return, because `pending_deadline` also reaps a pod no amount of waiting will place (an unpullable image, a constraint no node satisfies).
   After 30 minutes the wait is given up and counted as `actions_gateway_abandoned_run_rerun_waits_total{outcome="expired"}`; the successful case is `{outcome="capacity_returned"}`.
 
-Fixing the root cause is still yours to do: the re-run is a recovery, not a repair, and a re-run into an unchanged unpullable image will be abandoned again until the budget runs out.
+Fixing the root cause is still yours to do: the re-run is a recovery, not a repair.
+While another worker of the set is stuck in `ImagePullBackOff` and none has started since, the re-run is withheld with `reason="worker_unstartable"` instead, and needs a manual re-run once the image pulls (Q1320); with no such worker left to read, a re-run into an unchanged unpullable image is abandoned again until the budget runs out.
 
 **Timing.** `pendingPodDeadline` is a floor, not an instant.
 The AGC arms a timer for it on the reconcile that last saw the pod, and a reconcile that ends in an error — an optimistic-lock conflict on the owner's status is the routine one — hands the wake-up to the work queue's retry instead.
@@ -2295,7 +2296,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 | `WorkerPodCreateFailed` | Warning | The API server refused to create a worker pod (invalid name, admission webhook, pod-security policy). The note carries the API server's own message. No pod exists, so GitHub reports only that the runner lost communication. | ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created) |
 | `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) · [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) |
 | `EvictionRerunFailed` | Warning | A disrupted run's automatic re-run was never accepted by GitHub — refused past the 15-minute re-run window, or a terminal API error (Q503). The budget slot is spent; the named run needs a manual re-run. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |
-| `EvictionRerunWithheld` | Normal | Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded `cancelled` by someone other than GAG, so the cancel stands (Q811, Q1181); or the kubelet evicted the worker for exceeding its own `ephemeral-storage` or `emptyDir` limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181); or a runner killed for memory that a re-run would repeat, or while out-of-memory retries are paused (Q1183). Only a cancel seen after detection spends a slot. | [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod); [Which Disruptions Auto-Re-Run a Job](#which-disruptions-auto-re-run-a-job-and-which-never-do) |
+| `EvictionRerunWithheld` | Normal | Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded `cancelled` by someone other than GAG, so the cancel stands (Q811, Q1181); or the kubelet evicted the worker for exceeding its own `ephemeral-storage` or `emptyDir` limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181); or already re-run by a later attempt, of a run that concluded `success`, or for a set whose workers are placed and cannot pull their image, which needs the image fixed and a manual re-run (Q1320); or a runner killed for memory that a re-run would repeat, or while out-of-memory retries are paused (Q1183). Only a cancel or a success seen after detection spends a slot. | [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod); [Which Disruptions Auto-Re-Run a Job](#which-disruptions-auto-re-run-a-job-and-which-never-do) |
 | `FlakyJobDetected` | Normal | A scale-set job failed with no disruption attributed to it, and a later attempt of it succeeded: a flake, re-run by a human or by GAG alongside a disrupted job (Q555). Names the run and the job. Not a fault of the platform; a run of them on one job is a test worth fixing. | [Flaky Jobs and Platform Faults on Failed Jobs](#flaky-jobs-and-platform-faults-on-failed-jobs) |
 | `MemoryLimitRaisedForRetry` | Normal | A scale-set worker's runner was killed at its own memory limit, and the `Binpack` or `Throughput` profile gives the job's next attempt a higher one, so the run is re-run as `cause="oom"` once GitHub concludes it, waiting up to 24 hours (Q1183, Q1244). Names the job, the run and both limits. One per job: a second kill is withheld. A rising rate is jobs outgrowing their history, or a change that grew one. | [When a job runs out of memory](worker-rightsizing.md#when-a-job-runs-out-of-memory) |
 | `AutoRetryPaused` | Warning | More than 10 distinct runs on this set were re-run after a runner was killed for memory within 10 minutes, so out-of-memory retries are paused for 30 (Q1183). That many at once points at a shared cause, such as a node packed past its memory or a dependency that bloated every job, rather than each job's own growth. Each kill in the pause is withheld as `reason="breaker_open"`, and `actions_gateway_auto_retry_paused{cause="oom"}` reads 1 until the pause ends (Q1245). | [When a job runs out of memory](worker-rightsizing.md#when-a-job-runs-out-of-memory) |
@@ -3059,7 +3060,7 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
   A drain catching a still-`Pending` pod, the `pendingPodDeadline` reap, or a node shutdown while the worker was still pulling its image leaves no reportable failure for `rerun-failed-jobs` to act on.
   It is not lost, though: the run is force-cancelled and then re-run once capacity returns, which is the out-of-table `abandoned` cause named above.
   One case does take the `vanished` row instead: a never-started worker removed while the AGC was down, because whether a container ever ran is a fact about the pod.
-  GitHub refuses a re-run for a run with no failed job, which is logged and dropped, so the outcome is a manual re-run rather than a wrong one.
+  A run with no failed job gets no re-run: one that concluded `success` is withheld as `run_succeeded`, and any other refusal of GitHub's is logged and dropped, so the outcome is a manual re-run rather than a wrong one.
   See [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pending-workerpodstuckpending).
 
 **Fires but can come up short** — each has its own runbook below:
@@ -3074,8 +3075,18 @@ That is checked on every cause, and GAG's own force-cancel of an abandoned run i
 No call is made, `eviction_rerun_withheld_total{reason="run_cancelled"}` increments, and a Normal `EvictionRerunWithheld` Event names the run (Q811, Q1181).
 See [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod).
 
-**Fires and is withheld as futile**, before any budget slot is spent (Q1181): `reason="attempt_limit"` (the run is past GitHub's 50 re-runs), `reason="run_too_old"` (created more than 30 days ago), or `reason="superseded"` (a newer commit's run of the same workflow, event and branch has started).
-The `EvictionRerunWithheld` Event names the reason; for the first two, start a new run, and for the third nothing is needed.
+**Fires and is withheld as futile**, before any budget slot is spent (Q1181, Q1320).
+The `EvictionRerunWithheld` Event names the reason and, where one is needed, the fix:
+
+| `reason` | Why no re-run | What to do |
+|---|---|---|
+| `already_rerun` | A later attempt of the run already re-ran the job | Nothing |
+| `run_succeeded` | The run concluded `success`, and GitHub refuses to re-run it | Nothing; seen after detection, it has spent its slot |
+| `attempt_limit` | The run is past GitHub's 50 re-runs | Start a new run |
+| `run_too_old` | The run was created more than 30 days ago | Start a new run |
+| `superseded` | A newer commit's run of the same workflow, event and branch has started | Nothing |
+| `worker_unstartable` | A worker of the set is placed and stuck in `ImagePullBackOff`, and none has started since | [Fix the image or its pull credentials](#the-reason-is-podsnotstarting-the-image-will-not-pull), then re-run by hand |
+
 A merge-queue run has no `superseded` check, and GitHub leaves a group displaced from the queue running rather than cancelling it, so a disrupted job in one is re-run and spends a budget slot on a result nothing reads (measured 2026-11-22, Q1381).
 
 A quota-blocked job is deliberately absent from this table: it is **never claimed** in the first place, so it stays queued at GitHub with no re-run needed — see [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion).

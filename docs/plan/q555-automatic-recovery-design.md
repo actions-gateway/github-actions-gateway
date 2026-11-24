@@ -1,7 +1,7 @@
 # Q555 automatic recovery: design
 
 **Status:** ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; so is Q1181's `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the scale-set tier (`rerun_futility.go`); so is Q555's detection (`flaky_jobs.go`): the `failures` map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up whose [readings](#readings-from-the-dogfood-turn-up-2026-11-22) (Q1236) refute three of its assumptions, with the colocated proxy's readiness added by Q1237; the rest is not.
+Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; so are the futility checks on the scale-set tier (`rerun_futility.go`), from Q1181 and Q1320; so is Q555's detection (`flaky_jobs.go`): the `failures` map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up whose [readings](#readings-from-the-dogfood-turn-up-2026-11-22) (Q1236) refute three of its assumptions, with the colocated proxy's readiness added by Q1237; the rest is not.
 It turns [the requirements draft](q555-flaky-job-retry.md) into components against the code as it stands, one per backlog row, and answers the draft's [open questions](q555-flaky-job-retry.md#open-questions-for-the-design-session).
 Each answer is marked **Decided** (the maintainer chose it, 2026-10-12), **Decide** (a recommendation still awaiting sign-off) or **Research** (needs a measurement before anyone can choose).
 The draft says *what* and *why*; this says *how*.
@@ -16,7 +16,7 @@ Retry classes then fire off that context through the re-run path the disruption 
 ## Measure before building
 
 Each of these decides a component's shape.
-M1 to M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)), and M5 from GitHub's API the same day ([the readings](#readings-from-githubs-api-2026-11-22)); M6 has not been observed:
+M1 to M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)), and M5 from GitHub's API the same day ([the readings](#readings-from-githubs-api-2026-11-22)); M6 has not been observed beyond the jobs-list half of [a single-job re-run](#readings-from-githubs-api-2026-11-23):
 
 | # | Unknown | Decides | How to settle |
 |---|---|---|---|
@@ -66,6 +66,17 @@ No fork pull request was disrupted end to end, so the AGC's own decode of a fork
   `per_page=1` returns whichever fork built last, though, so a fork's own newer commit is hidden whenever another fork's pull request from `main` has built since, and the check misses; a miss re-runs, so it costs a wasted re-run, never a withheld one.
 - **A merge-group run that loses its place is not cancelled by GitHub.** On this repository's queue on 2026-10-30, #2190 failed at the head and was removed (`failed_checks`, 17:56:25 UTC), and the groups behind it were rebuilt at 17:56:30; of the old groups' 30 runs, six concluded `success` after the removal, the last at 18:05:13, and the eight `cancelled` were each ended by one of their own jobs exceeding `timeout-minutes` before 17:56:25 (the jobs' check-run annotations).
   So `run_cancelled` does not catch a displaced group's run, and nothing else does ([Q1381](../queue/Q1381.md)).
+
+### Readings from GitHub's API, 2026-11-23
+
+Taken from the REST API for `already_rerun` (Q1320), over public runs somebody had already re-run.
+
+- **An attempt's jobs list holds every job of the run, and a job the attempt did not run keeps its old times and runner.** This repository's run 45310657002, attempt 2 by `rerun-failed-jobs`: each of the attempt's jobs carries `run_attempt: 2`, a new `id` and a new `created_at` (03:25:44 UTC), so none of those tells a re-run job from a carried one.
+  `validate`, which the attempt did not run, keeps attempt 1's `runner_name`, `started_at` and `completed_at`, so `completed_at` before `created_at` does.
+  The run read's `run_started_at` is the latest attempt's (03:25:41 against attempt 1's 02:12:24).
+- **A single-job re-run moves `run_attempt` and carries its siblings' failures.** Run 45325262167's attempt 2 re-ran `reusable / inner` alone (`POST …/jobs/{id}/rerun`), and lists `dup` and `matrix-default (b, x64)` as `failure` with the runner and times of attempt 1 (`dup` completed 04:18:54 UTC under a `created_at` of 04:22:28).
+  `apache/airflow` run 44861166633 shows the same shape on somebody else's repository.
+- **`runner_name` is GAG's runner name.** Run 45051967354's jobs list `gag-ci-scaleset-<job UUID>`.
 
 ## Component 1: the failure ledger (Q555, R1 to R8)
 
@@ -256,7 +267,7 @@ The `EvictionRerunWithheld` Event names the reason and the fix.
 | `superseded` | A newer run of the same `workflow_id`, `event` and `head_branch` from the same `head_repository`, with a different `head_sha`, exists (`GET …/workflows/{id}/runs?branch=…&event=…&per_page=1`), for `push` and `pull_request` only | None: a newer commit is building |
 | `same_class_again` | Class only: this job's failure entry already records a re-run by the same cause that failed again | The class does not fit this job; investigate |
 | `budget_exhausted` | The budget above | As today's `EvictionRetriesExhausted` |
-| `worker_unstartable` | The set's capacity gate holds a startup or placeability verdict (Q714) that every next pod fails | The verdict's own remediation |
+| `worker_unstartable` | A worker of the set is placed and in startup backoff (Q714), and none has started since the oldest such worker was placed | The verdict's own remediation |
 | `own_limit` | A class hit its own limit (see [Component 3](#the-first-class-out-of-memory-under-right-sizing)), or the eviction arm saw a storage-limit eviction (shipped, Q1177) | Raise the limit, or enable a sizing profile |
 
 Notes on the table:
@@ -264,12 +275,15 @@ Notes on the table:
 - **`selfCancelledAttempt` replaces an arm exemption.** The abandoned arm records the attempt it force-cancels before cancelling, so the check holds on whichever arm a merge lets through, and a user's cancel of a later attempt is never mistaken for GAG's.
   Q1182 shipped first, so Q1181 reads `selfCancelledAttempt` on every arm from the start and needs no arm exemption; until Q1181, only the deletion arm checks the conclusion, and it already honours the record.
   The abandoned arm also reads the conclusion **before** force-cancelling: a run a user or a concurrency group already cancelled is withheld, not cancelled again and re-run.
-- **`already_rerun` asks about the job, not the run.** A single-job re-run moves `run_attempt` (from recall) without touching the job's siblings, so "the attempt moved" would withhold a job that nobody re-ran.
+- **`already_rerun` asks about the job, not the run.** A single-job re-run moves `run_attempt` ([measured](#readings-from-githubs-api-2026-11-23)) without touching the job's siblings, so "the attempt moved" would withhold a job that nobody re-ran.
   The jobs-list call it needs happens only when the attempt has moved, which is rare.
 - **`superseded` is the other extra call**, and only on the two events where a branch can move.
   Filtering on `event` and comparing `head_repository` keeps a fork's `main` from matching upstream's (M5, [measured](#readings-from-githubs-api-2026-11-22)); with `per_page=1` another fork's newer run can hide the fork's own, which re-runs.
   A merge-group run that loses its place is not cancelled by GitHub, so `run_cancelled` does not catch it ([measured](#readings-from-githubs-api-2026-11-22), [Q1381](../queue/Q1381.md)).
-- **`worker_unstartable` is new wiring**: no re-run path consults `worker_startup_verdict.go` today.
+  An arm that does not know its attempt takes it as moved when `run_started_at` is later than the worker's provisioning ([as built](../design/04-operational-flows.md#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set)).
+- **`worker_unstartable` reads the startup half of the verdict, on every set** (Q1320), gated or not, since Q906 publishes it ungated.
+  The placeability half is left out: a full cluster reads as unschedulable, so a drain on a fixed-size cluster would withhold every disrupted job's re-run, finally, where the re-run's job would only have queued; and the arm it was for has no need of it, because the abandoned arm is released by a pod being bound.
+  It runs before the reservation, where it spends nothing, so a run past its budget can report it in place of `budget_exhausted`.
   It matters most on the abandoned arm, which by design releases on any pod of the set being bound to a node (Q512's test for capacity), including one stuck pulling an image that every next pod will fail to pull too.
 - **`budget_exhausted` keeps its own counter**, `eviction_retries_exhausted_total`, so existing alerts keep working.
 - Storage-limit eviction is already an `own_limit` hit on the eviction arm (Q1177): the kubelet's limit message with no `TerminationByKubelet` condition, withheld before the budget is touched ([the measurement](../design/04-operational-flows.md#an-eviction-for-the-pods-own-limit-is-not-a-disruption)).
@@ -607,7 +621,7 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 
 1. The dogfood turn-up of 2026-11-22 settled M1 to M4 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)), and the API settled M5 ([the readings](#readings-from-githubs-api-2026-11-22)); M6 needs its own test workflow.
 2. Q1182 (built) created the ledger store, with its version rules, `reruns` map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as `selfCancelledAttempt`.
-3. Q1181 (built): `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the widened run read, honouring `selfCancelledAttempt`, between the run read and the reservation in `handleScaleSetEviction`; `already_rerun`, `run_succeeded` and `worker_unstartable` are not built, and the classic tier takes none.
+3. Q1181 (built): `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the widened run read, honouring `selfCancelledAttempt`, between the run read and the reservation in `handleScaleSetEviction`; Q1320 (built) added `already_rerun`, `run_succeeded` and `worker_unstartable` there, and the classic tier takes none.
 4. Q555 (built) added the `failures` map, the snapshot, the pairing and the metrics on that store.
    Three departures from Component 1: `JobCompleted` carries no attempt number, so a later attempt is attributed from GAG's re-runs by job name, each re-run paired at most once per job ([04-operational-flows.md](../design/04-operational-flows.md#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555)); event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.
 5. Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the `pending` map, Q1245 (built) added the alert, the gauge and the annotation, and job-granular re-run still waits on M6.

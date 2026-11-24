@@ -58,6 +58,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner](#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner)
   - [Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run](#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run)
   - [Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically](#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically)
+  - [A disrupted job is not re-run while its set's workers cannot pull their image](#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image)
   - [A worker evicted for its own storage limit is no longer re-run](#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run)
   - [Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once](#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once)
   - [Non-breaking: the worker-image registry read presents the worker ServiceAccount's pull secrets](#non-breaking-the-worker-image-registry-read-presents-the-worker-serviceaccounts-pull-secrets)
@@ -1273,6 +1274,19 @@ A `NotReady` node with no taint is unchanged: its worker stays `Running` until y
 The command is in [Which Disruptions Auto-Re-Run a Job](troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
 **Rolling back** returns the job on such a node to staying failed.
+
+### A disrupted job is not re-run while its set's workers cannot pull their image
+
+**Who is affected:** a tenant whose scale-set workers are stuck in `ImagePullBackOff` when another of the set's jobs loses its worker.
+
+**What changed.** The re-run of a disrupted job used to fire anyway, and its worker would fail to start too, spending a slot of `maxEvictionRetries`.
+While a worker of the set is placed and in `ImagePullBackOff`, and none has started since the oldest such worker was placed, the AGC now withholds the re-run (Q1320).
+A re-run of a job a later attempt already re-ran, or of a run that concluded `success`, is withheld too.
+
+**What you will see.** `actions_gateway_eviction_rerun_withheld_total` increments with `reason="worker_unstartable"`, `"already_rerun"` or `"run_succeeded"`, and a **Normal** `EvictionRerunWithheld` Event names the run and the reason.
+
+**What to do.** Nothing at upgrade time.
+On `worker_unstartable`, [fix the image or its pull credentials](troubleshooting.md#the-reason-is-podsnotstarting-the-image-will-not-pull), then re-run the job by hand; the withhold is final for that disruption.
 
 ### A worker evicted for its own storage limit is no longer re-run
 

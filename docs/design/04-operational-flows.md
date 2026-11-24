@@ -431,9 +431,9 @@ The recovery scan runs **before** the worker-pod reaper in the same reconcile, s
 And the budget survives a restart, which the classic tier's in-memory one does not (Q1182).
 It lives in the set's `scaleset-failures-<set>` ConfigMap as a count of GAG's own re-runs per run plus a record, per run attempt GAG re-ran from, of the disruptions that re-run covered, written with the same read, modify, compare-and-swap loop as the claim.
 A reservation is taken once per disruption, after a run read that names the attempt the job failed in, and does one of four things: it **resumes** a reservation the same worker already holds, **merges** into a re-run already reserved for that attempt (rerun-failed-jobs re-runs every failed job of an attempt, so a second disruption of the same attempt is covered and spends nothing), **refuses** at `maxEvictionRetries`, or **reserves** a slot.
-Every outcome but a refusal then enters the re-run loop, which reads the run before each call and stands down once its attempt is past the one the job failed in.
+Every outcome but a refusal then enters the re-run loop, which reads the run before each call and stands down once its attempt is past the one the job failed in, unless that attempt's jobs show the job was not re-run in it.
 That is what stops two disruptions in one run from each landing a re-run (before it, the second retried against `403 This workflow is already running` until GAG's first re-run concluded, then re-ran the run again), and what keeps a merge safe: a merged disruption re-runs the attempt itself if the reservation it joined never lands, because that recovery failed or the AGC restarted before it.
-A disruption detected late (the vanished arm, or a scan after a restart) can read an attempt another re-run already started and reserve against it; the design's `already_rerun` check, not built, would close that.
+A disruption detected late (the vanished arm, or a scan after a restart) can read an attempt another re-run already started; the [`already_rerun` check](#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set) tells that from when the worker was provisioned, and judges the job rather than the attempt (Q1320).
 The cap covers every disruption cause, so the `cause` label splits the reporting but not the cap; it is per set, so a run whose jobs span two sets, or a set and a classic group, has a budget in each.
 A run that cannot be read, or a decision that cannot be written, withholds the re-run, counted as `eviction_rerun_failures_total{reason="conclusion_unknown"|"api_error"|"budget_unrecorded"}`.
 The ConfigMap's schema and its rules for being shared by two AGC versions are in [the Q555 recovery design](../plan/q555-automatic-recovery-design.md#the-storage-shape).
@@ -484,13 +484,30 @@ The scale-set tier now judges the run read it takes before reserving a slot ([`r
 
 | `reason` | Withheld when | What the Event says to do |
 |---|---|---|
+| `already_rerun` | The run is past the attempt the job failed in, and its latest attempt's jobs (`GET …/runs/{id}/attempts/{n}/jobs`) show that attempt re-ran the job | Nothing: it was re-run |
 | `run_cancelled` | The run concluded `cancelled` and the ledger does not record GAG force-cancelling that attempt. Also checked on every pass of the re-run loop, since at detection the run has usually not concluded; a cancel seen there has already spent its slot. The abandoned arm takes the same check on its own run read, before force-cancelling: a run already cancelled that way is withheld with `cause="abandoned"`, neither cancelled again nor recorded as GAG's cancel (Q1232). The conclusion does not say who cancelled, so this includes GitHub's own ~15-minute unstarted-job timeout, which lands before the reap when `pendingPodDeadline` is set past it; that run needs a manual re-run | Re-run by hand if the cancel was not intended |
+| `run_succeeded` | The run concluded `success`, whose failed jobs GitHub refuses to re-run with a 403. Also checked on every pass of the re-run loop, where the slot is already spent | Nothing |
 | `attempt_limit` | `run_attempt` is past 50, so the run has already been re-run 50 times, GitHub's cap on re-runs of a run, full or partial ([changelog, 2026-04-10](https://github.blog/changelog/2026-04-10-actions-workflows-are-limited-to-50-reruns/)) | Start a new run |
 | `run_too_old` | The run was created more than 30 days ago, outside GitHub's re-run window | Start a new run |
 | `superseded` | A `push` or `pull_request` run, and the newest run of the same workflow, event and branch is from a newer commit in the same head repository | Nothing: the newer commit is building |
+| `worker_unstartable` | A worker pod of the set is bound and in `ImagePullBackOff`, and no worker of the set has started since the oldest such pod was placed | Fix the image or its pull credentials, then re-run by hand |
 
 A field GitHub did not send skips its check rather than withholding.
-The superseded check is the only one that costs a call (the workflow's runs, filtered to the branch and event, newest first), and a list it cannot read re-runs: that check only ever withholds, so an unreadable answer must not.
+Two checks cost a call, and neither withholds on an answer it cannot read, because each only ever withholds: `superseded` lists the workflow's runs, filtered to the branch and event, newest first; `already_rerun` lists a moved attempt's jobs.
+
+`already_rerun` makes its call only when the attempt has moved, which for a disruption detected live it has not (Q1320).
+An arm that knows its attempt compares it; every other arm compares the run's `run_started_at` against when the job's worker was provisioned, allowing a minute of clock skew, and a worker with no such time is taken as unmoved.
+A moved attempt is then read from its jobs, because a single-job re-run moves `run_attempt` and leaves the failed siblings standing ([measured](../plan/q555-automatic-recovery-design.md#readings-from-githubs-api-2026-11-23)).
+GitHub lists every job of the run under each attempt, and one the attempt did not run keeps the runner and the `completed_at` of the attempt it ran in.
+So the worker's runner name still on the list means the job was not re-run, and its absence means it was; with no recorded start the answer comes from whether any carried job is a failure, then from the job's display name.
+A job found not re-run is recovered from the latest attempt, where its failure still stands.
+Where the jobs do not say, the pre-reservation check lets the re-run through, and the re-run loop and the parked re-runs stand down on the attempt alone, since there a second re-run of one attempt is the worse mistake.
+
+`worker_unstartable` reads the worker pods, not the capacity gate, so it holds on a set with no `spec.capacityGate`: it is the startup half of the verdict [`WorkersNotStarting`](../operations/troubleshooting.md#the-reason-is-podsnotstarting-the-image-will-not-pull) publishes on every set, plus the requirement that nothing started since, so one node that cannot reach the registry does not withhold (Q1320).
+Every scale-set arm asks it, and it matters most to the abandoned arm, which is released by any pod of the set binding, one stuck pulling an image included; that release still counts `capacity_returned`.
+The gate's placeability verdicts are not consulted: a cluster that is merely full reads as unschedulable, and withholding is final where a re-run's job would only have waited.
+The reaped worker itself is not evidence, because it is being deleted, so a set whose only failing worker was the reaped one re-runs.
+
 Comparing the head repository keeps a fork's branch from matching upstream's of the same name; GitHub's `branch` filter does match a fork pull request's head branch, but the newest run it returns can be another fork's, which hides this fork's own newer commit (M5, [measured from the API](../plan/q555-automatic-recovery-design.md#readings-from-githubs-api-2026-11-22)), and a miss there re-runs, the safe direction.
 A `merge_group` run has no superseded check, and a group displaced from the queue is not cancelled by GitHub, so a disrupted job in one is re-run although no queue entry waits for it ([Q1381](../queue/Q1381.md)).
 A support ticket can raise GitHub's re-run cap for an organisation, and the check does not know that; such an organisation sees `attempt_limit` where GitHub would have accepted the re-run.
