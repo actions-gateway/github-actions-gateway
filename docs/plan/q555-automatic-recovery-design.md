@@ -16,7 +16,7 @@ Retry classes then fire off that context through the re-run path the disruption 
 ## Measure before building
 
 Each of these decides a component's shape.
-M1 to M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)), and M5 from GitHub's API the same day ([the readings](#readings-from-githubs-api-2026-11-22)); M6 was measured on dogfood on 2026-11-24 ([the readings](#m6-readings-from-the-job-granular-probe-2026-11-24)):
+M1 to M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)), and M5 from GitHub's API the same day ([the readings](#readings-from-githubs-api-2026-11-22)); M6 has not been observed:
 
 | # | Unknown | Decides | How to settle |
 |---|---|---|---|
