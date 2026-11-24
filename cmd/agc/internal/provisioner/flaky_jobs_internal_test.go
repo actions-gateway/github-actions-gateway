@@ -225,7 +225,7 @@ func TestFlakyJobs_AReplayedCompletionChangesNothing(t *testing.T) {
 	replayed := flakyProvisioner(c)
 	completeJob(ctx, t, replayed, target, buildJob(1), "failed")
 	assert.Equal(t, before, readLedgerData(t, c, target), "a replayed failure rewrites nothing")
-	assert.Zero(t, replayed.HTTPClient.Transport.(*runJobsStub).gets, "and reads no job list")
+	assert.Zero(t, replayed.HTTPClient.Transport.(*runJobsStub).gets.Load(), "and reads no job list")
 
 	completeJob(ctx, t, p, target, buildJob(2), jobResultSucceeded)
 	restarted := flakyProvisioner(c)
