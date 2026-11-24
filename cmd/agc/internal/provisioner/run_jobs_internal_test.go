@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -29,7 +30,7 @@ type runJobsStub struct {
 	mu     sync.Mutex
 	jobs   []map[string]any
 	status int
-	gets   int
+	gets   atomic.Int64
 	// unlisted is how many more jobs the run has than the pages serve.
 	unlisted int
 	// hang: a read is never answered.
@@ -54,7 +55,7 @@ func (s *runJobsStub) serve(p *Provisioner) {
 func (s *runJobsStub) RoundTrip(r *http.Request) (*http.Response, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.gets++
+	s.gets.Add(1)
 	if deadline, ok := r.Context().Deadline(); !ok {
 		s.slowest = time.Hour
 	} else {
@@ -162,14 +163,14 @@ func TestFlakyJobs_AJobSharingANameIsNotItsReRun(t *testing.T) {
 	gh.serve(p)
 
 	completeJob(ctx, t, p, target, twinJob("red", redTwin), "failed")
-	assert.Zero(t, gh.gets, "a first failure reads nothing")
+	assert.Zero(t, gh.gets.Load(), "a first failure reads nothing")
 	recorded := readFailures(t, p, target)["900/build"]
 	require.NotNil(t, recorded)
 
 	green := scaleSetWorker(greenTwin, corev1.PodFailed, "Evicted")
 	<-p.SnapshotScaleSetWorker(ctx, nil, green, false)
 	completeJob(ctx, t, p, target, twinJob("green", greenTwin), jobResultSucceeded)
-	assert.Equal(t, 1, gh.gets)
+	assert.Equal(t, int64(1), gh.gets.Load())
 	assert.Equal(t, recorded, readFailures(t, p, target)["900/build"], "the record is left as it was")
 	assert.Zero(t, rerunCount(p, rerunTriggerOther), "nobody re-ran anything")
 	assert.Zero(t, flaky(p, rerunTriggerOther))
@@ -263,9 +264,9 @@ func TestFlakyJobs_AnUnreadableRunPairsNothing(t *testing.T) {
 			assert.Empty(t, p.pairings.byRun)
 			switch {
 			case job.RunnerName == "":
-				assert.Zero(t, gh.gets, "nothing to look for")
+				assert.Zero(t, gh.gets.Load(), "nothing to look for")
 			case name == "more jobs than it reads":
-				assert.Equal(t, 1, gh.gets, "the first page says so")
+				assert.Equal(t, int64(1), gh.gets.Load(), "the first page says so")
 				fallthrough
 			default:
 				assert.Contains(t, log.String(), "could not read the run's jobs")
@@ -287,7 +288,7 @@ func TestRunJobs_ReadsEveryPage(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, jobs, jobsPerPage+1)
 	assert.Equal(t, "runner-2", jobs[jobsPerPage].RunnerName)
-	assert.Equal(t, 2, gh.gets)
+	assert.Equal(t, int64(2), gh.gets.Load())
 	assert.LessOrEqual(t, gh.slowest, runJobsBudget)
 }
 
@@ -341,14 +342,14 @@ func TestPairing_OneListPerRunAndDelay(t *testing.T) {
 		_, err := p.RecordScaleSetJobCompleted(ctx, target, leg(2, 0), jobResultSucceeded)
 		require.NoError(t, err)
 		assert.Zero(t, time.Since(start), "the listener waits for no list")
-		assert.Zero(t, gh.gets)
+		assert.Zero(t, gh.gets.Load())
 		assert.Equal(t, before, readLedgerData(t, c, target))
 
 		for _, done := range waits {
 			<-done
 		}
 		assert.Equal(t, defaultPairingDelay, time.Since(start))
-		assert.Equal(t, 4, gh.gets)
+		assert.Equal(t, int64(4), gh.gets.Load())
 		assert.Equal(t, float64(rerun), flaky(p, rerunTriggerOther))
 		assert.Empty(t, readFailures(t, p, target))
 		assert.Equal(t, 1, ledgerVersion()-version, "one write")
