@@ -536,7 +536,7 @@ ARC has neither the re-run machinery nor the metrics plumbing, so this extends a
 
 **Cost, including the parts that are easy to miss.**
 
-1. **Granularity is the run, not the job.** `rerun-failed-jobs` re-runs *all* failed jobs of a concluded run.
+1. **Granularity is the run, unless it borrows the single-job re-run.** `rerun-failed-jobs` re-runs *all* failed jobs of a concluded run; the out-of-memory class re-runs the killed job alone ([how](04-operational-flows.md#the-re-run-takes-only-the-killed-jobs-q1319)).
    Test-level retry (Datadog/VSTest style) is out of reach without entering the test framework — explicitly out of scope; this is job-level.
 2. **It argues with our own marketing.** The re-run boundary is documented as "a genuine failure is never re-run, re-running would mask real breakage" — the [why-gag box](../why-gag.md) says exactly this.
    The feature must be off by default, per-set opt-in, loudly metered, and framed as "retry *and* surface" — detection metrics keep the flake visible while retry buys throughput.
@@ -566,7 +566,7 @@ Four candidates, and only one is both expressive and safe:
 Two objections bound the value.
 First, the moment a tenant writes a signal into their workflow, the "nothing in your workflows changes" property this enhancement is sold on is gone, and a job that can emit "retry me" can equally wrap the step in a retry loop.
 What survives: an in-workflow wrapper retries steps *on the same worker*, while a platform signal re-runs the whole job on a fresh pod — new node, new network, clean runner — which is a flake class a step wrapper structurally cannot fix.
-Second, `rerun-failed-jobs` is run-granular and fires only after the run concludes, so a signal from one job re-runs its siblings too; the waiting machinery exists (`rerunUntilAccepted` already holds through `errRunNotConcluded`), the fan-out is the cost.
+Second, a re-run fires only after the run concludes, and `rerun-failed-jobs` takes the siblings too; the waiting machinery and a single-job re-run exist (Q1183, Q1319), and where two jobs signal, they go one attempt at a time.
 
 Whichever channel wins, the writer is tenant-controlled code, often an untrusted PR's workflow.
 Gating is not optional: an operator-set `RunnerSet` opt-in (a workflow author's signal must never enable retry on its own), the existing per-run budget plus a per-window cap, and its own `cause` label so the spend is attributable.

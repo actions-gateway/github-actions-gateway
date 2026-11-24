@@ -59,6 +59,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run](#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run)
   - [Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically](#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically)
   - [A timed-out job whose re-run passes counts as flaky](#a-timed-out-job-whose-re-run-passes-counts-as-flaky)
+  - [Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run](#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run)
   - [A disrupted job is not re-run while its set's workers cannot pull their image](#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image)
   - [A worker evicted for its own storage limit is no longer re-run](#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run)
   - [Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once](#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once)
@@ -1288,6 +1289,21 @@ In a private repository whose GitHub App lacks `Checks: Read`, a **Normal** `Can
 
 **What to do.** Nothing.
 To have timed-out jobs counted in a private repository, grant the App the optional [`Checks: Read`](tenant-onboarding.md#0a-create-the-app-web-ui).
+
+
+### Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run
+
+**Who is affected:** a tenant with a `Binpack` or `Throughput` `RunnerSet`, whose jobs killed at a memory limit the profile chose are re-run automatically.
+Nothing to do.
+
+**What changed.** The retry called `rerun-failed-jobs`, so a sibling job that failed on its own was re-run with the killed one and could turn green.
+The AGC now finds the killed job by its runner's name and re-runs it alone; [when it still re-runs every failed job](worker-rightsizing.md#when-a-job-runs-out-of-memory) is listed with the retry (Q1319).
+
+**What you will see.** The sibling keeps its `failure`, and so does the run.
+Where several jobs of one run were killed and another failed on its own, the killed ones are re-run one attempt at a time, a slot of `maxEvictionRetries` each.
+`actions_gateway_eviction_rerun_withheld_total` can carry `reason="job_not_found"`.
+
+**Rolling back** returns the retry to `rerun-failed-jobs`, for the re-runs still waiting too.
 
 ### A disrupted job is not re-run while its set's workers cannot pull their image
 
