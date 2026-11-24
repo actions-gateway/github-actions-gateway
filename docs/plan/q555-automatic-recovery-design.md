@@ -96,7 +96,7 @@ In run 45052015868, listed with `filter=all`, both `shared-name` jobs appear in 
   No run was found where such a job shares the failed one's name, which GitHub allows.
 - **A job is not listed until its `needs` finish.** In a unit-test run of [#2391](https://github.com/actions-gateway/github-actions-gateway/pull/2391), every job that needs `changes` is created within a second of `changes` completing, and the gate job in the second the last of them did.
   So an attempt in progress does not show which jobs it will re-run, and a rule that reads only the latest attempt calls the re-run of one twin the re-run of the other while that one waits.
-- **A list read early in an attempt is short**, over its first 14 s or so (read for Q1320).
+- **A list read in an attempt's first 15 s may be short**: over 62 re-run attempts the last carried job was created at most that long after `run_started_at` (read for Q1320; inferred from `created_at`, since no list was read while filling).
   A carried-over twin missing from it reads as replaced, so the re-run counts nothing rather than the wrong thing.
 - **A started job already names its runner.** Polling the same pull request's checks, no job was seen in progress without one, the earliest sighting 2 s after its start.
 - **The completion's runner name is the job list's**, in 35 of 35 jobs of runs 45325262167 and 45326925782 (dogfood, read for M6), where it differs per execution.
