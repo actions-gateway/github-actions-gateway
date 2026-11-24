@@ -3561,6 +3561,7 @@ No limit was raised and no budget slot was spent.
 
 - **Find the job by its runner's name**, which the Event gives: GitHub's jobs API lists it as `runner_name`.
   Re-run that job by hand; it gets the limit that killed it, so raise the runner's memory first where it needs more.
+  If it passes, a `FlakyJobDetected` Event can name it: its failure was recorded before its kill was known to be one.
 - **No job shows that runner:** the runner was killed before it took one, so nothing was lost.
 - **Several in a short time** point at an AGC that is not reading its message queue.
   Check the set's `Ready` condition and the AGC log for listener errors.
