@@ -388,7 +388,7 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 	var ran string
 	var refused bool
 	d := rerunDisruption{key: w.Disruption, job: w.Job, runner: w.Runner, failedAttempt: e.FailedAttempt,
-		scope: scope, onRerun: func(scope string) { ran = scope }}
+		scope: scope, with: workers[1:], onRerun: func(scope string) { ran = scope }}
 	if !final {
 		d.onRefused = func() { refused = true }
 	}

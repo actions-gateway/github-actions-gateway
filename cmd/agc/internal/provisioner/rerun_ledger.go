@@ -364,6 +364,9 @@ type rerunDisruption struct {
 	// scope is what the re-run covers, rerunScopeFailedJobs where it is "". The reservation
 	// widens a rerunScopeJob that another disruption's re-run of the attempt rules out.
 	scope string
+	// with is the other workers a parked release found standing, whose jobs a re-run of
+	// rerunScopeFailedJobs takes too.
+	with []killedWorker
 	// onReserved, where set, runs once the disruption holds a slot: a fresh
 	// reservation, or a merge into one this attempt already holds.
 	onReserved func()
@@ -426,7 +429,11 @@ func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, r
 			if a != nil && slices.Contains(a.Disruptions, d.key) {
 				outcome, number = rerunResumed, r.Count
 				changed := a.narrow(l, runID, d)
-				return r.advance(from, d) || changed
+				changed = r.advance(from, d) || changed
+				if r.Attempts[attemptKey] == a {
+					changed = a.cover(d) || changed
+				}
+				return changed
 			}
 		}
 		a := r.Attempts[attemptKey]
@@ -453,6 +460,7 @@ func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, r
 			a.Scope = rerunScopeFailedJobs
 		}
 		a.add(d)
+		a.cover(d)
 		r.ExpiresAt = now.Add(rerunRecordTTL)
 		outcome, number = rerunReserved, r.Count
 		return true
@@ -502,6 +510,21 @@ func (a *rerunAttempt) narrow(l *rerunLedger, runID string, d *rerunDisruption) 
 		a.Jobs = []string{d.job}
 	}
 	return true
+}
+
+// cover records the jobs d's release re-runs beside its own, which a is missing where a
+// single-job release GitHub refused narrowed it, or the run's records moved on without
+// them. It reports whether it changed a.
+func (a *rerunAttempt) cover(d *rerunDisruption) bool {
+	if d.scope != rerunScopeFailedJobs || len(d.with) == 0 {
+		return false
+	}
+	scope, size := a.Scope, len(a.Disruptions)+len(a.Jobs)
+	a.Scope = rerunScopeFailedJobs
+	for _, w := range d.with {
+		a.add(&rerunDisruption{key: w.Disruption, job: w.Job})
+	}
+	return a.Scope != scope || len(a.Disruptions)+len(a.Jobs) != size
 }
 
 // advance moves the single-job re-run at from, d's alone, to the later attempt d's job

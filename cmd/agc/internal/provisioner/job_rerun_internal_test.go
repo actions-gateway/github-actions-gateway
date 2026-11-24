@@ -472,6 +472,89 @@ func TestJobRerun_ACancelledSiblingIsReRunWithTheKilledLeg(t *testing.T) {
 	}
 }
 
+// TestJobRerun_AReleaseThatWidensRecordsEveryJobItTakes: the killed jobs a re-run of every
+// failed job takes are paired with it, where a single-job release GitHub refused had
+// narrowed the attempt's record to the first of them.
+func TestJobRerun_AReleaseThatWidensRecordsEveryJobItTakes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		// human is the jobs somebody re-runs after the refusal, in turn.
+		human []int
+		// noList is a jobs list that names no job by the next release.
+		noList bool
+		want   []string
+	}{
+		{"the first killed job stands", []int{0}, false, []string{"a", "b", "c"}},
+		{"somebody re-ran the first killed job too", []int{0, 1}, false, []string{"b", "c"}},
+		{"the list no longer says which jobs were killed", nil, true, []string{"a", "b", "c"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, api, target, clock, _ := jobsFixture(t,
+				runJob{name: "lint", runner: "r-lint", conclusion: "failure"},
+				runJob{name: "a", runner: "r-a", conclusion: "failure"},
+				runJob{name: "b", runner: "r-b", conclusion: "failure"},
+				runJob{name: "c", runner: "r-c", conclusion: "failure"})
+			for _, j := range []string{"a", "b", "c"} {
+				parkKill(p, target, "pod-"+j, j, "r-"+j)
+			}
+			api.busy = true
+			release(t, p, api, clock, 1)
+			require.Equal(t, []string{"a"}, readLedger(t, p, target).Reruns["4242"].Attempts["1"].Jobs)
+			api.busy, api.emptyList = false, tc.noList
+			for _, i := range tc.human {
+				api.humanReruns(i)
+			}
+			release(t, p, api, clock, 1)
+
+			calls := api.accepted()
+			require.Equal(t, "failed-jobs", calls[len(calls)-1])
+			r := readLedger(t, p, target).Reruns["4242"]
+			a := r.Attempts[strconv.Itoa(len(calls))]
+			require.NotNil(t, a, "the re-run is recorded under the attempt it started from")
+			assert.Equal(t, rerunScopeFailedJobs, a.Scope)
+			assert.Equal(t, tc.want, a.Jobs)
+			for _, job := range tc.want {
+				trigger, _ := pairFailure(r, len(calls), job)
+				assert.Equal(t, rerunTriggerGAG, trigger, job)
+			}
+		})
+	}
+}
+
+// TestReserveScaleSetRerun_WidensOnlyTheAttemptItReRunsFrom: a narrowed record that cannot
+// move to the attempt the release re-runs from, which holds one already, stays as it is.
+func TestReserveScaleSetRerun_WidensOnlyTheAttemptItReRunsFrom(t *testing.T) {
+	p, _, target, _, _ := jobsFixture(t)
+	for _, d := range []rerunDisruption{
+		{key: "pod-a", job: "a", failedAttempt: 1, scope: rerunScopeJob},
+		{key: "pod-x", job: "x", failedAttempt: 2, scope: rerunScopeJob},
+		{key: "pod-a", job: "a", failedAttempt: 2, scope: rerunScopeFailedJobs, with: []killedWorker{{Job: "b", Disruption: "pod-b"}}},
+	} {
+		_, _, err := p.reserveScaleSetRerun(context.Background(), target, "4242", &d, recoveryCauseOOM, 2, nil)
+		require.NoError(t, err)
+	}
+	a := readLedger(t, p, target).Reruns["4242"].Attempts["1"]
+	assert.Equal(t, rerunScopeJob, a.Scope)
+	assert.Equal(t, []string{"a"}, a.Jobs)
+}
+
+// TestJobRerun_AReplayedParkDoesNotWiden: parking a kill again, as a restart does, leaves
+// the single-job re-run its release recorded.
+func TestJobRerun_AReplayedParkDoesNotWiden(t *testing.T) {
+	p, api, target, clock, _ := jobsFixture(t,
+		runJob{name: "lint", runner: "r-lint", conclusion: "failure"},
+		runJob{name: "a", runner: "r-a", conclusion: "failure"},
+		runJob{name: "b", runner: "r-b", conclusion: "failure"})
+	parkKill(p, target, "pod-a", "a", "r-a")
+	parkKill(p, target, "pod-b", "b", "r-b")
+	api.busy = true
+	release(t, p, api, clock, 1)
+	parkKill(p, target, "pod-a", "a", "r-a")
+	a := readLedger(t, p, target).Reruns["4242"].Attempts["1"]
+	assert.Equal(t, rerunScopeJob, a.Scope)
+	assert.Equal(t, []string{"a"}, a.Jobs)
+}
+
 // TestJobRerun_AHumansReRunLeavesTheOthersParked: somebody re-ran one of two killed jobs,
 // so only the other is.
 func TestJobRerun_AHumansReRunLeavesTheOthersParked(t *testing.T) {
