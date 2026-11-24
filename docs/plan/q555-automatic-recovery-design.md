@@ -67,7 +67,7 @@ Times are UTC.
 - The first worker's memory request and limit were both 7744Mi, 1.4 times the set's 5512Mi peak rounded up to 64Mi, and the pod was `Guaranteed`.
 - Its runner was `OOMKilled`, exit 137, at 04:16:17; the class fired 7 s later with the floor 10880Mi, 1.4 times 7744Mi rounded up, and emitted `MemoryLimitRaisedForRetry` naming both.
 - GitHub concluded the job `failure` at 04:26:05, 9 min 48 s after the kill, the interval under `Throughput` too; the second run's was 9 min 43 s.
-  Counted from the job's `started_at` the three are 10 min 0 s, 0 s and 1 s; every kill came in the job's first 17 s, so these do not say what a kill later in a job would show.
+  Counted from the job's `started_at` the three intervals are 10:00 (this run), 10:00 (the second) and 10:01 (the `Throughput` run); every kill came in the job's first 17 s, so these do not say what a kill later in a job would show.
   The re-run was released at 04:27:49.
 - Its pod's request and limit were both 10880Mi, so `Binpack` raised the request with the limit, and the pod was scheduled in the second it was created (04:27:52).
   The node, an `e2-standard-4`, had 12369Mi unrequested and held no other worker; a node already holding one 7744Mi worker had about 4625Mi.
@@ -81,7 +81,8 @@ The 31 job assignments inside that window were all from this work's own probe ru
 
 - The class fired, parked and re-ran exactly as above; it does not ask whether any node can hold the raised request.
 - The re-run's pod (04:40:23) was unschedulable with all eight worker nodes `Ready` and holding no worker: "8 Insufficient memory", plus two system-pool nodes its selector excludes.
-  The autoscaler added no node: its `NotTriggerScaleUp` gave the pool's maximum size at 04:40:23, and, once the pool was below it, "1 node(s) had untolerated taint(s), 1 Insufficient memory" at 04:45:24.
+  The autoscaler added no node: its `NotTriggerScaleUp` gave the pool's maximum size at 04:40:23, and "1 node(s) had untolerated taint(s), 1 Insufficient memory" from 04:43:38, once the pool was below it.
+  It was also removing idle workers under the wait: four were cordoned by 04:45:24, and no worker node was left when the third assignment's pod was created at 04:50:24, so the eight-node reading is the first pod's alone and the later ones show the same memory refusal.
   `WorkersUnschedulable` went `True` at 04:45:23.
 - GitHub withdrew the untaken assignment at 04:45:22 and 04:50:23, five minutes after each, and re-issued the job; each re-issue's pod asked for 12672Mi again, because the floor is keyed by run and job name.
 - The third assignment was not withdrawn.
