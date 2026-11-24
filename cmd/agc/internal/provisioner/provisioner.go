@@ -421,6 +421,9 @@ type Provisioner struct {
 	// (Q555, flaky_jobs.go). Their zero values are ready to use.
 	failureIndex    failureIndex
 	workerSnapshots workerSnapshots
+	pairings        pairingQueue
+	// pairingDelay is how long a run's completions gather before its jobs are read.
+	pairingDelay time.Duration
 
 	// classBreakers is the retry classes' set-wide stampede breaker (Q1183,
 	// oom_class.go). Its zero value is ready to use.
@@ -452,6 +455,7 @@ func NewProvisioner(c client.Client, m *runnercore.Metrics, log *slog.Logger) *P
 		MaxQuotaRetries:            5,
 		QuotaRetryDelay:            30 * time.Second,
 		PollInterval:               5 * time.Second,
+		pairingDelay:               defaultPairingDelay,
 		DefaultWorkerImage:         DefaultWorkerImage,
 	}
 }

@@ -147,8 +147,8 @@ var (
 	rerunLedgerNames   = []string{"version", "minWriterVersion", "reruns", "failures", "memoryFloors", "pending"}
 	rerunRecordNames   = []string{"expiresAt", "count", "selfCancelledAttempt", "attempts"}
 	rerunAttemptNames  = []string{"scope", "cause", "jobs", "disruptions"}
-	failureRecordNames = []string{"expiresAt", "failedAt", "jobID", "cause", "event", "workflowRef",
-		"pairedAttempts", "context"}
+	failureRecordNames = []string{"expiresAt", "failedAt", "jobID", "runner", "cause", "event", "workflowRef",
+		"context"}
 	memoryFloorNames  = []string{"expiresAt", "pod", "container", "killedLimit", "limit", "requestsFollow"}
 	pendingRerunNames = []string{"expiresAt", "firedAt", "cause", "repository", "runID", "job", "disruption",
 		"failedAttempt"}

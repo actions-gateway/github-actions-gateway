@@ -235,6 +235,14 @@ The alternatives:
 - **Match every job by name in the list**, without the runner.
   Two jobs of one name cannot be told apart that way.
 
+The list is read off the listener, once per run and set for the matches of 30 seconds, and its 10-second budget is the batch's: `TestPairing_OneListPerRunAndDelay` re-runs 100 of a run's 200 legs, 400 rows, for 4 requests and one ledger write, and `TestPairing_AHungReadHoldsNoListener` has GitHub never answer; in both, the listener waits for neither.
+A run whose matches do not finish together costs a list per 30 seconds, so at most 1,200 requests an hour at the 1,000-row cap, and never more lists than matches.
+The alternatives to that:
+
+- **A read per match, on the listener.** Those 100 matches would be 400 requests, with every other message of the set behind them, for up to 10 seconds each where GitHub is slow.
+- **One list per run and attempt, kept.** A completion names no attempt, so which list it belongs to is what the read is for, and a kept list lacks whatever started after it.
+- **A cap on reads, counting nothing past it.** It drops the re-run of a large matrix, the case with most to count.
+
 One false flake is left, and nothing in the list tells it from a re-run: a job first listed under the failure's name in a later attempt, completing while the failed job's re-run waits on its `needs` and is not listed.
 A job in the workflow file is listed in every finished attempt, skipped or not, so it takes a name that expands differently between attempts, such as a dynamic matrix gaining a leg whose name truncates to the failed one's.
 
@@ -690,6 +698,6 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 2. Q1182 (built) created the ledger store, with its version rules, `reruns` map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as `selfCancelledAttempt`.
 3. Q1181 (built): `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the widened run read, honouring `selfCancelledAttempt`, between the run read and the reservation in `handleScaleSetEviction`; Q1320 (built) added `already_rerun`, `run_succeeded` and `worker_unstartable` there, and the classic tier takes none.
 4. Q555 (built) added the `failures` map, the snapshot, the pairing and the metrics on that store.
-   Three departures from Component 1: `JobCompleted` carries no attempt number, so a later attempt is attributed from GAG's re-runs by job name, each re-run paired at most once per job ([04-operational-flows.md](../design/04-operational-flows.md#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555)); event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.
+   Two departures from Component 1: event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.
 5. Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the `pending` map, Q1245 (built) added the alert, the gauge and the annotation, and job-granular re-run still waits on M6.
 6. Q1178 and Q1184 (built).

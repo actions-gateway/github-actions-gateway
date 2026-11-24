@@ -409,7 +409,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		// Flaky-job detection: a failure is recorded, and a later attempt paired with it
 		// (Q555).
 		Completed: func(ctx context.Context, job scalesetlistener.Job, result string) error {
-			return r.Provisioner.RecordScaleSetJobCompleted(ctx, target, provisioner.ScaleSetJob{
+			_, err := r.Provisioner.RecordScaleSetJobCompleted(ctx, target, provisioner.ScaleSetJob{
 				JobID:       job.JobID,
 				RunnerName:  job.RunnerName,
 				Owner:       job.Owner,
@@ -419,6 +419,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 				EventName:   job.EventName,
 				WorkflowRef: job.WorkflowRef,
 			}, result)
+			return err
 		},
 		// Per-RunnerSet ConfigMap persisting the concluded-job guards, so a hard-killed
 		// AGC does not replay an assignment it concluded but had not yet deleted (Q606).

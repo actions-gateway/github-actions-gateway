@@ -699,18 +699,21 @@ So the AGC reads the run's jobs in every attempt (`GET …/actions/runs/{id}/job
 It is the failed job's re-run when the jobs of its name differ between its attempt and the one before by those two alone, the failed job's runner gone and the completed job's added; anything else changes no record.
 A job with no runner, a skipped one included, matches nothing in the other attempt, so a name that any job was skipped under never pairs: a job skipped beside its failing twin can run in the re-run.
 The rule rests on the earlier attempt, which has finished and lists every job, because the later one does not list a job whose `needs` are still running ([measured](../plan/q555-automatic-recovery-design.md#readings-for-pairing-jobs-that-share-a-name-2026-11-23)).
-The read happens only for a completion that matches a record, never for an ordinary one, and holds the listener's goroutine for at most 10 seconds.
+The read happens only for a completion that matches a record, never for an ordinary one, and off the listener's goroutine, so nothing behind the completion waits for it.
+A run's matches gather for 30 seconds and share one list and one ledger write, so a run costs a set at most one list in that time, of one request per 100 jobs over its attempts; past 1,000 jobs it costs one request and pairs nothing.
+Re-running 100 of a run's 200 legs, finished together, costs 4 requests and one write.
+The delay also lets a fast job's attempt finish listing.
+A restart loses the matches gathered in those 30 seconds, whose re-runs then count nothing; at most 1,024 wait at once.
 
-A re-run is attributed from GAG's own re-runs of the run in the same ledger:
+A re-run of an attempt is attributed from what the same ledger says GAG re-ran of that attempt:
 
-| GAG re-ran the run and | Trigger | Flaky when it succeeds |
+| GAG re-ran the failed attempt and | Trigger | Flaky when it succeeds |
 |---|---|---|
 | listed this job | `gag` | Never; the result counts in `eviction_rerun_outcomes_total{cause}` |
 | re-ran failed jobs without listing it | `gag_collateral` | When its failure had no disruption cause |
 | did neither | `other` | As above |
 
-A succeeded attempt deletes the record; a failed one updates it, keeping the first failure's time and context, and marks GAG's re-run it was attributed to as spent so a later attempt does not claim it again.
-`JobCompleted` carries no run attempt, so GAG's re-runs are matched by job name rather than by attempt: a job that first fails in an attempt after one GAG re-ran reads as `gag_collateral` rather than `other`.
+A succeeded attempt deletes the record; a failed one updates it, keeping the first failure's time and context.
 A succeeded completion with no record, the common case, reads an in-memory index of the ledger's keys and costs no API call; the index is refreshed on each read and write of the ledger, so a record another replica wrote since is missed and counts nothing.
 Failure records are evicted oldest first once the ledger passes half its 512 KiB cap, and budget records never are: `v1.10.0` writes the same object, keeps failure records it does not know, cannot evict them, and refuses a write past the cap, so records allowed to fill it would withhold that version's every reservation during a rollout or after a rollback.
 
