@@ -927,8 +927,12 @@ The jobs list gives `conclusion: cancelled` for every shape below; the failure-l
 
 - **The annotation separates them and the jobs list does not.** Reading it takes `Checks: read`, which the App has only where the optional `Checks: Read and write` that posts a fork refusal's check run is granted, and it is one call for each cancelled job.
 - **The time does not.** All 329 fail-fast siblings read ended at or after their run's first failure, but so did 12 of the 14 timeouts read and all 4 concurrency cancels.
-- **Most fail-fast runs hold another failed job too.** 12 of the 63 had one failed job and cancelled siblings alone; the other 51 also had a job that concluded `failure`, in 30 of `rust-lang/cargo`'s 38 an aggregate (`conclusion`) and one leg.
-  A rule that lets `cancelled` through still meets those as another failure.
+- **Most fail-fast runs hold another failed job too, usually an aggregate.** By each run's own workflow file at its head SHA, `needs:` followed transitively, 12 of the 63 hold nothing else, 30 only jobs that need the leg's matrix (all `rust-lang/cargo`'s `conclusion`), 15 such a job and an independent failure, and 6 an independent failure alone.
+  A rule that lets `cancelled` through recovers the 12; `rerun-failed-jobs` recovers the 42 where nothing independent failed, and re-runs the independent failure in the other 21.
+- **"Started after the killed job completed" does not tell an aggregate from an independent failure.** It separates all 102 other failures of those 51 runs, 45 aggregates (one inside a reusable workflow, read by eye) and 57 independent.
+  Over the runs with two or more failed jobs (195 of the 600 listed again with `created` at or before 2026-11-24 22:40 UTC), taking the first to complete as the killed one, all 98 dependents started after it and so did 73 of the 612 others, in 19 runs: jobs that waited for a runner, a later stage that needed something else, an aggregate of other jobs.
+  A killed job is listed as completed about 10 minutes after it died; a start 600 s later or more leaves 22 of the 73, in 3 runs.
+- **What a single-job re-run takes along is the sound fact**, by M6, and is [Q1401](../queue/Q1401.md).
 - **This repository's matrices mostly set `fail-fast: false`**, so its 0 is not a rate for a tenant that leaves the default.
 
 None of these runs lost a runner.
