@@ -42,8 +42,8 @@ type stubTarget struct {
 	capacityDeclined bool
 	capacityDetail   string
 	// events records every RecordEvent reason, so a test can assert an owner-visible
-	// incident was surfaced and not merely logged.
-	events []string
+	// incident was surfaced and not merely logged; messages records each one's text.
+	events, messages []string
 }
 
 func (s *stubTarget) Key() client.ObjectKey { return s.key }
@@ -68,7 +68,9 @@ func (s *stubTarget) ScaleUpLimit(context.Context) *ScaleUpConfig {
 	}
 	return s.spec.ScaleUp
 }
-func (s *stubTarget) RecordEvent(_, reason, _, _ string) { s.events = append(s.events, reason) }
+func (s *stubTarget) RecordEvent(_, reason, _, message string) {
+	s.events, s.messages = append(s.events, reason), append(s.messages, message)
+}
 func (s *stubTarget) Resolve(context.Context) (*ResolvedSpec, error) {
 	return s.spec, nil
 }

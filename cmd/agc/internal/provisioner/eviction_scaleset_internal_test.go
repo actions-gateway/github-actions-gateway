@@ -383,6 +383,39 @@ func TestRecoverEvictedScaleSetWorkers_NoEvictedPodsIsCheap(t *testing.T) {
 	assert.Equal(t, int64(0), rerunCount.Load())
 }
 
+// TestDisruptionOf_NamesTheJobForTheAlreadyRerunCheck: the runner is named only where a
+// start was recorded for it, since a pre-registered runner that took no job is on none.
+func TestDisruptionOf_NamesTheJobForTheAlreadyRerunCheck(t *testing.T) {
+	created := metav1.NewTime(time.Now().Add(-time.Hour).Truncate(time.Second))
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod-a", CreationTimestamp: created,
+		Annotations: map[string]string{annotationJobName: "build", AnnotationRunnerName: "gpu-1"}}}
+	assert.Equal(t, rerunDisruption{key: "pod-a", job: "build", assignedAt: created.Time}, disruptionOf(pod))
+
+	pod.Annotations[AnnotationStartedJobID] = "job-1"
+	assert.Equal(t, rerunDisruption{key: "pod-a", job: "build", runner: "gpu-1", assignedAt: created.Time}, disruptionOf(pod))
+}
+
+// TestRecoverEvictedScaleSetWorkers_AHumansReRunIsLeftAlone is the late scan: the evicted
+// pod outlived an AGC outage during which somebody re-ran its run, and that attempt
+// failed on its own, so a re-run would retry a genuine failure.
+func TestRecoverEvictedScaleSetWorkers_AHumansReRunIsLeftAlone(t *testing.T) {
+	now := time.Now()
+	api := &futilityAPI{run: secondAttempt(now, nil), jobs: []map[string]any{ranInAttempt(now, "build", "gpu-new", "failure")}}
+	pod := evicted(scaleSetWorkerPod("pod-a", identityAnnotations()))
+	pod.CreationTimestamp = metav1.NewTime(now.Add(-time.Hour))
+	pod.Annotations[AnnotationRunnerName] = "gpu-old"
+	pod.Annotations[AnnotationStartedJobID] = "job-1"
+	p, target := futilityFixture(t, api)
+	target.spec = &ResolvedSpec{MaxEvictionRetries: 2}
+	require.NoError(t, p.Client.Create(context.Background(), pod))
+
+	done, err := p.RecoverEvictedScaleSetWorkers(context.Background(), target)
+	require.NoError(t, err)
+	<-done
+
+	assertWithheld(t, p, target, api, recoveryCauseEviction, rerunWithheldReasonAlreadyRerun, false)
+}
+
 // TestProvisionScaleSetWorker_StampsIdentityAndTier is the other half of the port: a
 // scale-set worker pod must carry the run identity and the tier marker, because the pod
 // is the only durable record either one has. Without this, recovery has nothing to read.

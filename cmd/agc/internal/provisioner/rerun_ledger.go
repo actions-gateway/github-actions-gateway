@@ -342,6 +342,11 @@ type rerunDisruption struct {
 	// failedAttempt is the run attempt the job failed in. Zero means unknown, and the
 	// recovery reads the run to learn it before reserving.
 	failedAttempt int
+	// assignedAt is when the job's worker was provisioned, zero where that is not known.
+	// An attempt that started after it is not the one the job failed in.
+	assignedAt time.Time
+	// runner is the GitHub runner that took the job, "" where no start was recorded.
+	runner string
 	// onReserved, where set, runs once the disruption holds a slot: a fresh
 	// reservation, or a merge into one this attempt already holds.
 	onReserved func()

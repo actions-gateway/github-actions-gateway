@@ -172,8 +172,10 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 	}
 	// Parked rather than re-run now: a job that outgrows its memory is often one of a long
 	// matrix, and GitHub refuses the re-run until every sibling has concluded.
+	d := disruptionOf(pod)
+	d.onReserved, d.park = onReserved, true
 	return p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay,
-		evictionTierScaleSet, recoveryCauseOOM, rerunDisruption{key: pod.Name, job: job, onReserved: onReserved, park: true})
+		evictionTierScaleSet, recoveryCauseOOM, d)
 }
 
 // withholdOOMRerun logs and records one withheld out-of-memory retry.
