@@ -682,7 +682,7 @@ The two were joined on the runner the AGC logs at start or completion against th
 - **GitHub refuses two calls**, both 403: "The workflow run containing this job is already running" while any job of the run is going, and "Only jobs from the current attempt can be re-run" for an earlier attempt's job ID.
 - **A concluded attempt lists every job of the run under a new ID**, with the new attempt in `run_attempt`.
   The rows are not all there when the attempt starts: run 45325262167's attempt 2 started at 04:22:25 and its rows' `created_at` run from 04:22:28 to 04:22:37, and a dependent's waits for its `needs:` (`down`, chain attempt 2: 04:29:09, 48 s in).
-  Every list here was read after its attempt concluded; that a row is missing before its `created_at` is inferred.
+  Every list here was read, or read again, after its attempt concluded; that a row is missing before its `created_at` is inferred.
   A job that ran in an earlier attempt and not in this one, a failed one included, keeps the `started_at` and `runner_name` of the attempt it ran in: `dup`'s red leg is 138213206154 in attempt 1 and 138215428065 in attempt 2, both started at 04:18:50 on one runner.
   So the ID to call with is the latest attempt's, and only a re-executed job gets a new `JobAssigned`.
 - **A skipped matrix job shows its name unexpanded** (`Named ${{ matrix.leg }} / ${{ matrix.n }}`), so a name read from a skipped job is not comparable.
