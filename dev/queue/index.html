@@ -3832,6 +3832,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Demand:</strong> operators ask for gateway diagnostics beyond raw kubectl + the runbook.</td>
 </tr>
 <tr>
+<td><a href="Q1392/">Q1392</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">A signal hides the release gate's failure, or skips its teardown</a></td>
+<td><code>bug</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**A release gate ended by Ctrl-C, <code>kill</code> or a closed terminal records no failure and dumps no diagnostics, and a closed terminal leaves its …</td>
+</tr>
+<tr>
 <td><a href="Q678/">Q678</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md">Re-assess the script entry point once most gate cores are Go</a></td>
 <td><code>debt</code> <code>ci</code></td>
