@@ -91,7 +91,7 @@ The 31 job assignments inside that window were all from this work's own probe ru
   That spent the second of the run's two slots on a third attempt whose pod was again 12672Mi and `Pending`; the run was then cancelled by hand, so how a third attempt ends was not read.
 
 So the class works under `Binpack` as under `Throughput`, and a raise no node can hold cost this run 20 minutes of `Pending` and both its slots ([Q1388](../queue/Q1388.md)).
-An operator prevents it with `maxRequests.memory`, which caps the raise (from source; not run here).
+An operator prevents it with `maxRequests.memory`, which caps the raise container by container, so a pod's sidecars need room beside it (from source; not run here).
 Why GitHub withdrew two assignments and kept the third was not measured, and this is one run.
 
 **The class fired before the job's `JobStarted` was handled** (run 45324839276): the first at 04:16:24, the second at 04:16:35, 30 s after the job started.
