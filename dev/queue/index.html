@@ -2864,12 +2864,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> a test in <code>cmd/gmc/internal/controller/integration/v2_egressproxy_test.go</code> fails on <code>main</code> with a <code>not found</code> read of a proxy …</td>
 </tr>
 <tr>
-<td><a href="Q1367/">Q1367</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/dogfood-e2e">Schedule Kata workers only onto nodes whose kata-qemu runtime is ready</a></td>
+<td><a href="Q1387/">Q1387</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Pre-warm the Dragonfly leg's e2e node once the pool is emptied</a></td>
 <td><code>dogfood</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>**Every cold e2e node on the measured gates failed its first sandbox with <code>no runtime for "kata-qemu" is configured</code>, because the worker is …</td>
+<td>**The gate's Dragonfly leg empties the <code>e2e</code> pool so its worker lands on a node that has not cached the runner image, then pays the whole …</td>
 </tr>
 <tr>
 <td><a href="Q1252/">Q1252</a></td>

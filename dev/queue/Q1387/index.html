@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1367/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1387/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Schedule Kata workers only onto nodes whose kata-qemu runtime is ready - GitHub Actions Gateway</title>
+        <title>Pre-warm the Dragonfly leg's e2e node once the pool is emptied - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#schedule-kata-workers-only-onto-nodes-whose-kata-qemu-runtime-is-ready" class="md-skip">
+        <a href="#pre-warm-the-dragonfly-legs-e2e-node-once-the-pool-is-emptied" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Schedule Kata workers only onto nodes whose kata-qemu runtime is ready
+              Pre-warm the Dragonfly leg's e2e node once the pool is emptied
             
           </span>
         </div>
@@ -2703,13 +2703,20 @@
   
 
 
-<h1 id="schedule-kata-workers-only-onto-nodes-whose-kata-qemu-runtime-is-ready">Schedule Kata workers only onto nodes whose kata-qemu runtime is ready<a class="headerlink" href="#schedule-kata-workers-only-onto-nodes-whose-kata-qemu-runtime-is-ready" title="Permanent link">&para;</a></h1>
-<p><strong>Every cold e2e node on the measured gates failed its first sandbox with <code>no runtime for "kata-qemu" is configured</code>, because the worker is scheduled before the node's Kata runtime is installed.</strong> The failure window was 37s for <code>v2.0.1-rc.1</code>'s Kata leg, 74s for <code>v2.0.0-rc.3</code>'s, and about 52s for rc.1's Dragonfly leg (Q1360's audit-log read measured that one); the kubelet's retry backoff decides when the sandbox is tried again.</p>
-<p>Gating placement on a node label or taint that the runtime installer clears once <code>kata-qemu</code> is configured would remove the backoff part.
-How much of each window is the install itself, which no scheduling change removes, was not measured; read the installer's own log on the next cold node before choosing.
-<strong>Saving:</strong> up to the measured windows, so 1–2 minutes per gate (estimate), and the same on every cold-node Kata job outside the gate.
-<strong>Cost:</strong> falls slightly.</p>
-<p><strong>Done when</strong> a Kata worker on a cold e2e node schedules only once its runtime is ready, and its events show no <code>FailedCreatePodSandBox</code> for a missing runtime.
+<h1 id="pre-warm-the-dragonfly-legs-e2e-node-once-the-pool-is-emptied">Pre-warm the Dragonfly leg's e2e node once the pool is emptied<a class="headerlink" href="#pre-warm-the-dragonfly-legs-e2e-node-once-the-pool-is-emptied" title="Permanent link">&para;</a></h1>
+<p><strong>The gate's Dragonfly leg empties the <code>e2e</code> pool so its worker lands on a node that has not cached the runner image, then pays the whole cold start after dispatch, 5m16s from dispatch to runner on <code>v2.0.1-rc.1</code>.</strong> The Kata leg no longer does: <code>prewarm_e2e_node</code> raises its node while <code>start.sh</code> and <code>e2e-start.sh</code> run.</p>
+<p>Raising one node right after <code>empty_node_pool</code> succeeds would overlap the node's boot and the Kata installer's image pull with the leg's own <code>e2e-start.sh</code>.
+On the 11 cold nodes read for Q1367 that pull took 24–84s, of which 0–46s (median 17.5s) was left when the Kata worker's first sandbox failed.
+The node still has no worker image, so <code>node-p2p</code> keeps its meaning.
+It would also let <code>apply_dragonfly_nodes</code>' rollout wait cover the node client on that node, which today races the first job's pulls.
+<strong>Saving:</strong> at most that leg's <code>e2e-start.sh</code> time after the pool is emptied, which was not measured.
+<strong>Cost:</strong> one e2e node starts earlier by the same span.
+<strong>Risk:</strong> GKE advises against combining <code>resize</code> with autoscaling, and the autoscaler may remove the idle node before dispatch; the leg's <code>e2e-pool-nodes:</code> line shows it.
+The CPU reservation is already held by then.
+The raise would also run beside <code>e2e-start.sh</code>'s own system-pool resize, whose failure stops the leg.
+Whether GKE queues or refuses the second operation is unmeasured; <code>empty_node_pool</code> resizes without <code>--async</code> to avoid that overlap.</p>
+<p><code>prewarm_e2e_node</code> returns early unless the <code>kata</code> leg is selected, so a <code>--legs dragonfly</code> run needs its own condition.</p>
+<p><strong>Done when</strong> the Dragonfly leg raises one e2e node after emptying the pool and before <code>e2e-start.sh</code>, a refused resize is a warning, and the gate's tests assert that order.
 Context: <a href="../../plan/release-gate-speed/#6-schedule-kata-workers-onto-ready-nodes-q1367">release-gate-speed.md</a>.</p>
 
 
