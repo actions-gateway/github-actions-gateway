@@ -255,7 +255,10 @@ It holds a version and three maps, every entry carrying its own `expiresAt` so a
     }
   },
   "pending": {
-    "<runID>/<jobDisplayName>": { "expiresAt": "2026-10-11T12:00:00Z", "cause": "oom", "failedAttempt": 1 }
+    "<runID>/<jobDisplayName>": {
+      "expiresAt": "2026-10-11T12:00:00Z", "cause": "oom", "failedAttempt": 1,
+      "workers": [{ "job": "<jobDisplayName>", "runner": "<runner name>", "disruption": "<pod key>" }]
+    }
   }
 }
 ```
@@ -530,7 +533,7 @@ For a class whose job ends on a step's result ([Q1315](../queue/Q1315.md), [Q131
 
 Classes go through one deferred path, built beside the abandoned arm's (Q691, `abandoned_rerun.go`) but persistent:
 
-- **Pending re-runs live in the ledger**, in its `pending` map, keyed by run and job.
+- **Pending re-runs live in the ledger**, in its `pending` map, keyed by run and job, one entry per run attempt listing each worker it is for (Q1319).
   The abandoned arm's waiting set is in process memory, so a restart drops it, which costs that arm at most 30 minutes of waiting; a class can wait hours for a run to conclude, so its pending entries must survive.
 - **A pending entry records the attempt the job failed in**, read from the run when the class fires, as `failedAttempt`.
   Release judges `already_rerun` and the merge against that attempt, not against a fresh read: if a disruption arm has already re-run the run in the meantime, a fresh read would take the new attempt as the baseline and re-run it again.
@@ -869,7 +872,14 @@ Job-granular avoids that, and costs:
   GitHub keeps the upstream jobs' outputs and artifacts for the re-run ([measured](#m6-readings-from-the-job-granular-probe-2026-11-24)), so the case is state outside GitHub only.
   The fallback for this case is the same `rerun-failed-jobs`, and choosing it needs a signal GAG does not have, so the first version does not try; `same_class_again` stops the repeat.
 
-Until it is built, detection's `gag_collateral` count measures what run-granular costs on the existing arms.
+**Built** (Q1319) for the out-of-memory class; detection's `gag_collateral` count measures what run-granular costs on the arms that stay so.
+What it does is in [04-operational-flows.md](../design/04-operational-flows.md#the-re-run-takes-only-the-killed-jobs-q1319), and three choices there are not in the readings:
+
+- **A run whose failed jobs were all killed takes one `rerun-failed-jobs`**, since it re-runs nothing else and spends one slot.
+- **Several killed jobs beside another failure go one attempt at a time**, a slot each, so a run's budget bounds its attempts and no genuine failure is re-run.
+  Two killed jobs spend the default budget of 2, so a third kill is `budget_exhausted`.
+  The alternatives: one `rerun-failed-jobs` for the set, which recovers them all on one slot and re-runs the genuine failure, as this release [must not](release-2.1.md#what-this-release-must-not-do); or one slot for the whole set, which lets one reservation start as many attempts as there were kills.
+- **A dependent the single-job re-run took along counts as `gag_collateral`**, since GAG's re-run took it and no person did.
 
 ### M6 readings from the job-granular probe, 2026-11-24
 
@@ -897,7 +907,7 @@ The two were joined on the runner the AGC logs at start or completion against th
   So the ID to call with is the latest attempt's, and only a re-executed job gets a new `JobAssigned`.
 - **A skipped matrix job shows its name unexpanded** (`Named ${{ matrix.leg }} / ${{ matrix.n }}`), so a name read from a skipped job is not comparable.
 
-Not covered: nesting past two levels; an upload without `overwrite: true` on a re-run (the fixture sets it); state outside GitHub; a killed job carried into a later attempt, since the one killed job read here was itself re-run; and a single-job re-run of a job whose runner was lost, since each re-run here was of a job that ended on its own.
+Not covered: nesting past two levels; an upload without `overwrite: true` on a re-run (the fixture sets it); state outside GitHub; a killed job carried into a later attempt, since the one killed job read here was itself re-run; and a single-job re-run of a job whose runner was lost, since each re-run here was of a job that ended on its own ([Q1394](../queue/Q1394.md)).
 
 ### What the readings recommend
 
@@ -951,5 +961,5 @@ The disruption arms stay run-granular; nothing in the readings argues otherwise.
 3. Q1181 (built): `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the widened run read, honouring `selfCancelledAttempt`, between the run read and the reservation in `handleScaleSetEviction`; Q1320 (built) added `already_rerun`, `run_succeeded` and `worker_unstartable` there, Q1381 (built) `superseded` for merge groups, and the classic tier takes none.
 4. Q555 (built) added the `failures` map, the snapshot, the pairing and the metrics on that store.
    Two departures from Component 1: event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.
-5. Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the `pending` map, Q1245 (built) added the alert, the gauge and the annotation, and job-granular re-run (Q1319) is unbuilt, with M6 measured.
+5. Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the `pending` map, Q1245 (built) added the alert, the gauge and the annotation, and Q1319 (built) re-runs the killed job alone.
 6. Q1178 and Q1184 (built).
