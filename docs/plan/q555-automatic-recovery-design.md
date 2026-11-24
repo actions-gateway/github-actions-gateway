@@ -875,13 +875,14 @@ Job-granular avoids that, and costs:
 **Built** (Q1319) for the out-of-memory class; detection's `gag_collateral` count measures what run-granular costs on the arms that stay so.
 What it does is in [04-operational-flows.md](../design/04-operational-flows.md#the-re-run-takes-only-the-killed-jobs-q1319), and four choices there are not in the M6 readings:
 
-- **A run whose failed jobs were all killed takes one `rerun-failed-jobs`**, since it re-runs nothing else and spends one slot.
+- **A run whose failed jobs were all killed takes one `rerun-failed-jobs`**, since it re-runs nothing else that ended `failure` and spends one slot.
 - **Several killed jobs beside another failure go one attempt at a time**, a slot each, so a run's budget bounds its attempts and no genuine failure is re-run.
   Two killed jobs spend the default budget of 2, so a third kill is `budget_exhausted`.
   The common cost is a job that aggregates the others (`if: always()`, red when one it needs is): it is another failure, since the jobs list carries no `needs:`, so three killed legs of a matrix behind one recover two where `rerun-failed-jobs` recovers three.
   The alternatives: one `rerun-failed-jobs` for the set, which recovers them all on one slot and re-runs the genuine failure, as this release [must not](release-2.1.md#what-this-release-must-not-do); or one slot for the whole set, which lets one reservation start an attempt for each kill, up to 15.
-- **A cancelled job is another failure**, so a killed leg of a fail-fast matrix is re-run alone and its cancelled siblings are not, where `rerun-failed-jobs` re-ran them.
-  Treating `cancelled` as not a failure would restore them where nothing else failed, and re-run a timeout, which the list spells the same ([readings](#readings-for-a-cancelled-sibling-2026-11-24)); telling them apart is [Q1399](../queue/Q1399.md).
+- **A cancelled job is not another failure**, so a killed leg of a fail-fast matrix and its cancelled siblings take one `rerun-failed-jobs` where no other job ended `failure`, as they did before Q1319.
+  A timeout or a concurrency cancel beside the kill is re-run with them, since the list spells the three the same ([readings](#readings-for-a-cancelled-sibling-2026-11-24)); telling them apart is [Q1399](../queue/Q1399.md).
+  Counting a cancelled job as a failure would re-run neither, and would end red the default matrix with one killed leg.
 - **A dependent the single-job re-run took along counts as `gag_collateral`**, since GAG's re-run took it and no person did.
 
 ### M6 readings from the job-granular probe, 2026-11-24
@@ -934,6 +935,7 @@ The jobs list gives `conclusion: cancelled` for every shape below; the failure-l
   A killed job is listed as completed about 10 minutes after it died; a start 600 s later or more leaves 22 of the 73, in 3 runs.
 - **What a single-job re-run takes along is the sound fact**, by M6, and is [Q1401](../queue/Q1401.md).
 - **This repository's matrices mostly set `fail-fast: false`**, so its 0 is not a rate for a tenant that leaves the default.
+- **Every count is of runs GitHub concluded `failure`.** It can conclude a run holding a failure and a timeout `cancelled` (`rust-lang/cargo` 43369863330), and that run is not re-run at all, whatever a cancelled job counts as.
 
 None of these runs lost a runner.
 Not read: a matrix whose failed leg lost its runner, which is taken to cancel its siblings as any failed leg does; `rerun-failed-jobs` on a cancelled sibling, which this repository has recorded as re-run without a reading; and how often a run the class acts on holds either shape, since every kill it has acted on was a probe's.

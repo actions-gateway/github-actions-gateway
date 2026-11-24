@@ -1294,7 +1294,7 @@ To have timed-out jobs counted in a private repository, grant the App the option
 ### Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run
 
 **Who is affected:** a tenant with a `Binpack` or `Throughput` `RunnerSet`, whose jobs killed at a memory limit the profile chose are re-run automatically.
-Nothing to do, unless a matrix of such jobs uses GitHub's default `fail-fast: true`: its cancelled legs are no longer re-run with the killed one.
+Nothing to do, unless a matrix of such jobs uses GitHub's default `fail-fast: true` beside a job that fails too, such as one that reports on the matrix: its cancelled legs are then no longer re-run with the killed one.
 Set `fail-fast: false` on it, or re-run those legs by hand.
 
 **What changed.** The retry called `rerun-failed-jobs`, so a sibling job that failed on its own was re-run with the killed one and could turn green.
