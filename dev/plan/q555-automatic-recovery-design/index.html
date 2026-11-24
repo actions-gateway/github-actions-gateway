@@ -2758,6 +2758,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#readings-for-the-merge-group-check-2026-11-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Readings for the merge-group check, 2026-11-23
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3173,7 +3184,7 @@
 
 <h1 id="q555-automatic-recovery-design">Q555 automatic recovery: design<a class="headerlink" href="#q555-automatic-recovery-design" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; so is Q1181's <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the scale-set tier (<code>rerun_futility.go</code>); so is Q555's detection (<code>flaky_jobs.go</code>): the <code>failures</code> map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up whose <a href="#readings-from-the-dogfood-turn-up-2026-11-22">readings</a> (Q1236) refute three of its assumptions, one of them since corrected (Q1376), with the colocated proxy's readiness added by Q1237; the rest is not.
+Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; so are Q1181's <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> and Q1320's <code>already_rerun</code>, <code>run_succeeded</code> and <code>worker_unstartable</code> on the scale-set tier (<code>rerun_futility.go</code>), <code>superseded</code> for merge groups included (Q1381); so is Q555's detection (<code>flaky_jobs.go</code>): the <code>failures</code> map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up whose <a href="#readings-from-the-dogfood-turn-up-2026-11-22">readings</a> (Q1236) refute three of its assumptions, one of them since corrected (Q1376), with the colocated proxy's readiness added by Q1237; the rest is not.
 It turns <a href="../q555-flaky-job-retry/">the requirements draft</a> into components against the code as it stands, one per backlog row, and answers the draft's <a href="../q555-flaky-job-retry/#open-questions-for-the-design-session">open questions</a>.
 Each answer is marked <strong>Decided</strong> (the maintainer chose it, 2026-10-12), <strong>Decide</strong> (a recommendation still awaiting sign-off) or <strong>Research</strong> (needs a measurement before anyone can choose).
 The draft says <em>what</em> and <em>why</em>; this says <em>how</em>.
@@ -3308,7 +3319,7 @@ No fork pull request was disrupted end to end, so the AGC's own decode of a fork
   Comparing <code>head_repository</code> then separates one fork from another: fork <code>503badrr/docs</code> has runs 32531300946 and 32531324720 on two different head commits, 19 s apart, so the second supersedes the first.
   <code>per_page=1</code> returns whichever fork built last, though, so a fork's own newer commit is hidden whenever another fork's pull request from <code>main</code> has built since, and the check misses; a miss re-runs, so it costs a wasted re-run, never a withheld one.</li>
 <li><strong>A merge-group run that loses its place is not cancelled by GitHub.</strong> On this repository's queue on 2026-10-30, #2190 failed at the head and was removed (<code>failed_checks</code>, 17:56:25 UTC), and the groups behind it were rebuilt at 17:56:30; of the old groups' 30 runs, six concluded <code>success</code> after the removal, the last at 18:05:13, and the eight <code>cancelled</code> were each ended by one of their own jobs exceeding <code>timeout-minutes</code> before 17:56:25 (the jobs' check-run annotations).
-  So <code>run_cancelled</code> does not catch a displaced group's run, and nothing else does (<a href="../../queue/Q1381/">Q1381</a>).</li>
+  So <code>run_cancelled</code> does not catch a displaced group's run; <code>superseded</code> does, by the newer group (Q1381, <a href="#readings-for-the-merge-group-check-2026-11-23">the readings</a>).</li>
 </ul>
 <h3 id="readings-from-githubs-api-2026-11-23">Readings from GitHub's API, 2026-11-23<a class="headerlink" href="#readings-from-githubs-api-2026-11-23" title="Permanent link">&para;</a></h3>
 <p>Taken from the REST API for <code>already_rerun</code> (Q1320), over public runs somebody had already re-run.</p>
@@ -3341,6 +3352,20 @@ In run 45052015868, listed with <code>filter=all</code>, both <code>shared-name<
 <li><strong>The completion's runner name is the job list's</strong>, in 35 of 35 jobs of runs 45325262167 and 45326925782 (dogfood, read for M6), where it differs per execution.</li>
 <li><strong>A matrix collides too</strong>, where its legs' names pass 100 characters: GitHub truncates both to the same 97 and <code>...</code> (run 45326925782, two legs), on the wire as in the API.
   Ordinary legs do not, even under a static <code>name:</code>, which GitHub extends with the matrix values.</li>
+</ul>
+<h3 id="readings-for-the-merge-group-check-2026-11-23">Readings for the merge-group check, 2026-11-23<a class="headerlink" href="#readings-for-the-merge-group-check-2026-11-23" title="Permanent link">&para;</a></h3>
+<p>Taken from the REST API for the <code>merge_group</code> half of <code>superseded</code> (Q1381).</p>
+<ul>
+<li><strong>A displaced group's ref is deleted at once, while its runs go on.</strong> The repository activity API has the three groups of 2026-10-30 deleted at 17:56:26 and 17:56:27 UTC, one to two seconds after #2190's removal; a run of one of them concluded 527 s later (41099950920).
+  So the ref would show a displacement in time, but reading it needs <code>Contents: read</code>, which the tenant's App does not have, and a merged group's ref is deleted too, sometimes before its optional runs end (#2344's e2e-calico run ended 370 s after).</li>
+<li><strong>GitHub accepts a re-run after the ref is gone, and it runs.</strong> <code>rust-lang/cargo</code> run 43427210034 was re-run 4 min 42 s after its ref's deletion; its checkout succeeded and so did the attempt.
+  The queue did not use it: the pull request was queued again and built as a new group.</li>
+<li><strong>No merged group had a newer group for its pull request, in three repositories.</strong> The built check (<code>newerMergeGroupRun</code>), fed every later run of the workflow, matched 0 of 2,925 runs whose commit is on the default branch, and 369 of the 373 whose commit is not.
+  Each repository contributes one workflow: this one's <code>unit-test.yml</code> since 2026-08-12 (946 merged, 172 not), <code>rust-lang/cargo</code>'s <code>main.yml</code> (712, 107) and <code>rust-lang/rust-analyzer</code>'s <code>ci.yaml</code> (1,267, 94) since 2025-12-28.</li>
+<li><strong>The check sees what has happened by the time it asks.</strong> With only the runs created by then, and its own page limit, it matches 62 of the 373 at the run's conclusion, 161 ten minutes later, 265 after an hour and 342 after a day, still with no merged match.
+  The rest are pull requests removed and not yet queued again (<a href="../../queue/Q1391/">Q1391</a>).
+  Of the 106 that concluded <code>failure</code>, the nearest the sample has to a lost required job, it matches 5 at the conclusion and 38 ten minutes later.</li>
+<li><strong>The base commit in the branch name does not identify a group.</strong> In <code>cilium/cilium</code>, whose queue merges by rebase, two live groups share it (#48687 and #48686), and one pull request queued twice on one base repeats its branch name at another commit, as cargo run 43427210034's did; so the check compares the pull request's number and the commit.</li>
 </ul>
 <h2 id="component-1-the-failure-ledger-q555-r1-to-r8">Component 1: the failure ledger (Q555, R1 to R8)<a class="headerlink" href="#component-1-the-failure-ledger-q555-r1-to-r8" title="Permanent link">&para;</a></h2>
 <h3 id="where-the-hook-goes">Where the hook goes<a class="headerlink" href="#where-the-hook-goes" title="Permanent link">&para;</a></h3>
@@ -3618,8 +3643,8 @@ The <code>EvictionRerunWithheld</code> Event names the reason and the fix.</p>
 </tr>
 <tr>
 <td><code>superseded</code></td>
-<td>A newer run of the same <code>workflow_id</code>, <code>event</code> and <code>head_branch</code> from the same <code>head_repository</code>, with a different <code>head_sha</code>, exists (<code>GET …/workflows/{id}/runs?branch=…&amp;event=…&amp;per_page=1</code>), for <code>push</code> and <code>pull_request</code> only</td>
-<td>None: a newer commit is building</td>
+<td>A newer run of the same <code>workflow_id</code>, <code>event</code> and <code>head_branch</code> from the same <code>head_repository</code>, with a different <code>head_sha</code>, exists (<code>GET …/workflows/{id}/runs?branch=…&amp;event=…&amp;per_page=1</code>), for <code>push</code> and <code>pull_request</code>; for <code>merge_group</code>, a newer run of the same <code>workflow_id</code> for another group of the pull request, with a different <code>head_sha</code></td>
+<td>None: a newer commit is building, or the queue has a newer group</td>
 </tr>
 <tr>
 <td><code>same_class_again</code></td>
@@ -3651,9 +3676,9 @@ The <code>EvictionRerunWithheld</code> Event names the reason and the fix.</p>
 <li><strong><code>already_rerun</code> asks about the job, not the run.</strong> A single-job re-run moves <code>run_attempt</code> (<a href="#readings-from-githubs-api-2026-11-23">measured</a>) without touching the job's siblings, so "the attempt moved" would withhold a job that nobody re-ran.
   The jobs-list call it needs happens only when the attempt has moved, which is rare.
   An arm that does not know its attempt takes it as moved when <code>run_started_at</code> is later than the worker's provisioning (<a href="../../design/04-operational-flows/#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set">as built</a>).</li>
-<li><strong><code>superseded</code> is the other extra call</strong>, and only on the two events where a branch can move.
+<li><strong><code>superseded</code> is the other extra call</strong>, and only on <code>push</code>, <code>pull_request</code> and <code>merge_group</code>.
   Filtering on <code>event</code> and comparing <code>head_repository</code> keeps a fork's <code>main</code> from matching upstream's (M5, <a href="#readings-from-githubs-api-2026-11-22">measured</a>); with <code>per_page=1</code> another fork's newer run can hide the fork's own, which re-runs.
-  A merge-group run that loses its place is not cancelled by GitHub, so <code>run_cancelled</code> does not catch it (<a href="#readings-from-githubs-api-2026-11-22">measured</a>, <a href="../../queue/Q1381/">Q1381</a>).</li>
+  A merge-group run that loses its place is not cancelled by GitHub, so <code>run_cancelled</code> does not catch it (<a href="#readings-from-githubs-api-2026-11-22">measured</a>); a newer group for the pull request does (Q1381, built, <a href="#readings-for-the-merge-group-check-2026-11-23">measured</a>), asked again before the re-run call.</li>
 <li><strong><code>worker_unstartable</code> reads the startup half of the verdict, on every set</strong> (Q1320), gated or not, since Q906 publishes it ungated.
   The placeability half is left out: a full cluster reads as unschedulable, so a drain on a fixed-size cluster would withhold every disrupted job's re-run, finally, where the re-run's job would only have queued; and the arm it was for has no need of it, because the abandoned arm is released by a pod being bound.
   It runs before the reservation, where it spends nothing, so a run past its budget can report it in place of <code>budget_exhausted</code>.
@@ -4062,7 +4087,7 @@ The disruption arms stay run-granular; nothing in the readings argues otherwise.
 <ol>
 <li>The dogfood turn-up of 2026-11-22 settled M1 to M4 (<a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>), and the API settled M5 (<a href="#readings-from-githubs-api-2026-11-22">the readings</a>); M6 was measured on 2026-11-24 (<a href="#m6-readings-from-the-job-granular-probe-2026-11-24">the readings</a>).</li>
 <li>Q1182 (built) created the ledger store, with its version rules, <code>reruns</code> map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as <code>selfCancelledAttempt</code>.</li>
-<li>Q1181 (built): <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the widened run read, honouring <code>selfCancelledAttempt</code>, between the run read and the reservation in <code>handleScaleSetEviction</code>; Q1320 (built) added <code>already_rerun</code>, <code>run_succeeded</code> and <code>worker_unstartable</code> there, and the classic tier takes none.</li>
+<li>Q1181 (built): <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the widened run read, honouring <code>selfCancelledAttempt</code>, between the run read and the reservation in <code>handleScaleSetEviction</code>; Q1320 (built) added <code>already_rerun</code>, <code>run_succeeded</code> and <code>worker_unstartable</code> there, Q1381 (built) <code>superseded</code> for merge groups, and the classic tier takes none.</li>
 <li>Q555 (built) added the <code>failures</code> map, the snapshot, the pairing and the metrics on that store.
    Two departures from Component 1: event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.</li>
 <li>Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the <code>pending</code> map, Q1245 (built) added the alert, the gauge and the annotation, and job-granular re-run (Q1319) is unbuilt, with M6 measured.</li>

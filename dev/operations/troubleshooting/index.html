@@ -7193,7 +7193,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>EvictionRerunWithheld</code></td>
 <td>Normal</td>
-<td>Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded <code>cancelled</code> by someone other than GAG, so the cancel stands (Q811, Q1181); or the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> or <code>emptyDir</code> limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181); or already re-run by a later attempt, of a run that concluded <code>success</code>, or for a set whose workers are placed and cannot pull their image, which needs the image fixed and a manual re-run (Q1320); or a runner killed for memory that a re-run would repeat, or while out-of-memory retries are paused (Q1183). Only a cancel or a success seen after detection spends a slot.</td>
+<td>Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded <code>cancelled</code> by someone other than GAG, so the cancel stands (Q811, Q1181); or the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> or <code>emptyDir</code> limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181) or a newer merge group for the same pull request (Q1381); or already re-run by a later attempt, of a run that concluded <code>success</code>, or for a set whose workers are placed and cannot pull their image, which needs the image fixed and a manual re-run (Q1320); or a runner killed for memory that a re-run would repeat, or while out-of-memory retries are paused (Q1183). Only a cancel, a success or a newer merge group seen after detection spends a slot.</td>
 <td><a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>; <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a></td>
 </tr>
 <tr>
@@ -7980,7 +7980,7 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 That is checked on every cause, and GAG's own force-cancel of an abandoned run is told apart and still re-run.
 No call is made, <code>eviction_rerun_withheld_total{reason="run_cancelled"}</code> increments, and a Normal <code>EvictionRerunWithheld</code> Event names the run (Q811, Q1181).
 See <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>.</p>
-<p><strong>Fires and is withheld as futile</strong>, before any budget slot is spent (Q1181, Q1320).
+<p><strong>Fires and is withheld as futile</strong>, before any budget slot is spent unless the table says otherwise (Q1181, Q1320).
 The <code>EvictionRerunWithheld</code> Event names the reason and, where one is needed, the fix:</p>
 <table>
 <thead>
@@ -8013,8 +8013,8 @@ The <code>EvictionRerunWithheld</code> Event names the reason and, where one is 
 </tr>
 <tr>
 <td><code class="gag-nowrap">superseded</code></td>
-<td>A newer commit's run of the same workflow, event and branch has started</td>
-<td>Nothing</td>
+<td>A newer commit's run of the same workflow, event and branch has started, or the merge queue has built another group for the pull request</td>
+<td>Nothing; a newer group seen after detection, as it is for a group still queued when its job was lost, has spent its slot</td>
 </tr>
 <tr>
 <td><code class="gag-nowrap">worker_unstartable</code></td>
@@ -8023,7 +8023,9 @@ The <code>EvictionRerunWithheld</code> Event names the reason and, where one is 
 </tr>
 </tbody>
 </table>
-<p>A merge-queue run has no <code>superseded</code> check, and GitHub leaves a group displaced from the queue running rather than cancelling it, so a disrupted job in one is re-run and spends a budget slot on a result nothing reads (measured 2026-11-22, Q1381).</p>
+<p>GitHub leaves the runs of a group dropped from the merge queue going, so a job in one can still be disrupted.
+Its re-run is withheld once the queue has built a newer group for the pull request (Q1381); a pull request removed from the queue and not yet queued again has none, so its job is re-run and spends a budget slot on a result nothing reads.
+A group dropped because of the lost job is usually that case, since the AGC asks as the run concludes: of 106 failed runs measured, 5 had a newer group by then.</p>
 <p>A quota-blocked job is deliberately absent from this table: it is <strong>never claimed</strong> in the first place, so it stays queued at GitHub with no re-run needed — see <a href="#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a>.</p>
 <hr />
 <h2 id="flaky-jobs-and-platform-faults-on-failed-jobs">Flaky Jobs and Platform Faults on Failed Jobs<a class="headerlink" href="#flaky-jobs-and-platform-faults-on-failed-jobs" title="Permanent link">&para;</a></h2>

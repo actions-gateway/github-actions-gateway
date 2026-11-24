@@ -3805,7 +3805,7 @@ The residual there is a cancelled run whose worker is <em>also</em> evicted or p
 On the scale-set tier every arm takes it (Q1181), because that tier already reads the run on every pass, so the check costs no call, and the failure ledger's <code>selfCancelledAttempt</code> tells the abandoned arm's own force-cancel from anyone else's: a user's cancel, or a concurrency group's, is honoured whichever arm the worker was lost to, and GAG's own cancel is re-run with no exemption for any arm.</p>
 <h5 id="futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set">Futile re-runs are withheld before a slot is spent (scale-set)<a class="headerlink" href="#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set" title="Permanent link">&para;</a></h5>
 <p>Some re-runs cannot help, and before Q1181 each one spent a budget slot, a node and queue time, then ended in an Event asking for a manual re-run that would not help either.
-The scale-set tier now judges the run read it takes before reserving a slot (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/rerun_futility.go"><code>rerun_futility.go</code></a>) and withholds a futile re-run there, so it spends nothing: <code>actions_gateway_eviction_rerun_withheld_total</code> counts the <code>reason</code>, and a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event names the run, the reason and what would fix it.</p>
+The scale-set tier now judges the run read it takes before reserving a slot (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/rerun_futility.go"><code>rerun_futility.go</code></a>) and withholds a futile re-run there, so it spends nothing, except where the table says the re-run loop found it: <code>actions_gateway_eviction_rerun_withheld_total</code> counts the <code>reason</code>, and a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event names the run, the reason and what would fix it.</p>
 <table>
 <thead>
 <tr>
@@ -3842,8 +3842,8 @@ The scale-set tier now judges the run read it takes before reserving a slot (<a 
 </tr>
 <tr>
 <td><code>superseded</code></td>
-<td>A <code>push</code> or <code>pull_request</code> run, and the newest run of the same workflow, event and branch is from a newer commit in the same head repository</td>
-<td>Nothing: the newer commit is building</td>
+<td>A <code>push</code> or <code>pull_request</code> run, and the newest run of the same workflow, event and branch is from a newer commit in the same head repository; or a <code>merge_group</code> run, and a newer run of the same workflow is for another group of its pull request, at a different commit (Q1381). The merge-group half is also checked in the re-run loop once the run has concluded, where the slot is already spent</td>
+<td>Nothing: the newer commit is building, or the queue no longer waits on the group</td>
 </tr>
 <tr>
 <td><code>worker_unstartable</code></td>
@@ -3853,7 +3853,7 @@ The scale-set tier now judges the run read it takes before reserving a slot (<a 
 </tbody>
 </table>
 <p>A field GitHub did not send skips its check rather than withholding.
-Two checks cost a call, and neither withholds on an answer it cannot read, because each only ever withholds: <code>superseded</code> lists the workflow's runs, filtered to the branch and event, newest first; <code>already_rerun</code> lists a moved attempt's jobs.</p>
+Two checks cost a call, and neither withholds on an answer it cannot read, because each only ever withholds: <code>superseded</code> lists the workflow's runs, newest first, filtered to the event and to the branch, or for a <code>merge_group</code> run to those created since it (at most 3 pages of 30); <code>already_rerun</code> lists a moved attempt's jobs.</p>
 <p><code>already_rerun</code> makes its call only when the attempt has moved, which for a disruption detected live it has not (Q1320).
 An arm that knows its attempt compares it; every other arm compares the run's <code>run_started_at</code> against when the job's worker was provisioned, allowing a minute of clock skew, and a worker with no such time is taken as unmoved.
 A moved attempt is then read from its jobs, because a single-job re-run moves <code>run_attempt</code> and leaves the failed siblings standing (<a href="../../plan/q555-automatic-recovery-design/#readings-from-githubs-api-2026-11-23">measured</a>).
@@ -3869,9 +3869,17 @@ A started worker counts only until it is deleted (<code>completedPodTTL</code>, 
 Every scale-set arm asks it, and it matters most to the abandoned arm, which is released by any pod of the set binding, one stuck pulling an image included; that release still counts <code>capacity_returned</code>.
 The gate's placeability verdicts are not consulted: a cluster that is merely full reads as unschedulable, and withholding is final where a re-run's job would only have waited.
 The reaped worker itself is not evidence, because it is being deleted, so a set whose only failing worker was the reaped one re-runs.</p>
-<p>Comparing the head repository keeps a fork's branch from matching upstream's of the same name; GitHub's <code>branch</code> filter does match a fork pull request's head branch, but the newest run it returns can be another fork's, which hides this fork's own newer commit (M5, <a href="../../plan/q555-automatic-recovery-design/#readings-from-githubs-api-2026-11-22">measured from the API</a>), and a miss there re-runs, the safe direction.
-A <code>merge_group</code> run has no superseded check, and a group displaced from the queue is not cancelled by GitHub, so a disrupted job in one is re-run although no queue entry waits for it (<a href="../../queue/Q1381/">Q1381</a>).
-A support ticket can raise GitHub's re-run cap for an organisation, and the check does not know that; such an organisation sees <code>attempt_limit</code> where GitHub would have accepted the re-run.
+<p>Comparing the head repository keeps a fork's branch from matching upstream's of the same name; GitHub's <code>branch</code> filter does match a fork pull request's head branch, but the newest run it returns can be another fork's, which hides this fork's own newer commit (M5, <a href="../../plan/q555-automatic-recovery-design/#readings-from-githubs-api-2026-11-22">measured from the API</a>), and a miss there re-runs, the safe direction.</p>
+<p>A merge queue that drops a group builds another for the same pull request, at a new commit: at once when a group ahead failed, or when the pull request is queued again.
+GitHub leaves the old group's runs going (<a href="../../plan/q555-automatic-recovery-design/#readings-from-githubs-api-2026-11-22">measured</a>).
+A pull request holds one place in a queue, so a newer group for it means no queue entry reads the old group's result.
+The check matches the two on the branch name, <code>gh-readonly-queue/&lt;base&gt;/pr-&lt;number&gt;-&lt;sha&gt;</code>, up to the commit at its end.
+It does not ask whether the group's branch still exists: that needs <code>Contents: read</code>, which the tenant's App <a href="../../operations/tenant-onboarding/#0a-create-the-app-web-ui">does not have</a>, and a merged group's branch is deleted too.
+It asks a second time just before the re-run call, because a disrupted required job is itself what makes the queue drop the group, as the run concludes.
+So for a group still queued when its job is lost, only that second ask can find a newer group, and the slot is already spent.
+It usually finds none, because somebody has to queue the pull request again first: of 106 failed runs measured, 5 had a newer group as they concluded (<a href="../../plan/q555-automatic-recovery-design/#readings-for-the-merge-group-check-2026-11-23">readings</a>).
+A pull request removed from the queue and not yet queued again has no newer group, so its re-run goes ahead (<a href="../../queue/Q1391/">Q1391</a>, with the figures).</p>
+<p>A support ticket can raise GitHub's re-run cap for an organisation, and the check does not know that; such an organisation sees <code>attempt_limit</code> where GitHub would have accepted the re-run.
 The classic tier reserves from process memory with no run read first and takes none of these checks.</p>
 <h5 id="detecting-a-disruption-is-not-the-same-as-claiming-it">Detecting a disruption is not the same as claiming it<a class="headerlink" href="#detecting-a-disruption-is-not-the-same-as-claiming-it" title="Permanent link">&para;</a></h5>
 <p>The two deleted-pod rows above are readable only until the kubelet finishes tearing the object down, and recovery reads the pod off the informer (the watch event, or the scan's cached List) while it claims through the live API.

@@ -4600,6 +4600,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>**The EgressProxy reconciler holds a pool for at most 30 s while the egress allowlist ConfigMap is unread, and the 30 s starts when the GMC …</td>
 </tr>
 <tr>
+<td><a href="Q1391/">Q1391</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#readings-for-the-merge-group-check-2026-11-23">A removed pull request's merge-group run is still re-run</a></td>
+<td><code>bug</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A pull request removed from the merge queue and not queued again has no newer group, which is the only thing the <code>superseded</code> check can see …</td>
+</tr>
+<tr>
 <td><a href="Q1340/">Q1340</a></td>
 <td><a href="../development/parallel-dispatch/">Plan shared docs when one backlog row is split across parallel PRs</a></td>
 <td><code>debt</code> <code>retro</code></td>

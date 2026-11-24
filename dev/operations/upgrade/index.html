@@ -6412,8 +6412,8 @@ The command is in <a href="../troubleshooting/#which-disruptions-auto-re-run-a-j
 <p><strong>Who is affected:</strong> a tenant whose scale-set workers are stuck in <code>ImagePullBackOff</code> when another of the set's jobs loses its worker.</p>
 <p><strong>What changed.</strong> The re-run of a disrupted job used to fire anyway, and its worker would fail to start too, spending a slot of <code>maxEvictionRetries</code>.
 While a worker of the set is placed and in <code>ImagePullBackOff</code>, and no worker still present has started since the oldest such worker was placed, the AGC now withholds the re-run (Q1320).
-A re-run of a job a later attempt already re-ran, or of a run that concluded <code>success</code>, is withheld too.</p>
-<p><strong>What you will see.</strong> <code>actions_gateway_eviction_rerun_withheld_total</code> increments with <code>reason="worker_unstartable"</code>, <code>"already_rerun"</code> or <code>"run_succeeded"</code>, and a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event names the run and the reason.</p>
+A re-run of a job a later attempt already re-ran, of a run that concluded <code>success</code>, or of a merge-queue run whose pull request has a newer group (Q1381), is withheld too.</p>
+<p><strong>What you will see.</strong> <code>actions_gateway_eviction_rerun_withheld_total</code> increments with <code>reason="worker_unstartable"</code>, <code>"already_rerun"</code>, <code>"run_succeeded"</code> or <code>"superseded"</code>, and a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event names the run and the reason.</p>
 <p><strong>What to do.</strong> Nothing at upgrade time.
 On <code>worker_unstartable</code>, <a href="../troubleshooting/#the-reason-is-podsnotstarting-the-image-will-not-pull">fix the image or its pull credentials</a>, then re-run the job by hand; the withhold is final for that disruption.</p>
 <h3 id="a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run<a class="headerlink" href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run" title="Permanent link">&para;</a></h3>

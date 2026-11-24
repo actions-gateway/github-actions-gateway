@@ -3235,7 +3235,7 @@ It also gives the person who has to act a reason, where today an exhausted budge
 <tr>
 <td>A newer commit superseded the run</td>
 <td>The pull request's head no longer matches the run's <code>head_sha</code>, or the run was cancelled by a concurrency group</td>
-<td>Withheld on the scale-set tier as <code>superseded</code> (a newer run of the workflow, event and branch from a different commit) or <code>run_cancelled</code> (Q1181); the classic tier does not check</td>
+<td>Withheld on the scale-set tier as <code>superseded</code> (a newer run of the workflow, event and branch from a different commit, or in a merge queue a newer group for the pull request, Q1381) or <code>run_cancelled</code> (Q1181); the classic tier does not check</td>
 </tr>
 <tr>
 <td>GitHub will refuse the re-run</td>
