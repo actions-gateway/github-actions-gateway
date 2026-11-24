@@ -3125,7 +3125,7 @@ Read the pool with `kubectl get egressproxy -n <namespace> <name>`.
 **What detection cannot see.** Node conditions are not recorded (the AGC has no `nodes` read), nor is a registry mirror's readiness.
 A proxy pool shared from another namespace is recorded as `proxy.mode: shared` with no readiness, since the AGC's cache does not reach that namespace.
 A snapshot is held in memory, so a failure recorded after an AGC restart, or after more than 1,024 workers finished with no completion yet, has no `context`.
-An AGC restart between a job's failure and its worker's finish leaves the record's `context` at `podPhase: Running`.
+An AGC restart between a job's failure and its worker's finish leaves the record's `context` at `podPhase: Running`, and so does a worker whose pod is removed before it finishes, such as a force delete.
 A re-run more than 7 days after the failure, or one that lands on another `RunnerSet`, pairs with nothing and counts nothing.
 Two jobs of one run that share a `name:` share one record, so one's success pairs with the other's failure and counts as a flake nobody re-ran (Q1375).
 

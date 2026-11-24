@@ -1,6 +1,6 @@
 # Release 2.1 Milestone Definition
 
-> **Status: scoped 2026-11-09, nothing landed.** The maintainer made flaky-job detection and automatic retry for more platform failures the `v2.1.0` headline on 2026-11-09.
+> **Status: scoped 2026-11-09; the ledger below says what has landed.** The maintainer made flaky-job detection and automatic retry for more platform failures the `v2.1.0` headline on 2026-11-09.
 > Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22); the ledger's open rows still gate the tag and nothing rides yet.
 > Three of them are the readings' refutations, Q1374 to Q1376, gated on 2026-11-22 because each breaks a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the `trigger="other"` rate this release measures success by, biased in opposite directions.
 > Q1381 gates it too, settled 2026-11-22: its re-runs land in merge-queue runs nothing reads and each spends a `maxEvictionRetries` slot, which is the opposite of what this release is for.

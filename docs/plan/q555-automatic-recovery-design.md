@@ -95,12 +95,14 @@ The alternatives:
 - **Only stop snapshotting a completed job's worker.** That fixes the map and leaves the record as it was.
 
 The amendment costs one ledger write per job that fails while its worker runs, and none for a succeeded job.
-It keeps the completion's proxy reading, and adds a fault only where its container or condition is dated before the completion, because a worker that outlives its job can be drained or killed without having failed it.
+A worker's later reads are merged, not swapped in: the kubelet drops a restarted sidecar's crash from the status it writes as the pod finishes (kubelet v1.35.5, `testdata/sidecar_restart_statuses.json`), so the pod watch passes a container's restart as well as a phase change, and each read carries forward the terminations the next one has lost.
+A pod deleted while it runs is waited for: its finish amends the record, or its deletion event where it never finishes.
+The amendment keeps the completion's proxy reading, and adds a fault only where its container or condition is dated before the completion, because a worker that outlives its job can be drained or killed without having failed it.
 
 A snapshot holds only bounded fields, all read from objects the AGC can already see:
 
 - pod phase, reason and message (message truncated to 256 bytes), its conditions (`DisruptionTarget` included), `spec.nodeName`, pod IP and start time;
-- per container, sidecars included: name, terminated reason, exit code, restart count, and the termination before the last where a restarted container has since exited;
+- per container, sidecars included: name, terminated reason, exit code, restart count, and the termination before the last where a restarted container has since exited, carried from an earlier read where the kubelet has dropped it;
 - for a colocated egress proxy, the EgressProxy's `Ready` condition and `readyReplicas`.
 
 **Two things R7 lists are left out, deliberately:**
@@ -320,12 +322,15 @@ It runs where M3 says the evidence is first complete: on the worker's terminal t
 An out-of-memory kill takes the runner with it (M3, [measured](#readings-from-the-dogfood-turn-up-2026-11-22)), so the first class fires from the terminal transition, as built.
 Either way it reads the same snapshot detection records, which is why Q1183 waits on Q555.
 
-For a class whose job ends on a step's result ([Q1315](../queue/Q1315.md), [Q1316](../queue/Q1316.md)), neither point alone has the evidence: the completion has the result and a running pod, the transition a finished pod and no result.
-Both are known together where the record is amended, `amendFailedJob`, or on `Completed` where the worker finished first, so such a class fires from those two (Q1376):
+For a class whose job ends on a step's result ([Q1315](../queue/Q1315.md), [Q1316](../queue/Q1316.md)), the completion is where it fires, and the amendment (`amendFailedJob`, Q1376) adds what only a later read of the pod shows:
 
-- **The proxy class** reads the proxy readiness taken at the completion, which the amendment keeps, and the pool's state when the worker finished never replaces it.
-- **The sidecar class** reads a restart count and the crash behind it, which the running pod shows as the container's last termination and the finished pod as the one before its shutdown (`previousReason`); the amendment adds a crash the kubelet had not yet reported at the completion, and its time tells one before the job's end from one after.
-- **A restart between the two** drops the failure from the amendment, so the class does not fire and the job is not re-run: fewer re-runs, never a wrong one.
+- **The proxy class** fires from `Completed`, which holds the result and the proxy readiness together.
+  The amendment never replaces that reading, so it changes nothing for the class, and a restart after the record is written costs it nothing.
+- **The sidecar class** fires from `Completed` where the running pod already shows the crash, as a restarted container's last termination.
+  A crash the pod reports later, which the near-simultaneous end of a sidecar and the step that used it makes likely, is first known to the amendment, so the class also judges the record there, and the crash's time tells one before the job's end from one after.
+  It cannot read the crash from the finished pod alone: the kubelet drops a restarted container's earlier termination from the status it writes as the pod finishes (measured on kubelet v1.35.5, 2026-11-23), so the AGC carries it from the events before.
+- **A restart between the two** loses only what the completion had not seen: a sidecar crash reported after it does not fire the class.
+  Fewer re-runs, never a wrong one.
 
 ### How it waits
 

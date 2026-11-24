@@ -103,6 +103,8 @@ type workerSnapshot struct {
 	// carries no identity of its own.
 	runID, jobName string
 	takenAt        time.Time
+	// gone: the pod's deletion event, after which nothing reports on the worker.
+	gone bool
 }
 
 // Proxy modes in a snapshot.
@@ -140,7 +142,9 @@ type snapshotCondition struct {
 
 // containerSnapshot is one container's last termination, init containers and native
 // sidecars included, and the one before it where a restarted container has since exited:
-// the crash, which the pod's own shutdown replaces.
+// the crash, which the pod's own shutdown replaces. The kubelet drops that one from the
+// status it writes as the pod finishes, so it comes from an earlier event
+// (testdata/sidecar_restart_statuses.json, kubelet v1.35.5).
 type containerSnapshot struct {
 	Name                   string `json:"name"`
 	Reason                 string `json:"reason,omitempty"`
@@ -200,11 +204,36 @@ func (s *workerSnapshot) finished() bool {
 	return s.Phase == string(corev1.PodSucceeded) || s.Phase == string(corev1.PodFailed)
 }
 
+// ended reports whether nothing after s can say more of the worker.
+func (s *workerSnapshot) ended() bool {
+	return s.finished() || s.gone
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
 	return s[:n]
+}
+
+// carryTerminations adds the terminations earlier read that s's own status has dropped.
+func (s *workerSnapshot) carryTerminations(earlier *workerSnapshot) {
+	for i := range s.Containers {
+		c := &s.Containers[i]
+		for _, e := range earlier.Containers {
+			switch {
+			case e.Name != c.Name || e.finishedAt.IsZero():
+			case c.finishedAt.IsZero():
+				c.Reason, c.ExitCode, c.finishedAt = e.Reason, e.ExitCode, e.finishedAt
+				c.PreviousReason, c.PreviousExitCode, c.previousAt = e.PreviousReason, e.PreviousExitCode, e.previousAt
+			case !c.previousAt.IsZero():
+			case e.finishedAt.Equal(c.finishedAt):
+				c.PreviousReason, c.PreviousExitCode, c.previousAt = e.PreviousReason, e.PreviousExitCode, e.previousAt
+			default:
+				c.PreviousReason, c.PreviousExitCode, c.previousAt = e.Reason, e.ExitCode, e.finishedAt
+			}
+		}
+	}
 }
 
 // faults lists what in the snapshot points at the platform rather than the job: a
@@ -255,14 +284,15 @@ func (s *workerSnapshot) faultsBy(end time.Time) []string {
 	return out
 }
 
-// recordedFailure is a failed job whose completion found its worker still running.
+// recordedFailure is a failed job whose completion found its worker not yet ended.
 type recordedFailure struct {
 	target                       Target
 	runID, jobName, jobID, cause string
 	// snap is the worker as the completion found it at that time, and context its JSON.
-	snap    *workerSnapshot
-	context json.RawMessage
-	at      time.Time
+	// last is the latest read since, with the terminations every read before it showed.
+	snap, last *workerSnapshot
+	context    json.RawMessage
+	at         time.Time
 }
 
 // workerSnapshots joins a scale-set worker's terminal snapshot to its job's completion,
@@ -276,16 +306,32 @@ type workerSnapshots struct {
 	recorded map[string]*recordedFailure
 }
 
-// put returns the recorded failure waiting for s, or stores s where none is, unless the
-// worker's job has completed and nothing will take it.
+// awaits reports whether a recorded failure waits for the worker to finish.
+func (w *workerSnapshots) awaits(key string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.recorded[key] != nil
+}
+
+// put returns the recorded failure whose worker s ends, or keeps s as the latest read of
+// one whose worker runs on. With none waiting it stores s where it is the worker's
+// terminal transition, unless the worker's job has completed and nothing will take it.
 func (w *workerSnapshots) put(key string, s *workerSnapshot, jobCompleted bool) *recordedFailure {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	r := w.recorded[key]
-	if r != nil || jobCompleted {
+	if r := w.recorded[key]; r != nil {
+		s.carryTerminations(r.last)
+		r.last = s
+		if !s.ended() {
+			return nil
+		}
 		delete(w.recorded, key)
-		delete(w.byID, key)
 		return r
+	}
+	// A finished pod's deletion is its reap, which says nothing its finish did not;
+	// storing it again would hold a slot no completion takes.
+	if jobCompleted || s.finished() == s.gone {
+		return nil
 	}
 	if w.byID == nil {
 		w.byID = map[string]*workerSnapshot{}
@@ -302,13 +348,14 @@ func (w *workerSnapshots) take(key string) *workerSnapshot {
 	return s
 }
 
-// hold keeps r until put brings its worker's snapshot, or returns the snapshot that
-// arrived since the completion looked.
+// hold keeps r until put brings its worker's end, or returns the snapshot of a worker that
+// ended since the completion looked.
 func (w *workerSnapshots) hold(key string, r *recordedFailure) *workerSnapshot {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if s := w.byID[key]; s != nil {
 		delete(w.byID, key)
+		s.carryTerminations(r.last)
 		return s
 	}
 	if w.recorded == nil {
@@ -491,12 +538,12 @@ type completionPairing struct {
 	flaky   bool
 }
 
-// SnapshotScaleSetWorker records a scale-set worker's platform context at its
-// terminal transition: a terminal phase, or a deletion of a pod that never reached one.
-// The snapshot waits for its job's completion, or amends the record of a job that failed
-// first on its own goroutine, whose end closes the returned channel. proxy, which may be
-// nil, supplies the set's egress proxy readiness.
-func (p *Provisioner) SnapshotScaleSetWorker(ctx context.Context, proxy EgressProxyReader, pod *corev1.Pod) <-chan struct{} {
+// SnapshotScaleSetWorker records a scale-set worker's platform context at its terminal
+// transition: a terminal phase, or the deletion event of a pod that never reached one,
+// which gone names. The snapshot waits for its job's completion, or amends the record of
+// a job that failed first on its own goroutine, whose end closes the returned channel.
+// proxy, which may be nil, supplies the set's egress proxy readiness.
+func (p *Provisioner) SnapshotScaleSetWorker(ctx context.Context, proxy EgressProxyReader, pod *corev1.Pod, gone bool) <-chan struct{} {
 	if pod.Labels[LabelAcquisitionProtocol] != AcquisitionProtocolScaleSet {
 		return closedChan()
 	}
@@ -504,16 +551,16 @@ func (p *Provisioner) SnapshotScaleSetWorker(ctx context.Context, proxy EgressPr
 	if runner == "" {
 		return closedChan()
 	}
+	key := pod.Namespace + "/" + runner
 	s := snapshotOf(pod, p.nowFn())
-	// A terminal pod's deletion is its reap, which says nothing the terminal transition
-	// did not; snapshotting it again would hold a slot no completion takes.
-	if s.finished() == s.Deleting {
+	s.gone = gone
+	if !s.ended() && !p.workerSnapshots.awaits(key) {
 		return closedChan()
 	}
 	if proxy != nil {
 		s.Proxy = proxy.EgressProxyReadiness(ctx)
 	}
-	r := p.workerSnapshots.put(pod.Namespace+"/"+runner, s, ownJobCompleted(pod))
+	r := p.workerSnapshots.put(key, s, ownJobCompleted(pod))
 	if r == nil {
 		return closedChan()
 	}
@@ -566,7 +613,6 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 
 	var cause string
 	var contextJSON json.RawMessage
-	var running bool
 	if failed {
 		cause = p.disruptionCause(ctx, target, job.JobID)
 		if result == jobResultCanceled && cause == "" {
@@ -578,7 +624,6 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 				if proxy, ok := target.(EgressProxyReader); ok {
 					snap.Proxy = proxy.EgressProxyReadiness(ctx)
 				}
-				running = !snap.finished()
 			}
 		}
 		if snap != nil {
@@ -629,12 +674,24 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 	if o.paired {
 		p.reportRerunJob(target, runID, jobName, result, o, log)
 	}
-	if o.recorded && running {
-		r := &recordedFailure{target: target, runID: runID, jobName: jobName, jobID: job.JobID, cause: cause,
-			snap: snap, context: contextJSON, at: at}
-		if s := p.workerSnapshots.hold(workerKey, r); s != nil {
-			p.amendFailedJob(ctx, r, s)
+	if !o.recorded || snap == nil || snap.ended() {
+		return nil
+	}
+	r := &recordedFailure{target: target, runID: runID, jobName: jobName, jobID: job.JobID, cause: cause,
+		snap: snap, last: snap, context: contextJSON, at: at}
+	s := p.workerSnapshots.hold(workerKey, r)
+	if s == nil {
+		// The pod can have changed since the completion read it, with no failure held yet
+		// for its event to reach.
+		if pod, err := p.scaleSetWorkerByRunner(ctx, target, job.RunnerName); err == nil && pod != nil {
+			s = snapshotOf(pod, p.nowFn())
+			if p.workerSnapshots.put(workerKey, s, true) == nil {
+				s = nil
+			}
 		}
+	}
+	if s != nil {
+		p.amendFailedJob(ctx, r, s)
 	}
 	return nil
 }

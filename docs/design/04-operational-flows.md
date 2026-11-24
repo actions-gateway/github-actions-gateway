@@ -664,6 +664,7 @@ The record carries the worker's state at its terminal transition, which the pod 
   The snapshot waits in a bounded in-memory map (1,024 workers) and the completion takes it.
 - **The completion arrives first** when the job ends on a step's result, and finds the pod still `Running` ([measured](../plan/q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22), Q1376).
   The failure is recorded at once from the running pod, so a restart cannot lose its pairing, and the pod watch rewrites the record's context when the worker finishes, one more ledger write per such failure.
+  A restarted sidecar's crash is in no finished pod's status, since the kubelet drops it (measured on v1.35.5), so the watch also passes a container's restart, and the write keeps every container's crash from the reads before it.
   That write keeps the proxy readiness the completion read, the nearer reading to the job's end, and a fault it adds is reported only where it is dated before the completion, since what happens to a worker after its job has a result did not cause it.
   The wait is off the listener's goroutine, which handles one message at a time, so nothing behind the completion is delayed.
 
