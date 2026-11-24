@@ -281,9 +281,10 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 		var park *pendingRerun
 		if d.park {
 			park = &pendingRerun{Cause: cause, Repository: owner + "/" + repo, RunID: runID,
-				Job: d.job, Disruption: d.key, FailedAttempt: d.failedAttempt}
+				Job: d.job, Disruption: d.key, FailedAttempt: d.failedAttempt,
+				Workers: []killedWorker{{Job: d.job, Runner: d.workerRunner, Disruption: d.key}}}
 		}
-		outcome, number, err := p.reserveScaleSetRerun(rctx, target, runID, d, cause, maxRetries, park)
+		outcome, number, err := p.reserveScaleSetRerun(rctx, target, runID, &d, cause, maxRetries, park)
 		switch {
 		case err != nil:
 			log.Error("could not record the run's re-run budget decision; the re-run is withheld, manual rerun may be required",
@@ -318,6 +319,9 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 		case <-rctx.Done():
 			return
 		case <-time.After(retryDelay):
+		}
+		if d.onRerun != nil {
+			d.onRerun(d.scope)
 		}
 		p.rerunUntilAccepted(rctx, target, owner, repo, runID, log, number, tier, cause, d)
 	}()
@@ -385,13 +389,15 @@ func (p *Provisioner) recordRetryStarted(target Target, runID string, log *slog.
 	}
 }
 
-// rerunUntilAccepted calls rerun-failed-jobs for the run until GitHub accepts it,
-// treating the 403 "This workflow is already running" refusal as "not yet" and
-// retrying on a fixed interval within the re-run window (Q503). Any other failure is
-// terminal: the reserved budget slot stays spent either way (the Q106 hard cap counts
-// recoveries, and re-reserving on failure would let one disruption burn the whole
-// budget), so a re-run that never lands is surfaced to the operator via the
-// EvictionRerunFailures counter and an owner Event rather than retried further.
+// rerunUntilAccepted calls rerun-failed-jobs for the run, or the job's own re-run where d
+// covers that job alone, until GitHub accepts it, treating the 403 "This workflow is
+// already running" refusal as "not yet" and retrying on a fixed interval within the
+// re-run window (Q503). A job ID the run has moved past retries too, since the next pass
+// reads the latest list. Any other failure is terminal: the reserved budget slot stays
+// spent either way (the Q106 hard cap counts recoveries, and re-reserving on failure
+// would let one disruption burn the whole budget), so a re-run that never lands is
+// surfaced to the operator via the EvictionRerunFailures counter and an owner Event
+// rather than retried further.
 //
 // d.failedAttempt, where non-zero, is the run attempt the job failed in, and a pass that
 // finds the job re-run past it stands down (errRerunCovered, the scale-set tier only).
@@ -426,7 +432,7 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 				"runID", runID, "attempt", attempt, "cause", cause, "rerunCalls", call, "newerRunID", superseded.newer.ID)
 			p.recordRerunWithheld(target, runID, cause, rerunWithheldReasonSuperseded, supersededMessage(runID, cause, superseded.run, superseded.newer))
 			return
-		case !errors.Is(err, errRunNotConcluded) && !errors.Is(err, errRunConclusionUnreadable):
+		case !errors.Is(err, errRunNotConcluded) && !errors.Is(err, errRunConclusionUnreadable) && !errors.Is(err, errJobNotCurrent):
 			log.Error("disruption auto-retry failed; manual rerun may be required",
 				"runID", runID, "cause", cause, "error", err)
 			p.recordRerunFailure(target, runID, cause, rerunFailureReasonAPIError, err)
@@ -497,8 +503,10 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 func (p *Provisioner) attemptRerun(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, tier, cause string, d rerunDisruption) error {
 	covering := d.failedAttempt > 0
 	checksCancel := cause == recoveryCauseDeletion || tier == evictionTierScaleSet
+	var run runState
 	if (covering || checksCancel) && p.canReadRun(owner, repo) {
-		run, err := p.runConclusion(ctx, owner, repo, runID)
+		var err error
+		run, err = p.runConclusion(ctx, owner, repo, runID)
 		if err != nil {
 			return fmt.Errorf("read the run's conclusion before re-running it: %w", err)
 		}
@@ -531,6 +539,9 @@ func (p *Provisioner) attemptRerun(ctx context.Context, target Target, owner, re
 				}
 			}
 		}
+	}
+	if d.scope == rerunScopeJob {
+		return p.rerunJob(ctx, owner, repo, runID, run.attempt, d, log)
 	}
 	return p.rerunFailedJobs(ctx, owner, repo, runID, log)
 }
@@ -878,11 +889,6 @@ func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID st
 		return nil
 	}
 
-	token, err := p.TokenFunc(ctx)
-	if err != nil {
-		return fmt.Errorf("get installation token: %w", err)
-	}
-
 	// No silent default: refusing to guess an endpoint keeps the installation
 	// token from being posted to a host that never issued it (see GitHubAPIURL, Q504).
 	if p.GitHubAPIURL == "" {
@@ -898,34 +904,34 @@ func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID st
 	if err != nil {
 		return fmt.Errorf("build rerun request: %w", err)
 	}
-	req.Header.Set("Authorization", "token "+token)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("Content-Type", "application/json")
+	return p.sendRerun(ctx, req)
+}
 
-	hc := p.HTTPClient
-	if hc == nil {
-		hc = defaultProvisionerClient()
-	}
-	resp, err := hc.Do(req)
+// sendRerun sends a re-run POST and reads GitHub's answer.
+func (p *Provisioner) sendRerun(ctx context.Context, req *http.Request) error {
+	req.Header.Set("Content-Type", "application/json")
+	status, body, err := p.githubSend(ctx, req)
 	if err != nil {
 		return fmt.Errorf("rerun API call: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(resp.Body)
 
 	// GitHub returns 201 Created on success.
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+	if status != http.StatusCreated && status != http.StatusOK {
 		// The one refusal that means "again later" rather than "failed": until GitHub
 		// concludes the original run it answers 403 with "This workflow is already
 		// running", and after an ungraceful kill that conclusion is minutes away
 		// (Q503). Discriminated by the message, not the status code alone — a 403 is
 		// also what a permissions problem returns, and retrying that would be noise.
-		if resp.StatusCode == http.StatusForbidden &&
+		if status == http.StatusForbidden &&
 			bytes.Contains(bytes.ToLower(body), []byte("already running")) {
 			return fmt.Errorf("rerun API returned %d: %s: %w",
-				resp.StatusCode, githubapp.SanitizeBody(bytes.TrimSpace(body), 512), errRunNotConcluded)
+				status, githubapp.SanitizeBody(bytes.TrimSpace(body), 512), errRunNotConcluded)
 		}
-		return fmt.Errorf("rerun API returned %d: %s", resp.StatusCode, githubapp.SanitizeBody(bytes.TrimSpace(body), 512))
+		if status == http.StatusForbidden && bytes.Contains(bytes.ToLower(body), []byte("from the current attempt")) {
+			return fmt.Errorf("rerun API returned %d: %s: %w",
+				status, githubapp.SanitizeBody(bytes.TrimSpace(body), 512), errJobNotCurrent)
+		}
+		return fmt.Errorf("rerun API returned %d: %s", status, githubapp.SanitizeBody(bytes.TrimSpace(body), 512))
 	}
 	return nil
 }

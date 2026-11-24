@@ -176,7 +176,7 @@ func TestScaleSetBudget_AMergeIntoADeadReservationStillReRuns(t *testing.T) {
 	ctx := context.Background()
 	c, api, srv, target := ledgerFixture(t)
 	dead := ledgerProvisioner(c, srv)
-	got, _, err := dead.reserveScaleSetRerun(ctx, target, "4242", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
+	got, _, err := dead.reserveScaleSetRerun(ctx, target, "4242", &rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
 	require.Equal(t, rerunReserved, got)
 
@@ -274,7 +274,7 @@ func TestScaleSetBudget_ReservationOutcomes(t *testing.T) {
 	p := ledgerProvisioner(c, srv)
 	reserve := func(key, job string, attempt int) (rerunReservation, int) {
 		t.Helper()
-		got, n, err := p.reserveScaleSetRerun(ctx, target, "77", rerunDisruption{key: key, job: job, failedAttempt: attempt}, recoveryCauseEviction, 2, nil)
+		got, n, err := p.reserveScaleSetRerun(ctx, target, "77", &rerunDisruption{key: key, job: job, failedAttempt: attempt}, recoveryCauseEviction, 2, nil)
 		require.NoError(t, err)
 		return got, n
 	}
@@ -323,11 +323,16 @@ func TestScaleSetBudget_ASingleJobRerunDoesNotAbsorbAnotherJob(t *testing.T) {
 		return true
 	}))
 
-	got, _, err := p.reserveScaleSetRerun(ctx, target, "77", rerunDisruption{key: "pod-b", job: "test", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
+	got, _, err := p.reserveScaleSetRerun(ctx, target, "77", &rerunDisruption{key: "pod-b", job: "test", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
 	assert.Equal(t, rerunReserved, got, "the second job reserves its own re-run")
+	l, _, err := p.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	assert.Equal(t, 2, l.Reruns["77"].Count)
+	assert.Equal(t, []string{"77/build", "pod-b"}, l.Reruns["77"].Attempts["1"].Disruptions, "the first still resumes its own slot")
+	assert.Equal(t, rerunScopeFailedJobs, l.Reruns["77"].Attempts["1"].Scope, "an arm re-runs every failed job")
 
-	got, _, err = p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-c", job: "build", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
+	got, _, err = p.reserveScaleSetRerun(ctx, target, "78", &rerunDisruption{key: "pod-c", job: "build", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
 	assert.Equal(t, rerunReserved, got, "another run's record does not cover this one")
 }
@@ -487,7 +492,7 @@ func TestRerunLedger_OlderWriterPreservesWhatItDoesNotKnow(t *testing.T) {
 		            "undated": {"jobID": "j3"}}
 	}`)
 
-	got, _, err := p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
+	got, _, err := p.reserveScaleSetRerun(ctx, target, "78", &rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
 	require.Equal(t, rerunReserved, got)
 
@@ -513,7 +518,7 @@ func TestRerunLedger_ExpiredBudgetsAreDropped(t *testing.T) {
 	expired := p.nowFn().Add(-time.Minute).UTC().Format(time.RFC3339)
 	writeLedger(t, c, target, `{"version":1,"minWriterVersion":1,"reruns":{"old":{"expiresAt":"`+expired+`","count":2}}}`)
 
-	_, _, err := p.reserveScaleSetRerun(ctx, target, "new", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
+	_, _, err := p.reserveScaleSetRerun(ctx, target, "new", &rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
 
 	l, _, err := p.readRerunLedger(ctx, target)
@@ -533,7 +538,7 @@ func TestRerunLedger_CapRefusesRatherThanEvicts(t *testing.T) {
 		"reruns":{"77":{"expiresAt":"`+live+`","count":1}}}`)
 	before := readLedgerData(t, c, target)
 
-	_, _, err := p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
+	_, _, err := p.reserveScaleSetRerun(ctx, target, "78", &rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.ErrorIs(t, err, errRerunLedgerFull)
 	assert.Equal(t, before, readLedgerData(t, c, target), "nothing is written past the cap")
 }

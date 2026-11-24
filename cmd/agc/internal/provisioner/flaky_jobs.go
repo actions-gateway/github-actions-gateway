@@ -485,7 +485,8 @@ func evictOldestFailure(l *rerunLedger) bool {
 
 // pairFailure attributes the attempt that re-ran job in r's run after the attempt failed,
 // from what GAG re-ran of that failed attempt. It returns the trigger and the cause GAG
-// re-ran the job for, "" unless the trigger is gag.
+// re-ran the job for, "" unless the trigger is gag. A single-job re-run takes the job's
+// dependents with it, so it has collateral too.
 func pairFailure(r *rerunRecord, failed int, job string) (trigger, cause string) {
 	if r == nil {
 		return rerunTriggerOther, ""
@@ -496,10 +497,8 @@ func pairFailure(r *rerunRecord, failed int, job string) (trigger, cause string)
 		return rerunTriggerOther, ""
 	case slices.Contains(a.Jobs, job):
 		return rerunTriggerGAG, a.Cause
-	case a.Scope == rerunScopeFailedJobs:
-		return rerunTriggerGAGCollateral, ""
 	}
-	return rerunTriggerOther, ""
+	return rerunTriggerGAGCollateral, ""
 }
 
 // rerunOutcomeEvents are the triggering events the outcome metric names; any other
