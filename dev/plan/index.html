@@ -3110,7 +3110,7 @@ Each has inline ✓ markers per item.</p>
 <tr>
 <td><a href="q1344-scaleset-delete/">q1344-scaleset-delete.md</a></td>
 <td>Investigation J (Q1344): whether deleting a scale set at GitHub concludes or keeps its queued job, removes its runner records, and stops a same-name successor taking the job, which decides drain-then-delete on rename versus an accepted residual</td>
-<td>ⓘ Probe built and stub-tested 2026-11-12; live run pending</td>
+<td>ⓘ Measured 2026-11-22 on github.com: the delete is accepted and removes the runner record, but the queued job stays queued and a same-name successor receives it; drain-then-delete versus the documented residual is open in <a href="../queue/Q1344/">Q1344</a></td>
 </tr>
 <tr>
 <td><a href="q710-overlong-paragraphs/">q710-overlong-paragraphs.md</a></td>

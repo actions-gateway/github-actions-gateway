@@ -4306,7 +4306,8 @@ The namespace <code>ResourceQuota</code> now has to hold both pools at their <co
 <li><strong>Every <code>runnerLabel</code> is a <code>runs-on</code> match target</strong>, so a workflow may name the set with a single label or with an array (<code>runs-on: [linux, gpu]</code>).
   Concurrency is governed by <code>maxWorkers</code>/<code>priorityTiers</code> (advertised to GitHub as the scale set's capacity), not by a listener count.</li>
 <li><strong>The first label names the scale set</strong>, which makes it the set's identity at GitHub.
-  Reordering the list renames the scale set and orphans the old one, so append rather than prepend.</li>
+  Reordering the list renames the scale set and orphans the old one, so append rather than prepend.
+  An orphan stays registered at GitHub, and another tenant bound to the same org can claim its name and adopt it, queued jobs and all, so <a href="../security-operations/#retire-a-scale-set-when-its-runner-set-is-renamed-or-deleted">retire it</a> after a rename or a deleted set.</li>
 <li><strong>The first label is unique per GitHub org, enterprise, or repo.</strong> Two sets claiming the same <code>runnerLabels[0]</code> would register the same scale-set name at GitHub; the second is rejected.
   The boundary is the <code>githubURL</code> the set's gateway names, <strong>not the namespace</strong>: two sets in different namespaces whose gateways point at the same org still collide, so a shard of one org across namespaces needs distinct first labels per shard.
   Later labels may overlap freely, and so may the <code>RunnerSet</code> names: two sets named <code>build</code> in different namespaces are fine with distinct first labels.</li>

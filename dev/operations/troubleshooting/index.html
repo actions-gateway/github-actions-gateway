@@ -7596,6 +7596,7 @@ Two ways in, and the condition message says which labels are affected either way
 </ul>
 <p><strong>Note on the first label.</strong> It names the scale set, which makes it the set's identity.
 Reordering <code>runnerLabels</code> renames the scale set, leaving the old one orphaned at GitHub with any queued jobs still pointed at it.
+Another tenant bound to the same org can then claim the old label and adopt the orphan with those jobs, so <a href="../security-operations/#retire-a-scale-set-when-its-runner-set-is-renamed-or-deleted">retire the old scale set</a>.
 The AGC moves to the new name on the next reconcile, deleting its session on the old scale set; before <code>v2.0.0</code> it stayed on the old one until the AGC restarted.
 Append rather than prepend.</p>
 <p><strong>Why it does not gate <code>Ready</code>.</strong> The set is still serving every job that targets the labels which <em>did</em> register, so it is a configuration mismatch rather than an outage.

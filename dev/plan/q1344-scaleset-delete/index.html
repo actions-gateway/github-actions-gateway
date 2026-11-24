@@ -2742,10 +2742,32 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-readings-2026-11-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The readings, 2026-11-22
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#what-each-answer-decides" class="md-nav__link">
     <span class="md-ellipsis">
       
         What each answer decides
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-readings-leave-to-decide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the readings leave to decide
       
     </span>
   </a>
@@ -2773,8 +2795,10 @@
 
 
 <h1 id="q1344--what-deleting-a-scale-set-does-to-its-jobs-and-runner-records">Q1344 — What deleting a scale set does to its jobs and runner records<a class="headerlink" href="#q1344--what-deleting-a-scale-set-does-to-its-jobs-and-runner-records" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> the probe for <a href="../../queue/Q1344/">Q1344</a> is built and unit-tested against the scale-set stub; it has not run against github.com.
-Nothing below is a finding yet.</p>
+<p><strong>Status:</strong> measured.
+Investigation J ran both arms against github.com on 2026-11-22, and the readings are in <a href="#the-readings-2026-11-22">The readings</a>.
+The delete is accepted and takes the runner record with it, but the queued job survives it and a scale set re-created under the same name receives that job, so a delete alone does not protect the queued jobs; only draining does.
+Which fix follows is open in <a href="../../queue/Q1344/">Q1344</a>, laid out in <a href="#what-the-readings-leave-to-decide">What the readings leave to decide</a>.</p>
 <h2 id="the-question">The question<a class="headerlink" href="#the-question" title="Permanent link">&para;</a></h2>
 <p>A renamed or deleted <code>RunnerSet</code> leaves its scale set registered at GitHub, and the next tenant admitted onto that name adopts it.
 Three facts, read from source at <code>680d328</code> and not re-measured here:</p>
@@ -2841,12 +2865,66 @@ The key reaches the probe as a file path, per <a href="../../development/github-
 <li><strong>Measurement 4 picks up a different run.</strong> It matches on the fixture's run id and logs any other assignment it ignores; a second fixture dispatch inside the window would show up there.</li>
 <li><strong>A quiet window is not an absence until both records were read.</strong> The job status and the runner listing are separate records, and each verdict names the one it read.</li>
 </ul>
+<h2 id="the-readings-2026-11-22">The readings, 2026-11-22<a class="headerlink" href="#the-readings-2026-11-22" title="Permanent link">&para;</a></h2>
+<p>Karl ran both arms against <code>actions-gateway/github-actions-gateway</code> on github.com; the verdict lines below are quoted from the probe's logs, which stay outside the repository.
+Times are PST.</p>
+<table>
+<thead>
+<tr>
+<th>Arm</th>
+<th>T0 state (<code>STAGED</code>)</th>
+<th>1: delete</th>
+<th>2: job</th>
+<th>3: runner record</th>
+<th>4: same-name successor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Queued</td>
+<td>10:16:07.225, <code>scaleSetId=29</code>, <code>runId=45054082229</code>, <code>jobId=137305352512</code>, <code>jobStatus=queued</code>, no runner</td>
+<td><code>DELETE-ACCEPTED</code>: <code>DELETE</code> 204, gone by name at 10:16:07.603</td>
+<td><code>JOB-NOT-CONCLUDED (queued)</code>, history <code>queued/</code> over the 20 min window</td>
+<td>none minted on this arm</td>
+<td><code>JOB-INHERITED</code> at 10:36:09.999: re-created <code>scaleSetId=30</code> received a <code>JobAssigned</code> for <code>runId=45054082229</code> (new job id <code>8ddb9b6c-878c-5ecd-9de6-0254de88a393</code>)</td>
+</tr>
+<tr>
+<td>Assigned</td>
+<td>10:39:10.261, <code>scaleSetId=31</code>, <code>runId=45056284852</code>, <code>jobId=137312136885</code>, <code>jobStatus=queued</code>, runner <code>gag-q1344-ssdelete-84dc72ee</code></td>
+<td><code>DELETE-ACCEPTED</code> at 10:39:10.625</td>
+<td><code>JOB-NOT-CONCLUDED (queued)</code></td>
+<td><code>RUNNER-REMOVED</code>: no longer listed 1 s after T0</td>
+<td><code>JOB-INHERITED</code> at 10:59:13.347: re-created <code>scaleSetId=32</code> received <code>runId=45056284852</code> (new job id <code>f340abfc-1876-58f4-8210-03fc6aabe8c4</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Both runs are valid by <a href="#what-makes-a-result-invalid">the rules above</a>: each <code>STAGED</code> line read <code>queued</code> at T0, neither log has a <code>WARN</code> line other than the <code>JOB-INHERITED</code> verdict, and measurement 4 matched the fixture's own run id.
+Cleanup deleted scale sets 30 and 32, and both fixture runs read <code>completed</code>/<code>cancelled</code> afterwards.
+The logs were checked for key material and hold none.</p>
+<p>Three things follow from the readings rather than from source:</p>
+<ul>
+<li><strong>GitHub keeps a job queued against the name, not the scale-set id.</strong> Each successor had a new id, and its session's owner name, <code>gag-q1344-successor</code>, is set in the probe's source rather than read from the logs; it was offered the deleted set's job about 20 minutes after T0, once the window ended and the probe re-created the set.</li>
+<li><strong>A delete does not conclude or cancel the job.</strong> It stayed <code>queued</code> for the whole window on both arms.</li>
+<li><strong>The runner record goes with the scale set.</strong> So a delete would retire the records leak a rename leaves, which deregistration in the AGC would otherwise have to do.</li>
+</ul>
 <h2 id="what-each-answer-decides">What each answer decides<a class="headerlink" href="#what-each-answer-decides" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Delete refused while a job or record exists:</strong> an AGC deleting on stop has to drain first and retry, so the fix needs a drain signal it does not have today.</li>
 <li><strong>Delete accepted, job concluded, record removed, and <code>JOB-NOT-INHERITED</code>:</strong> drain-then-delete is sound, and the delete alone stops a successor taking queued jobs.</li>
 <li><strong><code>JOB-INHERITED</code>:</strong> a delete does not protect queued jobs from a same-name successor; only draining does, and the adoption's remaining delta is the inherited runner group, which declaring <code>runnerGroup</code> closes (Q712).</li>
 <li><strong><code>RUNNER-LEFT</code>:</strong> a delete leaves the records leak in place, and the AGC has to deregister them before deleting.</li>
+</ul>
+<p>The readings are the <code>JOB-INHERITED</code> and <code>RUNNER-REMOVED</code> rows.</p>
+<h2 id="what-the-readings-leave-to-decide">What the readings leave to decide<a class="headerlink" href="#what-the-readings-leave-to-decide" title="Permanent link">&para;</a></h2>
+<p>A delete alone closes only the group half: the successor creates a fresh scale set, so it no longer inherits the first tenant's runner group, but it still receives the queued jobs.
+Two directions remain, and they differ in what an operator does and what the AGC has to carry:</p>
+<ul>
+<li><strong>Drain, then delete, in the AGC.</strong> On a rename or a <code>RunnerSet</code> delete, the old name's listener keeps serving until no job is queued on it, then deletes the scale set, which also removes its runner records.
+  For that to protect the queue, admission has to keep the old name claimed until the delete lands, because today it releases the name the moment the change is stored and a successor could claim it mid-drain.
+  It needs a drain signal the listener does not have, a claim on a name no stored <code>RunnerSet</code> holds, and a listener that outlives its spec (a finalizer on delete).
+  Jobs queued after the delete still go to whoever claims the label next, as any job targeting a label does.</li>
+<li><strong>Keep the residual and close the group half by declaration.</strong> The operator step stays as it is, drain and then delete, now with the measured reason, and every set binds a runner group through <code>runnerGroup</code> or <code>defaultRunnerGroup</code> (Q712, shipped), so an adopted scale set is moved into the claiming tenant's group.
+  No code changes; the queued-job half stays an operator step.</li>
 </ul>
 
 

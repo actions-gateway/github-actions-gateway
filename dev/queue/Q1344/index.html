@@ -23,7 +23,7 @@
     
     
       
-        <title>A renamed or deleted set's scale set is adopted by the next tenant - GitHub Actions Gateway</title>
+        <title>Choose drain-then-delete or the documented residual for a renamed set - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-renamed-or-deleted-sets-scale-set-is-adopted-by-the-next-tenant" class="md-skip">
+        <a href="#choose-drain-then-delete-or-the-documented-residual-for-a-renamed-set" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A renamed or deleted set's scale set is adopted by the next tenant
+              Choose drain-then-delete or the documented residual for a renamed set
             
           </span>
         </div>
@@ -2703,21 +2703,26 @@
   
 
 
-<h1 id="a-renamed-or-deleted-sets-scale-set-is-adopted-by-the-next-tenant">A renamed or deleted set's scale set is adopted by the next tenant<a class="headerlink" href="#a-renamed-or-deleted-sets-scale-set-is-adopted-by-the-next-tenant" title="Permanent link">&para;</a></h1>
-<p>When a set's first label is renamed, or a <code>RunnerSet</code> is deleted, the old scale set stays registered at GitHub, and the next tenant admitted onto that name adopts it by exact name.
-A job from the first tenant's repositories that still targets the old label then lands on the second tenant's runners.</p>
-<p><strong>Read from source, not measured</strong> (Q1325's reviewer, 2026-11-11, at #2306 head <code>4b373bc</code>).
-No AGC path calls <code>DeleteRunnerScaleSet</code>, and <a href="../../development/testing/#finding-and-pruning-orphan-scale-sets">Finding and pruning orphan scale sets</a> records that a rename leaves the old one registered.
-Admission releases the name as soon as the rename or delete is stored, so a second tenant in the same scope can claim it.
-That tenant's listener runs <code>ensureScaleSet</code>, <code>GetRunnerScaleSetByName</code> returns the orphan as an exact match, and it is adopted.
-If the second tenant declares no runner group, the orphan keeps the first tenant's group (the <code>!pinned</code> return); if it declares one, <code>UpdateRunnerScaleSet</code> moves the orphan into it.
-Q1325 removed the stale session a rename used to leave on the old scale set, which made this worse while it lasted, but not the adoption.</p>
-<p><strong>Same root, smaller cost.</strong> After a rename, a reaped worker pod minted under the old name fails <code>scalesetlistener.MintedBy</code> against the new one, and the new listener's start-up sweep lists only the new prefix, so the old name's runner records are never deregistered.
-That is a records leak rather than a boundary.</p>
-<p><strong>Fix direction, not decided.</strong> Delete the old scale set when a listener stops for a rename or its set is deleted, once its jobs have drained, so the name is released at GitHub as well as in the cluster; that would also take its runner records with it, which is unmeasured.
-Otherwise state the adoption in <code>05-security.md</code> as an accepted residual with the operator step that closes it.
-A measurement first: whether deleting a scale set at github.com removes its runner records and fails or requeues its queued jobs.
-Investigation J (<a href="../../plan/q1344-scaleset-delete/">q1344-scaleset-delete.md</a>) takes it, and also whether a scale set re-created under the same name receives the deleted one's queued job: a job targets a label, so if it does, deleting releases nothing a successor cannot take and only draining protects the queue.</p>
+<h1 id="choose-drain-then-delete-or-the-documented-residual-for-a-renamed-set">Choose drain-then-delete or the documented residual for a renamed set<a class="headerlink" href="#choose-drain-then-delete-or-the-documented-residual-for-a-renamed-set" title="Permanent link">&para;</a></h1>
+<p>When a set's first label is renamed, or a <code>RunnerSet</code> is deleted, the old scale set stays registered at GitHub, and the next tenant admitted onto that name adopts it by exact name, with the jobs still queued on it and, unless the adopting set declares <code>runnerGroup</code>, the first tenant's runner group.
+<a href="../../design/05-security/#cross-tenant-job-acquisition-via-a-shared-scale-set-name">05-security.md</a> states it as an open residual, and <a href="../../operations/security-operations/#retire-a-scale-set-when-its-runner-set-is-renamed-or-deleted">security-operations.md</a> gives the operator step that closes it by hand: drain, then delete the old scale set with the probe's cleanup mode.</p>
+<p><strong>Measured 2026-11-22, Investigation J on github.com</strong> (<a href="../../plan/q1344-scaleset-delete/#the-readings-2026-11-22">readings</a>): GitHub accepts the delete with a job queued and a runner record live, and removes the record, but the job stays queued, and a scale set re-created under the same name received it on both arms (runs <code>45054082229</code> and <code>45056284852</code>).
+So a delete alone does not protect the queued jobs; only draining does.
+A delete after the drain still stops the successor inheriting the runner group and retires the runner records a rename leaves behind.</p>
+<p><strong>The open question is which of two fixes, and it is a security call</strong> (<a href="../../plan/q1344-scaleset-delete/#what-the-readings-leave-to-decide">both laid out</a>):</p>
+<ul>
+<li><strong>Drain, then delete, in the AGC.</strong> The old name's listener serves until no job is queued, then deletes the scale set.
+  Admission has to keep the old name claimed until the delete lands, because <code>scalesetscope.Of</code> builds the inventory from stored <code>RunnerSet</code>s and releases a renamed name at once (<code>cmd/gmc/internal/scalesetscope/scalesetscope.go:187:func Of(</code>); the listener needs a drain signal and has to outlive a deleted spec.</li>
+<li><strong>Keep the residual and close the group half by declaration.</strong> The operator step stays, now with the measured reason, and every set binds a runner group through <code>runnerGroup</code> or <code>defaultRunnerGroup</code> (Q712, shipped).
+  No code.</li>
+</ul>
+<p><strong>Ask:</strong> which of the two Karl wants, put to Karl when this row is picked up and before any code.
+No choice has been made, and the answer turns on whether the AGC itself has to protect the queued jobs or an operator step is enough.
+The AGC route needs no operator step; it costs a drain signal the listener lacks, a listener that outlives its spec, and a name that admission keeps claimed with no stored <code>RunnerSet</code> behind it for as long as jobs stay queued.
+The operator route needs no code; it costs a runner group bound on every set, and a queue that goes to whoever claims the name when the step is skipped.
+Under either, a job queued after the delete goes to whoever claims the label next.</p>
+<p><strong>Not the fix: moving an unpinned adoption into the default group.</strong> <code>resolveRunnerGroup</code> deliberately leaves an existing scale set where it is, because an operator may have moved it into a narrower group at GitHub, and dragging it into the default group by omission widens that boundary.</p>
+<p><strong>Done when</strong> the choice is made and either the AGC drains and deletes on rename and on <code>RunnerSet</code> delete, holding the name at admission until it has, with 05-security.md and the operator step reduced to match, or 05-security.md records the residual as final and the onboarding docs require a runner group for every set.</p>
 
 
 
