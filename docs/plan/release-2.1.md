@@ -4,7 +4,7 @@
 > Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22), and Q1382's dogfood reading (2026-11-24); the ledger's open rows still gate the tag and nothing rides yet.
 > Three of them are the readings' refutations, Q1374 to Q1376, gated on 2026-11-22 because each breaks a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the `trigger="other"` rate this release measures success by, biased in opposite directions.
 > Q1381 gates it too, settled 2026-11-22: its re-runs land in merge-queue runs nothing reads and each spends a `maxEvictionRetries` slot, which is the opposite of what this release is for.
-> Q1389 gates it too: the classes this release adds read the same record as the out-of-memory class, and if that record names the wrong job they re-run a genuine failure.
+> Q1389 gates it too: the out-of-memory class `v2.0.0` shipped can act on the wrong job where a worker dies before its pod names the job it ran, and Q1319 fixes only the re-run half of that, not the raised limit.
 > The wrong-job half is read from source, so its first step is reproducing it.
 > Nothing here is a commitment to a date.
 
