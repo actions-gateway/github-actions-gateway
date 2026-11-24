@@ -3,7 +3,7 @@
 **Status:** ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
 Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; so are Q1181's `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` and Q1320's `already_rerun`, `run_succeeded` and `worker_unstartable` on the scale-set tier (`rerun_futility.go`), `superseded` for merge groups included (Q1381); so is Q555's detection (`flaky_jobs.go`): the `failures` map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up whose [readings](#readings-from-the-dogfood-turn-up-2026-11-22) (Q1236) refute three of its assumptions, one of them since corrected (Q1376), with the colocated proxy's readiness added by Q1237; the rest is not.
 It turns [the requirements draft](q555-flaky-job-retry.md) into components against the code as it stands, one per backlog row, and answers the draft's [open questions](q555-flaky-job-retry.md#open-questions-for-the-design-session).
-Each answer is marked **Decided** (the maintainer chose it, 2026-10-12), **Decide** (a recommendation still awaiting sign-off) or **Research** (needs a measurement before anyone can choose).
+Each answer is marked **Decided** (the maintainer chose it, 2026-10-12), **Decide** (a recommendation still awaiting sign-off) or **Research** (needs a measurement before anyone can choose); one already built is marked **Built**, with its reasons.
 The draft says *what* and *why*; this says *how*.
 Code facts were read from source on 2026-10-10 and 2026-10-11 unless marked otherwise; the assumptions the design rests on that nobody has measured are listed [first](#measure-before-building).
 
@@ -849,7 +849,7 @@ None of these ships until someone asks for it; each then lands as one optional m
 
 ## Run- or job-granular re-run (open question 2)
 
-**Decide**, with the maintainer's preference recorded: re-run only the job GAG classified, unless something rules it out (2026-10-12).
+**Built** for the out-of-memory class (Q1319): re-run only the job GAG classified, because a run-granular re-run takes a sibling's genuine failure too and hides it where it passes.
 M6's readings rule nothing out, and they change how the job is found: by its runner's name rather than its own ([below](#what-the-readings-recommend)).
 GitHub re-runs no finer than a job, through three endpoints:
 
@@ -872,13 +872,14 @@ Job-granular avoids that, and costs:
   GitHub keeps the upstream jobs' outputs and artifacts for the re-run ([measured](#m6-readings-from-the-job-granular-probe-2026-11-24)), so the case is state outside GitHub only.
   The fallback for this case is the same `rerun-failed-jobs`, and choosing it needs a signal GAG does not have, so the first version does not try; `same_class_again` stops the repeat.
 
-**Built** (Q1319) for the out-of-memory class; detection's `gag_collateral` count measures what run-granular costs on the arms that stay so.
-What it does is in [04-operational-flows.md](../design/04-operational-flows.md#the-re-run-takes-only-the-killed-jobs-q1319), and four choices there are not in the M6 readings:
+Detection's `gag_collateral` count measures what run-granular costs on the arms that stay so.
+What is built is in [04-operational-flows.md](../design/04-operational-flows.md#the-re-run-takes-only-the-killed-jobs-q1319), and four choices there are not in the M6 readings:
 
 - **A run whose failed jobs were all killed takes one `rerun-failed-jobs`**, since it re-runs nothing else that ended `failure` and spends one slot.
 - **Several killed jobs beside another failure go one attempt at a time**, a slot each, so a run's budget bounds its attempts and no genuine failure is re-run.
   Two killed jobs spend the default budget of 2, so a third kill is `budget_exhausted`.
   The common cost is a job that aggregates the others (`if: always()`, red when one it needs is): it is another failure, since the jobs list carries no `needs:`, so three killed legs of a matrix behind one recover two where `rerun-failed-jobs` recovers three.
+  [Q1401](../queue/Q1401.md) recovers them all from what the first single-job re-run takes along.
   The alternatives: one `rerun-failed-jobs` for the set, which recovers them all on one slot and re-runs the genuine failure, as this release [must not](release-2.1.md#what-this-release-must-not-do); or one slot for the whole set, which lets one reservation start an attempt for each kill, up to 15.
 - **A cancelled job is not another failure**, so a killed leg of a fail-fast matrix and its cancelled siblings take one `rerun-failed-jobs` where no other job ended `failure`, as they did before Q1319.
   A timeout or a concurrency cancel beside the kill is re-run with them, since the list spells the three the same ([readings](#readings-for-a-cancelled-sibling-2026-11-24)); telling them apart is [Q1399](../queue/Q1399.md).

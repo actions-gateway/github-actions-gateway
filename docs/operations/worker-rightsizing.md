@@ -167,7 +167,8 @@ Four things follow:
   Where another job failed on its own, they are re-run one after another, each once the attempt before it concludes and each on its own slot, until `maxEvictionRetries` is spent and the rest get `EvictionRetriesExhausted`.
   A job that reports on the others (`if: always()`, red when one it needs is) is another failed job here, because GitHub's job list does not say what needs what; raise `maxEvictionRetries` where such a workflow loses several jobs at once.
 - **A cancelled job is re-run with the killed one where no other job failed**, such as the unfinished legs that GitHub's default `fail-fast: true` cancels with a killed leg.
-  GitHub's job list spells a job past its `timeout-minutes` the same way, so that one is re-run too.
+  GitHub's job list spells a job past its `timeout-minutes` the same way, and one a concurrency group cancelled, so those are re-run too.
+  A run GitHub itself concludes `cancelled`, as it can one holding a failure and a timeout, is not re-run at all (`run_cancelled`).
   Where another job failed, a job that reports on the matrix included, the cancelled legs are not re-run: re-run the run's failed jobs by hand, or set `fail-fast: false` on a matrix whose legs outgrow their memory.
 
 Every failed job is re-run, as a disruption's recovery does, where the AGC cannot tell which jobs were killed: GitHub's job list cannot be read, the worker's pod names no runner and its job name is not unique, a disruption recovery is re-running the same attempt, or 16 or more workers of one attempt were killed.
