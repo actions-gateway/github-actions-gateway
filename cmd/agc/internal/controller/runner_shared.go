@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -203,10 +204,10 @@ func reconcileRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
 
 // workerPodPhaseChangePredicate restricts a worker-Pod watch to this project's
 // worker pods (those carrying labelKey) and to the events that carry new status
-// for the owning CR: Create, Delete, phase-changing Updates, and the Update where a
-// pod newly becomes a scheduler-preemption victim. Generic events and every other
-// Update are dropped (status heartbeats don't change observable state). labelKey is
-// LabelRunnerGroup (v1) or LabelRunnerSet (v2).
+// for the owning CR: Create, Delete, phase-changing Updates, and the Updates where a
+// pod newly becomes a scheduler-preemption victim or restarts a container. Generic
+// events and every other Update are dropped (status heartbeats don't change observable
+// state). labelKey is LabelRunnerGroup (v1) or LabelRunnerSet (v2).
 //
 // The preemption edge exists because that disruption changes no phase (Q497). The
 // scheduler stamps a DisruptionTarget condition and deletes the victim, which can leave
@@ -216,6 +217,9 @@ func reconcileRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
 // left to read the workflow-run identity off. It fires at most once per pod (the
 // condition is only added, never removed) and only for pods already carrying the
 // worker label, so it adds no steady-state reconcile traffic.
+//
+// The restart edge exists because a restarted sidecar's crash is in no later phase change:
+// the kubelet drops it from the status it writes as the pod finishes (Q1376).
 func workerPodPhaseChangePredicate(labelKey string) predicate.Predicate {
 	hasLabel := func(obj client.Object) bool {
 		_, ok := obj.GetLabels()[labelKey]
@@ -237,9 +241,20 @@ func workerPodPhaseChangePredicate(labelKey string) predicate.Predicate {
 			if oldPod.Status.Phase != newPod.Status.Phase {
 				return true
 			}
+			if restarts(newPod) > restarts(oldPod) {
+				return true
+			}
 			return !provisioner.PreemptedByScheduler(oldPod) && provisioner.PreemptedByScheduler(newPod)
 		},
 	}
+}
+
+// restarts is how many times the pod's containers have restarted, sidecars included.
+func restarts(pod *corev1.Pod) (n int32) {
+	for _, cs := range slices.Concat(pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses) {
+		n += cs.RestartCount
+	}
+	return n
 }
 
 // workerPodCounts is the per-owner count of worker pods by phase, returned

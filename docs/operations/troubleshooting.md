@@ -3087,8 +3087,9 @@ A quota-blocked job is deliberately absent from this table: it is **never claime
 > Detection reads `JobCompleted` messages, is on for every `RunnerSet` with no field, and changes no behaviour.
 
 When a scale-set job completes `failed`, the AGC records it in the set's failure ledger, ConfigMap `scaleset-failures-<runnerset>`, key `failures.json`, under `failures["<runID>/<job name>"]`.
-The record holds the worker's state (`context`): pod phase, reason and a truncated message, its conditions, the node and pod IP, and each container's termination reason, exit code and restart count.
-For a job that ends on a step's result, GitHub's completion arrives before the worker's pod finishes, so the context is the pod while still `Running`, often before any container has terminated; a worker killed out from under its job, such as by an out-of-memory kill, is recorded as it finished (measured 2026-11-22, Q1376).
+The record holds the worker's state (`context`): pod phase, reason and a truncated message, its conditions, the node and pod IP, and each container's termination reason, exit code and restart count, with the termination before it (`previousReason`, `previousExitCode`) for a sidecar that crashed, restarted and then exited.
+The context is the worker as it finished.
+For a job that ends on a step's result, GitHub's completion arrives while the worker's pod still runs (measured 2026-11-22), so the record first holds the pod as `Running` and is rewritten when the pod finishes (Q1376).
 A `canceled` completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing, and neither does a job that reached its `timeout-minutes`, which GitHub also reports `canceled` (Q1374).
 
 When a later attempt of the same job (same run, same job name) completes, it is paired with that record and counted in `actions_gateway_scaleset_job_reruns_total{trigger}`:
@@ -3101,7 +3102,8 @@ When a later attempt of the same job (same run, same job name) completes, it is 
 
 A flaky verdict counts `actions_gateway_scaleset_flaky_jobs_total` and emits a Normal `FlakyJobDetected` Event.
 
-**Read a failure's context** from the AGC log, which carries it on every failed job, at Warn when it shows a platform fault and Info otherwise:
+**Read a failure's context** from the AGC log, which carries it on every failed job, at Warn when it shows a platform fault and Info otherwise.
+A job recorded while its worker still ran is logged twice: at its completion, and with `workerFinished=true` once the worker finishes, where a Warn names only a fault the first line did not.
 
 ```bash
 kubectl logs -n <agc-namespace> deploy/<agc-deployment> | grep 'scale-set job failed'
@@ -3115,13 +3117,15 @@ kubectl get configmap -n <namespace> scaleset-failures-<runnerset> -o jsonpath='
 
 **A `PlatformFaultOnFailedJob` Warning** names the fault.
 `OOMKilled` means the job needs more memory than the worker template gives it; a `DisruptionTarget` condition or a `Failed` pod means the node or the scheduler removed the worker, which the [disruption arms](#which-disruptions-auto-re-run-a-job-and-which-never-do) recover on their own.
-`EgressProxy <name> has no ready replicas` means no proxy pod could carry the job's egress when the worker finished.
+A fault that came after the job's completion, such as a node drain while the runner shut down, stays in the context and raises no Warning.
+`EgressProxy <name> has no ready replicas` means no proxy pod could carry the job's egress when the job completed, or when the worker finished if that came first.
 `EgressProxy <name> not Ready`, with its ready count, means the pool had fewer ready pods than its floor (`spec.minReplicas`, or the Deployment's replicas under bring-your-own autoscaling), as during a rolling update or after an eviction, so the remaining pods may still have carried the job's egress.
 Read the pool with `kubectl get egressproxy -n <namespace> <name>`.
 
 **What detection cannot see.** Node conditions are not recorded (the AGC has no `nodes` read), nor is a registry mirror's readiness.
 A proxy pool shared from another namespace is recorded as `proxy.mode: shared` with no readiness, since the AGC's cache does not reach that namespace.
 A snapshot is held in memory, so a failure recorded after an AGC restart, or after more than 1,024 workers finished with no completion yet, has no `context`.
+An AGC restart between a job's failure and its worker's finish leaves the record's `context` at `podPhase: Running`, and so does a worker whose pod is removed before it finishes, such as a force delete.
 A re-run more than 7 days after the failure, or one that lands on another `RunnerSet`, pairs with nothing and counts nothing.
 Two jobs of one run that share a `name:` share one record, so one's success pairs with the other's failure and counts as a flake nobody re-ran (Q1375).
 

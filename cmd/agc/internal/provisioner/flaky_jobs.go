@@ -1,6 +1,7 @@
 package provisioner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -39,9 +40,13 @@ const (
 	rerunTriggerOther = "other"
 )
 
-// maxWorkerSnapshots bounds the snapshots awaiting their job's completion. A snapshot
-// is consumed by its completion, so the bound only binds when completions stop arriving.
+// maxWorkerSnapshots bounds the snapshots awaiting their job's completion, and the
+// recorded failures awaiting their worker's finish. Each is consumed by what it waits
+// for, so the bound only binds when those stop arriving.
 const maxWorkerSnapshots = 1024
+
+// failureAmendBudget bounds one amendFailedJob off the pod watch.
+const failureAmendBudget = 30 * time.Second
 
 // snapshotMessageMax truncates the pod's status message in a snapshot.
 const snapshotMessageMax = 256
@@ -75,9 +80,10 @@ func failureKey(runID, jobName string) string {
 	return runID + "/" + jobName
 }
 
-// workerSnapshot is the platform context of a worker at its terminal transition, from
-// objects the AGC already reads. Node conditions are not in it: the AGC has no nodes
-// RBAC, and the pod's DisruptionTarget condition carries what a node loss shows.
+// workerSnapshot is the platform context of a worker at its terminal transition, or as
+// its job's completion found it, from objects the AGC already reads. Node conditions are
+// not in it: the AGC has no nodes RBAC, and the pod's DisruptionTarget condition carries
+// what a node loss shows.
 type workerSnapshot struct {
 	// Proxy is the set's egress proxy pool, nil for direct egress or where no reader
 	// was supplied.
@@ -97,6 +103,8 @@ type workerSnapshot struct {
 	// carries no identity of its own.
 	runID, jobName string
 	takenAt        time.Time
+	// gone: the pod's deletion event, after which nothing reports on the worker.
+	gone bool
 }
 
 // Proxy modes in a snapshot.
@@ -129,16 +137,23 @@ type snapshotCondition struct {
 	Type   string `json:"type"`
 	Status string `json:"status"`
 	Reason string `json:"reason,omitempty"`
+	at     time.Time
 }
 
 // containerSnapshot is one container's last termination, init containers and native
-// sidecars included.
+// sidecars included, and the one before it where a restarted container has since exited:
+// the crash, which the pod's own shutdown replaces. The kubelet drops that one from the
+// status it writes as the pod finishes, so it comes from an earlier event
+// (testdata/sidecar_restart_statuses.json, kubelet v1.35.5).
 type containerSnapshot struct {
-	Name         string `json:"name"`
-	Reason       string `json:"reason,omitempty"`
-	ExitCode     int32  `json:"exitCode"`
-	RestartCount int32  `json:"restartCount,omitempty"`
-	sidecar      bool
+	Name                   string `json:"name"`
+	Reason                 string `json:"reason,omitempty"`
+	ExitCode               int32  `json:"exitCode"`
+	RestartCount           int32  `json:"restartCount,omitempty"`
+	PreviousReason         string `json:"previousReason,omitempty"`
+	PreviousExitCode       int32  `json:"previousExitCode,omitempty"`
+	sidecar                bool
+	finishedAt, previousAt time.Time
 }
 
 // snapshotOf reads pod into a snapshot.
@@ -160,17 +175,21 @@ func snapshotOf(pod *corev1.Pod, now time.Time) *workerSnapshot {
 		s.StartTime = &t
 	}
 	for _, c := range pod.Status.Conditions {
-		s.Conditions = append(s.Conditions, snapshotCondition{Type: string(c.Type), Status: string(c.Status), Reason: c.Reason})
+		s.Conditions = append(s.Conditions, snapshotCondition{
+			Type: string(c.Type), Status: string(c.Status), Reason: c.Reason, at: c.LastTransitionTime.Time})
 	}
 	add := func(statuses []corev1.ContainerStatus, sidecar bool) {
 		for _, cs := range statuses {
 			c := containerSnapshot{Name: cs.Name, RestartCount: cs.RestartCount, sidecar: sidecar}
-			term := cs.State.Terminated
+			term, prev := cs.State.Terminated, cs.LastTerminationState.Terminated
 			if term == nil {
-				term = cs.LastTerminationState.Terminated
+				term, prev = prev, nil
 			}
 			if term != nil {
-				c.Reason, c.ExitCode = term.Reason, term.ExitCode
+				c.Reason, c.ExitCode, c.finishedAt = term.Reason, term.ExitCode, term.FinishedAt.Time
+			}
+			if prev != nil {
+				c.PreviousReason, c.PreviousExitCode, c.previousAt = prev.Reason, prev.ExitCode, prev.FinishedAt.Time
 			}
 			s.Containers = append(s.Containers, c)
 		}
@@ -180,11 +199,41 @@ func snapshotOf(pod *corev1.Pod, now time.Time) *workerSnapshot {
 	return s
 }
 
+// finished reports whether the worker had reached a terminal phase.
+func (s *workerSnapshot) finished() bool {
+	return s.Phase == string(corev1.PodSucceeded) || s.Phase == string(corev1.PodFailed)
+}
+
+// ended reports whether nothing after s can say more of the worker.
+func (s *workerSnapshot) ended() bool {
+	return s.finished() || s.gone
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
 	return s[:n]
+}
+
+// carryTerminations adds the terminations earlier read that s's own status has dropped.
+func (s *workerSnapshot) carryTerminations(earlier *workerSnapshot) {
+	for i := range s.Containers {
+		c := &s.Containers[i]
+		for _, e := range earlier.Containers {
+			switch {
+			case e.Name != c.Name || e.finishedAt.IsZero():
+			case c.finishedAt.IsZero():
+				c.Reason, c.ExitCode, c.finishedAt = e.Reason, e.ExitCode, e.finishedAt
+				c.PreviousReason, c.PreviousExitCode, c.previousAt = e.PreviousReason, e.PreviousExitCode, e.previousAt
+			case !c.previousAt.IsZero():
+			case e.finishedAt.Equal(c.finishedAt):
+				c.PreviousReason, c.PreviousExitCode, c.previousAt = e.PreviousReason, e.PreviousExitCode, e.previousAt
+			default:
+				c.PreviousReason, c.PreviousExitCode, c.previousAt = e.Reason, e.ExitCode, e.finishedAt
+			}
+		}
+	}
 }
 
 // faults lists what in the snapshot points at the platform rather than the job: a
@@ -193,23 +242,30 @@ func truncate(s string, n int) string {
 // has no ready replica. A sidecar's non-zero exit is not one, since sidecars are
 // routinely killed when the runner finishes.
 func (s *workerSnapshot) faults() []string {
+	return s.faultsBy(time.Time{})
+}
+
+// faultsBy is faults limited to what had happened by end, the zero time for no limit.
+// The pod's phase carries no date, so a limit leaves it out.
+func (s *workerSnapshot) faultsBy(end time.Time) []string {
 	if s == nil {
 		return nil
 	}
+	by := func(t time.Time) bool { return end.IsZero() || (!t.IsZero() && !t.After(end)) }
 	var out []string
-	if s.Phase == string(corev1.PodFailed) {
+	if s.Phase == string(corev1.PodFailed) && end.IsZero() {
 		out = append(out, strings.TrimSpace("pod Failed "+s.Reason))
 	}
 	for _, c := range s.Conditions {
-		if c.Type == string(corev1.DisruptionTarget) && c.Status == string(corev1.ConditionTrue) {
+		if c.Type == string(corev1.DisruptionTarget) && c.Status == string(corev1.ConditionTrue) && by(c.at) {
 			out = append(out, "DisruptionTarget "+c.Reason)
 		}
 	}
 	for _, c := range s.Containers {
 		switch {
-		case c.Reason == "OOMKilled":
+		case c.Reason == "OOMKilled" && by(c.finishedAt), c.PreviousReason == "OOMKilled" && by(c.previousAt):
 			out = append(out, "container "+c.Name+" OOMKilled")
-		case c.Name == runnerContainer && !c.sidecar && c.ExitCode != 0:
+		case c.Name == runnerContainer && !c.sidecar && c.ExitCode != 0 && by(c.finishedAt):
 			out = append(out, fmt.Sprintf("container %s exited %d", c.Name, c.ExitCode))
 		}
 	}
@@ -228,30 +284,60 @@ func (s *workerSnapshot) faults() []string {
 	return out
 }
 
-// workerSnapshots holds each scale-set worker's snapshot from its terminal transition
-// until its job's completion takes it, keyed by namespace/runner name. A restart loses
-// them, and the records written after it say the context is unknown.
-type workerSnapshots struct {
-	mu   sync.Mutex
-	byID map[string]*workerSnapshot
+// recordedFailure is a failed job whose completion found its worker not yet ended.
+type recordedFailure struct {
+	target                       Target
+	runID, jobName, jobID, cause string
+	// snap is the worker as the completion found it at that time, and context its JSON.
+	// last is the latest read since, with the terminations every read before it showed.
+	snap, last *workerSnapshot
+	context    json.RawMessage
+	at         time.Time
 }
 
-func (w *workerSnapshots) put(key string, s *workerSnapshot) {
+// workerSnapshots joins a scale-set worker's terminal snapshot to its job's completion,
+// keyed by namespace/runner name: byID holds the snapshots that arrived first, and
+// recorded the failures. A job that ends on a step's result completes before its worker
+// finishes, and one whose runner was killed after (measured on dogfood, 2026-11-22,
+// docs/design/04-operational-flows.md §4.2). A restart loses both.
+type workerSnapshots struct {
+	mu       sync.Mutex
+	byID     map[string]*workerSnapshot
+	recorded map[string]*recordedFailure
+}
+
+// awaits reports whether a recorded failure waits for the worker to finish.
+func (w *workerSnapshots) awaits(key string) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	return w.recorded[key] != nil
+}
+
+// put returns the recorded failure whose worker s ends, or keeps s as the latest read of
+// one whose worker runs on. With none waiting it stores s where it is the worker's
+// terminal transition, unless the worker's job has completed and nothing will take it.
+func (w *workerSnapshots) put(key string, s *workerSnapshot, jobCompleted bool) *recordedFailure {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if r := w.recorded[key]; r != nil {
+		s.carryTerminations(r.last)
+		r.last = s
+		if !s.ended() {
+			return nil
+		}
+		delete(w.recorded, key)
+		return r
+	}
+	// A finished pod's deletion is its reap, which says nothing its finish did not;
+	// storing it again would hold a slot no completion takes.
+	if jobCompleted || s.finished() == s.gone {
+		return nil
+	}
 	if w.byID == nil {
 		w.byID = map[string]*workerSnapshot{}
 	}
-	if _, ok := w.byID[key]; !ok && len(w.byID) >= maxWorkerSnapshots {
-		oldest := ""
-		for k, v := range w.byID {
-			if oldest == "" || v.takenAt.Before(w.byID[oldest].takenAt) {
-				oldest = k
-			}
-		}
-		delete(w.byID, oldest)
-	}
-	w.byID[key] = s
+	putBounded(w.byID, key, s, func(s *workerSnapshot) time.Time { return s.takenAt })
+	return nil
 }
 
 func (w *workerSnapshots) take(key string) *workerSnapshot {
@@ -260,6 +346,37 @@ func (w *workerSnapshots) take(key string) *workerSnapshot {
 	s := w.byID[key]
 	delete(w.byID, key)
 	return s
+}
+
+// hold keeps r until put brings its worker's end, or returns the snapshot of a worker that
+// ended since the completion looked.
+func (w *workerSnapshots) hold(key string, r *recordedFailure) *workerSnapshot {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if s := w.byID[key]; s != nil {
+		delete(w.byID, key)
+		s.carryTerminations(r.last)
+		return s
+	}
+	if w.recorded == nil {
+		w.recorded = map[string]*recordedFailure{}
+	}
+	putBounded(w.recorded, key, r, func(r *recordedFailure) time.Time { return r.at })
+	return nil
+}
+
+// putBounded sets m[key], dropping the oldest entry past maxWorkerSnapshots.
+func putBounded[T any](m map[string]T, key string, v T, at func(T) time.Time) {
+	if _, ok := m[key]; !ok && len(m) >= maxWorkerSnapshots {
+		oldest := ""
+		for k, v := range m {
+			if oldest == "" || at(v).Before(at(m[oldest])) {
+				oldest = k
+			}
+		}
+		delete(m, oldest)
+	}
+	m[key] = v
 }
 
 // failureIndex is the failure keys each set's ledger held at this process's last read
@@ -421,29 +538,49 @@ type completionPairing struct {
 	flaky   bool
 }
 
-// SnapshotScaleSetWorker records a scale-set worker's platform context at its
-// terminal transition, for its job's completion to take: a terminal phase, or a
-// deletion of a pod that never reached one. proxy, which may be nil, supplies the
-// set's egress proxy readiness. It is in-memory only and never fails.
-func (p *Provisioner) SnapshotScaleSetWorker(ctx context.Context, proxy EgressProxyReader, pod *corev1.Pod) {
+// SnapshotScaleSetWorker records a scale-set worker's platform context at its terminal
+// transition: a terminal phase, or the deletion event of a pod that never reached one,
+// which gone names. The snapshot waits for its job's completion, or amends the record of
+// a job that failed first on its own goroutine, whose end closes the returned channel.
+// proxy, which may be nil, supplies the set's egress proxy readiness.
+func (p *Provisioner) SnapshotScaleSetWorker(ctx context.Context, proxy EgressProxyReader, pod *corev1.Pod, gone bool) <-chan struct{} {
 	if pod.Labels[LabelAcquisitionProtocol] != AcquisitionProtocolScaleSet {
-		return
+		return closedChan()
 	}
 	runner := pod.Annotations[AnnotationRunnerName]
 	if runner == "" {
-		return
+		return closedChan()
 	}
-	terminal := pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed
-	// A terminal pod's deletion is its reap, which says nothing the terminal transition
-	// did not; snapshotting it again would hold a slot no completion takes.
-	if terminal == (pod.DeletionTimestamp != nil) {
-		return
-	}
+	key := pod.Namespace + "/" + runner
 	s := snapshotOf(pod, p.nowFn())
+	s.gone = gone
+	if !s.ended() && !p.workerSnapshots.awaits(key) {
+		return closedChan()
+	}
 	if proxy != nil {
 		s.Proxy = proxy.EgressProxyReadiness(ctx)
 	}
-	p.workerSnapshots.put(pod.Namespace+"/"+runner, s)
+	r := p.workerSnapshots.put(key, s, ownJobCompleted(pod))
+	if r == nil {
+		return closedChan()
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// A watch handler's context is cancelled when the handler returns.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), failureAmendBudget)
+		defer cancel()
+		p.amendFailedJob(ctx, r, s)
+	}()
+	return done
+}
+
+// ownJobCompleted reports whether pod carries the completion stamp of a job its runner
+// held. A surplus stamp is another job's, and its runner can still be given one.
+func ownJobCompleted(pod *corev1.Pod) bool {
+	_, stamped := pod.Annotations[AnnotationJobCompletedAt]
+	_, surplus := pod.Annotations[AnnotationSurplusForJob]
+	return stamped && !surplus
 }
 
 // RecordScaleSetJobCompleted records a scale-set job's completion in target's failure
@@ -451,9 +588,14 @@ func (p *Provisioner) SnapshotScaleSetWorker(ctx context.Context, proxy EgressPr
 // and a later attempt of a recorded job is attributed to whoever re-ran it. A
 // cancelled completion with no disruption behind it is a user's cancel and records
 // nothing. It is idempotent per job.JobID.
+//
+// A failed job whose worker still runs is recorded at once, so a restart cannot lose its
+// pairing, and amended when the worker finishes.
 func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Target, job ScaleSetJob, result string) error {
 	key := target.Key()
-	snap := p.workerSnapshots.take(key.Namespace + "/" + job.RunnerName)
+	at := p.nowFn()
+	workerKey := key.Namespace + "/" + job.RunnerName
+	snap := p.workerSnapshots.take(workerKey)
 	runID, jobName := job.RunID, job.JobName
 	if snap != nil {
 		runID, jobName = firstNonEmpty(runID, snap.runID), firstNonEmpty(jobName, snap.jobName)
@@ -527,12 +669,56 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 	}
 	log := p.logForKey(key).With("runID", runID, "job", jobName, "jobID", job.JobID, "result", result)
 	if o.recorded {
-		p.reportFailedJob(target, runID, jobName, cause, snap, log)
+		p.reportFailedJob(target, runID, jobName, cause, snap, snap.faults(), log)
 	}
 	if o.paired {
 		p.reportRerunJob(target, runID, jobName, result, o, log)
 	}
+	if !o.recorded || snap == nil || snap.ended() {
+		return nil
+	}
+	r := &recordedFailure{target: target, runID: runID, jobName: jobName, jobID: job.JobID, cause: cause,
+		snap: snap, last: snap, context: contextJSON, at: at}
+	s := p.workerSnapshots.hold(workerKey, r)
+	if s == nil {
+		// The pod can have changed since the completion read it, with no failure held yet
+		// for its event to reach.
+		if pod, err := p.scaleSetWorkerByRunner(ctx, target, job.RunnerName); err == nil && pod != nil {
+			s = snapshotOf(pod, p.nowFn())
+			if p.workerSnapshots.put(workerKey, s, true) == nil {
+				s = nil
+			}
+		}
+	}
+	if s != nil {
+		p.amendFailedJob(ctx, r, s)
+	}
 	return nil
+}
+
+// amendFailedJob gives r's record s, its worker's terminal snapshot, and reports the
+// faults s adds: those dated before the completion, since what happens to a worker after
+// its job has a result did not cause it. The proxy readiness stays the completion's, the
+// nearer reading to the job's end. A record paired since, or holding an earlier
+// attempt's context, is left as it is.
+func (p *Provisioner) amendFailedJob(ctx context.Context, r *recordedFailure, s *workerSnapshot) {
+	s.Proxy = r.snap.Proxy
+	contextJSON, _ := json.Marshal(s)
+	log := p.logForKey(r.target.Key()).With("runID", r.runID, "job", r.jobName, "jobID", r.jobID, "workerFinished", true)
+	err := p.updateRerunLedger(ctx, r.target, func(l *rerunLedger, _ time.Time) bool {
+		f := l.Failures[failureKey(r.runID, r.jobName)]
+		if f == nil || !bytes.Equal(f.Context, r.context) {
+			return false
+		}
+		f.Context = contextJSON
+		return true
+	})
+	if err != nil {
+		log.Warn("could not record a failed scale-set job's terminal worker context", "error", err)
+	}
+	seen := r.snap.faults()
+	added := slices.DeleteFunc(s.faultsBy(r.at), func(f string) bool { return slices.Contains(seen, f) })
+	p.reportFailedJob(r.target, r.runID, r.jobName, r.cause, s, added, log)
 }
 
 // firstNonEmpty returns a, or b where a is empty.
@@ -544,15 +730,14 @@ func firstNonEmpty(a, b string) string {
 }
 
 // reportFailedJob logs one failed attempt with its worker's context, at Warn and with
-// a Warning Event where the context shows a platform fault, so a log store that keeps
+// a Warning Event where faults names a platform fault, so a log store that keeps
 // only warnings still keeps every fault.
-func (p *Provisioner) reportFailedJob(target Target, runID, jobName, cause string, snap *workerSnapshot, log *slog.Logger) {
+func (p *Provisioner) reportFailedJob(target Target, runID, jobName, cause string, snap *workerSnapshot, faults []string, log *slog.Logger) {
 	snapJSON := "unknown"
 	if snap != nil {
 		b, _ := json.Marshal(snap)
 		snapJSON = string(b)
 	}
-	faults := snap.faults()
 	if len(faults) == 0 {
 		log.Info("scale-set job failed", "cause", cause, "context", snapJSON)
 		return

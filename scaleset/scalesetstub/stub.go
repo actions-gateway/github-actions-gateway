@@ -811,6 +811,36 @@ func (s *Stub) CompleteAssignedJob(scaleSetID int, jobID, result string) bool {
 	return false
 }
 
+// CompleteRunningJob is CompleteAssignedJob for a job a runner held: the JobCompleted
+// names runnerName and the run, as the backend's does.
+func (s *Stub) CompleteRunningJob(scaleSetID int, jobID, runnerName, result string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ss := s.scaleSets[scaleSetID]
+	if ss == nil {
+		return false
+	}
+	for _, j := range ss.jobs {
+		if j.jobID == jobID && !j.state.terminal() {
+			j.state = jobCompleted
+			j.result = result
+			ss.appendMessage(s.newMsgID(), []scaleset.JobMessage{{
+				MessageType:    scaleset.MessageTypeJobCompleted,
+				JobID:          j.jobID,
+				RunnerName:     runnerName,
+				Result:         result,
+				OwnerName:      j.owner,
+				RepositoryName: j.repo,
+				WorkflowRunID:  j.runID,
+				JobDisplayName: j.displayName(),
+			}})
+			s.notifyLocked()
+			return true
+		}
+	}
+	return false
+}
+
 // StartAssignedJob appends a JobStarted naming runnerName for an assigned job, the
 // message the backend sends once a runner takes it. Returns false if no non-terminal
 // job with that id exists.

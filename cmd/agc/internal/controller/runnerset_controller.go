@@ -1007,8 +1007,8 @@ func (r *RunnerSetReconciler) podToRunnerSet(_ context.Context, obj client.Objec
 // event gets, with scale-set disruption recovery run off the event first (Q1029). Why
 // the event rather than the reconcile it enqueues is on
 // provisioner.RecoverDisruptedScaleSetWorker. Updates and deletes also snapshot a
-// worker's terminal state for flaky-job detection (Q555), since the pod may be gone by
-// the time its job's completion arrives.
+// worker's terminal state for flaky-job detection (Q555): the pod may be gone by the
+// time its job's completion arrives, or finish only after it (Q1376).
 func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 	enqueue := handler.EnqueueRequestsFromMapFunc(r.podToRunnerSet)
 	return handler.Funcs{
@@ -1017,12 +1017,12 @@ func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 			enqueue.Create(ctx, e, q)
 		},
 		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-			r.snapshotWorkerPod(ctx, e.ObjectNew)
+			r.snapshotWorkerPod(ctx, e.ObjectNew, false)
 			r.recoverDisruptedWorkerPod(ctx, e.ObjectNew)
 			enqueue.Update(ctx, e, q)
 		},
 		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
-			r.snapshotWorkerPod(ctx, e.Object)
+			r.snapshotWorkerPod(ctx, e.Object, true)
 			enqueue.Delete(ctx, e, q)
 		},
 		GenericFunc: enqueue.Generic,
@@ -1031,8 +1031,9 @@ func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 
 // snapshotWorkerPod hands a worker pod from a watch event to the provisioner's
 // snapshot store, which keeps only scale-set workers at a terminal transition, with
-// its set's target to read the egress proxy's readiness from the cache.
-func (r *RunnerSetReconciler) snapshotWorkerPod(ctx context.Context, obj client.Object) {
+// its set's target to read the egress proxy's readiness from the cache. gone marks a
+// deletion event.
+func (r *RunnerSetReconciler) snapshotWorkerPod(ctx context.Context, obj client.Object, gone bool) {
 	pod, ok := obj.(*corev1.Pod)
 	if !ok || r.Provisioner == nil {
 		return
@@ -1041,7 +1042,7 @@ func (r *RunnerSetReconciler) snapshotWorkerPod(ctx context.Context, obj client.
 	if set := pod.Labels[provisioner.LabelRunnerSet]; set != "" {
 		proxy = &runnerSetTarget{client: r.Client, key: types.NamespacedName{Namespace: pod.Namespace, Name: set}}
 	}
-	r.Provisioner.SnapshotScaleSetWorker(ctx, proxy, pod)
+	r.Provisioner.SnapshotScaleSetWorker(ctx, proxy, pod, gone)
 }
 
 // disruptedWorkerRecoveryBudget bounds the synchronous half of a recovery started off a
