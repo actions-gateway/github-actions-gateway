@@ -84,8 +84,10 @@ kata_apply_runtimeclass() {
 	# server rejects outright ("strict decoding error: unknown field
 	# scheduling.nodeClassification") — caught under Q226.
 	#
-	# nodeSelector pins Kata pods to nodes where kata-deploy has FINISHED
-	# installing (it applies katacontainers.io/kata-runtime=true on completion).
+	# nodeSelector pins Kata pods to the e2e pool, not to nodes whose runtime is
+	# ready: the pool's own config carries the label kata-deploy applies on
+	# completion (see KATA_RUNTIME_LABEL_KEY), so a cold node matches before the
+	# install and its first sandboxes fail until the kubelet's retry succeeds.
 	# No tolerations here: the tenant's podTemplate already tolerates
 	# dedicated=e2e:NoSchedule, and this alias must stay identical to the one in
 	# deploy/kata-ci/runtimeclass.yaml.

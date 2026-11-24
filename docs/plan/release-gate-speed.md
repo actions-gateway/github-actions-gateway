@@ -1,7 +1,7 @@
 # Release gate speed
 
-> **Status:** 🚧 Investigation done 2026-11-18; the first five options (Q1363, Q1362, Q1365, Q1364, Q1366) are implemented, the other two are not.
-> Two rows are open, ranked in the order below: [Q1367](../queue/Q1367.md) and [Q1368](../queue/Q1368.md).
+> **Status:** 🚧 Investigation done 2026-11-18; the first five options (Q1363, Q1362, Q1365, Q1364, Q1366) are implemented, the sixth (Q1367) was measured and closed without a change, and the seventh is open.
+> Two rows are open: [Q1387](../queue/Q1387.md), which came out of the sixth, and [Q1368](../queue/Q1368.md).
 
 The release-candidate gate (`.github/workflows/validate-candidate.yml` running `scripts/dogfood/validate-release.sh`) took 115.5 minutes for `v2.0.1-rc.1` and 133.1 minutes for `v2.0.0-rc.3`, counted from the start of its gate step to its verdict.
 About a fifth of that, 21.7 and 25.3 minutes, is the gate waiting on a worker pod that finished long before.
@@ -112,10 +112,10 @@ The gate runs on `ubuntu-latest` in a public repository, so its minutes are not 
 | 3 | Q1365 (shipped) | Deploy once the image jobs succeed; require the whole publish run only before the CRD smoke | Up to 5.8 min (measured: `chart-publish` took 5m47s and 5m30s), and only when the approval beats the images | Falls by the same Actions minutes; node-hours unchanged |
 | 4 | Q1364 (shipped) | Bring the e2e node up during deploy instead of on the Kata dispatch | About 3 min (estimate, from rc.1's measured 3m59s dispatch-to-runner) | Falls slightly (estimate): the e2e node starts ~1–2 min early, while 2 system nodes stop ~3 min early |
 | 5 | Q1366 (shipped) | Take the Dragonfly readings concurrently | About 2.5 min (estimate: 3m42s of probes measured in series, the slowest 74s) | Falls by the same minutes and system node time |
-| 6 | [Q1367](../queue/Q1367.md) | Schedule Kata workers only once a node's `kata-qemu` runtime is ready | Up to 37–74s per cold node (measured failure window), so about 1–2 min | Falls slightly |
+| 6 | Q1367 (closed, not built) | Schedule Kata workers only once a node's `kata-qemu` runtime is ready | 3–5s per cold node (measured over 11 nodes against a two-sample control); the 37–74s failure window is mostly the installer's image pull | Neutral |
 | 7 | [Q1368](../queue/Q1368.md) | Scope running the Kata and DinD legs at the same time on dogfood | About 20 min (estimate: the DinD leg's length once rank 2 lands) | Unpriced: peak e2e nodes rise from 1 to 2 inside the quota the gate already reserves, node-hours are expected to fall |
 
-Ranks 1 to 6 together bring a gate like rc.1's from 115.5 minutes to roughly 85 (estimate), plus up to 5.8 minutes off tag-to-gate.
+Ranks 1 to 5 together bring a gate like rc.1's from 115.5 minutes to roughly 88 (estimate), plus up to 5.8 minutes off tag-to-gate.
 Rank 7 is a scoping row because its proof risks and quota are unmeasured.
 
 ### 1. A fresh node for the Dragonfly leg (Q1363)
@@ -208,15 +208,48 @@ Three of them share the e2e tenant at once, which with its AGC and two workers i
 
 ### 6. Schedule Kata workers onto ready nodes (Q1367)
 
-Every cold e2e node failed its first sandbox with `no runtime for "kata-qemu" is configured`: 37s in rc.1's Kata leg, 74s in rc.3's, and 52s in rc.1's Dragonfly leg (from Q1360).
-The pod is scheduled before the node's Kata runtime is installed, and the kubelet's retry backoff decides when it tries again.
-Gating placement on a node label or taint that the runtime installer clears would remove the backoff part.
-How much of each window is the install itself, which no change removes, was not measured.
-This helps every Kata job on a cold node, not only the gate.
+Closed on 2026-11-23 without a change: placement gating was measured to save about 3 to 5 seconds per cold node, not the 1–2 minutes first estimated.
+
+A cold e2e node fails its first sandboxes with `no runtime for "kata-qemu" is configured`: 37s in rc.1's Kata leg, 74s in rc.3's, and 52s in rc.1's Dragonfly leg (from Q1360).
+The cause is the label the `kata` RuntimeClass selects on. kata-deploy applies it once the runtime is installed, but `e2e-setup.sh` also sets it in the node pool's own configuration, because the autoscaler simulates a scale-up from zero against configured labels only.
+So the selector matches a node from its first second, and the installer's log says `node already labeled katacontainers.io/kata-runtime=true, skipping`.
+
+These are the 11 nodes in Cloud Logging's 30 days to 2026-11-23 on which a Kata worker's sandbox failed that way.
+The log store was read and the cluster was not.
+Times are in UTC, event timestamps have one-second resolution, and the failed-sandbox column counts events, which the kubelet can aggregate.
+
+| Worker scheduled | Installer image pull | Install | Runtime ready after scheduling | Failed sandboxes | First container pull after scheduling | Ready to first pull |
+|---|---|---|---|---|---|---|
+| 10-26 16:56 | 37.3s | 3.6s | 11.3s | 1 | 39s | 27.7s |
+| 10-26 22:32 | 63.4s | 3.2s | 37.0s | 3 | 62s | 25.0s |
+| 10-27 00:07 | 48.4s | 4.5s | 23.1s | 2 | 50s | 26.9s |
+| 11-17 08:38 | 61.2s | 4.5s | 36.7s | 3 | 80s | 43.3s |
+| 11-17 10:06 | 23.9s | 3.8s | 21.3s | 1 | 51s | 29.7s |
+| 11-18 04:41 | 37.4s | 4.6s | 12.3s | 1 | 44s | 31.7s |
+| 11-18 05:58 | 24.6s | 3.6s | 26.6s | 2 | 60s | 33.4s |
+| 11-18 06:03 | 26.2s | 4.0s | 29.5s | 2 | 58s | 28.5s |
+| 11-18 14:39 | 84.4s | 3.1s | 58.3s | 4 | 85s | 26.7s |
+| 11-18 15:59 | 27.4s | 3.8s | 45.6s | 3 | 70s | 24.4s |
+| 11-22 20:42 | 63.8s | 3.0s | 37.2s | 2 | 60s | 22.8s |
+
+The last column is the only part placement can touch, and its median is 27.7s (mean 29.1s).
+The control is two Kata workers scheduled onto a node whose runtime was already ready: they took 23s and 26s from scheduling to their first container pull, disk attach and sandbox included.
+A perfectly gated worker would still pay that after the runtime is ready, so gating removes the difference: about 3s at the median and 5s at the mean, before whatever delay clearing a taint adds.
+Two samples are a thin control, and more of them could move the figure by seconds in either direction.
+
+Left out: seven more installs on nodes where no Kata worker failed this way, and five workers that recorded no disk attach.
+Those five are taken to be DinD workers, which mount no block volume; their pod specs were not read.
+
+Against that saving, gating needs a startup taint on the shared `e2e` pool, a component with rights to patch nodes to clear it (the pinned kata-deploy 3.32.0 chart has none), and a toleration on the DinD template, whose workers need no Kata runtime and would otherwise wait for the install too.
+So the row's done-when is given up: a cold Kata worker's events keep showing `FailedCreatePodSandBox` for a missing runtime, and nothing else here removes them.
+
+What costs the window is the installer's image pull, 24–84s.
+A node that is already up has paid it, which is what the pre-warm in section 4 does for the Kata leg.
+The Dragonfly leg empties the pool on purpose and starts cold; [Q1387](../queue/Q1387.md) is the same pre-warm there.
 
 ### 7. Kata and DinD at the same time (Q1368)
 
-After ranks 1 to 6 the suite's execution is the constraint, and running two legs at once is the only change left that removes a whole leg from the wall clock.
+After ranks 1 to 5 the suite's execution is the constraint, and running two legs at once is the only change left that removes a whole leg from the wall clock.
 It stays on the one dogfood cluster: the legs are serial so the gate runs on a single cluster inside GKE's free tier, and both legs already share that cluster's `e2e` pool.
 Kata and DinD are two overlays of one namespace, ActionsGateway and RunnerSet, and their namespace security profiles differ (baseline and privileged), so each needs its own tenant with its own runner label.
 The e2e pool already allows two nodes (the autoscaler's `max: 2`), and e2e node-hours should stay about the same while system-pool hours fall.
