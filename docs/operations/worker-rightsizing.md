@@ -165,6 +165,7 @@ Three things follow:
 - **The run stays `failure`** while a sibling's failure is not re-run, so read the job's own result.
 - **Several killed jobs of one run** are re-run together, on one slot, where every failed job of the run was killed for memory.
   Where another job failed on its own, they are re-run one after another, each once the attempt before it concludes and each on its own slot, until `maxEvictionRetries` is spent and the rest get `EvictionRetriesExhausted`.
+  A job that reports on the others (`if: always()`, red when one it needs is) is another failed job here, because GitHub's job list does not say what needs what; raise `maxEvictionRetries` where such a workflow loses several jobs at once.
 
 Every failed job is re-run, as a disruption's recovery does, where the AGC cannot tell which jobs were killed: GitHub's job list cannot be read, the worker's pod names no runner and its job name is not unique, a disruption recovery is re-running the same attempt, or 16 or more workers of one attempt were killed.
 

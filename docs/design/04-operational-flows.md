@@ -704,6 +704,7 @@ Two jobs of a run can share a display name, and a worker often runs a job other 
 
 A list GitHub fails to serve retries at the next poll, like the run read.
 Taking turns is GitHub's limit as much as the budget's: it refuses a single-job re-run while the run is in progress.
+The list carries no `needs:`, so a dependent that failed because a killed job did, such as an `if: always()` aggregate, counts as another failure; the killed job's re-run takes it along.
 
 **The reservation follows the call.** A kill reserves its attempt's one slot when it fires, with scope `FailedJobs`, and later kills of the attempt merge into it.
 A release that re-runs one job narrows that record to the job, scope `Job`, in the write before the call, so each job that waits reserves a slot of its own at its turn, and a release that crashes before the call resumes the same job on the same slot.

@@ -878,6 +878,7 @@ What it does is in [04-operational-flows.md](../design/04-operational-flows.md#t
 - **A run whose failed jobs were all killed takes one `rerun-failed-jobs`**, since it re-runs nothing else and spends one slot.
 - **Several killed jobs beside another failure go one attempt at a time**, a slot each, so a run's budget bounds its attempts and no genuine failure is re-run.
   Two killed jobs spend the default budget of 2, so a third kill is `budget_exhausted`.
+  The common cost is a job that aggregates the others (`if: always()`, red when one it needs is): it is another failure, since the jobs list carries no `needs:`, so three killed legs of a matrix behind one recover two where `rerun-failed-jobs` recovers three.
   The alternatives: one `rerun-failed-jobs` for the set, which recovers them all on one slot and re-runs the genuine failure, as this release [must not](release-2.1.md#what-this-release-must-not-do); or one slot for the whole set, which lets one reservation start as many attempts as there were kills.
 - **A dependent the single-job re-run took along counts as `gag_collateral`**, since GAG's re-run took it and no person did.
 
