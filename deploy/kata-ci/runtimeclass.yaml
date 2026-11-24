@@ -10,6 +10,9 @@
 #
 # `scheduling.nodeSelector` pins kata pods to nodes where kata-deploy has finished
 # installing the runtime -- kata-deploy applies this label itself, post-install.
+# That holds on a fixed-size pool. One that autoscales from zero has to carry the
+# label in its own config, and then the selector also matches a node whose runtime
+# is not installed yet; the kubelet retries the sandbox until it is.
 # `overhead` mirrors what the chart renders for kata-qemu: the scheduler must
 # account for the micro-VM's memory/CPU footprint on top of the container's own
 # requests, or the node is oversubscribed.

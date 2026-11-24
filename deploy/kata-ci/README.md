@@ -28,6 +28,10 @@ Motivation, the options analysis, and the measured results live in [docs/plan/ar
 
 Using one label for both lets a Kata pod land on a node whose runtime does not exist yet.
 
+This holds for a fixed-size pool, which is what `kata-node-pool.sh` creates.
+A pool that autoscales from zero has to carry the second label in its own `--node-labels` too, or no Kata pod can trigger the scale-up, and it then loses that protection: a pod can land before the install and the kubelet retries its sandbox until the runtime exists ([why, and what it costs](../../docs/operations/kata-dind-workloads.md)).
+The dogfood `e2e` pool is one of these.
+
 ## Static validation
 
 - `make manifest-validate` — yamllint over `deploy/kata-ci/` plus kubeconform schema-check of `runtimeclass.yaml` and `runner-pod.yaml`.
