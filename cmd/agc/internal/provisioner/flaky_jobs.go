@@ -19,10 +19,10 @@ import (
 
 // Flaky-job detection on the scale-set tier (Q555). A failed JobCompleted records the
 // job in the failure ledger's failures map with the worker's platform context; a later
-// completion of the same job (same run, same display name, a new job ID) pairs with the
-// record and is attributed to whoever re-ran it, from GAG's own re-runs of the run in
-// the same ledger. Detection changes no behaviour. The operator-facing account is
-// docs/design/04-operational-flows.md §4.2.
+// completion of the same job (same run, same display name, a new job ID, and a re-run by
+// the run's job list) pairs with the record and is attributed to whoever re-ran it, from
+// GAG's own re-runs of the run in the same ledger. Detection changes no behaviour. The
+// operator-facing account is docs/design/04-operational-flows.md §4.2.
 
 // JobCompleted results. "canceled" is GitHub's spelling on this wire.
 const (
@@ -60,6 +60,9 @@ type failureRecord struct {
 	// JobID is the latest failed attempt's job UUID: a completion carrying it again is
 	// a replay and changes nothing.
 	JobID string `json:"jobID"`
+	// Runner is the latest failed attempt's runner, which is how GitHub's job list names
+	// it. Records written before v2.1 have none.
+	Runner string `json:"runner,omitempty"`
 	// Cause is the disruption a recovery claim names for the latest failed attempt, ""
 	// where none did. A failure with a cause is never counted flaky.
 	Cause       string `json:"cause,omitempty"`
@@ -75,7 +78,7 @@ type failureRecord struct {
 }
 
 // failureKey keys a job across its attempts: the job UUID changes on a re-run, the run
-// ID and the display name do not.
+// ID and the display name do not. Jobs of one run that share a display name share a key.
 func failureKey(runID, jobName string) string {
 	return runID + "/" + jobName
 }
@@ -530,6 +533,9 @@ func rerunOutcomeEvent(event string) string {
 type completionPairing struct {
 	// recorded: a failed attempt was written, new or over an earlier one.
 	recorded bool
+	// unpaired is a record of another job UUID under the completion's key, nil where the
+	// completion is known to be its later attempt. The completion changed nothing.
+	unpaired *failureRecord
 	// paired: a later attempt of a recorded failure completed.
 	paired  bool
 	trigger string
@@ -585,9 +591,11 @@ func ownJobCompleted(pod *corev1.Pod) bool {
 
 // RecordScaleSetJobCompleted records a scale-set job's completion in target's failure
 // ledger: a failed or disrupted completion records the job and its worker's context,
-// and a later attempt of a recorded job is attributed to whoever re-ran it. A
-// cancelled completion with no disruption behind it is a user's cancel and records
-// nothing. It is idempotent per job.JobID.
+// and a later attempt of a recorded job is attributed to whoever re-ran it. A completion
+// that matches a record costs one read of the run's jobs, to tell a later attempt from a
+// job of the same name; one that is not a later attempt, or whose run cannot be read,
+// changes no record. A cancelled completion with no disruption behind it is a user's
+// cancel and records nothing. It is idempotent per job.JobID.
 //
 // A failed job whose worker still runs is recorded at once, so a restart cannot lose its
 // pairing, and amended when the worker finishes.
@@ -632,7 +640,9 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 	}
 
 	var o completionPairing
-	err := p.updateRerunLedger(ctx, target, func(l *rerunLedger, now time.Time) bool {
+	// rerunOf is the job UUID of the recorded failure this completion re-ran.
+	var rerunOf string
+	pair := func(l *rerunLedger, now time.Time) bool {
 		o = completionPairing{}
 		f := l.Failures[fkey]
 		if f == nil {
@@ -640,13 +650,17 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 				return false
 			}
 			l.Failures[fkey] = &failureRecord{
-				ExpiresAt: now.Add(failureRecordTTL), FailedAt: now, JobID: job.JobID, Cause: cause,
+				ExpiresAt: now.Add(failureRecordTTL), FailedAt: now, JobID: job.JobID, Runner: job.RunnerName, Cause: cause,
 				Event: job.EventName, WorkflowRef: job.WorkflowRef, Context: contextJSON,
 			}
 			o.recorded = true
 			return true
 		}
 		if f.JobID == job.JobID {
+			return false
+		}
+		if f.JobID != rerunOf {
+			o.unpaired = f
 			return false
 		}
 		var attempt string
@@ -658,23 +672,38 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 			return true
 		}
 		o.recorded = true
-		f.JobID, f.Cause, f.ExpiresAt = job.JobID, cause, now.Add(failureRecordTTL)
+		f.JobID, f.Runner, f.Cause, f.ExpiresAt = job.JobID, job.RunnerName, cause, now.Add(failureRecordTTL)
 		if attempt != "" {
 			f.PairedAttempts = append(f.PairedAttempts, attempt)
 		}
 		return true
-	})
-	if err != nil {
+	}
+	if err := p.updateRerunLedger(ctx, target, pair); err != nil {
 		return err
 	}
 	log := p.logForKey(key).With("runID", runID, "job", jobName, "jobID", job.JobID, "result", result)
-	if o.recorded {
+	if o.unpaired != nil && job.RunnerName != "" {
+		jobs, err := p.runJobs(ctx, job.Owner, job.Repository, runID)
+		switch {
+		case err != nil:
+			log.Warn("could not read the run's jobs to pair a failed job's re-run; a re-run of it goes uncounted", "error", err)
+		case reranJob(jobs, job.RunnerName, o.unpaired.Runner):
+			rerunOf = o.unpaired.JobID
+			if err := p.updateRerunLedger(ctx, target, pair); err != nil {
+				return err
+			}
+		default:
+			log.Info("scale-set job is not known to re-run the failed job that shares its name; paired with nothing", "failedJobID", o.unpaired.JobID)
+		}
+	}
+	reported := failed && (o.recorded || o.unpaired != nil)
+	if reported {
 		p.reportFailedJob(target, runID, jobName, cause, snap, snap.faults(), log)
 	}
 	if o.paired {
 		p.reportRerunJob(target, runID, jobName, result, o, log)
 	}
-	if !o.recorded || snap == nil || snap.ended() {
+	if !reported || snap == nil || snap.ended() {
 		return nil
 	}
 	r := &recordedFailure{target: target, runID: runID, jobName: jobName, jobID: job.JobID, cause: cause,

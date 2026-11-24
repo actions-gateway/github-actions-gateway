@@ -694,7 +694,13 @@ A restart loses the snapshots waiting for a completion and the failures waiting 
 The snapshot also carries the set's egress proxy pool as `proxy`, read from the AGC's cache: a colocated pool's `Ready` condition and `readyReplicas`, or `mode: shared` alone for a pool in another namespace, which that cache cannot see (Q1237).
 The cause a recovery claim names for the job is recorded with it, so a disrupted job is never read as flaky.
 
-A later completion of the same key with a new job ID is the job's next attempt, attributed from GAG's own re-runs of the run in the same ledger:
+A later completion of the same key with a new job ID is the job's next attempt or another job with its `name:`, which GitHub allows in one run, and the completion carries no attempt number to tell them apart.
+So the AGC reads the run's jobs in every attempt (`GET …/actions/runs/{id}/jobs?filter=all`) and finds the completed job by its runner's name (Q1375).
+It is the failed job's re-run when its attempt replaced exactly one job of its name from the attempt before and that one ran on the failed job's runner; anything else changes no record.
+The rule rests on the earlier attempt, which has finished and lists every job, because the later one does not list a job whose `needs` are still running ([measured](../plan/q555-automatic-recovery-design.md#readings-for-pairing-jobs-that-share-a-name-2026-11-23)).
+The read happens only for a completion that matches a record, never for an ordinary one, and holds the listener's goroutine for at most 10 seconds.
+
+A re-run is attributed from GAG's own re-runs of the run in the same ledger:
 
 | GAG re-ran the run and | Trigger | Flaky when it succeeds |
 |---|---|---|

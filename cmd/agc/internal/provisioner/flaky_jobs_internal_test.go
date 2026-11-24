@@ -43,9 +43,16 @@ func flakyFixture(t *testing.T) (client.Client, *Provisioner, *stubTarget) {
 	return c, flakyProvisioner(c), &stubTarget{key: client.ObjectKey{Namespace: "team-a", Name: "gpu"}}
 }
 
-// flakyProvisioner is one AGC process; two on one client are a restart.
+// flakyProvisioner is one AGC process; two on one client are a restart. GitHub lists
+// attempt n of a run as one job "build" on runner-n, as buildJob(n) completes it.
 func flakyProvisioner(c client.Client) *Provisioner {
-	return NewProvisioner(c, flakyMetrics(), nil)
+	p := NewProvisioner(c, flakyMetrics(), nil)
+	gh := &runJobsStub{}
+	for n := 1; n <= 9; n++ {
+		gh.jobs = append(gh.jobs, listed(n, "build", fmt.Sprintf("runner-%d", n)))
+	}
+	gh.serve(p)
+	return p
 }
 
 // buildJob is attempt n of job "build" in run 900, triggered by a push.

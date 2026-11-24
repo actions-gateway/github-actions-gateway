@@ -41,7 +41,8 @@ The readings are the AGC's `scaleset: job assigned`, `job completed`, `scale-set
   A job killed by `timeout-minutes` completes `canceled` (`b31558d4…`, `486169c1…`; the jobs API says `cancelled`), exactly as a user's cancel does (`3762586f…`), so detection records no timed-out job and never counts its later success as flaky ([Q1374](../queue/Q1374.md)).
   A job whose runner an out-of-memory kill ended completes `failed`, 9 min 48 s after the kill, when the job lock lapses (`ff028f4b…`, run 45052020040).
 - **M2.** A re-run of the failed job arrives with a new job UUID (`abe6cad3…`, then `4349fbb7…`) under the same run ID and `jobDisplayName`, and pairs as `trigger=other`, flaky, as designed.
-  GitHub accepts two jobs sharing one `name:`, and they share one failure key: the green twin's success paired with the red twin's failure and emitted a false `FlakyJobDetected` (18:05:32 UTC), and the red twin's re-run at 18:07:02 logged as a fresh failure rather than a pairing, so its record was gone ([Q1375](../queue/Q1375.md)).
+  GitHub accepts two jobs sharing one `name:`, and they share one failure key: the green twin's success paired with the red twin's failure and emitted a false `FlakyJobDetected` (18:05:32 UTC), and the red twin's re-run at 18:07:02 logged as a fresh failure rather than a pairing, so its record was gone.
+  Q1375 fixed it since ([Pairing and attribution](#pairing-and-attribution-r1-r2-r8)).
 - **M4.** A job that ends on a step's result completes before its pod's terminal transition: the completion is logged in the same second as `job started`, and every such record's `context` reads `podPhase: Running` (three in these runs, and `44325908424/scripts-test` from 2026-11-18); in two of the three no container had terminated yet, and in `ee99fae0…` the runner had just terminated `Completed`, exit 0.
   So `Completed` read the running pod every time, and the snapshot the terminal transition took moments later was never taken by any completion; it waited in the 1,024-entry map until evicted.
   Q1376 fixed both since ([What a failed job records](#what-a-failed-job-records-r7)).
@@ -80,6 +81,22 @@ Taken from the REST API for `already_rerun` (Q1320), over public runs somebody h
   That a row cannot be read before its `created_at` is inferred; no list was read while filling.
 - **`runner_name` is GAG's runner name**, `gag-ci-scaleset-<job UUID>`, and a job whose runner was lost keeps it in its own attempt (run 45052020040, the out-of-memory kill).
   A lost job carried into a later attempt was not observed; every carried failure read was an ordinary red step.
+
+### Readings for pairing jobs that share a name, 2026-11-23
+
+Taken from GitHub's REST API for Q1375.
+In run 45052015868, listed with `filter=all`, both `shared-name` jobs appear in attempt 1, each with the runner the AGC registered; in attempt 2 the red twin appears on a new runner, and the green one, which nobody re-ran, appears again on attempt 1's runner.
+
+- **An attempt's carried-over jobs keep their runner, and its re-run ones do not.** Over this repository's 156 re-run runs of 2026-11-01 to 2026-11-22, 97 jobs of the latest attempt name a runner an earlier attempt had, every one with a start before its creation, and 590 name a new one, none with such a start.
+  Those are GitHub-hosted jobs; the self-hosted ones are run 45052015868's.
+- **A job is not listed until its `needs` finish.** In a unit-test run of [#2391](https://github.com/actions-gateway/github-actions-gateway/pull/2391), every job that needs `changes` is created within a second of `changes` completing, and the gate job in the second the last of them did.
+  So an attempt in progress does not show which jobs it will re-run, and a rule that reads only the latest attempt calls the re-run of one twin the re-run of the other while that one waits.
+- **A list read early in an attempt is short**, over its first 14 s or so (read for Q1320).
+  A carried-over twin missing from it reads as replaced, so the re-run counts nothing rather than the wrong thing.
+- **A started job already names its runner.** Polling the same pull request's checks, no job was seen in progress without one, the earliest sighting 2 s after its start.
+- **The completion's runner name is the job list's**, in 35 of 35 jobs of runs 45325262167 and 45326925782 (dogfood, read for M6), where it differs per execution.
+- **A matrix collides too**, where its legs' names pass 100 characters: GitHub truncates both to the same 97 and `...` (run 45326925782, two legs), on the wire as in the API.
+  Ordinary legs do not, even under a static `name:`, which GitHub extends with the matrix values.
 
 ## Component 1: the failure ledger (Q555, R1 to R8)
 
@@ -157,6 +174,7 @@ It holds a version and three maps, every entry carrying its own `expiresAt` so a
       "expiresAt": "2026-10-17T12:00:00Z",
       "failedAt": "2026-10-10T12:00:00Z",
       "jobID": "6f1c…",
+      "runner": "<the failed attempt's runner>",
       "event": "pull_request",
       "workflowRef": "org/repo/.github/workflows/ci.yml@refs/pull/42/merge",
       "context": { "podPhase": "Failed", "containers": [{ "name": "runner", "reason": "OOMKilled", "exitCode": 137 }] },
@@ -196,7 +214,21 @@ It is also [the budget](#the-budget-is-gags-own-count-in-the-ledger-r15): `count
 
 ### Pairing and attribution (R1, R2, R8)
 
-On a completion for a key with a failure entry, the completion is a later attempt of that job (M2):
+On a completion for a key with a failure entry, the completion is either a later attempt of that job or another job of its name (M2), and carries no attempt number.
+The run's job list over every attempt settles it, joined by the runner's name, which both sides carry (Q1375, built): the completion's attempt must have replaced exactly one job of its name from the attempt before, and that one must be the recorded failure's.
+Anything else pairs with nothing, including a run that cannot be read: R5 accepts an undercount and not a false flake, and R6 allows the read because only a re-run or a shared name reaches it.
+
+The alternatives:
+
+- **Pair only a job assigned after the failure was recorded.** Wrong without a restart too: on a set at capacity the second twin is assigned after the first has failed, and it ran 3 min 40 s after the red one ended in the measured run.
+  After a restart every assignment the AGC never saw would also have to be guessed.
+- **The run's `run_started_at` against the failure's time.** One small read and no list, but it calls a re-run of all jobs, or of the twin alone, a re-run of the failed job: two false flakes left.
+- **The message's own `queueTime`.** Free, and unmeasured on a re-run's completion; a value that did not move would end pairing without a sign.
+- **The latest attempt's job list alone.** Half the rows, and a false flake where both twins re-run and the failed one waits on its `needs`, since it is then not listed.
+- **Match every job by name in the list**, without the runner.
+  Two jobs of one name cannot be told apart that way.
+
+A pairing then counts as:
 
 | GAG's re-run of the attempt the job failed in | This job in its `jobs` | New result | Counts as |
 |---|---|---|---|
