@@ -5,7 +5,7 @@ go 1.27.4
 require (
 	k8s.io/api v0.37.2
 	k8s.io/apimachinery v0.37.2
-	sigs.k8s.io/controller-runtime v0.25.2
+	sigs.k8s.io/controller-runtime v0.25.3
 )
 
 require (
@@ -19,8 +19,8 @@ require (
 	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
-	golang.org/x/net v0.62.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/net v0.63.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad // indirect
