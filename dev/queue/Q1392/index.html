@@ -2785,8 +2785,8 @@ No cluster was used, and bash on Linux was not run.</p>
 </tr>
 </tbody>
 </table>
-<p>The gate's own status is never 0: it dies of the signal.
-Teardown still prints <code>Teardown complete (exit 0)</code>, and the stream still reads <code>running</code> after it, so <code>release-sentinel.sh</code> can report it only as <code>stalled</code>, later, where a recorded failure would be <code>failed</code>.</p>
+<p>In every row above the gate's own status is non-zero; Ctrl-C during a <code>wait</code>, below, can exit 0.
+Teardown still prints <code>Teardown complete (exit 0)</code>, and the stream still reads <code>running</code> after it, so <code>release-sentinel.sh</code> reports the move into teardown as <code>phase</code>, then <code>stalled</code> or <code>timeout</code>, where a recorded failure would be <code>failed</code>.</p>
 <p>Two causes of the skipped teardown.
 With the terminal gone, <code>teardown</code>'s first <code>echo</code> fails and errexit ends the trap there, read from an xtrace.
 Inside <code>$(…)</code> the trap was not entered at all, and why is not known.
@@ -2800,8 +2800,11 @@ The stubs write to a file: the real stop scripts print, so a fix has to give the
 <li>A trapped TERM to the gate alone waits for the foreground command, 4.7s of a 5s one, where an untrapped one ended the gate in 0.2s.
   A lost lease stops the gate with a TERM.</li>
 <li><code>dragonfly_readings</code> sets these three traps and clears them with <code>trap -</code> on its way out, which would drop the gate's own.</li>
-<li>Ctrl-C during <code>wait</code> on a background job is swallowed (seen once on the same harness, exit 0): bash starts the job with INT ignored.
-  <code>e2e_leg</code>'s two waits on <code>capture_pid</code> have that shape.</li>
+<li>Ctrl-C during <code>wait</code> on a background job is lost, in the shape of <code>e2e_leg</code>'s two <code>wait "${capture_pid}" || true</code>: 16 of 18 runs carried on, exited 0 and left the status file reading <code>passed</code>.
+  The other two ended at 130 once the job finished, on slow runs; why is not known.
+  Two things hide it: bash starts the job with INT ignored, and <code>|| true</code> drops the 130.
+  Restoring INT in the job is enough for a bare <code>wait</code> (10 of 10 at 130) and not with <code>|| true</code> (6 of 6 exit 0).
+  Trapping INT in the gate ended it at 130 with <code>failed</code> recorded in all 24 runs, with and without each.</li>
 </ul>
 <p><strong>Done when</strong> each ending above records the failure with its status and runs both stop scripts, the gate's tests signal a real process for it, and the header and release.md say what is true.</p>
 <p>Not a duplicate of <a href="../Q1161/">Q1161</a> or <a href="../Q1025/">Q1025</a>, which share only the script: one runs legs in parallel, the other drives a capacity verdict.</p>
