@@ -156,6 +156,17 @@ type containerSnapshot struct {
 	finishedAt, previousAt time.Time
 }
 
+// oomKilled reports whether a termination of c was c's own kill for memory. The runtime
+// sets the reason for a kill anywhere in the container's cgroup, its nested containers'
+// included, and keeps it for whatever exit follows (containerd 2.3.1), so a container
+// other than the runner also needs a SIGKILL's exit code.
+func (c containerSnapshot) oomKilled(reason string, exitCode int32) bool {
+	if reason != containerReasonOOMKilled {
+		return false
+	}
+	return exitCode == exitCodeSIGKILL || c.Name == runnerContainer && !c.sidecar
+}
+
 // snapshotOf reads pod into a snapshot.
 func snapshotOf(pod *corev1.Pod, now time.Time) *workerSnapshot {
 	s := &workerSnapshot{
@@ -237,7 +248,7 @@ func (s *workerSnapshot) carryTerminations(earlier *workerSnapshot) {
 }
 
 // faults lists what in the snapshot points at the platform rather than the job: a
-// failed pod, a DisruptionTarget condition, any container killed for memory, the
+// failed pod, a DisruptionTarget condition, a container killed for memory, the
 // runner container exiting non-zero, or a colocated proxy pool that is not Ready or
 // has no ready replica. A sidecar's non-zero exit is not one, since sidecars are
 // routinely killed when the runner finishes.
@@ -263,7 +274,7 @@ func (s *workerSnapshot) faultsBy(end time.Time) []string {
 	}
 	for _, c := range s.Containers {
 		switch {
-		case c.Reason == "OOMKilled" && by(c.finishedAt), c.PreviousReason == "OOMKilled" && by(c.previousAt):
+		case c.oomKilled(c.Reason, c.ExitCode) && by(c.finishedAt), c.oomKilled(c.PreviousReason, c.PreviousExitCode) && by(c.previousAt):
 			out = append(out, "container "+c.Name+" OOMKilled")
 		case c.Name == runnerContainer && !c.sidecar && c.ExitCode != 0 && by(c.finishedAt):
 			out = append(out, fmt.Sprintf("container %s exited %d", c.Name, c.ExitCode))

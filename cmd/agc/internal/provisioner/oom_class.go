@@ -42,6 +42,10 @@ const (
 // container killed at its memory limit.
 const containerReasonOOMKilled = "OOMKilled"
 
+// exitCodeSIGKILL is the exit code of a process killed by SIGKILL, as an out-of-memory
+// kill ends one.
+const exitCodeSIGKILL = 137
+
 // memoryLimitStep rounds a raised limit up, matching the recommendation's 64Mi buckets.
 const memoryLimitStep = 64 << 20
 
