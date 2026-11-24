@@ -665,7 +665,8 @@ Until it is built, detection's `gag_collateral` count measures what run-granular
 
 Taken for Q1319 on the `ci` set in `gag-dogfood`, AGC `v2.0.1-rc.2`, with the [`q1319-rerun-probe`](../../.github/workflows/q1319-rerun-probe.yml) fixture.
 The `names` runs are 45325262167 (attempts 1 to 4) and 45326925782 (attempt 1, a second set of shapes); the `chain` run is 45325687478 (attempts 1 to 4; attempt 5 re-ran `sibling-red` alone, to place a worker for another reading, and nothing here uses it).
-The jobs of the second `names` run and of the chain run's attempts 3 and 4 were assigned while the set's `minRequests.memory` was raised to 9024Mi for another reading; nothing here depends on memory.
+The jobs of the second `names` run and of the chain run's attempts 3 and 4 were assigned while the set's `minRequests.memory` was raised to 9024Mi for another reading, and attempt 2's last two jobs, assigned just before it, finished inside it; nothing here depends on memory.
+The first `names` run used an earlier form of the fixture, with one `matrix-long` leg where the second has two.
 The AGC's `scaleset: job assigned` lines give `jobDisplayName` and the jobs API gives `name`.
 The two were joined on the runner the AGC logs at start or completion against the API's `runner_name`, so the join does not use the names it tests.
 
@@ -686,7 +687,7 @@ The two were joined on the runner the AGC logs at start or completion against th
   So the ID to call with is the latest attempt's, and only a re-executed job gets a new `JobAssigned`.
 - **A skipped matrix job shows its name unexpanded** (`Named ${{ matrix.leg }} / ${{ matrix.n }}`), so a name read from a skipped job is not comparable.
 
-Not covered: nesting past two levels, an upload without `overwrite: true` on a re-run (the fixture sets it), and state outside GitHub.
+Not covered: nesting past two levels; an upload without `overwrite: true` on a re-run (the fixture sets it); state outside GitHub; a killed job carried into a later attempt, since the one killed job read here was itself re-run; and a single-job re-run of a job whose runner was lost, since each re-run here was of a job that ended on its own.
 
 ### What the readings recommend
 
