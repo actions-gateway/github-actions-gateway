@@ -2,7 +2,7 @@
 
 > **Status: scoped 2026-11-09; the ledger below says what has landed.** The maintainer made flaky-job detection and automatic retry for more platform failures the `v2.1.0` headline on 2026-11-09.
 > Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22), and Q1382's dogfood reading (2026-11-24); the ledger's open rows still gate the tag and nothing rides yet.
-> Three of them are the readings' refutations, Q1374 to Q1376, gated on 2026-11-22 because each breaks a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the `trigger="other"` rate this release measures success by, biased in opposite directions.
+> The readings' three refutations, Q1374 to Q1376, gated it from 2026-11-22 because each broke a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the `trigger="other"` rate this release measures success by, biased in opposite directions; all three are built.
 > Q1381 gated it too, settled 2026-11-22, because its re-runs landed in merge-queue runs nothing reads and each spent a `maxEvictionRetries` slot, which is the opposite of what this release is for; it and Q1320 are built, and the case it leaves is Q1391.
 > Q1389 gates it too: the out-of-memory class `v2.0.0` shipped can act on the wrong job where a worker dies before its pod names the job it ran, and Q1319 fixes only the re-run half of that, not the raised limit.
 > The wrong-job half is read from source, so its first step is reproducing it.
@@ -32,7 +32,7 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | Q1236 | Measure flaky-job detection on dogfood: result spelling, re-run job IDs (M1, M2, M4) | `2.1-gate` | ✅ measured 2026-11-22; three refuted assumptions filed as Q1374 to Q1376 |
 | Q1376 | Record a failed job's context from its terminated pod, not the still-`Running` one (M4) | `2.1-gate` | ✅ landed: the record is amended when the worker finishes |
 | Q1375 | Keep jobs that share one `name:` from pairing as a false flake (M2) | `2.1-gate` | ✅ landed: the run's job list tells a re-run from a job of the same name |
-| [Q1374](../queue/Q1374.md) | Record a job killed by `timeout-minutes`, which `JobCompleted` reports `canceled` (M1) | `2.1-gate` | 🔲 open |
+| Q1374 | Record a job killed by `timeout-minutes`, which `JobCompleted` reports `canceled` (M1) | `2.1-gate` | ✅ landed: counted once its re-run passes and GitHub's annotation says it exceeded its limit; tested against a fake only |
 | Q1317 | Reproduce the out-of-memory retry class on dogfood (M3, R12) | `2.1-gate` | ✅ reproduced 2026-11-22 under `Throughput`: the kill takes the runner, and the class fires and re-runs as built; `Binpack` is Q1382's |
 | Q1382 | Reproduce the out-of-memory retry class on a `Binpack` set (R12) | `2.1-gate` | ✅ reproduced 2026-11-24: the request rises with the limit and the re-run succeeds; a raise no node can hold is filed as Q1388 |
 | [Q1389](../queue/Q1389.md) | Keep the out-of-memory class from acting before the pod names the job it ran | `2.1-gate` | 🔲 open: reproduce first, since the wrong-job half is read from source |
