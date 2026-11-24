@@ -2725,6 +2725,13 @@ A refuted row that was <a href="../maintaining-backlog/#repurposing-an-id-is-a-c
 </thead>
 <tbody>
 <tr>
+<td>Q1393</td>
+<td><code>TestPairing_OneListPerRunAndDelay</code> races on its stub's read counter</td>
+<td>#2407</td>
+<td>2026-11-24</td>
+<td>Fixed and retired at fix time, with no row filed first, because its trigger cannot fire: the test read <code>runJobsStub.gets</code> with no lock after the pairing goroutine that writes it had started, and the counter is now an <code>atomic.Int64</code>, so no access to it can race. Never seen in CI. Reproduced on <code>main</code> at b5881b4cc under <code>-race</code>: 1 of 180 runs of the test alone, and 1 of 4 of the package under <code>-tags integration</code>.</td>
+</tr>
+<tr>
 <td>Q797</td>
 <td>Three GMC provisioning integration tests time out under the race run</td>
 <td>none</td>
