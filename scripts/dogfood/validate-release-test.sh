@@ -1808,6 +1808,7 @@ FAKE_BATTERY_RC=1
 # The wrapper takes all four and never fails the gate, whatever they find.
 : >"${RELEASE_READINGS_FILE}"
 rc=0
+# shellcheck disable=SC2329 # the stubs run under dragonfly_take, whose indirect call shellcheck cannot follow
 (
 	kubectl() { return 1; }
 	dragonfly_probe() { :; }
@@ -1815,6 +1816,7 @@ rc=0
 ) || rc=$?
 check "readings: a cluster that answers nothing does not fail the gate" "0" "${rc}"
 : >"${RELEASE_READINGS_FILE}"
+# shellcheck disable=SC2329 # the stubs run under dragonfly_take, whose indirect call shellcheck cannot follow
 (
 	kubectl() { return 1; }
 	dragonfly_probe() { :; }
@@ -1823,6 +1825,7 @@ check "readings: a cluster that answers nothing does not fail the gate" "0" "${r
 )
 check "readings: the node client's readings run when it is installed" "not-taken" "$(node_reading node-p2p verdict)"
 : >"${RELEASE_READINGS_FILE}"
+# shellcheck disable=SC2329 # the stubs run under dragonfly_take, whose indirect call shellcheck cannot follow
 (
 	kubectl() { return 1; }
 	dragonfly_probe() { :; }
@@ -1832,6 +1835,174 @@ check "readings: the node client's readings run when it is installed" "not-taken
 check "readings: no node-client reading without the node client" "" "$(node_reading node-p2p verdict)"
 check "readings: all four are recorded" "4" "$(jq -s 'map(select(.id=="Q539"))|length' "${RELEASE_READINGS_FILE}")"
 check "readings: none of them reads as a pass" "0" "$(jq -s 'map(select(.id=="Q539" and .verdict=="pass"))|length' "${RELEASE_READINGS_FILE}")"
+
+# Q1366: the readings run at once. Each of the three slow probes holds until it
+# has seen the other two start, so a serial run times the first one out, and the
+# battery holds until both worker probes are done, so a record written as it is
+# taken would land them ahead of it. One worker probe reports nothing while the
+# other passes.
+RDV="${SCRATCH}/readings-rendezvous"
+rdv_wait() { # FILE... — 0 once every FILE exists, 1 after about 20s.
+	local i f missing
+	for ((i = 0; i < 200; i++)); do
+		missing=0
+		for f in "$@"; do [[ -e "${RDV}/${f}" ]] || missing=1; done
+		((missing)) || return 0
+		command sleep 0.1 # the suite stubs sleep
+	done
+	return 1
+}
+export -f rdv_wait
+export RDV
+cat >"${SCRIPT_DIR}/e2e-mirror-validate.sh" <<'BATTERY'
+echo "kubeconfig=${KUBECONFIG:-unset}"
+echo "battery" >>"${RDV}/events"
+: >"${RDV}/battery-started"
+rdv_wait worker-started node-started && : >"${RDV}/battery-overlapped"
+rdv_wait worker-done node-done
+echo "battery-end" >>"${RDV}/events"
+exit 0
+BATTERY
+# shellcheck disable=SC2329 # the stubs run under dragonfly_take, whose indirect call shellcheck cannot follow
+concurrent_readings() (
+	kubectl() {
+		case "$*" in
+		*"${DRAGONFLY_SEED_SELECTOR}"*) echo "p2p" >>"${RDV}/events"; p2p_log 2 35 ;;
+		*hostIP*) echo 10.142.0.16 ;;
+		*"${DRAGONFLY_NODE_SELECTOR}"*) node_log 15 11 4 ;;
+		esac
+	}
+	dragonfly_probe() {
+		case "$2" in
+		dragonfly-worker-probe)
+			: >"${RDV}/worker-started"
+			rdv_wait battery-started node-started && : >"${RDV}/worker-overlapped"
+			: >"${RDV}/worker-done"
+			return 1
+			;;
+		dragonfly-node-worker-probe)
+			: >"${RDV}/node-started"
+			rdv_wait battery-started worker-started && : >"${RDV}/node-overlapped"
+			: >"${RDV}/node-done"
+			printf 'control 200\nnode 28\n'
+			;;
+		dragonfly-connect-probe)
+			echo "connect" >>"${RDV}/events"
+			printf 'control 0 200\nselfsigned 60 000\n'
+			;;
+		esac
+	}
+	E2E_DRAGONFLY_NODES=1
+	# Stands in for capture_worker_sizing, which e2e_leg waits for afterwards.
+	(rdv_wait readings-returned) &
+	local other="$!"
+	dragonfly_readings 2>&1
+	if kill -0 "${other}" 2>/dev/null; then : >"${RDV}/other-job-left"; fi
+	# By name: a suite started in the background inherits INT ignored, which shows here too.
+	trap -p INT TERM HUP | { grep -o dragonfly_interrupted || true; } >"${RDV}/traps-left"
+	: >"${RDV}/readings-returned"
+)
+mkdir -p "${RDV}"
+: >"${RELEASE_READINGS_FILE}"
+out="$(KUBECONFIG=/shared/kubeconfig concurrent_readings)"
+for actor in battery worker node; do
+	if [[ -e "${RDV}/${actor}-overlapped" ]]; then got=yes; else got=no; fi
+	check "readings: the ${actor} probe ran while the other two were running" "yes" "${got}"
+done
+check "readings: one record each, in a fixed order whatever order they finish in" \
+	"mirror-battery=pass p2p-path=pass worker-to-seed-proxy=not-taken connect-upstream-tls=pass node-p2p=pass worker-to-node-client=pass" \
+	"$(jq -r '"\(.criterion)=\(.verdict)"' "${RELEASE_READINGS_FILE}" | paste -sd' ' -)"
+check "readings: the terminal shows them in the same order" \
+	"mirror battery|P2P path|worker to seed proxy|CONNECT to a self-signed host|node P2P|worker to node client" \
+	"$(grep -oE '^  (mirror battery|P2P path|worker to seed proxy|CONNECT to a self-signed host|node P2P|worker to node client)' <<<"${out}" | sed 's/^  //' | paste -sd'|' -)"
+check "readings: the seed's log is read after the battery and before the CONNECTs" \
+	"battery battery-end p2p connect" "$(paste -sd' ' - <"${RDV}/events")"
+check_contains "battery: its credential fetch writes a kubeconfig of its own" \
+	"/mirror-battery-kubeconfig" "$(grep '^kubeconfig=' <<<"${out}" || true)"
+if [[ -e "${RDV}/other-job-left" ]]; then got=left; else got=waited; fi
+check "readings: another background job is left to its owner" "left" "${got}"
+check "readings: their interrupt traps end with them" "" "$(cat "${RDV}/traps-left")"
+
+# With the stream disabled there is no file to append to, and no reading fails.
+rm -rf "${RDV}" && mkdir -p "${RDV}"
+rc=0
+(RELEASE_READINGS_FILE="" concurrent_readings >/dev/null 2>&1) || rc=$?
+check "readings: a disabled readings file does not fail the gate" "0" "${rc}"
+
+# An interrupt ends the gate while the readings run, with no lane or probe left
+# for teardown to run beside. The gate here is a process of its own, in a session
+# of its own with INT at its default: a background bash ignores INT, and so would
+# everything it starts. Each probe is a foreground child, as kubectl is, and
+# outlives the test unless something stops it.
+export REPO_ROOT
+cat >"${SCRATCH}/interrupted-gate.sh" <<'GATE'
+set -euo pipefail
+shopt -s inherit_errexit
+echo "$$" >"${RDV}/gate"
+source "${REPO_ROOT}/scripts/dogfood/validate-release.sh"
+PROJECT=p ZONE=z CLUSTER=c WORKDIR="${RDV}" SCRIPT_DIR="${RDV}" E2E_DRAGONFLY_NODES=1
+gke_get_credentials_and_verify() { :; }
+kubectl() { [[ "$*" != *hostIP* ]] || echo 10.142.0.16; }
+dragonfly_probe() { bash "${RDV}/probe.sh" "$2"; }
+teardown() {
+	local rc="$?" i pid alive
+	for ((i = 0; i < 50; i++)); do
+		alive=0
+		while read -r pid; do
+			[[ ! "$(ps -o stat= -p "${pid}" || true)" =~ ^[^Z] ]] || alive=1
+		done < <(cat "${RDV}"/probing-*)
+		((alive)) || break
+		sleep 0.1
+	done
+	echo "teardown rc=${rc} probes-alive=${alive}" >>"${RDV}/events"
+}
+trap teardown EXIT
+dragonfly_readings
+echo "carried on" >>"${RDV}/events"
+GATE
+interrupted_readings() { # SIGNAL — signal the gate mid-readings; events and eof land in RDV.
+	local target i
+	rm -rf "${RDV}" && mkdir -p "${RDV}"
+	# shellcheck disable=SC2016 # expanded by the probe's own shell
+	printf '%s\n' 'echo "$$" >"${RDV}/probing-$1"' 'exec sleep 60' >"${RDV}/probe.sh"
+	# shellcheck disable=SC2016 # expanded by the battery's own shell
+	printf '%s\n' 'bash "${RDV}/probe.sh" battery' 'exit 0' >"${RDV}/e2e-mirror-validate.sh"
+	python3 -c 'import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+os.setsid()
+os.execvp("bash", ["bash", sys.argv[1]])' "${SCRATCH}/interrupted-gate.sh" 2>/dev/null | {
+		cat >/dev/null
+		: >"${RDV}/eof"
+	} &
+	rdv_wait probing-battery probing-dragonfly-worker-probe probing-dragonfly-node-worker-probe || true
+	target="$(cat "${RDV}/gate")"
+	# Ctrl-C reaches the terminal's whole process group; kill names one process.
+	if [[ "$1" == INT ]]; then kill -INT -- "-${target}"; else kill "-$1" "${target}"; fi
+	for ((i = 0; i < 100; i++)); do
+		[[ ! -e "${RDV}/eof" ]] || break
+		command sleep 0.1
+	done
+	[[ -e "${RDV}/eof" ]] || echo "output held open" >>"${RDV}/events"
+	kill -KILL -- "-${target}" 2>/dev/null || true
+	wait "$!" 2>/dev/null || true
+}
+for sig in INT:130 TERM:143 HUP:129; do
+	interrupted_readings "${sig%:*}"
+	check "readings: ${sig%:*} ends the gate, and its probes with it" \
+		"teardown rc=${sig#*:} probes-alive=0" "$(paste -sd'|' - <"${RDV}/events")"
+done
+rm -f "${RDV}/late"
+( # An interrupt ahead of the first lane, with a job the gate does not wait for.
+	(command sleep 5 && : >"${RDV}/late") &
+	echo "$!" >"${RDV}/other-job"
+	dragonfly_interrupted 143
+) && rc=0 || rc="$?"
+stop_tree "$(cat "${RDV}/other-job")"
+if [[ -e "${RDV}/late" ]]; then got=waited; else got=left; fi
+check "readings: an interrupt before any lane waits for no other job" "143 left" "${rc} ${got}"
+interrupted_readings KILL
+check "readings: a killed gate's lanes do not hold its output open" "closed" \
+	"$(cat "${RDV}/events" 2>/dev/null || echo closed)"
 
 # --- --legs: run one leg alone, record each leg, mark the candidate once all pass ---
 

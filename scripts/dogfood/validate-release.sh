@@ -802,22 +802,84 @@ probe_field() {
 	awk -v k="$2" -v n="$3" '$1 == k { print $(n + 1); exit }' <<<"$1"
 }
 
+# dragonfly_take DIR READING — take one reading with its output and its record
+# in DIR, so that readings taken at once neither interleave nor race an append.
+# Every reading records a verdict on each path out, so a status is ignored.
+dragonfly_take() {
+	local dir="$1" reading="$2"
+	local RELEASE_READINGS_FILE="${RELEASE_READINGS_FILE:+${dir}/${reading}.jsonl}"
+	"dragonfly_${reading}_reading" >"${dir}/${reading}.out" 2>&1 || true
+}
+
+# stop_tree PID — TERM PID and every process descended from it. Each is stopped
+# before its children are listed, so none can fork one the listing misses.
+stop_tree() {
+	local child
+	kill -STOP "$1" 2>/dev/null || return 0
+	for child in $(ps -A -o pid= -o ppid= | awk -v parent="$1" '$2 == parent { print $1 }'); do
+		stop_tree "${child}"
+	done
+	kill -TERM "$1" 2>/dev/null || true
+	kill -CONT "$1" 2>/dev/null || true
+}
+
+# dragonfly_interrupted STATUS PID... — end the gate with STATUS, after the lanes
+# at PID: teardown must not run beside a lane still creating probe pods.
+dragonfly_interrupted() {
+	local status="$1" pid
+	shift
+	trap - INT TERM HUP
+	for pid in "$@"; do stop_tree "${pid}"; done
+	# With no lane started yet, a bare wait would wait for the lease renewer.
+	(($# == 0)) || wait "$@" 2>/dev/null || true
+	exit "${status}"
+}
+
 # dragonfly_readings — the readings that make a Dragonfly leg say something
 # about Dragonfly: Phase 3 of the Q539 plan, beside the matrix and the census. Readings, not gates: each records
 # pass, finding or not-taken and the function returns 0 whatever it finds,
 # because each is evidence about the back end rather than about whether the
 # matrix ran.
+#
+# Taken at once (Q1366), since the two worker probes each wait out a timeout
+# that is the expected answer, and emitted in a fixed order. The seed lane is
+# serial: p2p counts the seed's log lines, which the battery's fetches add to
+# and connect's CONNECTs would. At most three probe pods share the e2e tenant,
+# which with its AGC and two workers is its ResourceQuota's six.
+#
+# The traps are what lets Ctrl-C end the gate here: bash starts a background lane
+# with INT ignored, so nothing under it dies of the signal.
 dragonfly_readings() {
 	echo "Dragonfly back-end readings (Q539, Q1160)..."
 	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
-	dragonfly_battery_reading
-	dragonfly_p2p_reading
-	dragonfly_worker_reading
-	dragonfly_connect_reading
+	local dir="${WORKDIR}/dragonfly-readings" reading
+	local lane
+	local -a readings=(battery p2p worker connect) lanes=("battery p2p connect" worker) pids=()
+	rm -rf "${dir}"
+	mkdir -p "${dir}"
+	# The node clients run on the tainted e2e pool alone, where no probe pod can
+	# land, so no probe adds to the log node_p2p counts.
 	if [[ "${E2E_DRAGONFLY_NODES:-0}" == 1 ]]; then
-		dragonfly_node_p2p_reading
-		dragonfly_node_worker_reading
+		readings+=(node_p2p node_worker)
+		lanes+=(node_p2p node_worker)
 	fi
+	trap 'dragonfly_interrupted 130 "${pids[@]}"' INT
+	trap 'dragonfly_interrupted 143 "${pids[@]}"' TERM
+	trap 'dragonfly_interrupted 129 "${pids[@]}"' HUP
+	for lane in "${lanes[@]}"; do
+		# Off the gate's output, which a lane would otherwise hold open.
+		(for reading in ${lane}; do dragonfly_take "${dir}" "${reading}"; done) >/dev/null 2>&1 &
+		pids+=("$!")
+	done
+	# By pid: capture_worker_sizing is e2e_leg's to wait for.
+	wait "${pids[@]}" || true
+	trap - INT TERM HUP
+	for reading in "${readings[@]}"; do
+		cat "${dir}/${reading}.out" || true
+		if [[ -s "${dir}/${reading}.jsonl" ]]; then
+			cat "${dir}/${reading}.jsonl" >>"${RELEASE_READINGS_FILE}" || true
+		fi
+	done
 	return 0
 }
 
@@ -828,9 +890,11 @@ dragonfly_readings() {
 # to the e2e tenant: this script's own TENANT_NAMESPACE is the standing one.
 # The battery exits 1 for a failed check and for one that reported nothing
 # alike, so 1 records as a finding whose detail sends the reader to its lines.
+# It fetches its own credentials, and gcloud truncates and rewrites the
+# kubeconfig in place, so it gets one the other readings' kubectl never reads.
 dragonfly_battery_reading() {
 	local rc=0
-	PROJECT="${PROJECT}" CLUSTER="${CLUSTER}" ZONE="${ZONE}" \
+	KUBECONFIG="${WORKDIR}/mirror-battery-kubeconfig" PROJECT="${PROJECT}" CLUSTER="${CLUSTER}" ZONE="${ZONE}" \
 		TENANT_NAMESPACE="${E2E_NAMESPACE}" MIRROR_NAMESPACE="${MIRROR_NAMESPACE}" \
 		bash "${SCRIPT_DIR}/e2e-mirror-validate.sh" || rc=$?
 	case "${rc}" in
