@@ -3264,14 +3264,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Three of the design's futility checks, which withhold a re-run that cannot help, were left unbuilt when Q1181 shipped the other four, so a …</td>
 </tr>
 <tr>
-<td><a href="Q1318/">Q1318</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#measure-before-building">Measure the superseded check on a fork PR whose branch is main (M5)</a></td>
-<td><code>tests</code> <code>2.1-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The <code>superseded</code> futility check (Q1181) withholds a re-run when a newer run of the same workflow, event and branch exists from the same …</td>
-</tr>
-<tr>
 <td><a href="Q1319/">Q1319</a></td>
 <td><a href="../plan/q555-automatic-recovery-design/#run--or-job-granular-re-run-open-question-2">Re-run only the classified job once job names are shown to match (M6)</a></td>
 <td><code>feature</code> <code>2.1-gate</code></td>
@@ -3294,6 +3286,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>A job that fails because its Docker-in-Docker sidecar crashed is a platform failure, and today it needs a manual re-run.</td>
+</tr>
+<tr>
+<td><a href="Q1381/">Q1381</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">A displaced merge-group run is re-run: GitHub never cancels it</a></td>
+<td><code>bug</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The futility checks assume a merge-group run that loses its place in the queue is cancelled by GitHub and so withheld as <code>run_cancelled</code> …</td>
 </tr>
 <tr>
 <td><a href="Q1255/">Q1255</a></td>

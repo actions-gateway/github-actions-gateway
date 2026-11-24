@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1318/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1381/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Measure the superseded check on a fork PR whose branch is main (M5) - GitHub Actions Gateway</title>
+        <title>A displaced merge-group run is re-run: GitHub never cancels it - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#measure-the-superseded-check-on-a-fork-pr-whose-branch-is-main-m5" class="md-skip">
+        <a href="#a-displaced-merge-group-run-is-re-run-github-never-cancels-it" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Measure the superseded check on a fork PR whose branch is main (M5)
+              A displaced merge-group run is re-run: GitHub never cancels it
             
           </span>
         </div>
@@ -2703,15 +2703,15 @@
   
 
 
-<h1 id="measure-the-superseded-check-on-a-fork-pr-whose-branch-is-main-m5">Measure the superseded check on a fork PR whose branch is main (M5)<a class="headerlink" href="#measure-the-superseded-check-on-a-fork-pr-whose-branch-is-main-m5" title="Permanent link">&para;</a></h1>
-<p>The <code>superseded</code> futility check (Q1181) withholds a re-run when a newer run of the same workflow, event and branch exists from the same <code>head_repository</code>, and nothing has measured that this keeps a fork's <code>main</code> from matching upstream's <code>main</code>.
-A wrong answer withholds a fork PR's legitimate re-run whenever upstream <code>main</code> builds, which is the design's M5.</p>
-<ul>
-<li>Open a pull request from a fork whose head branch is <code>main</code> against a test repository, fail its job by disruption, push to upstream <code>main</code>, and read whether the re-run is withheld as <code>superseded</code>.</li>
-<li>If the filter does not separate them, the check needs more than <code>event</code> and <code>head_repository</code>; the <a href="../../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">design notes</a> say what it compares today.</li>
-</ul>
-<p>Also unmeasured beside it, and cheap to read in the same session: whether a merge-group run that loses its place is cancelled by GitHub and so caught by <code>run_cancelled</code>.
-Gated on 2.1 with the rest of the retry work (<a href="../../plan/release-2.1/">release-2.1.md</a>).</p>
+<h1 id="a-displaced-merge-group-run-is-re-run-github-never-cancels-it">A displaced merge-group run is re-run: GitHub never cancels it<a class="headerlink" href="#a-displaced-merge-group-run-is-re-run-github-never-cancels-it" title="Permanent link">&para;</a></h1>
+<p>The futility checks assume a merge-group run that loses its place in the queue is cancelled by GitHub and so withheld as <code>run_cancelled</code>; measured on 2026-11-22 against this repo's queue of 2026-10-30, GitHub leaves it running.
+When #2190 failed at the head of the queue and was removed (<code>failed_checks</code>, 17:56:25 UTC), the groups behind it, <code>gh-readonly-queue/main/pr-2179-e90ed166…</code> and <code>pr-2180-1558b6ca…</code>, were rebuilt as new groups at 17:56:30, and the old groups' runs kept going: six concluded <code>success</code> after the removal, the last at 18:05:13 (run 41099950920, <code>doc-links</code>).
+Their eight <code>cancelled</code> runs were each cancelled by a job of their own that exceeded its <code>timeout-minutes</code>, every one before 17:56:25, read from the jobs' check-run annotations, so none of the 30 runs was cancelled by the displacement (<a href="../../plan/q555-automatic-recovery-design/#readings-from-githubs-api-2026-11-22">the readings</a>).
+Both old group refs now return 404.</p>
+<p>So a disruption in a displaced group's run passes every check that is built: <code>superseded</code> covers only <code>push</code> and <code>pull_request</code>, and nothing else reads the event, so the AGC re-runs a run whose result no queue entry is waiting for, and spends a slot of <code>maxEvictionRetries</code> on it.
+What that re-run does once its <code>gh-readonly-queue</code> ref is deleted was not measured.</p>
+<p>A candidate check is that the run's <code>head_branch</code> ref still exists, one <code>GET …/git/ref/heads/&lt;head_branch&gt;</code> for <code>merge_group</code> runs only, which a 404 answers; whether a displaced group's ref is deleted before its runs conclude, so that the check can see it in time, is the open part.
+Separate from <a href="../Q1230/">Q1230</a>, which is about preemption victims that never started.</p>
 
 
 

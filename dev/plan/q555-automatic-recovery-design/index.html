@@ -2714,6 +2714,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#readings-from-githubs-api-2026-11-22" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Readings from GitHub's API, 2026-11-22
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3112,7 +3123,7 @@ A per-set failure ledger joins each failed job's platform context to its later a
 Retry classes then fire off that context through the re-run path the disruption arms already use, after one run read that both checks futility and enforces a budget that survives a restart.</p>
 <h2 id="measure-before-building">Measure before building<a class="headerlink" href="#measure-before-building" title="Permanent link">&para;</a></h2>
 <p>Each of these decides a component's shape.
-M1 to M4 were measured on dogfood on 2026-11-22 (<a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>); the rest have not been observed:</p>
+M1 to M4 were measured on dogfood on 2026-11-22 (<a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>), and M5 from GitHub's API the same day (<a href="#readings-from-githubs-api-2026-11-22">the readings</a>); M6 has not been observed:</p>
 <table>
 <thead>
 <tr>
@@ -3151,7 +3162,7 @@ M1 to M4 were measured on dogfood on 2026-11-22 (<a href="#readings-from-the-dog
 <td>M5</td>
 <td>The <code>superseded</code> check's answer for a pull request from a fork whose branch is <code>main</code></td>
 <td>Whether the check needs more than the filters below</td>
-<td>A fork PR on a test repository</td>
+<td>Measured from the API: <a href="#readings-from-githubs-api-2026-11-22">the readings</a></td>
 </tr>
 <tr>
 <td>M6</td>
@@ -3184,6 +3195,19 @@ The readings are the AGC's <code>scaleset: job assigned</code>, <code>job comple
   The re-run's pod carried a runner limit of 12416Mi, its request unchanged at 5568Mi since <code>Throughput</code> raises only the limit, and <code>actions-gateway.com/rerun-cause: oom</code>; its step read <code>memory.max</code> as 13019119616 bytes (12416Mi), survived the same allocation, and paired as <code>trigger=gag</code>, <code>cause=oom</code>, not flaky.
   <code>Binpack</code>, which raises the request with the limit, was not measured: the live set runs <code>Throughput</code> (<a href="../../queue/Q1382/">Q1382</a>).</li>
 <li><strong><code>JobCompleted</code> carries <code>eventName</code> and <code>jobWorkflowRef</code>.</strong> Every record holds <code>event: push</code> and the fixture's workflow ref, and the listener reads both from the completion message.</li>
+</ul>
+<h3 id="readings-from-githubs-api-2026-11-22">Readings from GitHub's API, 2026-11-22<a class="headerlink" href="#readings-from-githubs-api-2026-11-22" title="Permanent link">&para;</a></h3>
+<p>M5 and the merge-group question beside it were read from GitHub's REST API rather than on dogfood, since the queries the <code>superseded</code> check sends can be put to any public repository.
+This repository has no <code>pull_request</code> run whose branch is <code>main</code> (<code>?branch=main&amp;event=pull_request</code> returns 0), so the fork readings are from <code>github/docs</code>, which has many.
+No fork pull request was disrupted end to end, so the AGC's own decode of a fork run is the piece these readings do not cover.</p>
+<ul>
+<li><strong>M5.</strong> The <code>branch</code> filter matches a fork pull request's head branch, and the <code>event</code> filter is what keeps the two <code>main</code>s apart.
+  On <code>github/docs</code> workflow 126781987, <code>?branch=main&amp;event=push</code> returns only upstream's runs (3, all <code>github/docs</code>) and <code>?branch=main&amp;event=pull_request</code> only forks' (5, from four forks); on workflow 6878645, the second query's 112 runs come from 58 forks, 6 with a deleted fork (<code>head_repository</code> null) and none from upstream.
+  Without <code>event</code>, the newest <code>main</code> run is upstream's <code>schedule</code> run on the first workflow and a fork's pull request on the second, so either side would shadow the other.
+  Comparing <code>head_repository</code> then separates one fork from another: fork <code>503badrr/docs</code> has runs 32531300946 and 32531324720 on two different head commits, 19 s apart, so the second supersedes the first.
+  <code>per_page=1</code> returns whichever fork built last, though, so a fork's own newer commit is hidden whenever another fork's pull request from <code>main</code> has built since, and the check misses; a miss re-runs, so it costs a wasted re-run, never a withheld one.</li>
+<li><strong>A merge-group run that loses its place is not cancelled by GitHub.</strong> On this repository's queue on 2026-10-30, #2190 failed at the head and was removed (<code>failed_checks</code>, 17:56:25 UTC), and the groups behind it were rebuilt at 17:56:30; of the old groups' 30 runs, six concluded <code>success</code> after the removal, the last at 18:05:13, and the eight <code>cancelled</code> were each ended by one of their own jobs exceeding <code>timeout-minutes</code> before 17:56:25 (the jobs' check-run annotations).
+  So <code>run_cancelled</code> does not catch a displaced group's run, and nothing else does (<a href="../../queue/Q1381/">Q1381</a>).</li>
 </ul>
 <h2 id="component-1-the-failure-ledger-q555-r1-to-r8">Component 1: the failure ledger (Q555, R1 to R8)<a class="headerlink" href="#component-1-the-failure-ledger-q555-r1-to-r8" title="Permanent link">&para;</a></h2>
 <h3 id="where-the-hook-goes">Where the hook goes<a class="headerlink" href="#where-the-hook-goes" title="Permanent link">&para;</a></h3>
@@ -3457,8 +3481,8 @@ The <code>EvictionRerunWithheld</code> Event names the reason and the fix.</p>
 <li><strong><code>already_rerun</code> asks about the job, not the run.</strong> A single-job re-run moves <code>run_attempt</code> (from recall) without touching the job's siblings, so "the attempt moved" would withhold a job that nobody re-ran.
   The jobs-list call it needs happens only when the attempt has moved, which is rare.</li>
 <li><strong><code>superseded</code> is the other extra call</strong>, and only on the two events where a branch can move.
-  Filtering on <code>event</code> and comparing <code>head_repository</code> keeps a fork's <code>main</code> from matching upstream's (M5).
-  A merge-group run that loses its place is assumed cancelled by GitHub and so caught by <code>run_cancelled</code>; that is unmeasured.</li>
+  Filtering on <code>event</code> and comparing <code>head_repository</code> keeps a fork's <code>main</code> from matching upstream's (M5, <a href="#readings-from-githubs-api-2026-11-22">measured</a>); with <code>per_page=1</code> another fork's newer run can hide the fork's own, which re-runs.
+  A merge-group run that loses its place is not cancelled by GitHub, so <code>run_cancelled</code> does not catch it (<a href="#readings-from-githubs-api-2026-11-22">measured</a>, <a href="../../queue/Q1381/">Q1381</a>).</li>
 <li><strong><code>worker_unstartable</code> is new wiring</strong>: no re-run path consults <code>worker_startup_verdict.go</code> today.
   It matters most on the abandoned arm, which by design releases on any pod of the set being bound to a node (Q512's test for capacity), including one stuck pulling an image that every next pod will fail to pull too.</li>
 <li><strong><code>budget_exhausted</code> keeps its own counter</strong>, <code>eviction_retries_exhausted_total</code>, so existing alerts keep working.</li>
@@ -3815,7 +3839,7 @@ Job-granular avoids that, and costs:</p>
 </ul>
 <h2 id="order-of-work">Order of work<a class="headerlink" href="#order-of-work" title="Permanent link">&para;</a></h2>
 <ol>
-<li>The dogfood turn-up of 2026-11-22 settled M1 to M4 (<a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>); M6 needs its own test workflow.</li>
+<li>The dogfood turn-up of 2026-11-22 settled M1 to M4 (<a href="#readings-from-the-dogfood-turn-up-2026-11-22">the readings</a>), and the API settled M5 (<a href="#readings-from-githubs-api-2026-11-22">the readings</a>); M6 needs its own test workflow.</li>
 <li>Q1182 (built) created the ledger store, with its version rules, <code>reruns</code> map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as <code>selfCancelledAttempt</code>.</li>
 <li>Q1181 (built): <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the widened run read, honouring <code>selfCancelledAttempt</code>, between the run read and the reservation in <code>handleScaleSetEviction</code>; <code>already_rerun</code>, <code>run_succeeded</code> and <code>worker_unstartable</code> are not built, and the classic tier takes none.</li>
 <li>Q555 (built) added the <code>failures</code> map, the snapshot, the pairing and the metrics on that store.

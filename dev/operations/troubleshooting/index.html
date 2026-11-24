@@ -7979,7 +7979,8 @@ That is checked on every cause, and GAG's own force-cancel of an abandoned run i
 No call is made, <code>eviction_rerun_withheld_total{reason="run_cancelled"}</code> increments, and a Normal <code>EvictionRerunWithheld</code> Event names the run (Q811, Q1181).
 See <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>.</p>
 <p><strong>Fires and is withheld as futile</strong>, before any budget slot is spent (Q1181): <code>reason="attempt_limit"</code> (the run is past GitHub's 50 re-runs), <code>reason="run_too_old"</code> (created more than 30 days ago), or <code>reason="superseded"</code> (a newer commit's run of the same workflow, event and branch has started).
-The <code>EvictionRerunWithheld</code> Event names the reason; for the first two, start a new run, and for the third nothing is needed.</p>
+The <code>EvictionRerunWithheld</code> Event names the reason; for the first two, start a new run, and for the third nothing is needed.
+A merge-queue run has no <code>superseded</code> check, and GitHub leaves a group displaced from the queue running rather than cancelling it, so a disrupted job in one is re-run and spends a budget slot on a result nothing reads (measured 2026-11-22, Q1381).</p>
 <p>A quota-blocked job is deliberately absent from this table: it is <strong>never claimed</strong> in the first place, so it stays queued at GitHub with no re-run needed — see <a href="#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a>.</p>
 <hr />
 <h2 id="flaky-jobs-and-platform-faults-on-failed-jobs">Flaky Jobs and Platform Faults on Failed Jobs<a class="headerlink" href="#flaky-jobs-and-platform-faults-on-failed-jobs" title="Permanent link">&para;</a></h2>
