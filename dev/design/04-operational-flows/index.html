@@ -4074,11 +4074,21 @@ The record carries the worker's state at its terminal transition, which the pod 
 A restart loses the snapshots waiting for a completion and the failures waiting for a worker, and the latter keep the running pod's context.
 The snapshot also carries the set's egress proxy pool as <code>proxy</code>, read from the AGC's cache: a colocated pool's <code>Ready</code> condition and <code>readyReplicas</code>, or <code>mode: shared</code> alone for a pool in another namespace, which that cache cannot see (Q1237).
 The cause a recovery claim names for the job is recorded with it, so a disrupted job is never read as flaky.</p>
-<p>A later completion of the same key with a new job ID is the job's next attempt, attributed from GAG's own re-runs of the run in the same ledger:</p>
+<p>A later completion of the same key with a new job ID is the job's next attempt or another job with its <code>name:</code>, which GitHub allows in one run, and the completion carries no attempt number to tell them apart.
+So the AGC reads the run's jobs in every attempt (<code>GET …/actions/runs/{id}/jobs?filter=all</code>) and finds the completed job by its runner's name (Q1375).
+It is the failed job's re-run when the jobs of its name differ between its attempt and the one before by those two alone, the failed job's runner gone and the completed job's added; anything else changes no record.
+A job with no runner, a skipped one included, matches nothing in the other attempt, so a name that any job was skipped under never pairs: a job skipped beside its failing twin can run in the re-run.
+The rule rests on the earlier attempt, which has finished and lists every job, because the later one does not list a job whose <code>needs</code> are still running (<a href="../../plan/q555-automatic-recovery-design/#readings-for-pairing-jobs-that-share-a-name-2026-11-23">measured</a>).
+The read happens only for a completion that matches a record, never for an ordinary one, and off the listener's goroutine, so nothing behind the completion waits for it.
+A run's matches gather for 30 seconds and share one list and one ledger write, so a run costs a set at most one list in that time, of one request per 100 jobs over its attempts; past 1,000 jobs it costs one request and pairs nothing.
+Re-running 100 of a run's 200 legs, finished together, costs 4 requests and one write.
+The delay also lets a fast job's attempt finish listing.
+A restart loses the matches gathered in those 30 seconds, whose re-runs then count nothing; at most 1,024 wait at once.</p>
+<p>A re-run of an attempt is attributed from what the same ledger says GAG re-ran of that attempt:</p>
 <table>
 <thead>
 <tr>
-<th>GAG re-ran the run and</th>
+<th>GAG re-ran the failed attempt and</th>
 <th>Trigger</th>
 <th>Flaky when it succeeds</th>
 </tr>
@@ -4101,8 +4111,7 @@ The cause a recovery claim names for the job is recorded with it, so a disrupted
 </tr>
 </tbody>
 </table>
-<p>A succeeded attempt deletes the record; a failed one updates it, keeping the first failure's time and context, and marks GAG's re-run it was attributed to as spent so a later attempt does not claim it again.
-<code>JobCompleted</code> carries no run attempt, so GAG's re-runs are matched by job name rather than by attempt: a job that first fails in an attempt after one GAG re-ran reads as <code>gag_collateral</code> rather than <code>other</code>.
+<p>A succeeded attempt deletes the record; a failed one updates it, keeping the first failure's time and context.
 A succeeded completion with no record, the common case, reads an in-memory index of the ledger's keys and costs no API call; the index is refreshed on each read and write of the ledger, so a record another replica wrote since is missed and counts nothing.
 Failure records are evicted oldest first once the ledger passes half its 512 KiB cap, and budget records never are: <code>v1.10.0</code> writes the same object, keeps failure records it does not know, cannot evict them, and refuses a write past the cap, so records allowed to fill it would withhold that version's every reservation during a rollout or after a rollback.</p>
 <h4 id="why-preemption-deletes-rather-than-evicts-and-what-that-costs-us">Why preemption <em>deletes</em> rather than <em>evicts</em>, and what that costs us<a class="headerlink" href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" title="Permanent link">&para;</a></h4>

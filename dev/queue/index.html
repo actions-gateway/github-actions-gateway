@@ -3216,14 +3216,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Since Q1232, the scale-set abandoned arm reads the run before force-cancelling.</td>
 </tr>
 <tr>
-<td><a href="Q1375/">Q1375</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#pairing-and-attribution-r1-r2-r8">Jobs sharing one name: share a failure key and report false flakes</a></td>
-<td><code>bug</code> <code>2.1-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Flaky-job detection keys a failure by run ID and <code>jobDisplayName</code>, and GitHub accepts two jobs in one workflow with the same <code>name:</code> …</td>
-</tr>
-<tr>
 <td><a href="Q1374/">Q1374</a></td>
 <td><a href="../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">Detection drops timed-out jobs: JobCompleted reports them canceled</a></td>
 <td><code>bug</code> <code>2.1-gate</code></td>
@@ -4670,6 +4662,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> <code>e2e / e2e</code> fails in the step "Chart uninstall/reinstall check" with `FAIL: actions-gateway-gmc-ip-ranges has no Deployment …</td>
+</tr>
+<tr>
+<td><a href="Q1390/">Q1390</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2_runnerset_sizing_profile_test.go">Sizing envtest reads status directly and the pod build reads a cache</a></td>
+<td><code>tests</code> <code>flake</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>TestV2_RunnerSet_ThroughputCPULimitInjectionIsReported</code> can get a worker pod built without the sizing profile it waited for, and fail …</td>
 </tr>
 </tbody>
 </table>
