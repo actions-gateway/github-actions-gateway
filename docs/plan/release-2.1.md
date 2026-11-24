@@ -1,7 +1,7 @@
 # Release 2.1 Milestone Definition
 
 > **Status: scoped 2026-11-09, nothing landed.** The maintainer made flaky-job detection and automatic retry for more platform failures the `v2.1.0` headline on 2026-11-09.
-> Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22); nine rows still gate the tag and nothing rides yet.
+> Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22); the ledger's open rows still gate the tag and nothing rides yet.
 > Three of them are the readings' refutations, Q1374 to Q1376, gated on 2026-11-22 because each breaks a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the `trigger="other"` rate this release measures success by, biased in opposite directions.
 > Q1381 gates it too, settled 2026-11-22: its re-runs land in merge-queue runs nothing reads and each spends a `maxEvictionRetries` slot, which is the opposite of what this release is for.
 > Nothing here is a commitment to a date.
@@ -27,7 +27,7 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
 | Q1236 | Measure flaky-job detection on dogfood: result spelling, re-run job IDs (M1, M2, M4) | `2.1-gate` | ✅ measured 2026-11-22; three refuted assumptions filed as Q1374 to Q1376 |
-| [Q1376](../queue/Q1376.md) | Record a failed job's context from its terminated pod, not the still-`Running` one (M4) | `2.1-gate` | 🔲 open |
+| Q1376 | Record a failed job's context from its terminated pod, not the still-`Running` one (M4) | `2.1-gate` | ✅ landed: the record is amended when the worker finishes |
 | [Q1375](../queue/Q1375.md) | Keep jobs that share one `name:` from pairing as a false flake (M2) | `2.1-gate` | 🔲 open |
 | [Q1374](../queue/Q1374.md) | Record a job killed by `timeout-minutes`, which `JobCompleted` reports `canceled` (M1) | `2.1-gate` | 🔲 open |
 | Q1317 | Reproduce the out-of-memory retry class on dogfood (M3, R12) | `2.1-gate` | ✅ reproduced 2026-11-22 under `Throughput`: the kill takes the runner, and the class fires and re-runs as built; `Binpack` is Q1382 |

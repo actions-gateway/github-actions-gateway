@@ -658,7 +658,17 @@ What it rests on, from recall of the kubelet rather than measured here: on cgrou
 Detection records what each recovery did, and changes nothing it does.
 The listener reports every terminal `JobCompleted` once per process, with its result, run identity, triggering event and workflow ref.
 A `failed` completion, or a `canceled` one a recovery claim names, is recorded in the set's failure ledger (`scaleset-failures-<set>`, the ConfigMap that holds the scale-set budget) under `failures["<runID>/<job name>"]`, for 7 days.
-The record carries the worker's state at its terminal transition, which the pod watch snapshots into a bounded in-memory map (1,024 workers) because the pod may be gone when the completion arrives; the completion falls back to reading the pod, and records no context when neither exists.
+The record carries the worker's state at its terminal transition, which the pod watch snapshots, and the two arrive in either order:
+
+- **The worker finishes first** when something kills its runner: GitHub completes the job when its lock lapses, about 10 minutes later, by when the pod may be reaped.
+  The snapshot waits in a bounded in-memory map (1,024 workers) and the completion takes it.
+- **The completion arrives first** when the job ends on a step's result, and finds the pod still `Running` ([measured](../plan/q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22), Q1376).
+  The failure is recorded at once from the running pod, so a restart cannot lose its pairing, and the pod watch rewrites the record's context when the worker finishes, one more ledger write per such failure.
+  That write keeps the proxy readiness the completion read, the nearer reading to the job's end, and a fault it adds is reported only where it is dated before the completion, since what happens to a worker after its job has a result did not cause it.
+  The wait is off the listener's goroutine, which handles one message at a time, so nothing behind the completion is delayed.
+
+A worker whose completion has already been handled is not snapshotted, since nothing would take it; a record with neither a snapshot nor a pod has no context.
+A restart loses the snapshots waiting for a completion and the failures waiting for a worker, and the latter keep the running pod's context.
 The snapshot also carries the set's egress proxy pool as `proxy`, read from the AGC's cache: a colocated pool's `Ready` condition and `readyReplicas`, or `mode: shared` alone for a pool in another namespace, which that cache cannot see (Q1237).
 The cause a recovery claim names for the job is recorded with it, so a disrupted job is never read as flaky.
 

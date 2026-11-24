@@ -1007,8 +1007,8 @@ func (r *RunnerSetReconciler) podToRunnerSet(_ context.Context, obj client.Objec
 // event gets, with scale-set disruption recovery run off the event first (Q1029). Why
 // the event rather than the reconcile it enqueues is on
 // provisioner.RecoverDisruptedScaleSetWorker. Updates and deletes also snapshot a
-// worker's terminal state for flaky-job detection (Q555), since the pod may be gone by
-// the time its job's completion arrives.
+// worker's terminal state for flaky-job detection (Q555): the pod may be gone by the
+// time its job's completion arrives, or finish only after it (Q1376).
 func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 	enqueue := handler.EnqueueRequestsFromMapFunc(r.podToRunnerSet)
 	return handler.Funcs{

@@ -325,6 +325,7 @@ func TestFlakyJobs_AnUnreadyColocatedProxyIsAPlatformFault(t *testing.T) {
 					require.NoError(t, c.Create(ctx, red))
 				}
 				require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+				assert.Empty(t, p.workerSnapshots.recorded, "a finished worker's record waits for nothing")
 
 				var snap workerSnapshot
 				require.NoError(t, json.Unmarshal(readFailures(t, p, stub)["900/build"].Context, &snap))
@@ -390,11 +391,241 @@ func TestFlakyJobs_SnapshotStoreIsBounded(t *testing.T) {
 	var w workerSnapshots
 	base := time.Now()
 	for i := range maxWorkerSnapshots + 1 {
-		w.put(fmt.Sprint(i), &workerSnapshot{takenAt: base.Add(time.Duration(i) * time.Second)})
+		at := base.Add(time.Duration(i) * time.Second)
+		w.put(fmt.Sprint("s", i), &workerSnapshot{takenAt: at}, false)
+		w.hold(fmt.Sprint("r", i), &recordedFailure{at: at})
 	}
 	assert.Len(t, w.byID, maxWorkerSnapshots)
-	assert.Nil(t, w.take("0"), "the oldest snapshot is evicted")
-	assert.NotNil(t, w.take(fmt.Sprint(maxWorkerSnapshots)))
+	assert.Nil(t, w.take("s0"), "the oldest snapshot is evicted")
+	assert.NotNil(t, w.take(fmt.Sprint("s", maxWorkerSnapshots)))
+	assert.Len(t, w.recorded, maxWorkerSnapshots)
+	assert.NotContains(t, w.recorded, "r0", "the oldest recorded failure is evicted")
+}
+
+// recordedContext is the context of the record for run 900's job "build".
+func recordedContext(t *testing.T, p *Provisioner, target Target) workerSnapshot {
+	t.Helper()
+	f := readFailures(t, p, target)["900/build"]
+	require.NotNil(t, f)
+	var s workerSnapshot
+	require.NoError(t, json.Unmarshal(f.Context, &s))
+	return s
+}
+
+// finishWorker is pod after its runner exited, with the completion stamp a Running pod
+// is given when its job completes.
+func finishWorker(pod *corev1.Pod, at time.Time) *corev1.Pod {
+	done := pod.DeepCopy()
+	done.Annotations[AnnotationJobCompletedAt] = at.UTC().Format(time.RFC3339)
+	done.Status.Phase = corev1.PodSucceeded
+	done.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: runnerContainer, State: corev1.ContainerState{
+		Terminated: &corev1.ContainerStateTerminated{Reason: "Completed", FinishedAt: metav1.NewTime(at)}}}}
+	return done
+}
+
+// terminated is a container status that exited with reason and code at the given time.
+func terminated(name, reason string, code int32, at time.Time) corev1.ContainerStatus {
+	return corev1.ContainerStatus{Name: name, State: corev1.ContainerState{
+		Terminated: &corev1.ContainerStateTerminated{Reason: reason, ExitCode: code, FinishedAt: metav1.NewTime(at)}}}
+}
+
+// TestFlakyJobs_ARunningWorkersRecordIsCompletedWhenItFinishes (Q1376): a job that ends
+// on a step's result completes while its worker runs, so the record starts from the
+// running pod and is rewritten at the worker's terminal transition. Only what happened
+// before the completion is reported as a fault, and only once.
+func TestFlakyJobs_ARunningWorkersRecordIsCompletedWhenItFinishes(t *testing.T) {
+	end := time.Now()
+	before, after := end.Add(-time.Minute), end.Add(time.Minute)
+	oomSidecar := func(at time.Time) []corev1.ContainerStatus {
+		return []corev1.ContainerStatus{terminated("dind", "OOMKilled", 137, at)}
+	}
+	crashedSidecar := func(at time.Time, state corev1.ContainerState) []corev1.ContainerStatus {
+		crash := terminated("dind", "OOMKilled", 137, at)
+		return []corev1.ContainerStatus{{Name: "dind", RestartCount: 1, State: state, LastTerminationState: crash.State}}
+	}
+	disrupted := func(at time.Time) []corev1.PodCondition {
+		return []corev1.PodCondition{{Type: corev1.DisruptionTarget, Status: corev1.ConditionTrue,
+			Reason: "TerminationByKubelet", LastTransitionTime: metav1.NewTime(at)}}
+	}
+	for _, tc := range []struct {
+		name   string
+		worker func(running, finished *corev1.Pod)
+		// wantEvents is the PlatformFaultOnFailedJob Events over the completion and the
+		// finish together.
+		wantEvents int
+	}{
+		{name: "a red test on a healthy worker", worker: func(_, _ *corev1.Pod) {}},
+		{name: "a sidecar killed for memory before the job ended", wantEvents: 1, worker: func(_, f *corev1.Pod) {
+			f.Status.InitContainerStatuses = oomSidecar(before)
+		}},
+		{name: "a sidecar killed for memory after the job ended", worker: func(_, f *corev1.Pod) {
+			f.Status.InitContainerStatuses = oomSidecar(after)
+		}},
+		{name: "a fault the running worker already showed", wantEvents: 1, worker: func(r, f *corev1.Pod) {
+			r.Status.InitContainerStatuses = oomSidecar(before)
+			f.Status.InitContainerStatuses = oomSidecar(before)
+		}},
+		{name: "a sidecar's crash its own shutdown replaced", wantEvents: 1, worker: func(_, f *corev1.Pod) {
+			f.Status.InitContainerStatuses = crashedSidecar(before, terminated("dind", "Error", 143, after).State)
+		}},
+		{name: "a sidecar's crash the running worker already showed", wantEvents: 1, worker: func(r, f *corev1.Pod) {
+			r.Status.InitContainerStatuses = crashedSidecar(before, corev1.ContainerState{Running: &corev1.ContainerStateRunning{}})
+			f.Status.InitContainerStatuses = crashedSidecar(before, terminated("dind", "Error", 143, after).State)
+		}},
+		{name: "a sidecar's crash after the job ended", worker: func(_, f *corev1.Pod) {
+			f.Status.InitContainerStatuses = crashedSidecar(after, terminated("dind", "Error", 143, after).State)
+		}},
+		{name: "a disruption before the job ended", wantEvents: 1, worker: func(_, f *corev1.Pod) {
+			f.Status.Conditions = disrupted(before)
+		}},
+		{name: "a disruption after the job ended", worker: func(_, f *corev1.Pod) {
+			f.Status.Conditions = disrupted(after)
+		}},
+		{name: "a runner killed after the job ended", worker: func(_, f *corev1.Pod) {
+			f.Status.Phase = corev1.PodFailed
+			f.Status.ContainerStatuses = []corev1.ContainerStatus{terminated(runnerContainer, "Error", 143, after)}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			c, p, target := flakyFixture(t)
+			running := scaleSetWorker("runner-1", corev1.PodRunning, "")
+			finished := finishWorker(running, after)
+			tc.worker(running, finished)
+			require.NoError(t, c.Create(ctx, running))
+
+			require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+			require.Equal(t, "Running", recordedContext(t, p, target).Phase, "the failure is recorded at its completion")
+			for _, c := range recordedContext(t, p, target).Containers {
+				assert.Empty(t, c.PreviousReason, "a running sidecar's crash is its last termination")
+			}
+
+			<-p.SnapshotScaleSetWorker(ctx, nil, finished)
+			got := recordedContext(t, p, target)
+			assert.Equal(t, string(finished.Status.Phase), got.Phase)
+			want := snapshotOf(finished, end)
+			require.Len(t, got.Containers, len(want.Containers))
+			for i, c := range want.Containers {
+				g := got.Containers[i]
+				assert.Equal(t, []any{c.Name, c.Reason, c.ExitCode, c.PreviousReason, c.PreviousExitCode},
+					[]any{g.Name, g.Reason, g.ExitCode, g.PreviousReason, g.PreviousExitCode})
+			}
+			var events []string
+			for range tc.wantEvents {
+				events = append(events, "PlatformFaultOnFailedJob")
+			}
+			assert.Equal(t, events, target.events)
+
+			<-p.SnapshotScaleSetWorker(ctx, nil, finished)
+			assert.Empty(t, p.workerSnapshots.byID, "a finished worker whose job completed leaves nothing behind")
+			assert.Empty(t, p.workerSnapshots.recorded)
+		})
+	}
+}
+
+// TestFlakyJobs_AFinishedWorkersRecordKeepsTheCompletionsProxy: the proxy's readiness
+// when the job ended is the one that can have failed it, not the one when its worker
+// finished.
+func TestFlakyJobs_AFinishedWorkersRecordKeepsTheCompletionsProxy(t *testing.T) {
+	ctx := context.Background()
+	c, p, stub := flakyFixture(t)
+	proxy := func(ready string, replicas int32) *ProxySnapshot {
+		return &ProxySnapshot{Name: "ep", Mode: ProxyModeColocated, Ready: ready, ReadyReplicas: &replicas}
+	}
+	running := scaleSetWorker("runner-1", corev1.PodRunning, "")
+	require.NoError(t, c.Create(ctx, running))
+	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, proxyTarget{stub, staticProxy{proxy("False", 0)}}, buildJob(1), "failed"))
+	<-p.SnapshotScaleSetWorker(ctx, staticProxy{proxy("True", 2)}, finishWorker(running, time.Now()))
+
+	got := recordedContext(t, p, stub)
+	assert.Equal(t, "Succeeded", got.Phase)
+	assert.Equal(t, proxy("False", 0), got.Proxy)
+	assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, stub.events, "the unready pool is reported once")
+}
+
+// TestFlakyJobs_AKilledWorkersSnapshotWaitsForItsCompletion: a kill that ends the runner
+// inverts the order, the completion arriving when GitHub's job lock lapses, after the
+// pod is reaped.
+func TestFlakyJobs_AKilledWorkersSnapshotWaitsForItsCompletion(t *testing.T) {
+	ctx := context.Background()
+	_, p, target := flakyFixture(t)
+	killed := scaleSetWorker("runner-1", corev1.PodFailed, "")
+	killed.Status.ContainerStatuses = []corev1.ContainerStatus{terminated(runnerContainer, "OOMKilled", 137, time.Now())}
+
+	<-p.SnapshotScaleSetWorker(ctx, nil, killed)
+	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+
+	got := recordedContext(t, p, target)
+	assert.Equal(t, "Failed", got.Phase)
+	assert.Equal(t, "OOMKilled", got.Containers[0].Reason)
+	assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, target.events)
+	assert.Empty(t, p.workerSnapshots.byID)
+	assert.Empty(t, p.workerSnapshots.recorded)
+}
+
+// TestFlakyJobs_AWorkerFinishingDuringTheRecordCompletesIt: the terminal transition can
+// land between the completion's read of the pod and its ledger write.
+func TestFlakyJobs_AWorkerFinishingDuringTheRecordCompletesIt(t *testing.T) {
+	ctx := context.Background()
+	running := scaleSetWorker("runner-1", corev1.PodRunning, "")
+	var p *Provisioner
+	c := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).WithObjects(running).WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+			finished := finishWorker(running, time.Now())
+			delete(finished.Annotations, AnnotationJobCompletedAt)
+			p.SnapshotScaleSetWorker(ctx, nil, finished)
+			return c.Create(ctx, obj, opts...)
+		},
+	}).Build()
+	p = flakyProvisioner(c)
+	target := &stubTarget{key: client.ObjectKey{Namespace: "team-a", Name: "gpu"}}
+
+	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+	assert.Equal(t, "Succeeded", recordedContext(t, p, target).Phase)
+	assert.Empty(t, p.workerSnapshots.byID)
+	assert.Empty(t, p.workerSnapshots.recorded)
+}
+
+// TestFlakyJobs_AFinishedWorkerLeavesOtherRecordsAlone: a later attempt's worker is
+// reported but does not replace the first failure's context, and a record paired while
+// its worker shut down is not brought back.
+func TestFlakyJobs_AFinishedWorkerLeavesOtherRecordsAlone(t *testing.T) {
+	ctx := context.Background()
+	c, p, target := flakyFixture(t)
+	workers := map[int]*corev1.Pod{}
+	for n := 1; n <= 2; n++ {
+		workers[n] = scaleSetWorker(fmt.Sprintf("runner-%d", n), corev1.PodRunning, "")
+		require.NoError(t, c.Create(ctx, workers[n]))
+		require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(n), "failed"))
+	}
+
+	second := finishWorker(workers[2], time.Now())
+	second.Status.InitContainerStatuses = []corev1.ContainerStatus{terminated("dind", "OOMKilled", 137, time.Now().Add(-time.Minute))}
+	<-p.SnapshotScaleSetWorker(ctx, nil, second)
+	assert.Equal(t, "Running", recordedContext(t, p, target).Phase, "the first failure's context is kept")
+	assert.Equal(t, "worker-runner-1", recordedContext(t, p, target).Pod)
+	assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, target.events, "the later attempt's fault is reported")
+
+	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(3), jobResultSucceeded))
+	<-p.SnapshotScaleSetWorker(ctx, nil, finishWorker(workers[1], time.Now()))
+	assert.Empty(t, readFailures(t, p, target), "a paired record is not brought back")
+}
+
+// TestFlakyJobs_ACompletedJobsWorkerIsNotSnapshotted: nothing will take the snapshot of
+// a worker whose own job has completed, and a surplus stamp is another job's.
+func TestFlakyJobs_ACompletedJobsWorkerIsNotSnapshotted(t *testing.T) {
+	ctx := context.Background()
+	c, p, target := flakyFixture(t)
+	green := scaleSetWorker("runner-1", corev1.PodRunning, "")
+	require.NoError(t, c.Create(ctx, green))
+	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), jobResultSucceeded))
+	<-p.SnapshotScaleSetWorker(ctx, nil, finishWorker(green, time.Now()))
+	assert.Empty(t, p.workerSnapshots.byID)
+
+	surplus := finishWorker(scaleSetWorker("runner-2", corev1.PodRunning, ""), time.Now())
+	surplus.Annotations[AnnotationSurplusForJob] = "job-9"
+	<-p.SnapshotScaleSetWorker(ctx, nil, surplus)
+	assert.Contains(t, p.workerSnapshots.byID, "team-a/runner-2", "its runner may have taken another job")
 }
 
 // TestRerunLedger_CapEvictsFailuresBeforeBudgets: past half the cap the oldest failure

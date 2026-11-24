@@ -2,7 +2,9 @@ package controller
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/api/v2"
@@ -116,4 +118,41 @@ func TestWorkerPodHandler_SnapshotsTheSetsProxyReadiness(t *testing.T) {
 		provisioner.ScaleSetJob{JobID: "job-1", RunnerName: "runner-1", RunID: "900", JobName: "build"}, "failed"))
 	assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, target.reasons,
 		"the unready colocated proxy in the snapshot the handler took is a platform fault")
+}
+
+// TestWorkerPodHandler_CompletesAFailedJobsRecordWhenItsWorkerFinishes is the watch half
+// of Q1376: the handler's terminal event rewrites a record its completion made from the
+// still-running pod, on a context that outlives the handler's.
+func TestWorkerPodHandler_CompletesAFailedJobsRecordWhenItsWorkerFinishes(t *testing.T) {
+	ctx := context.Background()
+	running := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "runner-set-abc", Namespace: "team-a",
+			Labels: map[string]string{
+				provisioner.LabelRunnerSet:           "set",
+				provisioner.LabelAcquisitionProtocol: provisioner.AcquisitionProtocolScaleSet,
+			},
+			Annotations: map[string]string{provisioner.AnnotationRunnerName: "runner-1"},
+		},
+		Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "runner", Image: "runner:test"}}},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+	r, q, _ := podWatchFixture(t, running)
+	rs := &v2.RunnerSet{}
+	require.NoError(t, r.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "set"}, rs))
+	require.NoError(t, r.Provisioner.RecordScaleSetJobCompleted(ctx, &eventTarget{runnerSetTarget: r.provisionerTarget(rs)},
+		provisioner.ScaleSetJob{JobID: "job-1", RunnerName: "runner-1", RunID: "900", JobName: "build"}, "failed"))
+	ledger := func() string {
+		cm := &corev1.ConfigMap{}
+		require.NoError(t, r.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "scaleset-failures-set"}, cm))
+		return cm.Data["failures.json"]
+	}
+	require.Contains(t, ledger(), `"podPhase":"Running"`)
+
+	finished := running.DeepCopy()
+	finished.Status.Phase = corev1.PodSucceeded
+	hctx, cancel := context.WithCancel(ctx)
+	cancel()
+	r.workerPodHandler().Update(hctx, event.UpdateEvent{ObjectOld: running, ObjectNew: finished}, q)
+	require.Eventually(t, func() bool { return strings.Contains(ledger(), `"podPhase":"Succeeded"`) }, 5*time.Second, 10*time.Millisecond)
 }
