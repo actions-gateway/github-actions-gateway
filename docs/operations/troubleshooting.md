@@ -2654,6 +2654,7 @@ Two ways in, and the condition message says which labels are affected either way
 
 **Note on the first label.** It names the scale set, which makes it the set's identity.
 Reordering `runnerLabels` renames the scale set, leaving the old one orphaned at GitHub with any queued jobs still pointed at it.
+Another tenant bound to the same org can then claim the old label and adopt the orphan with those jobs, so [retire the old scale set](security-operations.md#retire-a-scale-set-when-its-runner-set-is-renamed-or-deleted).
 The AGC moves to the new name on the next reconcile, deleting its session on the old scale set; before `v2.0.0` it stayed on the old one until the AGC restarted.
 Append rather than prepend.
 

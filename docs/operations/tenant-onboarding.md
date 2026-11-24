@@ -875,6 +875,7 @@ The rules that follow from it, and the ones most likely to bite when you author 
   Concurrency is governed by `maxWorkers`/`priorityTiers` (advertised to GitHub as the scale set's capacity), not by a listener count.
 - **The first label names the scale set**, which makes it the set's identity at GitHub.
   Reordering the list renames the scale set and orphans the old one, so append rather than prepend.
+  An orphan stays registered at GitHub, and another tenant bound to the same org can claim its name and adopt it, queued jobs and all, so [retire it](security-operations.md#retire-a-scale-set-when-its-runner-set-is-renamed-or-deleted) after a rename or a deleted set.
 - **The first label is unique per GitHub org, enterprise, or repo.** Two sets claiming the same `runnerLabels[0]` would register the same scale-set name at GitHub; the second is rejected.
   The boundary is the `githubURL` the set's gateway names, **not the namespace**: two sets in different namespaces whose gateways point at the same org still collide, so a shard of one org across namespaces needs distinct first labels per shard.
   Later labels may overlap freely, and so may the `RunnerSet` names: two sets named `build` in different namespaces are fine with distinct first labels.
