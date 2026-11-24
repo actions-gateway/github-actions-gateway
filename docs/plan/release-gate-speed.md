@@ -1,7 +1,7 @@
 # Release gate speed
 
-> **Status:** 🚧 Investigation done 2026-11-18; the first four options (Q1363, Q1362, Q1365, Q1364) are implemented, the other three are not.
-> Three rows are open, ranked in the order below: [Q1366](../queue/Q1366.md), [Q1367](../queue/Q1367.md) and [Q1368](../queue/Q1368.md).
+> **Status:** 🚧 Investigation done 2026-11-18; the first five options (Q1363, Q1362, Q1365, Q1364, Q1366) are implemented, the other two are not.
+> Two rows are open, ranked in the order below: [Q1367](../queue/Q1367.md) and [Q1368](../queue/Q1368.md).
 
 The release-candidate gate (`.github/workflows/validate-candidate.yml` running `scripts/dogfood/validate-release.sh`) took 115.5 minutes for `v2.0.1-rc.1` and 133.1 minutes for `v2.0.0-rc.3`, counted from the start of its gate step to its verdict.
 About a fifth of that, 21.7 and 25.3 minutes, is the gate waiting on a worker pod that finished long before.
@@ -111,7 +111,7 @@ The gate runs on `ubuntu-latest` in a public repository, so its minutes are not 
 | 2 | Q1362 (shipped) | Release the gateway delete once the finished worker pod is reaped, not when its node goes | 20–24 min (estimate, from measured holds of 21.7 and 25.3 min) | Falls (estimate): 2 system nodes × 20–24 min ≈ 0.7–0.8 node-h, the same Actions minutes, and the e2e node's 10-min idle before scale-down |
 | 3 | Q1365 (shipped) | Deploy once the image jobs succeed; require the whole publish run only before the CRD smoke | Up to 5.8 min (measured: `chart-publish` took 5m47s and 5m30s), and only when the approval beats the images | Falls by the same Actions minutes; node-hours unchanged |
 | 4 | Q1364 (shipped) | Bring the e2e node up during deploy instead of on the Kata dispatch | About 3 min (estimate, from rc.1's measured 3m59s dispatch-to-runner) | Falls slightly (estimate): the e2e node starts ~1–2 min early, while 2 system nodes stop ~3 min early |
-| 5 | [Q1366](../queue/Q1366.md) | Take the Dragonfly readings concurrently | About 2.5 min (estimate: 3m42s of probes measured in series, the slowest 74s) | Falls by the same minutes and system node time |
+| 5 | Q1366 (shipped) | Take the Dragonfly readings concurrently | About 2.5 min (estimate: 3m42s of probes measured in series, the slowest 74s) | Falls by the same minutes and system node time |
 | 6 | [Q1367](../queue/Q1367.md) | Schedule Kata workers only once a node's `kata-qemu` runtime is ready | Up to 37–74s per cold node (measured failure window), so about 1–2 min | Falls slightly |
 | 7 | [Q1368](../queue/Q1368.md) | Scope running the Kata and DinD legs at the same time on dogfood | About 20 min (estimate: the DinD leg's length once rank 2 lands) | Unpriced: peak e2e nodes rise from 1 to 2 inside the quota the gate already reserves, node-hours are expected to fall |
 
@@ -195,7 +195,16 @@ In rc.1: the mirror battery probe pod took 68s, `worker to seed proxy` 74s, the 
 Both 74-second probes are waiting out a timeout that is the expected answer.
 They read different pods and different targets, so running them together bounds the step by its slowest probe.
 
-The risk is to the readings, not the verdict, since none of them gates: two probe pods in one namespace must not share a name, and each must keep its own control.
+Shipped in `dragonfly_readings`: the worker probe, the node-client probe and the node-client log read run beside a seed lane, and each reading's output and record are held apart and emitted in the order they had before.
+Three of the readings are not independent.
+`p2p-path` counts lines in the seed peer's log, which the mirror battery's fetches add to and the `CONNECT` probe's requests would, so the battery, that read and the `CONNECT` probe stay in series as the seed lane.
+On rc.1's times the seed lane is 74s, the same as each worker probe, so the saving holds; it was not re-measured.
+One interaction remains: a worker that does reach the seed proxy, itself a finding, can add a line to the log `p2p-path` counts.
+
+The battery fetches its own cluster credentials, and gcloud truncates and rewrites the kubeconfig in place (read from its source), so it is given one of its own.
+
+The risk is to the readings, not the verdict, since none of them gates: the probe pods have distinct names and each keeps its own control.
+Three of them share the e2e tenant at once, which with its AGC and two workers is the six pods its ResourceQuota allows.
 
 ### 6. Schedule Kata workers onto ready nodes (Q1367)
 
