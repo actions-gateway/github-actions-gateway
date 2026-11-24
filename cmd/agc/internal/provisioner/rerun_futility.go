@@ -168,6 +168,7 @@ const (
 // attempt did not re-run is listed in it again on the runner that ran it. RunnerName is
 // "" until the job has a runner.
 type workflowJobSummary struct {
+	ID          int64     `json:"id"`
 	Name        string    `json:"name"`
 	Conclusion  string    `json:"conclusion"`
 	RunnerName  string    `json:"runner_name"`
