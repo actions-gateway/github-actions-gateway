@@ -4088,14 +4088,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>throttle_active</code> returns 1 on any non-empty <code>CI</code> before it reaches the OS or GUI check ([``scripts/agent/local-throttle.sh:178:[[ -n …</td>
 </tr>
 <tr>
-<td><a href="Q980/">Q980</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/kustomization.yaml">Assert the dogfood e2e overlays supply their own workerImage</a></td>
-<td><code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q740 removed the library's <code>.invalid</code> placeholder, so an overlay that lost its <code>workerImage</code> patch now gap-fills the default runner instead …</td>
-</tr>
-<tr>
 <td><a href="Q991/">Q991</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-script-docs-test.sh">Test suites share a fixed fixture path and delete each other's</a></td>
 <td><code>tests</code> <code>ci</code> <code>debt</code></td>
