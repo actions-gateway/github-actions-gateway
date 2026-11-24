@@ -550,7 +550,7 @@ func TestFlakyJobs_ACrashTheFinishedStatusDroppedIsReportedOnce(t *testing.T) {
 	finished.Status.InitContainerStatuses = []corev1.ContainerStatus{terminated("dind", "Error", 143, time.Now())}
 	finished.Status.InitContainerStatuses[0].RestartCount = 1
 	for _, seen := range []string{"at the completion", "while the completion was recorded", "after the completion",
-		"at the completion of a worker that finished while it was recorded",
+		"after the completion on a worker being deleted", "at the completion of a worker that finished while it was recorded",
 		"at the completion of a worker whose finish is in the cache alone"} {
 		t.Run("crash seen "+seen, func(t *testing.T) {
 			ctx := context.Background()
@@ -579,8 +579,12 @@ func TestFlakyJobs_ACrashTheFinishedStatusDroppedIsReportedOnce(t *testing.T) {
 			target := &stubTarget{key: client.ObjectKey{Namespace: "team-a", Name: "gpu"}}
 			require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
 			switch {
-			case seen == "after the completion":
-				<-p.SnapshotScaleSetWorker(ctx, nil, crashed, false)
+			case strings.HasPrefix(seen, "after the completion"):
+				pod := crashed.DeepCopy()
+				if strings.HasSuffix(seen, "being deleted") {
+					pod.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+				}
+				<-p.SnapshotScaleSetWorker(ctx, nil, pod, false)
 				fallthrough
 			case !strings.Contains(seen, "of a worker"):
 				<-p.SnapshotScaleSetWorker(ctx, nil, finished, false)
