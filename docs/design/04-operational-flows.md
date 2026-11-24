@@ -705,14 +705,20 @@ Two jobs of a run can share a display name, and a worker often runs a job other 
 A list GitHub fails to serve retries at the next poll, like the run read.
 Taking turns is GitHub's limit as much as the budget's: it refuses a single-job re-run while the run is in progress.
 The list carries no `needs:`, so a dependent that failed because a killed job did, such as an `if: always()` aggregate, counts as another failure; the killed job's re-run takes it along.
+A job GitHub cancelled counts as another failure too, and the killed job's re-run does not take it: the list says `cancelled` for a fail-fast matrix's sibling, a job past its `timeout-minutes` and a job a concurrency group cancelled alike ([measured](../plan/q555-automatic-recovery-design.md#readings-for-a-cancelled-sibling-2026-11-24)), and a timeout is not this class's to re-run.
+So a killed leg of a fail-fast matrix is re-run alone, and its cancelled siblings wait for a re-run by hand.
 
 **The reservation follows the call.** A kill reserves its attempt's one slot when it fires, with scope `FailedJobs`, and later kills of the attempt merge into it.
 A release that re-runs one job narrows that record to the job, scope `Job`, in the write before the call, so each job that waits reserves a slot of its own at its turn, and a release that crashes before the call resumes the same job on the same slot.
 The record is not narrowed where a disruption arm holds the attempt too, since its own loop calls `rerun-failed-jobs`, and the release then makes that call.
 An arm's disruption that finds a single-job re-run recorded for the attempt reserves beside it rather than merging, because that re-run does not cover its job.
-Releases of one run take turns, one at a time per set.
+A resumed single-job re-run whose run has since moved on is recorded under the attempt it now re-runs from, so detection pairs the job with it.
 
-Runs whose jobs span two sets are judged by each set's own ledger, so a job another set's class killed is a failure this one did not classify: each set re-runs its own jobs alone.
+Releases of one run take turns, one at a time per set, and a release GitHub refuses as already running goes back to waiting: its entry stays parked, on the slot it holds, until the attempt in progress concludes.
+Past the 24 hours a refused release waits out the 15-minute window instead and then ends as `run_never_concluded`.
+
+Runs whose jobs span two sets are judged by each set's own ledger, so a job another set's class killed is a failure this one did not classify.
+Each set re-runs its own jobs alone, one set after the other, since GitHub refuses the second call until the first's attempt concludes.
 
 #### Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)
 

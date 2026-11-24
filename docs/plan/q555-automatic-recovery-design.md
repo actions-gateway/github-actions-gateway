@@ -873,13 +873,15 @@ Job-granular avoids that, and costs:
   The fallback for this case is the same `rerun-failed-jobs`, and choosing it needs a signal GAG does not have, so the first version does not try; `same_class_again` stops the repeat.
 
 **Built** (Q1319) for the out-of-memory class; detection's `gag_collateral` count measures what run-granular costs on the arms that stay so.
-What it does is in [04-operational-flows.md](../design/04-operational-flows.md#the-re-run-takes-only-the-killed-jobs-q1319), and three choices there are not in the readings:
+What it does is in [04-operational-flows.md](../design/04-operational-flows.md#the-re-run-takes-only-the-killed-jobs-q1319), and four choices there are not in the M6 readings:
 
 - **A run whose failed jobs were all killed takes one `rerun-failed-jobs`**, since it re-runs nothing else and spends one slot.
 - **Several killed jobs beside another failure go one attempt at a time**, a slot each, so a run's budget bounds its attempts and no genuine failure is re-run.
   Two killed jobs spend the default budget of 2, so a third kill is `budget_exhausted`.
   The common cost is a job that aggregates the others (`if: always()`, red when one it needs is): it is another failure, since the jobs list carries no `needs:`, so three killed legs of a matrix behind one recover two where `rerun-failed-jobs` recovers three.
-  The alternatives: one `rerun-failed-jobs` for the set, which recovers them all on one slot and re-runs the genuine failure, as this release [must not](release-2.1.md#what-this-release-must-not-do); or one slot for the whole set, which lets one reservation start as many attempts as there were kills.
+  The alternatives: one `rerun-failed-jobs` for the set, which recovers them all on one slot and re-runs the genuine failure, as this release [must not](release-2.1.md#what-this-release-must-not-do); or one slot for the whole set, which lets one reservation start an attempt for each kill, up to 15.
+- **A cancelled job is another failure**, so a killed leg of a fail-fast matrix is re-run alone and its cancelled siblings are not, where `rerun-failed-jobs` re-ran them.
+  Treating `cancelled` as not a failure would restore them and re-run a timeout, which the list spells the same ([readings](#readings-for-a-cancelled-sibling-2026-11-24)); telling them apart is [Q1399](../queue/Q1399.md).
 - **A dependent the single-job re-run took along counts as `gag_collateral`**, since GAG's re-run took it and no person did.
 
 ### M6 readings from the job-granular probe, 2026-11-24
@@ -909,6 +911,24 @@ The two were joined on the runner the AGC logs at start or completion against th
 - **A skipped matrix job shows its name unexpanded** (`Named ${{ matrix.leg }} / ${{ matrix.n }}`), so a name read from a skipped job is not comparable.
 
 Not covered: nesting past two levels; an upload without `overwrite: true` on a re-run (the fixture sets it); state outside GitHub; a killed job carried into a later attempt, since the one killed job read here was itself re-run; and a single-job re-run of a job whose runner was lost, since each re-run here was of a job that ended on its own ([Q1394](../queue/Q1394.md)).
+
+### Readings for a cancelled sibling, 2026-11-24
+
+Which fact tells a job a fail-fast matrix cancelled from one that timed out, read from public runs and from this repository's run 45052015868 (M1).
+The jobs list gives `conclusion: cancelled` for all three shapes below; the failure-level annotations of the job's check run name the cause.
+
+| Shape | Run | First annotation |
+|---|---|---|
+| Fail-fast sibling | `rust-lang/cargo` 45352018885, 45348465962, 45343173665; `prometheus/prometheus` 45427763111 | `The strategy configuration was canceled because "test.Windows_x86_64_gnu_nightl" failed` |
+| Past `timeout-minutes` | this repository's 45052015868, job 137302496192 | `The job has exceeded the maximum execution time of 1m0s` |
+| A concurrency group | `pandas-dev/pandas` 45290894194, 45209779277, 45001328916 | `Canceling since a higher priority waiting request for refs/pull/72292/merge-asv-benchmarks exists` |
+
+Each is followed by `The operation was canceled.` Fifteen fail-fast siblings were read, the first three or four of each run, and all ended 13 to 21 s after the run's first failure.
+The time does not separate the shapes: pandas' four cancelled jobs ended after their run's first failure too, 87 s to 13 minutes after.
+All of these jobs had a runner; one cancelled while queued was not read.
+Nor was a matrix whose failed leg lost its runner, which is taken to cancel its siblings as any failed leg does, nor `rerun-failed-jobs` on a cancelled sibling, which this repository has recorded as re-run without a reading.
+
+Reading annotations takes `Checks: read`, which the App has only where the optional `Checks: Read and write` that posts a fork refusal's check run is granted, and it is one call for each cancelled job.
 
 ### What the readings recommend
 

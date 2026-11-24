@@ -1294,13 +1294,15 @@ To have timed-out jobs counted in a private repository, grant the App the option
 ### Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run
 
 **Who is affected:** a tenant with a `Binpack` or `Throughput` `RunnerSet`, whose jobs killed at a memory limit the profile chose are re-run automatically.
-Nothing to do.
+Nothing to do, unless a matrix of such jobs uses GitHub's default `fail-fast: true`: its cancelled legs are no longer re-run with the killed one.
+Set `fail-fast: false` on it, or re-run those legs by hand.
 
 **What changed.** The retry called `rerun-failed-jobs`, so a sibling job that failed on its own was re-run with the killed one and could turn green.
 The AGC now finds the killed job by its runner's name and re-runs it alone; [when it still re-runs every failed job](worker-rightsizing.md#when-a-job-runs-out-of-memory) is listed with the retry (Q1319).
 
 **What you will see.** The sibling keeps its `failure`, and so does the run.
 Where several jobs of one run were killed and another failed on its own, the killed ones are re-run one attempt at a time, a slot of `maxEvictionRetries` each.
+Where two sets each lost a job of one run, the sets go one after the other.
 `actions_gateway_eviction_rerun_withheld_total` can carry `reason="job_not_found"`.
 
 **Rolling back** returns the retry to `rerun-failed-jobs`, for the re-runs still waiting too.
