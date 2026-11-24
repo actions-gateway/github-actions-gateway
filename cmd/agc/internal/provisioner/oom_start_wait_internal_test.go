@@ -460,3 +460,31 @@ func TestStartedAfterFailure(t *testing.T) {
 	assert.False(t, StartedAfterFailure(pod(corev1.PodFailed, "", ""), pod(corev1.PodFailed, "job", "now")), "claimed")
 	assert.False(t, StartedAfterFailure(pod(corev1.PodFailed, "", ""), pod(corev1.PodFailed, "", "")))
 }
+
+// TestOOMStartWait_TheStartLetsALostWorkersJobBeNamed: a start stamped on a killed worker
+// counts as any other, so losing the worker the started job was created for force-cancels
+// the run of the job left with no runner, and not the killed job's, whose re-run is parked.
+func TestOOMStartWait_TheStartLetsALostWorkersJobBeNamed(t *testing.T) {
+	for _, tc := range []struct {
+		name, strandedRun string
+		want              []string
+	}{
+		{"another run's job", "222", []string{"/repos/myorg/repo-b/actions/runs/222/force-cancel"}},
+		{"a job of the killed job's run", "111", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			killed := oomKilled(mintedWorker("job-b", "myorg/repo-b", tc.strandedRun), "2Gi")
+			killed.Annotations[AnnotationSizingProfile] = "Throughput"
+			f := newAbandonedScaleSetFixture(t, http.StatusAccepted, killed)
+			target := &inFlightTarget{stubTarget: f.target, jobs: []OrphanedWorker{
+				inFlight("job-a", "myorg/repo-a", "111"), inFlight("job-b", "myorg/repo-b", tc.strandedRun)}}
+			require.NoError(t, f.p.MarkScaleSetJobStarted(context.Background(), target, ScaleSetJob{
+				JobID: "job-a", RunnerName: "gpu-job-b", Owner: "myorg", Repository: "repo-a", RunID: "111", JobName: "a"}))
+
+			<-f.p.RecoverAbandonedScaleSetWorker(context.Background(), target, reapedPendingWorker(scaleSetPodName("gpu", "job-a")))
+
+			forceCancel, _ := f.calls.snapshot()
+			assert.Equal(t, tc.want, forceCancel)
+		})
+	}
+}
