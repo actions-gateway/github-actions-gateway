@@ -16,8 +16,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 const storeTestNamespace = "gmc-system"
@@ -259,6 +261,21 @@ func TestIPRangeStore_AdoptOwner(t *testing.T) {
 		before := read(t, fc).ResourceVersion
 		require.NoError(t, store.AdoptOwner(ctx))
 		assert.Equal(t, before, read(t, fc).ResourceVersion)
+	})
+	t.Run("a conflicting write is re-read and retried", func(t *testing.T) {
+		conflicts := 1
+		fc := fake.NewClientBuilder().WithScheme(newIPRangeScheme(t)).WithObjects(storeConfigMap(seed)).
+			WithInterceptorFuncs(interceptor.Funcs{Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				if conflicts > 0 {
+					conflicts--
+					return apierrors.NewConflict(schema.GroupResource{Resource: "configmaps"}, obj.GetName(), errors.New("stale"))
+				}
+				return c.Update(ctx, obj, opts...)
+			}}).Build()
+		store := &IPRangeStore{Reader: fc, Writer: fc, Namespace: storeTestNamespace, Name: IPRangeStoreName, MaxAge: 49 * time.Hour, Owner: &owner}
+		require.NoError(t, store.AdoptOwner(ctx))
+		assert.Zero(t, conflicts, "the conflict was never injected")
+		assert.Equal(t, []metav1.OwnerReference{owner}, read(t, fc).OwnerReferences)
 	})
 	t.Run("no copy creates none", func(t *testing.T) {
 		store, fc := newTestIPRangeStore(t)

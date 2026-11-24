@@ -12,6 +12,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -112,23 +113,27 @@ func (s *IPRangeStore) ensureOwner(cm *corev1.ConfigMap) {
 }
 
 // AdoptOwner adds Owner to the persisted ConfigMap when one exists without it, so
-// helm uninstall removes a copy this GMC seeds from even if it never completes a
-// fetch to Save over it. No ConfigMap, no Owner, or an Owner already listed writes
-// nothing; the ConfigMap's data is never touched.
+// helm uninstall removes a copy this GMC seeds from even if no fetch completes to
+// Save over it. It adopts any copy it finds, including one Load refuses as too
+// old. No ConfigMap, no Owner, or an Owner already listed writes nothing; the
+// ConfigMap's data is never touched. A conflicting write (a second replica
+// starting alongside) is re-read and retried.
 func (s *IPRangeStore) AdoptOwner(ctx context.Context) error {
 	if s.Owner == nil {
 		return nil
 	}
-	var cm corev1.ConfigMap
-	if err := s.Reader.Get(ctx, types.NamespacedName{Namespace: s.Namespace, Name: s.Name}, &cm); err != nil {
-		return client.IgnoreNotFound(err)
-	}
-	owners := len(cm.OwnerReferences)
-	s.ensureOwner(&cm)
-	if len(cm.OwnerReferences) == owners {
-		return nil
-	}
-	return s.Writer.Update(ctx, &cm)
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var cm corev1.ConfigMap
+		if err := s.Reader.Get(ctx, types.NamespacedName{Namespace: s.Namespace, Name: s.Name}, &cm); err != nil {
+			return client.IgnoreNotFound(err)
+		}
+		owners := len(cm.OwnerReferences)
+		s.ensureOwner(&cm)
+		if len(cm.OwnerReferences) == owners {
+			return nil
+		}
+		return s.Writer.Update(ctx, &cm)
+	})
 }
 
 // Load returns the persisted set and its fetch time. No ConfigMap yields an empty

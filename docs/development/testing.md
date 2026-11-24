@@ -4135,8 +4135,8 @@ A spent quota answers 403 for the reset window, leaves the proxy NetworkPolicy w
 A failed fetch leaves the variable unset and the GMC fetches for itself, as a local `make e2e` does; a variable that names an unusable file fails the suite.
 What the unit tests drive: `TestIPRangeReconciler_RateLimitedFetchKeepsSeed` (a rate-limited fetch leaves the seeded set served) and `TestIPRangeStore_SeededFromMetaBodyLoads` (the seed's data loads).
 What nothing drives: the quota cannot be spent on demand, so no run has shown a seeded GMC surviving a spent quota end to end.
-The seed has no owner reference, so a seeded GMC that never completes a fetch would fail the chart uninstall/reinstall check's "has no Deployment owner" assertion; the GMC adopts the copy at startup (`IPRangeStore.AdoptOwner`, Q1386) so the owner does not depend on the quota.
-`TestIPRangeStore_AdoptOwner` drives that, and `TestIPRangeStore_SaveWritesOwner` still pins the write a fetch's save makes, which a seeded run no longer reaches.
+The seed has no owner reference, so a seeded GMC whose own fetch is rate-limited would fail the chart uninstall/reinstall check's "has no Deployment owner" assertion; the GMC adopts the copy at startup (`IPRangeStore.AdoptOwner`, Q1386) so the owner does not depend on the quota.
+The check passes if either adoption or a successful fetch's save supplies the owner, so it cannot tell them apart: `TestSeedIPRanges` pins the startup call, `TestIPRangeStore_AdoptOwner` the write, and `TestIPRangeStore_SaveWritesOwner` the save.
 
 #### The Calico e2e lane
 
