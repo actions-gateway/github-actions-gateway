@@ -1991,6 +1991,15 @@ for sig in INT:130 TERM:143 HUP:129; do
 	check "readings: ${sig%:*} ends the gate, and its probes with it" \
 		"teardown rc=${sig#*:} probes-alive=0" "$(paste -sd'|' - <"${RDV}/events")"
 done
+rm -f "${RDV}/late"
+( # An interrupt ahead of the first lane, with a job the gate does not wait for.
+	(command sleep 5 && : >"${RDV}/late") &
+	echo "$!" >"${RDV}/other-job"
+	dragonfly_interrupted 143
+) && rc=0 || rc="$?"
+stop_tree "$(cat "${RDV}/other-job")"
+if [[ -e "${RDV}/late" ]]; then got=waited; else got=left; fi
+check "readings: an interrupt before any lane waits for no other job" "143 left" "${rc} ${got}"
 interrupted_readings KILL
 check "readings: a killed gate's lanes do not hold its output open" "closed" \
 	"$(cat "${RDV}/events" 2>/dev/null || echo closed)"

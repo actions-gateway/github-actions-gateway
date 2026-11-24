@@ -830,7 +830,8 @@ dragonfly_interrupted() {
 	shift
 	trap - INT TERM HUP
 	for pid in "$@"; do stop_tree "${pid}"; done
-	wait "$@" 2>/dev/null || true
+	# With no lane started yet, a bare wait would wait for the lease renewer.
+	(($# == 0)) || wait "$@" 2>/dev/null || true
 	exit "${status}"
 }
 
