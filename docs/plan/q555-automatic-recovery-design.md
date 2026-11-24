@@ -16,7 +16,7 @@ Retry classes then fire off that context through the re-run path the disruption 
 ## Measure before building
 
 Each of these decides a component's shape.
-M1 to M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)); the rest have not been observed:
+M1 to M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)), and M5 from GitHub's API the same day ([the readings](#readings-from-githubs-api-2026-11-22)); M6 has not been observed:
 
 | # | Unknown | Decides | How to settle |
 |---|---|---|---|
@@ -24,7 +24,7 @@ M1 to M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-t
 | M2 | Whether a re-run job's `JobAssigned` carries a new job UUID and the same `jobDisplayName`, and whether two jobs in one run can share a display name | Pairing's key | Measured: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
 | M3 | Whether a container killed at its memory limit takes the runner with it (the pod fails, and GitHub concludes the job only when the job lock lapses, about 10 minutes later) or only a step's process (the runner survives and reports a failed step) | Whether the out-of-memory class fires from the pod watch, like the disruption arms, or from `JobCompleted` | Measured under `Throughput`: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
 | M4 | Whether a finished worker's pod object still exists when its `JobCompleted` arrives | Where platform context is read | Measured: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
-| M5 | The `superseded` check's answer for a pull request from a fork whose branch is `main` | Whether the check needs more than the filters below | A fork PR on a test repository |
+| M5 | The `superseded` check's answer for a pull request from a fork whose branch is `main` | Whether the check needs more than the filters below | Measured from the API: [the readings](#readings-from-githubs-api-2026-11-22) |
 | M6 | Whether `jobDisplayName` matches the jobs API's `name` exactly, for matrix jobs and reusable workflows, and what a single-job re-run does to the jobs it depends on and that depend on it | Whether a classified retry can re-run only its own job ([granularity](#run--or-job-granular-re-run-open-question-2)) | A test workflow with a matrix, a reusable workflow and a `needs:` chain, re-run one job at a time |
 
 M3 rested on recall that kubelets on cgroup v2 kill a container's whole process group on an out-of-memory event; the reading below confirms it on dogfood's nodes.
@@ -52,6 +52,20 @@ The readings are the AGC's `scaleset: job assigned`, `job completed`, `scale-set
   The re-run's pod carried a runner limit of 12416Mi, its request unchanged at 5568Mi since `Throughput` raises only the limit, and `actions-gateway.com/rerun-cause: oom`; its step read `memory.max` as 13019119616 bytes (12416Mi), survived the same allocation, and paired as `trigger=gag`, `cause=oom`, not flaky.
   `Binpack`, which raises the request with the limit, was not measured: the live set runs `Throughput` ([Q1382](../queue/Q1382.md)).
 - **`JobCompleted` carries `eventName` and `jobWorkflowRef`.** Every record holds `event: push` and the fixture's workflow ref, and the listener reads both from the completion message.
+
+### Readings from GitHub's API, 2026-11-22
+
+M5 and the merge-group question beside it were read from GitHub's REST API rather than on dogfood, since the queries the `superseded` check sends can be put to any public repository.
+This repository has no `pull_request` run whose branch is `main` (`?branch=main&event=pull_request` returns 0), so the fork readings are from `github/docs`, which has many.
+No fork pull request was disrupted end to end, so the AGC's own decode of a fork run is the piece these readings do not cover.
+
+- **M5.** The `branch` filter matches a fork pull request's head branch, and the `event` filter is what keeps the two `main`s apart.
+  On `github/docs` workflow 126781987, `?branch=main&event=push` returns only upstream's runs (3, all `github/docs`) and `?branch=main&event=pull_request` only forks' (5, from four forks); on workflow 6878645, the second query's 112 runs come from 58 forks, 6 with a deleted fork (`head_repository` null) and none from upstream.
+  Without `event`, the newest `main` run is upstream's `schedule` run on the first workflow and a fork's pull request on the second, so either side would shadow the other.
+  Comparing `head_repository` then separates one fork from another: fork `503badrr/docs` has runs 32531300946 and 32531324720 on two different head commits, 19 s apart, so the second supersedes the first.
+  `per_page=1` returns whichever fork built last, though, so a fork's own newer commit is hidden whenever another fork's pull request from `main` has built since, and the check misses; a miss re-runs, so it costs a wasted re-run, never a withheld one.
+- **A merge-group run that loses its place is not cancelled by GitHub.** On this repository's queue on 2026-10-30, #2190 failed at the head and was removed (`failed_checks`, 17:56:25 UTC), and the groups behind it were rebuilt at 17:56:30; of the old groups' 30 runs, six concluded `success` after the removal, the last at 18:05:13, and the eight `cancelled` were each ended by one of their own jobs exceeding `timeout-minutes` before 17:56:25 (the jobs' check-run annotations).
+  So `run_cancelled` does not catch a displaced group's run, and nothing else does ([Q1381](../queue/Q1381.md)).
 
 ## Component 1: the failure ledger (Q555, R1 to R8)
 
@@ -253,8 +267,8 @@ Notes on the table:
 - **`already_rerun` asks about the job, not the run.** A single-job re-run moves `run_attempt` (from recall) without touching the job's siblings, so "the attempt moved" would withhold a job that nobody re-ran.
   The jobs-list call it needs happens only when the attempt has moved, which is rare.
 - **`superseded` is the other extra call**, and only on the two events where a branch can move.
-  Filtering on `event` and comparing `head_repository` keeps a fork's `main` from matching upstream's (M5).
-  A merge-group run that loses its place is assumed cancelled by GitHub and so caught by `run_cancelled`; that is unmeasured.
+  Filtering on `event` and comparing `head_repository` keeps a fork's `main` from matching upstream's (M5, [measured](#readings-from-githubs-api-2026-11-22)); with `per_page=1` another fork's newer run can hide the fork's own, which re-runs.
+  A merge-group run that loses its place is not cancelled by GitHub, so `run_cancelled` does not catch it ([measured](#readings-from-githubs-api-2026-11-22), [Q1381](../queue/Q1381.md)).
 - **`worker_unstartable` is new wiring**: no re-run path consults `worker_startup_verdict.go` today.
   It matters most on the abandoned arm, which by design releases on any pod of the set being bound to a node (Q512's test for capacity), including one stuck pulling an image that every next pod will fail to pull too.
 - **`budget_exhausted` keeps its own counter**, `eviction_retries_exhausted_total`, so existing alerts keep working.
@@ -591,7 +605,7 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 
 ## Order of work
 
-1. The dogfood turn-up of 2026-11-22 settled M1 to M4 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)); M6 needs its own test workflow.
+1. The dogfood turn-up of 2026-11-22 settled M1 to M4 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)), and the API settled M5 ([the readings](#readings-from-githubs-api-2026-11-22)); M6 needs its own test workflow.
 2. Q1182 (built) created the ledger store, with its version rules, `reruns` map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as `selfCancelledAttempt`.
 3. Q1181 (built): `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the widened run read, honouring `selfCancelledAttempt`, between the run read and the reservation in `handleScaleSetEviction`; `already_rerun`, `run_succeeded` and `worker_unstartable` are not built, and the classic tier takes none.
 4. Q555 (built) added the `failures` map, the snapshot, the pairing and the metrics on that store.
