@@ -35,7 +35,7 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | [Q1320](../queue/Q1320.md) | Build the `already_rerun`, `run_succeeded` and `worker_unstartable` checks | `2.1-gate` | 🔲 open |
 | Q1318 | Measure the `superseded` check on a fork PR whose branch is `main` (M5) | `2.1-gate` | ✅ measured 2026-11-22 from the API: the `event` filter separates a fork's `main` from upstream's; a displaced merge-group run is not cancelled, filed as Q1381 |
 | [Q1381](../queue/Q1381.md) | Withhold the re-run of a merge-group run displaced from the queue, which GitHub does not cancel | `2.1-gate` | 🔲 open |
-| [Q1319](../queue/Q1319.md) | Re-run only the classified job once job names are shown to match (M6) | `2.1-gate` | 🔲 open |
+| [Q1319](../queue/Q1319.md) | Re-run only the classified job, found by its runner's name | `2.1-gate` | 🔲 open: M6 measured 2026-11-24, job-granular re-run unbuilt |
 | [Q1315](../queue/Q1315.md) | Retry a job failed while its colocated egress proxy pool was unavailable | `2.1-gate` | 🔲 open |
 | [Q1316](../queue/Q1316.md) | Retry a job whose Docker-in-Docker sidecar crashed under it | `2.1-gate` | 🔲 open: the likeliest punt, since its discriminator may not exist |
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
