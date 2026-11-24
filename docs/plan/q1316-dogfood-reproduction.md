@@ -34,6 +34,8 @@ On a 32 GiB node with 31.4 GiB usable and `kubepods` near 28 GiB (both from reca
 
 | Process | `oom_score_adj` | Score at a `kubepods` kill | Score at a node-wide kill |
 |---|---|---|---|
+| A BestEffort pod's | 1000 | 28.0 GiB plus its own | 31.4 GiB plus its own |
+| A Burstable DaemonSet container requesting 512Mi or less, not node-critical | 985 or more | 27.6 GiB or more | 30.9 GiB or more |
 | The runner's largest | 969 | 27.1 GiB plus its own | 30.4 GiB plus its own |
 | dockerd, at the shipped requests (1Gi runner, 3Gi sidecar) | 907 | 25.4 GiB plus its own | 28.5 GiB plus its own |
 | One plain-pod filler of 4 GiB, pod requesting 12Gi | about 618 | 17.3 + 4 GiB | 19.4 + 4 GiB |
@@ -42,10 +44,12 @@ On a 32 GiB node with 31.4 GiB usable and `kubepods` near 28 GiB (both from reca
 So a filler never outscores a worker while each of its processes stays at 4 GiB, and dockerd goes first at the shipped requests only with 1.7 GiB more resident than the runner.
 At a runner request of 3Gi or more the two tie, and the larger process goes.
 
-**The fillers stop at the first kill.** Each process takes 2 MiB at a time and exits when `/proc/vmstat`'s `oom_kill` rises, so one reading is one kill and the second worker survives to log it.
-Run locally in a 700 MiB container with a 50 MiB victim: one kill in 5 of 5 runs.
-With 64 MiB steps a filler died too in 3 of 3, so the step stays small.
-The script is at [the end](#the-filler).
+**The fillers stop at the first kill of a worker.** Other pods on the node can outscore one (the table's first two rows; a node-critical pod is -997 and cannot), so their kills are passed over and logged.
+Each process takes 2 MiB at a time and exits when either worker's `oom_kill` rises, so one reading is one worker's kill and the second worker survives to log it.
+Run locally on two workers and two higher-scored pods under one 700 MiB `kubepods.slice`, with `oom.group` set: one worker killed, the other untouched and no filler killed in 10 of 10 runs, the higher-scored pods at 20 and 100 MiB.
+An earlier version with 64 MiB steps overshot and killed a second process in 3 of 3, so the step stays small.
+A restarted DaemonSet container is not modelled, and can be killed again.
+The scripts are at [the end](#the-probe).
 
 ## Shape
 
@@ -53,7 +57,9 @@ One e2e node, two workers on it at once, on a throwaway branch `claude/q1316-pro
 
 Both jobs sample the host's cgroup tree every second to their logs: each pod's `memory.current`, `memory.events` and `memory.events.local`, the same and `memory.max` for `kubepods.slice`, `/sys/fs/cgroup/docker`'s `memory.current`, and `/proc/vmstat`'s `oom_kill`.
 The two pods are scored alike, so a kill can take either; the survivor's log holds both pods' counters.
-Both do the same actions, except the fill, which one of them starts; both hold a step open so the job's end is observable.
+Both do the same actions, except the fill, which one of them starts.
+Each job ends in failure once its sampler ends, after 2.5 minutes for R0, R1, R6 and R7 and 8 for a fill, so its end is observable.
+R1, R6 and R7 use one worker.
 
 Both are ordinary `gag-ci-e2e` jobs, at the template's 4Gi of memory requested and 7Gi of limits, and 2.5 CPU requested after `NodeShare`'s sizing, so two fit one `n2-standard-8`.
 A job does nothing on a run attempt above 1, so a re-run an arm makes of it repeats no reading.
@@ -62,7 +68,8 @@ If the two land on different nodes, the reading is void and repeated once.
 ## Readings
 
 "Predicted" is from source or the local readings.
-R0 is a gate: where a job cannot read `memory.events` of `kubepods` and of another pod, or an `oom_score_adj` is more than 10 from the table above, the run stops and the plan is recomputed.
+R0 is a gate: where a job cannot read `memory.events` of `kubepods` and of another pod, does not find exactly two workers by their sidecar's 4Gi `memory.max`, or reads a worker's `oom_score_adj` more than 10 from the table above, the run stops and the plan is recomputed.
+R0 also reads, by read-only `kubectl`, the QoS class, requests and priority class of every pod on the node, and lists the ones whose computed score is above a runner's.
 
 | ID | Runs | What is done | Platform or tenant | Predicted |
 |---|---|---|---|---|
@@ -72,7 +79,7 @@ R0 is a gate: where a job cannot read `memory.events` of `kubepods` and of anoth
 | R2 | 1 | A job's own container fills the node: eight 4 GiB processes | Tenant, honest | One runner dies; pod `Failed`; the AGC withholds as `own_limit`, which is Q1400's reading; `kubepods.slice` `oom` 0; a `SystemOOM` Event |
 | R3 | 2 | A plain pod on the same node, 12Gi requested and no limit, fills: seven 4 GiB processes | Platform: a neighbour over its request | One runner dies; `kubepods.slice` `oom` above 0; no `SystemOOM` |
 | R3t | 2 | R3, with each worker's dockerd set to its runner's `oom_score_adj`, the tie a 3Gi runner request gives | Platform, tie | The larger process of the two goes, by R0's resident memory |
-| R4 | 1 | R3, with each dockerd 10 above its runner | Platform, forced | dockerd `OOMKilled`, 137; runner alive; pod `oom` 0 |
+| R4 | 1 | R3, with each dockerd at 1000 | Platform, forced | dockerd `OOMKilled`, 137; runner alive; pod `oom` 0 |
 | R5 | 1 | R2, with the same | Tenant, forced | As R4, with `kubepods.slice` `oom` 0 where R4's rose |
 | R7 | 1 | Under Kata, one worker: the sidecar's `memory.oom.group` as the guest sees it, R1, then the job's containers past the sidecar's 8Gi | Tenant, honest | `memory.oom.group` 0, since Kata 3.32.0's agent does not set it (read). R1: `OOMKilled`, 143. Second: one process dies, and the sidecar reads `OOMKilled` with 143 if it was the job's, or 137 if it was dockerd |
 
@@ -93,7 +100,9 @@ Read for every one: the victim pod's statuses as the API server serves them (`ku
 | R4 and R5 read the same in the pod's and `kubepods.slice`'s counters | No discriminator for memory |
 | R4 and R5 differ as predicted | A fill by pods is separated from a fill by a job's own containers, and that is not yet a neighbour against the job: the job's own pod over its request raises `kubepods`' `oom` too, so a class needs the pod's usage at or under its request beside it. The shipped limits let two workers use 14Gi, which does not reach `kubepods`' limit, so that twin is not run |
 | The kubelet evicts a worker or the plain pod before any kill | The kill order is not read by that run; it is repeated once. Two such runs mean eviction comes first on this node, which the existing arms classify, and R3's question stays unread |
-| No kill and no eviction | The fill did not reach the limit; repeated once at two more processes, then reported unread |
+| Another pod is killed before a worker | Expected where R0 lists it; the fill goes on and the kill is logged. It says nothing about the two workers' order |
+| A worker and another pod die in one window | The samples give the order to the second; where they do not, the statuses' `finishedAt` does |
+| No kill of a worker and no eviction | The fill did not reach the limit; repeated once at two more processes, then reported unread |
 | R6 matches the local statuses | `Error` stays a status any job can produce; a class keyed on it needs a platform cause, and none is known |
 | R7's first is not `OOMKilled`, or exits 137 | Q1395's rule is wrong for Kata and is refiled |
 | R7's second reads `OOMKilled` with 143 | A job's container killed at the sidecar's own limit reads as one killed at its own, which Q1395's rule does not name; the rule's documented miss is confirmed |
@@ -116,9 +125,9 @@ The values are the runbook's ([gke-dogfood.md](gke-dogfood.md#variables)) and ar
 | # | Command | Changes |
 |---|---|---|
 | 1 | `E2E_VARIANT=dind E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | Writes the `KUBECONFIG` file; system pool to its running size, which brings up the always-on gateways; the `dind` overlay (namespace labels, template, open egress policy, gateway); registry mirrors up |
-| 2 | `git push origin HEAD:claude/q1316-probe-run`, one push per reading | One workflow run; the e2e pool scales 0 to 1 |
-| 3 | `kubectl --context $CTX -n gag-dogfood-e2e apply -f hog.yaml`, R3, R3t and R4 only | One unprivileged pod, the e2e runner image (it has `python3`, checked locally; the job's fill uses `python:3-alpine` through the mirrors), 12Gi requested, `activeDeadlineSeconds: 120`, the e2e toleration and `nodeSelector: kubernetes.io/hostname` set to the node both workers are on |
-| 4 | `kubectl --context $CTX -n gag-dogfood-e2e delete pod q1316-hog` | Removes it |
+| 2 | `git push origin HEAD:claude/q1316-probe-run`, one push per reading | One workflow run of the file below; the e2e pool scales 0 to 1 |
+| 3 | `kubectl --context $CTX -n gag-dogfood-e2e create configmap q1316-fill --from-file=fill.py`, once, then `apply -f hog.yaml` with `NODE` set, per R3, R3t and R4 | One ConfigMap, and one non-root, unprivileged pod with the host's `/sys/fs/cgroup` mounted read-only, which is how it sees a worker die |
+| 4 | `kubectl --context $CTX -n gag-dogfood-e2e delete pod/q1316-hog` after each, `configmap/q1316-fill` after the last | Removes them |
 | 5 | `E2E_VARIANT=kata E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | Back to the `kata` overlay, and deletes the open egress policy |
 | 6 | `GAG_ROUTE_VARS=0 scripts/dogfood/e2e-stop.sh` | Drains, deletes the gateway, scales mirrors to 0, system pool to its running size |
 | 7 | `GAG_ROUTE_VARS=0 scripts/dogfood/stop.sh`, only where the system pool read 0 before step 1 | Drains every tenant's workers, then system pool to 0 |
@@ -146,12 +155,13 @@ Stop, run the restore, and report what was read, on any of:
 - 3.5 hours from step 1, which leaves the restore inside 4.
 
 R2, R3, R4 and R5 exhaust the e2e node on purpose.
-The pool's taint keeps other workloads off it, it is Spot and disposable, and its DaemonSets restart.
+The pool's taint keeps other workloads off it, and it is Spot and disposable.
+Its DaemonSets' containers are expected to be killed and restart, the metrics collector among them, so the node's own monitoring has gaps during a fill; that is not an abort.
 The system pool is a different pool.
 
 ## Restore
 
-1. Delete the plain pod, and cancel any probe run.
+1. Delete the plain pod and its ConfigMap, and cancel any probe run.
 2. Step 5, which leaves the tenant on its default overlay, then step 6.
    Where step 5 itself fails, `kubectl --context $CTX -n gag-dogfood-e2e delete networkpolicy e2e-open-egress` by hand, since `e2e-stop.sh` leaves it.
 3. Where step 6's drain times out it stops before deleting the gateway: read what it reports, cancel the probe run it names and re-run it.
@@ -176,19 +186,127 @@ Estimated from third-party price listings read on 2026-11-24 (Google's own page 
 So under $2, and under $4 at the on-demand rate, with nothing priced for disks.
 The cluster's own fee is paid either way.
 
-## The filler
+## The probe
 
-`fill.py <processes> <MiB each>`, run in the job's container (R2, R5: `8 4096`) and in the plain pod (R3, R3t, R4: `7 4096`):
+The commit pushed to `claude/q1316-probe-run` adds one file, `.github/workflows/q1316-probe.yml`, and its message is `[q1316-probe] <ID>`, with ` solo` after the ID for R1, R6 and R7.
+R6 is `R6a` and `R6b`, and R7 is `R7a` and `R7b`.
+`bash -n`, `shellcheck -S warning` and `actionlint` pass on it but for the runner label it does not know and an info note that single quotes do not expand, which is meant.
+It has not run on GitHub.
+
+```yaml
+name: q1316-probe
+on:
+  push:
+    branches: [claude/q1316-probe-run]
+permissions: {}
+jobs:
+  probe:
+    if: contains(github.event.head_commit.message, '[q1316-probe]')
+    strategy:
+      fail-fast: false
+      matrix:
+        worker: ${{ fromJSON(contains(github.event.head_commit.message, 'solo') && '["a"]' || '["a", "b"]') }}
+    runs-on: gag-ci-e2e
+    timeout-minutes: 15
+    steps:
+      - if: github.run_attempt == 1
+        shell: bash
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+          W: ${{ matrix.worker }}
+          I: python:3.13-alpine
+        run: |
+          set -uo pipefail
+          R=${MSG##*\[q1316-probe\] }
+          R=${R%%[!A-Za-z0-9]*}
+          echo "reading $R worker $W"
+          cd "$RUNNER_TEMP" || exit 1
+          cat > sample.py <<'PY'
+          @SAMPLE@
+          PY
+          cat > fill.py <<'PY'
+          @FILL@
+          PY
+          until docker info >/dev/null 2>&1; do sleep 1; done
+          docker pull "$I"
+          host() { docker run --rm -i --privileged --pid=host -v /sys/fs/cgroup:/h:ro "$I" "$@"; }
+          case $R in R0|R1|R6*|R7*) secs=150 ;; *) secs=480 ;; esac
+          host python3 - "$secs" < sample.py &
+          own=$(cat /proc/self/oom_score_adj)
+          case $R in
+            R3t) host sh -c "echo $own > /proc/\$(pidof dockerd)/oom_score_adj" ;;
+            R4|R5) host sh -c 'echo 1000 > /proc/$(pidof dockerd)/oom_score_adj' ;;
+          esac
+          sleep 20
+          case $R in
+            R0)
+              free -m; uname -r; docker version --format '{{.Server.Version}}'
+              for p in /proc/[0-9]*; do echo "runner ${p#/proc/} $(cat "$p/comm" "$p/oom_score_adj" | tr '\n' ' ') $(grep VmRSS "$p/status")"; done
+              host sh -c 'for p in /proc/[0-9]*; do echo "dind ${p#/proc/} $(cat $p/comm $p/oom_score_adj $p/cgroup | tr "\n" " ") $(grep VmRSS $p/status)"; done' ;;
+            R1|R7a)
+              host sh -c 'find /h -maxdepth 7 -name memory.oom.group -exec grep -H . {} +'
+              docker run --rm -m 64m --memory-swap 64m "$I" python3 -c 'b = bytearray(b"\1") * (256 << 20)'; echo "exit $?" ;;
+            R6a) host sh -c 'kill -KILL $(pidof dockerd)' ;;
+            R6b) host sh -c 'kill -ABRT $(pidof dockerd)' ;;
+            R7b) docker run --rm "$I" python3 -c 'b = bytearray(b"\1") * (9 << 30)'; echo "exit $?" ;;
+            R2|R5) if [[ $W == a ]]; then host python3 - 8 4096 45 < fill.py; fi ;;
+          esac
+          wait
+          exit 1
+```
+
+`@SAMPLE@` is `sample.py`:
 
 ```python
-import os, sys, time
+import glob, sys, time
+
+def rd(path):
+    try:
+        with open(path) as f:
+            return " ".join(f.read().split())
+    except OSError as e:
+        return type(e).__name__
+
+end = time.time() + int(sys.argv[1])
+while time.time() < end:
+    node = rd("/proc/vmstat").split()
+    print("T", time.strftime("%T"), "oom_kill", node[node.index("oom_kill") + 1])
+    for d in ["/h/kubepods.slice", "/h/docker"] + sorted(glob.glob("/h/kubepods.slice/**/*pod*.slice", recursive=True)):
+        print(" ", d[3:], *(rd(d + "/memory." + f) + " |" for f in ("current", "max", "events", "events.local")))
+        for c in sorted(glob.glob(d + "/cri-*.scope")):
+            print("   ", c[-20:], *(rd(c + "/memory." + f) + " |" for f in ("max", "oom.group", "events.local")), flush=True)
+    time.sleep(1)
+```
+
+`@FILL@`, and the ConfigMap's `fill.py`, is the script tested above:
+
+```python
+import glob, os, sys, time
+
+def field(path, name):
+    with open(path) as f:
+        return next(int(l.split()[1]) for l in f if l.startswith(name + " "))
+
+def find():
+    """A worker is a pod whose Docker-in-Docker sidecar has the template's 4Gi limit."""
+    return sorted(
+        os.path.dirname(os.path.dirname(f)) + "/memory.events"
+        for f in glob.glob("/h/kubepods.slice/*/*pod*.slice/*/memory.max")
+        if open(f).read().strip() == str(4 << 30)
+    )
+
+n, mib, settle = map(int, sys.argv[1:])
+end = time.time() + 300
+while len(workers := find()) != 2 and time.time() < end:
+    time.sleep(1)
+time.sleep(settle)
+if len(workers) != 2 or find() != workers:
+    sys.exit(f"found {len(workers)} workers, want 2: not filling")
 
 def kills():
-    with open("/proc/vmstat") as f:
-        return next(int(l.split()[1]) for l in f if l.startswith("oom_kill "))
+    return [field(w, "oom_kill") for w in workers]
 
-n, mib = int(sys.argv[1]), int(sys.argv[2])
-base = kills()
+base, node = kills(), field("/proc/vmstat", "oom_kill")
 for _ in range(n):
     if os.fork() == 0:
         held = []
@@ -203,5 +321,37 @@ for _ in range(n):
                 time.sleep(0.1)
         os._exit(0)
 died = [s for s in (os.wait()[1] for _ in range(n)) if s]
-print("kills", kills() - base, "fillers killed", len(died), flush=True)
+print("workers", base, "->", kills(), "node kills", field("/proc/vmstat", "oom_kill") - node,
+      "fillers killed", len(died), flush=True)
+```
+
+`hog.yaml`, whose image has `python3` (checked locally):
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: q1316-hog
+  namespace: gag-dogfood-e2e
+spec:
+  restartPolicy: Never
+  activeDeadlineSeconds: 180
+  automountServiceAccountToken: false
+  nodeSelector:
+    kubernetes.io/hostname: NODE # the node both workers are on
+  tolerations:
+    - { key: dedicated, value: e2e, effect: NoSchedule }
+  securityContext: { runAsNonRoot: true, runAsUser: 1001, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: fill
+      image: ghcr.io/actions-gateway/dogfood-e2e-runner:2.338.2-1
+      command: [python3, /f/fill.py, "7", "4096", "5"]
+      resources: { requests: { memory: 12Gi } }
+      securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
+      volumeMounts:
+        - { name: fill, mountPath: /f, readOnly: true }
+        - { name: cgroup, mountPath: /h, readOnly: true }
+  volumes:
+    - { name: fill, configMap: { name: q1316-fill } }
+    - { name: cgroup, hostPath: { path: /sys/fs/cgroup, type: Directory } }
 ```
