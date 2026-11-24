@@ -534,9 +534,9 @@ In the order the CI history and existing machinery make cheapest:
 
 ### Why the `dockerd` sidecar class is not built (Q1316)
 
-A crash of the Docker-in-Docker sidecar stays out of the retry classes because the crash with an ordinary cause, running out of memory, reads the same whether the job or the platform caused it.
-The shapes no job causes by accident have no known platform cause that leaves the runner alive.
-R10 wants a cause outside the tenant's code and R12 a discriminator shown to separate it, and what GAG reads gives neither.
+A crash of the Docker-in-Docker sidecar stays out of the retry classes because the crash with an ordinary cause, running out of memory, is the job's own (under `kata-dind`) or reads the same whether the job or the node caused it (under `privileged-dind`).
+The shapes no job causes by accident have no known platform cause, on the shipped templates, that leaves the runner alive.
+R10 wants a cause outside the tenant's code and R12 a discriminator shown to separate it, and what GAG reads gives neither: the status does not, and nor does the usage sampler, the other reading GAG has.
 
 **What the status shows**, read on 2026-11-24 with `docker:28-dind` (dockerd 28.5.2) on one container of the `kindest/node:v1.35.5` image (containerd 2.3.1, kubelet 1.35.5, cgroup v2), a static pod shaped like `privileged-dind` with a 256Mi limit on the sidecar, and no control plane.
 The statuses are the kubelet's own; the API server's copy, which the AGC watches, was not read, nor were Kata and GKE.
@@ -545,7 +545,7 @@ The statuses are the kubelet's own; the API server's copy, which the AGC watches
 |---|---|---|---|
 | Its cgroup reached its memory limit | `OOMKilled`, 137 | The job's own containers, where they are charged to the sidecar (`kata-dind`'s layout); the ordinary one | A node out of memory raises the same kernel counter, so it reads the same (kernel docs, not run) |
 | A container inside it was killed at its own limit (the sidecar's cgroup holding it), then dockerd got SIGKILL from the node | `OOMKilled`, 137 | A job's `docker run -m` limit, which is why the reason is wrong | The SIGKILL, which the status no longer shows |
-| SIGKILL that is not out of memory, from the node or from a job container with `--pid=host` | `Error`, 137, both the same | None that is not deliberate | None known to leave the runner alive: a pod kill, a node shutdown and an eviction take the pod, which the existing arms see |
+| SIGKILL that is not out of memory, from the node or from a job container with `--pid=host` | `Error`, 137, both the same | None that is not deliberate | None known on the shipped templates to leave the runner alive: a pod kill, a node shutdown and an eviction take the pod, which the existing arms see. A liveness probe's kill would leave it, and no shipped template has one (`kata-dind` has a `startupProbe` only) |
 | Aborts by itself (SIGABRT, as a Go fatal error does) | `Error`, 2 | Exhausting threads or processes, which aborts Go the same way (Go source; not run) | A daemon bug |
 | Cannot start on a full disk | `Error`, 1, then a crash loop | A full disk, once something restarts dockerd | A bad volume |
 | Its disk fills while it runs | No crash | The job's own writes | None |
@@ -555,18 +555,26 @@ The statuses are the kubelet's own; the API server's copy, which the AGC watches
 With a 1 GiB data disk filled by a container the job ran, dockerd stayed up and the job's next `docker run` and `docker import` failed with `no space left on device`.
 Only dockerd's restart on the full disk failed, with `failed to start daemon: error initializing graphdriver`, so a job that fills its disk fails with the daemon still up and GAG sees nothing.
 
-**Memory is the case that decides it.** Under `kata-dind`'s layout (its entrypoint's, read here on runc rather than in a Kata guest) a job's containers sit under the sidecar's cgroup, so a job that outgrows its sidecar produces the sidecar's `OOMKilled` and nothing in the status says which side grew.
+**Memory is the case that decides it.** Under `kata-dind`'s layout (its entrypoint's, run here on runc rather than in a Kata guest) a job's containers sit under the sidecar's cgroup, so a job that outgrows its sidecar produces the sidecar's `OOMKilled` and nothing in the status says which container grew.
+Under Kata itself the cause is not in doubt either way: an out-of-memory kill inside the guest is this pod's own memory, and the host running out takes the whole VM and the runner with it (reasoned, not run), so there is no platform cause for a class to recognise.
 It is ordinary job behaviour and needs a bigger limit, which a re-run does not bring: a sizing profile derives the limits of `spec.containers`, and the sidecar is an init container, so neither `Binpack` nor `Throughput` raises it.
 Under `privileged-dind` the job's containers are charged to the node instead (containers were under `/sys/fs/cgroup/docker`, outside the sidecar's limit), so dockerd and its own processes are what reach the sidecar's limit, and a job that exhausts the node's memory, or a neighbour's that does, can get the daemon killed by the node's out-of-memory killer with one and the same status (not run).
+
+**The usage sampler does not separate them.** It polls `metrics.k8s.io` every 15 s and keeps each container's peak, the sidecar's included, so GAG can hold a sampled peak beside the sidecar's limit (`cmd/agc/internal/usage/sampler.go`; detection does not read it).
+A peak near the limit says the limit was reached, which is the job's side.
+A peak far below it fits a spike between two samples, a nested container killed at its own limit ([Q1395](../queue/Q1395.md)) and a node out of memory, and under `privileged-dind` the sampled figure leaves out the job's containers altogether ([Q1396](../queue/Q1396.md)).
+So it can rule a limit in and cannot rule the platform in (reasoned from the source, not run).
+
 A nested kill also marks the sidecar `OOMKilled` without killing it ([Q1395](../queue/Q1395.md)), and Q1395's second row shows the status then indistinguishable from a real one.
 
 **Two shapes have no honest tenant twin**, and a class for them alone is not worth building.
-A SIGKILL that is not out of memory has no known platform cause that leaves the runner running, so there is nothing to build a class for.
+A SIGKILL that is not out of memory has no known platform cause on the shipped templates that leaves the runner running, so there is nothing to build a class for.
+A template with a liveness probe on its daemon, the operator's or the tenant's own, is the exception, and what it kills is a daemon the job may have hung.
 A daemon that aborts by itself is nearly one: its twin is thread or process exhaustion by the job, a rare thing to do by accident.
 Both have the same cost if wrong, a wasted budget slot or a masked daemon bug, and a benefit nobody can size: where a bug is deterministic the re-run repeats it, and nothing measured says how often it is not.
 
 **How often it happens is unmeasured.** The CI survey found 2 jobs that failed with dockerd unreachable among the 127 failed jobs on GAG's runners; their logs have expired and no annotation names them.
-Re-read on 2026-11-24, the 740 runs of the five workflows that can use the e2e runners and that ended failed, cancelled or timed out from 2026-05-18 to 2026-10-11 hold 17 failed jobs on GAG's runners: 11 lost the runner, and the one after 2026-07-17 failed an egress assertion.
+Re-read on 2026-11-24, the 740 runs of the five workflows that can use the e2e runners and that ended failed, cancelled or timed out from 2026-05-18 to 2026-10-11 hold 17 failed jobs on GAG's runners: 11 lost the runner, and the other six failed a Helm download, an image build, the Calico suite (three, 2026-07-16 and 17) and an egress assertion, the only one after 2026-07-17.
 That reading misses a job that failed and passed on a re-run, which is what a class would be for.
 [The Kata rollout](archive/kata-on-gke.md#what-the-live-session-found-2026-07-16) records one sidecar crash loop, on 2026-07-16, when a `blkid` defect failed every fresh volume and the runner took the job before the daemon was up; a startup probe, which landed on 2026-07-17 and ships in `kata-dind` alone, closes that shape for it and leaves it open for `privileged-dind` ([Q1397](../queue/Q1397.md)).
 
