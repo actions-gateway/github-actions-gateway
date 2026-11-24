@@ -64,6 +64,9 @@ func (w killedWorker) find(jobs []workflowJobSummary) (job workflowJobSummary, f
 // where that call takes no other job, because every failed job of the attempt is one of
 // them, or where the list does not say which jobs they are: an unread or empty one, or a
 // worker matched by a name that does not name one job.
+//
+// A cancelled job is one that failed: the list does not say whether a fail-fast matrix
+// cancelled it or its own timeout did, and a timeout is not the class's to re-run.
 func planJobRerun(workers []killedWorker, jobs []workflowJobSummary) (scope string, standing []killedWorker) {
 	if len(jobs) == 0 || len(workers) == 0 {
 		return rerunScopeFailedJobs, workers

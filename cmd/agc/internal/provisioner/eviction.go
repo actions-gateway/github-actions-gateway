@@ -401,6 +401,8 @@ func (p *Provisioner) recordRetryStarted(target Target, runID string, log *slog.
 //
 // d.failedAttempt, where non-zero, is the run attempt the job failed in, and a pass that
 // finds the job re-run past it stands down (errRerunCovered, the scale-set tier only).
+// d.onRefused, where set, ends the recovery at the first still-running refusal: a parked
+// re-run goes back to waiting for the run.
 func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, attempt int, tier, cause string, d rerunDisruption) {
 	windowC, stopWindow := p.startRerunWindow()
 	defer stopWindow()
@@ -431,6 +433,11 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 			log.Info("the merge queue built a newer group for the pull request; the disruption auto-retry stands down",
 				"runID", runID, "attempt", attempt, "cause", cause, "rerunCalls", call, "newerRunID", superseded.newer.ID)
 			p.recordRerunWithheld(target, runID, cause, rerunWithheldReasonSuperseded, supersededMessage(runID, cause, superseded.run, superseded.newer))
+			return
+		case d.onRefused != nil && errors.Is(err, errRunNotConcluded):
+			log.Info("another re-run of the run is in progress; the disruption auto-retry waits for it to conclude",
+				"runID", runID, "attempt", attempt, "cause", cause, "rerunCalls", call)
+			d.onRefused()
 			return
 		case !errors.Is(err, errRunNotConcluded) && !errors.Is(err, errRunConclusionUnreadable) && !errors.Is(err, errJobNotCurrent):
 			log.Error("disruption auto-retry failed; manual rerun may be required",
@@ -561,8 +568,9 @@ func (p *Provisioner) canReadRun(owner, repo string) bool {
 // scale-set tier, deletion only on the classic) and from the scale-set abandoned arm's
 // read before its force-cancel (Q1232), run_succeeded from attemptRerun's conclusion
 // check (scale-set tier only), superseded from attemptRerun's merge-group check (Q1381),
-// own_limit from withholdOwnLimitRerun (eviction only, Q1177), and the scale-set tier's
-// pre-reservation futility checks (futileRerun, Q1181).
+// own_limit from withholdOwnLimitRerun (eviction only, Q1177), job_not_found from a parked
+// re-run's release (Q1319), and the scale-set tier's pre-reservation futility checks
+// (futileRerun, Q1181).
 func (p *Provisioner) recordRerunWithheld(target Target, runID, cause, reason, message string) {
 	key := target.Key()
 	if p.Metrics != nil && p.Metrics.EvictionRerunWithheld != nil {

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,6 +48,10 @@ type jobsAPI struct {
 	refuseFor string
 	// stale answers that many job re-runs as GitHub refuses an earlier attempt's ID.
 	stale int
+	// busy refuses every re-run as if the run were in progress, whatever its status says.
+	busy bool
+	// hold, where set, keeps every re-run call waiting until it is closed.
+	hold chan struct{}
 	// calls is every accepted re-run: "failed-jobs", or a job's runner.
 	calls []string
 }
@@ -93,6 +99,9 @@ func (a *jobsAPI) accepted() []string {
 }
 
 func (a *jobsAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if a.hold != nil && r.Method == http.MethodPost {
+		<-a.hold
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	refuse := func(message string) {
@@ -102,7 +111,7 @@ func (a *jobsAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/repos/myorg/myrepo/actions/")
 	switch {
 	case path == "runs/4242/rerun-failed-jobs" && r.Method == http.MethodPost:
-		if a.running {
+		if a.running || a.busy {
 			_ = r.Body.Close()
 			w.WriteHeader(http.StatusForbidden)
 			_, _ = io.WriteString(w, alreadyRunningBody)
@@ -119,7 +128,7 @@ func (a *jobsAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(path, "jobs/") && strings.HasSuffix(path, "/rerun") && r.Method == http.MethodPost:
 		id, _ := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(path, "jobs/"), "/rerun"))
 		switch {
-		case a.running:
+		case a.running || a.busy:
 			refuse("The workflow run containing this job is already running")
 		case a.stale > 0 || id/1000 != a.attempt:
 			a.stale--
@@ -364,6 +373,69 @@ func TestJobRerun_KilledJobsBesideAGenuineFailureTakeTurns(t *testing.T) {
 	assert.Equal(t, "r-lint", api.jobs[0].runner, "the genuine failure was never re-run")
 }
 
+// TestJobRerun_TwoSetsOfOneRunTakeTurns: GitHub takes one re-run of a run at a time, so
+// the set that loses the call keeps its worker parked for the attempt the other's starts.
+func TestJobRerun_TwoSetsOfOneRunTakeTurns(t *testing.T) {
+	p, api, gpu, clock, _ := jobsFixture(t,
+		runJob{name: "lint", runner: "r-lint", conclusion: "failure"},
+		runJob{name: "a", runner: "r-a", conclusion: "failure"},
+		runJob{name: "b", runner: "r-b", conclusion: "failure"})
+	cpu := &stubTarget{key: client.ObjectKey{Namespace: "team-a", Name: "cpu"}, spec: gpu.spec}
+	parkKill(p, gpu, "pod-a", "a", "r-a")
+	parkKill(p, cpu, "pod-b", "b", "r-b")
+	api.conclude()
+	api.hold = make(chan struct{})
+	clock.advance(10 * time.Minute)
+	released := p.sweepPendingReruns(context.Background())
+	close(api.hold)
+	require.Len(t, released, 2, "both sets read the run before either call is answered")
+	for _, done := range released {
+		<-done
+	}
+	require.Len(t, api.accepted(), 1)
+	lost, name := cpu, "b"
+	if api.accepted()[0] == "r-b" {
+		lost, name = gpu, "a"
+	}
+	require.Len(t, readLedger(t, p, lost).Pending, 1, "the set GitHub refused keeps its worker parked")
+
+	clock.advance(10 * time.Minute)
+	sweepPendingAndWait(t, p, context.Background(), 0)
+	release(t, p, api, clock, 1)
+	assert.ElementsMatch(t, []string{"r-a", "r-b"}, api.accepted())
+	for _, target := range []*stubTarget{gpu, cpu} {
+		l := readLedger(t, p, target)
+		assert.Empty(t, l.Pending)
+		assert.Equal(t, 1, l.Reruns["4242"].Count, "the refused call spends no second slot")
+		assert.NotContains(t, target.events, "EvictionRerunFailed")
+	}
+	trigger, cause := pairFailure(readLedger(t, p, lost).Reruns["4242"], 2, name)
+	assert.Equal(t, rerunTriggerGAG, trigger, "the re-run is recorded under the attempt it started from")
+	assert.Equal(t, recoveryCauseOOM, cause)
+}
+
+// TestJobRerun_ARefusedReleaseEndsWithTheWait: a run that reads concluded and is refused as
+// running waits like one in progress, and ends the same way.
+func TestJobRerun_ARefusedReleaseEndsWithTheWait(t *testing.T) {
+	p, api, target, clock, _ := jobsFixture(t,
+		runJob{name: "lint", runner: "r-lint", conclusion: "failure"},
+		runJob{name: "build", runner: "r-build", conclusion: "failure"})
+	p.EvictionRerunWindow = 20 * time.Millisecond
+	neverConcluded := p.Metrics.EvictionRerunFailures.WithLabelValues("team-a", "gpu", recoveryCauseOOM, rerunFailureReasonNeverConcluded)
+	parkKill(p, target, "pod-a", "build", "r-build")
+	api.busy = true
+	release(t, p, api, clock, 1)
+	require.Len(t, readLedger(t, p, target).Pending, 1)
+	assert.Zero(t, testutil.ToFloat64(neverConcluded))
+	sweepPendingAndWait(t, p, context.Background(), 0)
+
+	clock.advance(pendingRerunMaxWait)
+	sweepPendingAndWait(t, p, context.Background(), 1)
+	assert.Empty(t, readLedger(t, p, target).Pending)
+	assert.Equal(t, float64(1), testutil.ToFloat64(neverConcluded))
+	assert.Empty(t, api.accepted())
+}
+
 // TestJobRerun_AHumansReRunLeavesTheOthersParked: somebody re-ran one of two killed jobs,
 // so only the other is.
 func TestJobRerun_AHumansReRunLeavesTheOthersParked(t *testing.T) {
@@ -557,6 +629,40 @@ func TestPendingSets_OneReleasePerRun(t *testing.T) {
 	assert.True(t, s.due("set|4242/b", "set|4242", 0, now, time.Time{}))
 }
 
+func TestRerunRecord_Advance(t *testing.T) {
+	one := func(scope string, disruptions ...string) *rerunAttempt {
+		return &rerunAttempt{Scope: scope, Disruptions: disruptions}
+	}
+	for _, tc := range []struct {
+		name     string
+		attempts map[string]*rerunAttempt
+		to       int
+		want     []string
+	}{
+		{"a later attempt", map[string]*rerunAttempt{"1": one(rerunScopeJob, "pod-a")}, 3, []string{"3"}},
+		{"the same attempt", map[string]*rerunAttempt{"2": one(rerunScopeJob, "pod-a")}, 2, []string{"2"}},
+		{"an earlier attempt", map[string]*rerunAttempt{"2": one(rerunScopeJob, "pod-a")}, 1, []string{"2"}},
+		{"a re-run of every failed job", map[string]*rerunAttempt{"1": one(rerunScopeFailedJobs, "pod-a")}, 2, []string{"1"}},
+		{"a re-run another disruption shares", map[string]*rerunAttempt{"1": one(rerunScopeJob, "pod-a", "pod-b")}, 2, []string{"1"}},
+		{"the later attempt holds a re-run", map[string]*rerunAttempt{"1": one(rerunScopeJob, "pod-a"), "2": one(rerunScopeJob, "pod-b")}, 2, []string{"1", "2"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &rerunRecord{Attempts: tc.attempts}
+			from := "1"
+			if tc.attempts[from] == nil {
+				from = "2"
+			}
+			a := r.Attempts[from]
+			moved := r.advance(from, &rerunDisruption{key: "pod-a", failedAttempt: tc.to})
+			assert.ElementsMatch(t, tc.want, slices.Collect(maps.Keys(r.Attempts)))
+			assert.Equal(t, len(tc.want) == 1 && tc.want[0] != from, moved)
+			if moved {
+				assert.Same(t, a, r.Attempts[tc.want[0]])
+			}
+		})
+	}
+}
+
 func TestPlanJobRerun(t *testing.T) {
 	row := func(id int64, name, runner, conclusion string) workflowJobSummary {
 		return workflowJobSummary{ID: id, Name: name, RunnerName: runner, Conclusion: conclusion}
@@ -571,6 +677,7 @@ func TestPlanJobRerun(t *testing.T) {
 		want      []killedWorker
 	}{
 		{"one of two failures", []killedWorker{a}, jobs, rerunScopeJob, []killedWorker{a}},
+		{"a sibling its matrix or its timeout cancelled", []killedWorker{a}, []workflowJobSummary{row(1, "a", "r-a", "failure"), row(2, "b", "r-b", "cancelled")}, rerunScopeJob, []killedWorker{a}},
 		{"every failure", []killedWorker{a, b}, jobs, rerunScopeFailedJobs, []killedWorker{a, b}},
 		{"one whose runner is not listed beside one that is", []killedWorker{{Job: "b", Runner: "gone"}, a}, jobs, rerunScopeJob, []killedWorker{a}},
 		{"none listed", []killedWorker{{Job: "a", Runner: "gone"}}, jobs, rerunScopeJob, nil},

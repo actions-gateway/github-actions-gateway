@@ -386,14 +386,25 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 	log.Info("the run concluded; releasing its parked re-run", "runID", e.RunID, "job", w.Job, "runner", w.Runner,
 		"cause", e.Cause, "scope", scope, "waited", age.Round(time.Second))
 	var ran string
+	var refused bool
+	d := rerunDisruption{key: w.Disruption, job: w.Job, runner: w.Runner, failedAttempt: e.FailedAttempt,
+		scope: scope, onRerun: func(scope string) { ran = scope }}
+	if !final {
+		d.onRefused = func() { refused = true }
+	}
 	// No retry delay: the run has concluded, which is the state a re-run needs.
 	recovered := p.handleEviction(ctx, target, owner, repo, e.RunID, log, p.ownerMaxEvictionRetries(ctx, target), 0,
-		tier, e.Cause, rerunDisruption{key: w.Disruption, job: w.Job, runner: w.Runner, failedAttempt: e.FailedAttempt,
-			scope: scope, onRerun: func(scope string) { ran = scope }})
+		tier, e.Cause, d)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		<-recovered
+		// Somebody's re-run started first, another set's or a person's. The entry waits for
+		// it as it waited for the run, with the slot it holds.
+		if refused {
+			p.pendingSets.settle(entry, runKey, false)
+			return
+		}
 		// A single-job re-run leaves the other workers parked, for the attempt it started.
 		var rest []killedWorker
 		if ran == rerunScopeJob {

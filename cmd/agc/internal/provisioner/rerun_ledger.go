@@ -369,6 +369,9 @@ type rerunDisruption struct {
 	onReserved func()
 	// onRerun, where set, is told the re-run's scope as its calls start.
 	onRerun func(scope string)
+	// onRefused, where set, ends the recovery on the first call GitHub refuses as already
+	// running, instead of the loop waiting the run out.
+	onRefused func()
 	// park defers the re-run until the run concludes: the reservation records it in
 	// the ledger's pending map in the same write, and the recovery returns once the slot
 	// is held instead of re-running (pending_rerun.go).
@@ -419,10 +422,11 @@ func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, r
 		}
 		attemptKey := strconv.Itoa(d.failedAttempt)
 
-		for _, a := range r.Attempts {
+		for from, a := range r.Attempts {
 			if a != nil && slices.Contains(a.Disruptions, d.key) {
 				outcome, number = rerunResumed, r.Count
-				return a.narrow(l, runID, d)
+				changed := a.narrow(l, runID, d)
+				return r.advance(from, d) || changed
 			}
 		}
 		a := r.Attempts[attemptKey]
@@ -497,6 +501,21 @@ func (a *rerunAttempt) narrow(l *rerunLedger, runID string, d *rerunDisruption) 
 	if d.job != "" {
 		a.Jobs = []string{d.job}
 	}
+	return true
+}
+
+// advance moves the single-job re-run at from, d's alone, to the later attempt d's job
+// stands failed in, so the attempt that re-runs it is paired with the re-run. It reports
+// whether it moved.
+func (r *rerunRecord) advance(from string, d *rerunDisruption) bool {
+	a, to := r.Attempts[from], strconv.Itoa(d.failedAttempt)
+	n, err := strconv.Atoi(from)
+	if err != nil || n >= d.failedAttempt || r.Attempts[to] != nil ||
+		a.Scope != rerunScopeJob || len(a.Disruptions) != 1 {
+		return false
+	}
+	delete(r.Attempts, from)
+	r.Attempts[to] = a
 	return true
 }
 
