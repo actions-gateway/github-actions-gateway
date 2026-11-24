@@ -1,0 +1,37 @@
+# Called by q1319-rerun-probe.yml, which says what it measures. Never runs on its own.
+name: q1319-rerun-probe (reusable)
+on:
+  workflow_call:
+    inputs:
+      fail-first:
+        description: "Fail the plain job on the run's first attempt"
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  inner:
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - if: inputs.fail-first && github.run_attempt == 1
+        run: exit 1
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT}"
+  inner-matrix:
+    strategy:
+      matrix:
+        leg: [a]
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT}"
+  inner-named:
+    name: Inner / named
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT}"
+  # One level deeper, so a name carries two caller prefixes.
+  deeper:
+    uses: ./.github/workflows/q1319-rerun-probe-nested.yml

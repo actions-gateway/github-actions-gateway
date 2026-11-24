@@ -1,0 +1,226 @@
+# Q1319 probe fixture, dispatch-only: never runs in normal CI.
+#
+# Gives the q555 design's M6 its two readings, on the dogfood `ci` scale set:
+#   names  whether the `jobDisplayName` a scale-set listener is sent matches the jobs
+#          API's `name`, across the shapes GitHub builds a name from.
+#   chain  what `POST /repos/{o}/{r}/actions/jobs/{id}/rerun` re-runs around one job of
+#          a `needs:` chain, and whether upstream outputs and artifacts survive it.
+# The readings are the AGC's `scaleset: job assigned` log lines against
+# `GET /repos/{o}/{r}/actions/runs/{id}/attempts/{n}/jobs`, and the re-run jobs' logs.
+#
+# Runs only while the dogfood cluster is up: the jobs wait server-side on the
+# `gag-ci-scaleset` label until its listener is serving.
+name: q1319-rerun-probe
+on:
+  workflow_dispatch:
+    inputs:
+      probe:
+        description: "names (the naming shapes) or chain (the needs: chain to re-run)"
+        type: choice
+        options: [names, chain]
+        default: names
+  # workflow_dispatch only works once the file reaches the default branch; the
+  # push trigger (scoped to this file on claude/ branches) lets the probe session
+  # queue the jobs from its own feature branch.
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/q1319-rerun-probe.yml"]
+
+# The jobs never touch the repo, so they get no token scopes at all.
+permissions: {}
+
+# Jobs run only on explicit opt-in: a workflow_dispatch, or a push whose head
+# commit message contains "[q1319-names]" or "[q1319-chain]". A plain push touching
+# this file skips every job, so the run concludes green.
+jobs:
+  # --- names ---------------------------------------------------------------
+  matrix-default:
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'names') || contains(github.event.head_commit.message, '[q1319-names]')
+    strategy:
+      fail-fast: false
+      matrix:
+        leg: [a, b]
+        arch: [x64]
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - if: matrix.leg == 'b' && github.run_attempt == 1
+        run: exit 1
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT}"
+
+  # Two legs whose explicit name does not vary: a duplicate made by a matrix.
+  matrix-same-name:
+    name: matrix-same-name
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'names') || contains(github.event.head_commit.message, '[q1319-names]')
+    strategy:
+      matrix:
+        leg: [a, b]
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT}"
+
+  # An object value, a number, and a name built from expressions.
+  matrix-object:
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'names') || contains(github.event.head_commit.message, '[q1319-names]')
+    strategy:
+      matrix:
+        cfg:
+          - { os: linux, ver: 1.10 }
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT}"
+  matrix-named:
+    name: "Named ${{ matrix.leg }} / ${{ matrix.n }}"
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'names') || contains(github.event.head_commit.message, '[q1319-names]')
+    strategy:
+      matrix:
+        leg: [a]
+        n: [1]
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT}"
+
+  # Two default names past 100 characters, differing only in the part GitHub cuts.
+  matrix-long:
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'names') || contains(github.event.head_commit.message, '[q1319-names]')
+    strategy:
+      matrix:
+        leg:
+          - aaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjjjjjjjjkkkkkkkkkk1
+          - aaaaaaaaaabbbbbbbbbbccccccccccddddddddddeeeeeeeeeeffffffffffgggggggggghhhhhhhhhhiiiiiiiiiijjjjjjjjjjkkkkkkkkkk2
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT}"
+
+  # Interior and edge whitespace, quotes and non-ASCII, which a normaliser would move.
+  name-odd:
+    name: "  odd   näme \"quoted\" ✓  "
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'names') || contains(github.event.head_commit.message, '[q1319-names]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT}"
+
+  # Two jobs sharing one `name:`, the red one re-run by its own job ID.
+  dup-red:
+    name: dup
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'names') || contains(github.event.head_commit.message, '[q1319-names]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - if: github.run_attempt == 1
+        run: exit 1
+      - run: echo "red twin, attempt ${GITHUB_RUN_ATTEMPT}"
+  dup-green:
+    name: dup
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'names') || contains(github.event.head_commit.message, '[q1319-names]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: echo "green twin, attempt ${GITHUB_RUN_ATTEMPT}"
+
+  reusable:
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'names') || contains(github.event.head_commit.message, '[q1319-names]')
+    uses: ./.github/workflows/q1319-rerun-probe-reusable.yml
+    with:
+      fail-first: true
+  reusable-matrix:
+    name: Called ${{ matrix.leg }}
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'names') || contains(github.event.head_commit.message, '[q1319-names]')
+    strategy:
+      matrix:
+        leg: [a]
+    uses: ./.github/workflows/q1319-rerun-probe-reusable.yml
+
+  # --- chain ---------------------------------------------------------------
+  # up -> mid -> down, with mid red on attempt 1. The nonce is minted per execution,
+  # so a re-run that reads back the first attempt's nonce was handed the old outputs.
+  up:
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'chain') || contains(github.event.head_commit.message, '[q1319-chain]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    outputs:
+      nonce: ${{ steps.mint.outputs.nonce }}
+    steps:
+      - id: mint
+        run: |
+          nonce="up-attempt${GITHUB_RUN_ATTEMPT}-${RANDOM}${RANDOM}"
+          echo "nonce=${nonce}" >> "${GITHUB_OUTPUT}"
+          echo "${nonce}" > nonce.txt
+          echo "minted ${nonce}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: up-nonce
+          path: nonce.txt
+          overwrite: true
+          retention-days: 1
+  mid:
+    needs: up
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    outputs:
+      nonce: ${{ steps.mint.outputs.nonce }}
+    steps:
+      - id: mint
+        run: |
+          nonce="mid-attempt${GITHUB_RUN_ATTEMPT}-${RANDOM}${RANDOM}"
+          echo "nonce=${nonce}" >> "${GITHUB_OUTPUT}"
+          echo "minted ${nonce}"
+      - name: Read up's output
+        env:
+          UP_NONCE: ${{ needs.up.outputs.nonce }}
+          UP_RESULT: ${{ needs.up.result }}
+        run: echo "attempt ${GITHUB_RUN_ATTEMPT} sees up result=${UP_RESULT} output=${UP_NONCE}"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: up-nonce
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT} sees up artifact=$(cat nonce.txt)"
+      - if: github.run_attempt == 1
+        run: exit 1
+  # Depends on both: reads mid's fresh output and up's old one.
+  down:
+    needs: [up, mid]
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - env:
+          UP_NONCE: ${{ needs.up.outputs.nonce }}
+          MID_NONCE: ${{ needs.mid.outputs.nonce }}
+        run: echo "attempt ${GITHUB_RUN_ATTEMPT} sees up=${UP_NONCE} mid=${MID_NONCE}"
+  # Runs after mid whatever it concluded, so attempt 1 already ran it.
+  down-always:
+    needs: mid
+    if: always() && needs.mid.result != 'skipped'
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - env:
+          MID_RESULT: ${{ needs.mid.result }}
+          MID_NONCE: ${{ needs.mid.outputs.nonce }}
+        run: echo "attempt ${GITHUB_RUN_ATTEMPT} sees mid result=${MID_RESULT} output=${MID_NONCE}"
+  # Depends on up only: not downstream of mid.
+  beside:
+    needs: up
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT}"
+  # A genuine failure outside the chain, which a single-job re-run should leave alone.
+  sibling-red:
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'chain') || contains(github.event.head_commit.message, '[q1319-chain]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 5
+    steps:
+      - run: exit 1
+  # Keeps the run in progress after mid and sibling-red have failed, so a single-job
+  # re-run can be asked for before the run concludes.
+  sibling-slow:
+    if: (github.event_name == 'workflow_dispatch' && inputs.probe == 'chain') || contains(github.event.head_commit.message, '[q1319-chain]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 15
+    steps:
+      - run: sleep 420
