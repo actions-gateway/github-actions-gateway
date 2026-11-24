@@ -449,7 +449,7 @@ For a class whose job ends on a step's result ([Q1315](../queue/Q1315.md), [Q131
 
 - **The proxy class** fires from `Completed`, which holds the result and the proxy readiness together.
   The amendment never replaces that reading, so it changes nothing for the class, and a restart after the record is written costs it nothing.
-- **The sidecar class** fires from `Completed` where the running pod already shows the crash, as a restarted container's last termination.
+- **The sidecar class** (not built, [why](#why-the-dockerd-sidecar-class-is-not-built-q1316)) would fire from `Completed` where the running pod already shows the crash, as a restarted container's last termination.
   A crash the pod reports later, which the near-simultaneous end of a sidecar and the step that used it makes likely, is first known to the amendment, so the class also judges the record there, and the crash's time tells one before the job's end from one after.
   It cannot read the crash from the finished pod alone: the kubelet drops a restarted container's earlier termination from the status it writes as the pod finishes (measured on kubelet v1.35.5, 2026-11-23), so the AGC carries it from the events before.
 - **A restart between the two** loses only what the completion had not seen: a sidecar crash reported after it does not fire the class.
@@ -527,9 +527,54 @@ In the order the CI history and existing machinery make cheapest:
 2. **Egress proxy pool unavailable** (`observable`), for a colocated pool: the snapshot's proxy `Ready` was `False` or `readyReplicas` was 0 while the job ran, and `ready` is the EgressProxy's `Ready` condition.
    The AGC already watches EgressProxies in its own namespace, so this needs nothing from Q1178.
    A shared pool in another namespace is invisible to it, so the class does not cover one.
-3. **`dockerd` sidecar crash** (`freshPod`): the Docker-in-Docker sidecar's restart count rose, with a discriminator against tenant disk use still to find.
+3. **`dockerd` sidecar crash** (`freshPod`): the Docker-in-Docker sidecar's restart count rose.
+   Not built: no fact separates a platform's crash from the job's own ([why](#why-the-dockerd-sidecar-class-is-not-built-q1316)).
 
 **Decide (open question 3):** measure in that order, and ship only the out-of-memory class under Q1183; each later class is a row of its own once reproduced.
+
+### Why the `dockerd` sidecar class is not built (Q1316)
+
+A crash of the Docker-in-Docker sidecar stays out of the retry classes because the crash with an ordinary cause, running out of memory, reads the same whether the job or the platform caused it.
+The shapes no job causes by accident have no known platform cause that leaves the runner alive.
+R10 wants a cause outside the tenant's code and R12 a discriminator shown to separate it, and what GAG reads gives neither.
+
+**What the status shows**, read on 2026-11-24 with `docker:28-dind` (dockerd 28.5.2) on one container of the `kindest/node:v1.35.5` image (containerd 2.3.1, kubelet 1.35.5, cgroup v2), a static pod shaped like `privileged-dind` with a 256Mi limit on the sidecar, and no control plane.
+The statuses are the kubelet's own; the API server's copy, which the AGC watches, was not read, nor were Kata and GKE.
+
+| What happened to dockerd | Sidecar status | Honest tenant cause | Platform cause |
+|---|---|---|---|
+| Its cgroup reached its memory limit | `OOMKilled`, 137 | The job's own containers, where they are charged to the sidecar (`kata-dind`'s layout); the ordinary one | A node out of memory raises the same kernel counter, so it reads the same (kernel docs, not run) |
+| A container inside it was killed at its own limit (the sidecar's cgroup holding it), then dockerd got SIGKILL from the node | `OOMKilled`, 137 | A job's `docker run -m` limit, which is why the reason is wrong | The SIGKILL, which the status no longer shows |
+| SIGKILL that is not out of memory, from the node or from a job container with `--pid=host` | `Error`, 137, both the same | None that is not deliberate | None known to leave the runner alive: a pod kill, a node shutdown and an eviction take the pod, which the existing arms see |
+| Aborts by itself (SIGABRT, as a Go fatal error does) | `Error`, 2 | Exhausting threads or processes, which aborts Go the same way (Go source; not run) | A daemon bug |
+| Cannot start on a full disk | `Error`, 1, then a crash loop | A full disk, once something restarts dockerd | A bad volume |
+| Its disk fills while it runs | No crash | The job's own writes | None |
+| The kubelet loses the container | `ContainerStatusUnknown`, 137 (kubelet source) | None | Needs the runtime to lose one container of a running pod; no natural path found |
+
+**A full disk does not crash dockerd.** The row this section closes assumed it did.
+With a 1 GiB data disk filled by a container the job ran, dockerd stayed up and the job's next `docker run` and `docker import` failed with `no space left on device`.
+Only dockerd's restart on the full disk failed, with `failed to start daemon: error initializing graphdriver`, so a job that fills its disk fails with the daemon still up and GAG sees nothing.
+
+**Memory is the case that decides it.** Under `kata-dind`'s layout (its entrypoint's, read here on runc rather than in a Kata guest) a job's containers sit under the sidecar's cgroup, so a job that outgrows its sidecar produces the sidecar's `OOMKilled` and nothing in the status says which side grew.
+It is ordinary job behaviour and needs a bigger limit, which a re-run does not bring: a sizing profile derives the limits of `spec.containers`, and the sidecar is an init container, so neither `Binpack` nor `Throughput` raises it.
+Under `privileged-dind` the job's containers are charged to the node instead (containers were under `/sys/fs/cgroup/docker`, outside the sidecar's limit), so dockerd and its own processes are what reach the sidecar's limit, and a job that exhausts the node's memory, or a neighbour's that does, can get the daemon killed by the node's out-of-memory killer with one and the same status (not run).
+A nested kill also marks the sidecar `OOMKilled` without killing it ([Q1395](../queue/Q1395.md)), and Q1395's second row shows the status then indistinguishable from a real one.
+
+**Two shapes have no honest tenant twin**, and a class for them alone is not worth building.
+A SIGKILL that is not out of memory has no known platform cause that leaves the runner running, so there is nothing to build a class for.
+A daemon that aborts by itself is nearly one: its twin is thread or process exhaustion by the job, a rare thing to do by accident.
+Both have the same cost if wrong, a wasted budget slot or a masked daemon bug, and a benefit nobody can size: where a bug is deterministic the re-run repeats it, and nothing measured says how often it is not.
+
+**How often it happens is unmeasured.** The CI survey found 2 jobs that failed with dockerd unreachable among the 127 failed jobs on GAG's runners; their logs have expired and no annotation names them.
+Re-read on 2026-11-24, the 740 runs of the five workflows that can use the e2e runners and that ended failed, cancelled or timed out from 2026-05-18 to 2026-10-11 hold 17 failed jobs on GAG's runners: 11 lost the runner, and the one after 2026-07-17 failed an egress assertion.
+That reading misses a job that failed and passed on a re-run, which is what a class would be for.
+[The Kata rollout](archive/kata-on-gke.md#what-the-live-session-found-2026-07-16) records one sidecar crash loop, on 2026-07-16, when a `blkid` defect failed every fresh volume and the runner took the job before the daemon was up; a startup probe, which landed on 2026-07-17 and ships in `kata-dind` alone, closes that shape for it and leaves it open for `privileged-dind` ([Q1397](../queue/Q1397.md)).
+
+**A deliberate kill is not the argument.** A job has its daemon's API, and `docker run --pid=host` then `kill -9` crashes dockerd from inside the job, with the same status as a kill from the node (measured).
+That a job can fake the status shows it cannot be trusted, but a job that does so spends its own run's retry budget and masks nobody's breakage.
+
+**What would reopen it.** Detection records a failed job's sidecar reason, exit code and restart count already, so the evidence gathers without a class: a job whose record shows dockerd restarted with `Error` and which passed when somebody re-ran it, on more than one run.
+Building it would also need three facts the record does not hold today: the crash's time past an AGC restart, when the runner started, and any crash before the last.
 
 ## Component 4: the proxy as a sensor (Q1178, Q1184)
 

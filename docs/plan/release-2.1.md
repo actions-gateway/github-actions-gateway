@@ -40,8 +40,14 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | [Q1381](../queue/Q1381.md) | Withhold the re-run of a merge-group run displaced from the queue, which GitHub does not cancel | `2.1-gate` | 🔲 open |
 | [Q1319](../queue/Q1319.md) | Re-run only the classified job, found by its runner's name | `2.1-gate` | 🔲 open: M6 measured 2026-11-24, job-granular re-run unbuilt |
 | [Q1315](../queue/Q1315.md) | Retry a job failed while its colocated egress proxy pool was unavailable | `2.1-gate` | 🔲 open |
-| [Q1316](../queue/Q1316.md) | Retry a job whose Docker-in-Docker sidecar crashed under it | `2.1-gate` | 🔲 open: the likeliest punt, since its discriminator may not exist |
+| [Q1316](../queue/Q1316.md) | Retry a job whose Docker-in-Docker sidecar crashed under it | | ⤴ punted: no discriminator exists (see *Explicitly out of scope*) |
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
 
 **Scoped 2026-11-09, and nothing rides yet.** `v2.1.0` follows `v2.0.0`, so nothing here waits on anything but its own row and the 2.0 tag.
 The ledger takes a row for each item that merges onto the released surface before the tag.
+
+## Explicitly out of scope
+
+- **[Q1316](../queue/Q1316.md), the Docker-in-Docker sidecar class**, punted 2026-11-24.
+  A sidecar out of memory reads the same whether the job or the platform caused it, and the crash shapes no job causes by accident have no known platform cause ([the readings](q555-automatic-recovery-design.md#why-the-dockerd-sidecar-class-is-not-built-q1316)).
+  This release's rule is to punt a class with no discriminator rather than ship it.
