@@ -176,6 +176,12 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	} else if n > 0 {
 		setupLog.Info("seeded GitHub IP ranges from the persisted copy", "cidrs", n)
 	}
+	// A persisted copy this GMC seeds from is owned by its Deployment before any fetch
+	// has to succeed, so a rate-limited /meta cannot leave it behind on uninstall (Q1386).
+	if err := ipStore.AdoptOwner(seedCtx); err != nil {
+		setupLog.Error(err, "not adopting the persisted GitHub IP ranges; helm uninstall may leave the ConfigMap behind",
+			"configMap", controller.IPRangeStoreName)
+	}
 
 	secretWatches := &controller.TenantSecretWatches{
 		Config:     mgr.GetConfig(),

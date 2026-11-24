@@ -262,9 +262,11 @@ assert_params_resolve baseline
 
 # The GMC persists GitHub IP ranges in a ConfigMap it creates at runtime, not one
 # the chart renders, so only an owner reference to the GMC Deployment lets
-# `helm uninstall` remove it (Q1227). It must exist here: this runs only after a
-# green suite, whose proxy CONNECT spec waits for GitHub CIDRs that only a
-# successful /meta fetch, and so a save, puts in the policy.
+# `helm uninstall` remove it (Q1227). It must exist here, and it must carry the
+# owner without a successful /meta fetch: the suite seeds the ConfigMap from the
+# job's own token (Q1119) because the runner's unauthenticated quota is often
+# spent, and the seeded copy has no owner until the GMC adopts it at startup
+# (Q1386). A fetch that does succeed adds the same owner by saving.
 readonly IP_RANGES_CM=actions-gateway-gmc-ip-ranges
 if ! ip_ranges_owner="$(kc get configmap "${IP_RANGES_CM}" --namespace "${RELEASE_NS}" \
 	-o jsonpath='{range .metadata.ownerReferences[*]}{.kind}/{.name}{"\n"}{end}')"; then

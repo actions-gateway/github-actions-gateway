@@ -111,6 +111,26 @@ func (s *IPRangeStore) ensureOwner(cm *corev1.ConfigMap) {
 	cm.OwnerReferences = append(cm.OwnerReferences, *s.Owner)
 }
 
+// AdoptOwner adds Owner to the persisted ConfigMap when one exists without it, so
+// helm uninstall removes a copy this GMC seeds from even if it never completes a
+// fetch to Save over it. No ConfigMap, no Owner, or an Owner already listed writes
+// nothing; the ConfigMap's data is never touched.
+func (s *IPRangeStore) AdoptOwner(ctx context.Context) error {
+	if s.Owner == nil {
+		return nil
+	}
+	var cm corev1.ConfigMap
+	if err := s.Reader.Get(ctx, types.NamespacedName{Namespace: s.Namespace, Name: s.Name}, &cm); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	owners := len(cm.OwnerReferences)
+	s.ensureOwner(&cm)
+	if len(cm.OwnerReferences) == owners {
+		return nil
+	}
+	return s.Writer.Update(ctx, &cm)
+}
+
 // Load returns the persisted set and its fetch time. No ConfigMap yields an empty
 // set and no error; any reason to distrust the copy yields an error and no CIDRs.
 func (s *IPRangeStore) Load(ctx context.Context, now time.Time) ([]net.IPNet, time.Time, error) {

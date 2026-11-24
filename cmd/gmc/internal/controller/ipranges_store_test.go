@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -216,6 +217,61 @@ func TestIPRangeStore_SaveWritesOwner(t *testing.T) {
 		store, fc := newTestIPRangeStore(t)
 		require.NoError(t, store.Save(ctx, cidrs, time.Now()))
 		assert.Empty(t, read(t, fc))
+	})
+}
+
+// A GMC that seeds from a copy and never completes a fetch (a spent /meta quota)
+// still owns it, because Save is the only other place the owner is written.
+func TestIPRangeStore_AdoptOwner(t *testing.T) {
+	ctx := context.Background()
+	owner := metav1.OwnerReference{APIVersion: "apps/v1", Kind: "Deployment", Name: "gmc", UID: "d-uid"}
+	other := metav1.OwnerReference{APIVersion: "apps/v1", Kind: "Deployment", Name: "old", UID: "o-uid"}
+	seed := map[string]string{"cidrs": "140.82.112.0/20", "fetchedAt": time.Now().UTC().Format(time.RFC3339Nano)}
+	read := func(t *testing.T, fc client.Client) corev1.ConfigMap {
+		t.Helper()
+		var cm corev1.ConfigMap
+		require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: storeTestNamespace, Name: IPRangeStoreName}, &cm))
+		return cm
+	}
+
+	t.Run("adds the owner to a copy without one and keeps its data", func(t *testing.T) {
+		store, fc := newTestIPRangeStore(t, storeConfigMap(seed))
+		store.Owner = &owner
+		require.NoError(t, store.AdoptOwner(ctx))
+		cm := read(t, fc)
+		assert.Equal(t, []metav1.OwnerReference{owner}, cm.OwnerReferences)
+		assert.Equal(t, seed, cm.Data)
+	})
+	t.Run("keeps another owner and never duplicates its own", func(t *testing.T) {
+		cm := storeConfigMap(seed)
+		cm.OwnerReferences = []metav1.OwnerReference{other}
+		store, fc := newTestIPRangeStore(t, cm)
+		store.Owner = &owner
+		require.NoError(t, store.AdoptOwner(ctx))
+		require.NoError(t, store.AdoptOwner(ctx))
+		assert.Equal(t, []metav1.OwnerReference{other, owner}, read(t, fc).OwnerReferences)
+	})
+	t.Run("a copy already owned is not rewritten", func(t *testing.T) {
+		cm := storeConfigMap(seed)
+		cm.OwnerReferences = []metav1.OwnerReference{owner}
+		store, fc := newTestIPRangeStore(t, cm)
+		store.Owner = &owner
+		before := read(t, fc).ResourceVersion
+		require.NoError(t, store.AdoptOwner(ctx))
+		assert.Equal(t, before, read(t, fc).ResourceVersion)
+	})
+	t.Run("no copy creates none", func(t *testing.T) {
+		store, fc := newTestIPRangeStore(t)
+		store.Owner = &owner
+		require.NoError(t, store.AdoptOwner(ctx))
+		var cm corev1.ConfigMap
+		err := fc.Get(ctx, client.ObjectKey{Namespace: storeTestNamespace, Name: IPRangeStoreName}, &cm)
+		assert.True(t, apierrors.IsNotFound(err), "got %v", err)
+	})
+	t.Run("no owner configured leaves the copy alone", func(t *testing.T) {
+		store, fc := newTestIPRangeStore(t, storeConfigMap(seed))
+		require.NoError(t, store.AdoptOwner(ctx))
+		assert.Empty(t, read(t, fc).OwnerReferences)
 	})
 }
 
