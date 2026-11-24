@@ -480,7 +480,7 @@ On the scale-set tier every arm takes it (Q1181), because that tier already read
 ##### Futile re-runs are withheld before a slot is spent (scale-set)
 
 Some re-runs cannot help, and before Q1181 each one spent a budget slot, a node and queue time, then ended in an Event asking for a manual re-run that would not help either.
-The scale-set tier now judges the run read it takes before reserving a slot ([`rerun_futility.go`](../../cmd/agc/internal/provisioner/rerun_futility.go)) and withholds a futile re-run there, so it spends nothing: `actions_gateway_eviction_rerun_withheld_total` counts the `reason`, and a **Normal** `EvictionRerunWithheld` Event names the run, the reason and what would fix it.
+The scale-set tier now judges the run read it takes before reserving a slot ([`rerun_futility.go`](../../cmd/agc/internal/provisioner/rerun_futility.go)) and withholds a futile re-run there, so it spends nothing, except where the table says the re-run loop found it: `actions_gateway_eviction_rerun_withheld_total` counts the `reason`, and a **Normal** `EvictionRerunWithheld` Event names the run, the reason and what would fix it.
 
 | `reason` | Withheld when | What the Event says to do |
 |---|---|---|
@@ -489,11 +489,11 @@ The scale-set tier now judges the run read it takes before reserving a slot ([`r
 | `run_succeeded` | The run concluded `success`, whose failed jobs GitHub refuses to re-run with a 403. Also checked on every pass of the re-run loop, where the slot is already spent | Nothing |
 | `attempt_limit` | `run_attempt` is past 50, so the run has already been re-run 50 times, GitHub's cap on re-runs of a run, full or partial ([changelog, 2026-04-10](https://github.blog/changelog/2026-04-10-actions-workflows-are-limited-to-50-reruns/)) | Start a new run |
 | `run_too_old` | The run was created more than 30 days ago, outside GitHub's re-run window | Start a new run |
-| `superseded` | A `push` or `pull_request` run, and the newest run of the same workflow, event and branch is from a newer commit in the same head repository | Nothing: the newer commit is building |
+| `superseded` | A `push` or `pull_request` run, and the newest run of the same workflow, event and branch is from a newer commit in the same head repository; or a `merge_group` run, and a newer run of the same workflow is for another group of its pull request, at a different commit (Q1381). The merge-group half is also checked in the re-run loop once the run has concluded, where the slot is already spent | Nothing: the newer commit is building, or the queue no longer waits on the group |
 | `worker_unstartable` | A worker pod of the set is bound and in `ImagePullBackOff`, and no worker of the set still present has started since the oldest such pod was placed | Fix the image or its pull credentials, then re-run by hand |
 
 A field GitHub did not send skips its check rather than withholding.
-Two checks cost a call, and neither withholds on an answer it cannot read, because each only ever withholds: `superseded` lists the workflow's runs, filtered to the branch and event, newest first; `already_rerun` lists a moved attempt's jobs.
+Two checks cost a call, and neither withholds on an answer it cannot read, because each only ever withholds: `superseded` lists the workflow's runs, newest first, filtered to the event and to the branch, or for a `merge_group` run to those created since it (at most 3 pages of 30); `already_rerun` lists a moved attempt's jobs.
 
 `already_rerun` makes its call only when the attempt has moved, which for a disruption detected live it has not (Q1320).
 An arm that knows its attempt compares it; every other arm compares the run's `run_started_at` against when the job's worker was provisioned, allowing a minute of clock skew, and a worker with no such time is taken as unmoved.
@@ -513,7 +513,17 @@ The gate's placeability verdicts are not consulted: a cluster that is merely ful
 The reaped worker itself is not evidence, because it is being deleted, so a set whose only failing worker was the reaped one re-runs.
 
 Comparing the head repository keeps a fork's branch from matching upstream's of the same name; GitHub's `branch` filter does match a fork pull request's head branch, but the newest run it returns can be another fork's, which hides this fork's own newer commit (M5, [measured from the API](../plan/q555-automatic-recovery-design.md#readings-from-githubs-api-2026-11-22)), and a miss there re-runs, the safe direction.
-A `merge_group` run has no superseded check, and a group displaced from the queue is not cancelled by GitHub, so a disrupted job in one is re-run although no queue entry waits for it ([Q1381](../queue/Q1381.md)).
+
+A merge queue that drops a group builds another for the same pull request, at a new commit: at once when a group ahead failed, or when the pull request is queued again.
+GitHub leaves the old group's runs going ([measured](../plan/q555-automatic-recovery-design.md#readings-from-githubs-api-2026-11-22)).
+A pull request holds one place in a queue, so a newer group for it means no queue entry reads the old group's result.
+The check matches the two on the branch name, `gh-readonly-queue/<base>/pr-<number>-<sha>`, up to the commit at its end.
+It does not ask whether the group's branch still exists: that needs `Contents: read`, which the tenant's App [does not have](../operations/tenant-onboarding.md#0a-create-the-app-web-ui), and a merged group's branch is deleted too.
+It asks a second time just before the re-run call, because a disrupted required job is itself what makes the queue drop the group, as the run concludes.
+So for a group still queued when its job is lost, only that second ask can find a newer group, and the slot is already spent.
+It usually finds none, because somebody has to queue the pull request again first: of 106 failed runs measured, 5 had a newer group as they concluded ([readings](../plan/q555-automatic-recovery-design.md#readings-for-the-merge-group-check-2026-11-23)).
+A pull request removed from the queue and not yet queued again has no newer group, so its re-run goes ahead ([Q1391](../queue/Q1391.md), with the figures).
+
 A support ticket can raise GitHub's re-run cap for an organisation, and the check does not know that; such an organisation sees `attempt_limit` where GitHub would have accepted the re-run.
 The classic tier reserves from process memory with no run read first and takes none of these checks.
 

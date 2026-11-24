@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	neturl "net/url"
+	"regexp"
 	"strconv"
 	"time"
 )
@@ -85,8 +86,7 @@ func (p *Provisioner) futileRerun(ctx context.Context, target Target, owner, rep
 			runID, cause, run.createdAt.UTC().Format(time.RFC3339)))
 	}
 	if newer, ok := p.supersedingRun(ctx, owner, repo, runID, run, log); ok {
-		return p.withholdFutileRerun(target, runID, cause, run.attempt, log, rerunWithheldReasonSuperseded, fmt.Sprintf("worker pod for run %s was lost to %s, but run %d of the same workflow has since started on %s for a newer commit (%.7s), so no automatic re-run was requested; nothing to do, the newer commit is building",
-			runID, cause, newer.ID, run.headBranch, newer.HeadSHA))
+		return p.withholdFutileRerun(target, runID, cause, run.attempt, log, rerunWithheldReasonSuperseded, supersededMessage(runID, cause, run, newer))
 	}
 	if reader, ok := target.(StartupFailureReader); ok {
 		if detail, failing := reader.WorkersFailingToStart(ctx); failing {
@@ -123,6 +123,16 @@ func runCancelledMessage(runID, cause string) string {
 // runSucceededMessage is the run_succeeded Event, shared the same way.
 func runSucceededMessage(runID, cause string) string {
 	return fmt.Sprintf("worker pod for run %s was lost to %s, but GitHub concluded the run success, and refuses to re-run a successful run's failed jobs, so no automatic re-run was requested; nothing to do", runID, cause)
+}
+
+// supersededMessage is the superseded Event, shared the same way.
+func supersededMessage(runID, cause string, run runState, newer workflowRunSummary) string {
+	if run.event == mergeGroupEvent {
+		return fmt.Sprintf("worker pod for run %s was lost to %s, but the merge queue has since built another group for the pull request (run %d, commit %.7s), so no automatic re-run was requested; nothing to do, the queue no longer waits on this group",
+			runID, cause, newer.ID, newer.HeadSHA)
+	}
+	return fmt.Sprintf("worker pod for run %s was lost to %s, but run %d of the same workflow has since started on %s for a newer commit (%.7s), so no automatic re-run was requested; nothing to do, the newer commit is building",
+		runID, cause, newer.ID, run.headBranch, newer.HeadSHA)
 }
 
 // attemptMoved reports whether run has started an attempt after the one d's job failed
@@ -278,6 +288,7 @@ func (p *Provisioner) listJobs(ctx context.Context, owner, repo, what string, re
 // workflowRunSummary is the part of a listed run the superseded check compares.
 type workflowRunSummary struct {
 	ID             int64     `json:"id"`
+	HeadBranch     string    `json:"head_branch"`
 	HeadSHA        string    `json:"head_sha"`
 	CreatedAt      time.Time `json:"created_at"`
 	HeadRepository struct {
@@ -285,56 +296,123 @@ type workflowRunSummary struct {
 	} `json:"head_repository"`
 }
 
-// supersedingRun returns the newest run of run's workflow, event and branch where it is a
-// newer commit from the same head repository, which supersedes run. Filtering on the
-// event and comparing the head repository keeps a fork's branch from matching
-// upstream's of the same name. The branch filter matches a fork pull request's head
-// branch, but one result per page lets another fork's newer run hide this fork's own
-// (measured on github/docs, 2026-11-22); a miss re-runs.
-//
-// A list that cannot be read answers false: the check only ever withholds a re-run, so
-// an unreadable answer must not withhold one.
+// supersedingRun returns a newer run of run's workflow that makes run's result one nothing
+// reads: on the same branch for a push or a pull request, for the same pull request in
+// the merge queue. A list that cannot be read answers false: the check only ever
+// withholds a re-run, so an unreadable answer must not withhold one.
 func (p *Provisioner) supersedingRun(ctx context.Context, owner, repo, runID string, run runState, log *slog.Logger) (workflowRunSummary, bool) {
-	if !supersedableEvents[run.event] || run.workflowID == 0 || run.headBranch == "" ||
-		run.headSHA == "" || run.headRepo == "" {
+	if run.workflowID == 0 || run.headBranch == "" || run.headSHA == "" || run.headRepo == "" {
 		return workflowRunSummary{}, false
 	}
-	if err := p.githubReady(owner, repo, "workflow-runs"); err != nil {
+	var find func(context.Context, string, string, runState) (workflowRunSummary, bool, error)
+	switch {
+	case supersedableEvents[run.event]:
+		find = p.newerBranchRun
+	case run.event == mergeGroupEvent && !run.createdAt.IsZero():
+		find = p.newerMergeGroupRun
+	default:
+		return workflowRunSummary{}, false
+	}
+	newer, ok, err := find(ctx, owner, repo, run)
+	if err != nil {
 		log.Warn("could not list the workflow's newer runs; re-running without the superseded check",
 			"runID", runID, "error", err)
-		return workflowRunSummary{}, false
+	}
+	return newer, ok
+}
+
+// newerBranchRun returns the newest run of run's workflow, event and branch where it is a
+// newer commit from the same head repository. Filtering on the event and comparing the
+// head repository keeps a fork's branch from matching upstream's of the same name. The
+// branch filter matches a fork pull request's head branch, but one result per page lets
+// another fork's newer run hide this fork's own (measured on github/docs, 2026-11-22); a
+// miss re-runs.
+func (p *Provisioner) newerBranchRun(ctx context.Context, owner, repo string, run runState) (workflowRunSummary, bool, error) {
+	runs, err := p.workflowRuns(ctx, owner, repo, run, neturl.Values{"branch": {run.headBranch}, "per_page": {"1"}})
+	if err != nil || len(runs) == 0 {
+		return workflowRunSummary{}, false, err
+	}
+	newest := runs[0]
+	if newest.HeadSHA == run.headSHA ||
+		newest.HeadRepository.FullName != run.headRepo || !newest.CreatedAt.After(run.createdAt) {
+		return workflowRunSummary{}, false, nil
+	}
+	return newest, true, nil
+}
+
+// mergeGroupEvent is the event of a run the merge queue started.
+const mergeGroupEvent = "merge_group"
+
+// mergeGroupBranchRE captures what a merge group's branch shares with every other group
+// of one pull request: the queue's target branch and the pull request's number. The
+// commit after them differs between two groups.
+var mergeGroupBranchRE = regexp.MustCompile(`^(gh-readonly-queue/.+/pr-[0-9]+-)[0-9a-f]+$`)
+
+const (
+	// mergeGroupRunsPerPage keeps a page of runs, about 16 KB each, inside the response
+	// cap githubSend reads.
+	mergeGroupRunsPerPage = 30
+	// maxMergeGroupRunPages bounds how far back from the newest run the search goes.
+	maxMergeGroupRunPages = 3
+)
+
+// newerMergeGroupRun returns a newer run of run's workflow for another group of the same
+// pull request, at a different commit. A pull request holds one place in a queue, so the
+// queue has abandoned run's group: GitHub deletes the group's ref but leaves its runs
+// going (measured on this repository's queue, 2026-11-23). A group that merged has no
+// newer one. The ref itself is not read, which needs Contents: read.
+func (p *Provisioner) newerMergeGroupRun(ctx context.Context, owner, repo string, run runState) (workflowRunSummary, bool, error) {
+	group := mergeGroupBranchRE.FindStringSubmatch(run.headBranch)
+	if group == nil {
+		return workflowRunSummary{}, false, nil
+	}
+	for page := 1; page <= maxMergeGroupRunPages; page++ {
+		runs, err := p.workflowRuns(ctx, owner, repo, run, neturl.Values{
+			"created":  {">=" + run.createdAt.UTC().Format(time.RFC3339)},
+			"per_page": {strconv.Itoa(mergeGroupRunsPerPage)},
+			"page":     {strconv.Itoa(page)},
+		})
+		if err != nil {
+			return workflowRunSummary{}, false, err
+		}
+		for _, r := range runs {
+			other := mergeGroupBranchRE.FindStringSubmatch(r.HeadBranch)
+			if other != nil && other[1] == group[1] && r.HeadSHA != run.headSHA && r.CreatedAt.After(run.createdAt) {
+				return r, true, nil
+			}
+		}
+		if len(runs) < mergeGroupRunsPerPage {
+			break
+		}
+	}
+	return workflowRunSummary{}, false, nil
+}
+
+// workflowRuns lists the runs of run's workflow and event that query selects, newest first.
+func (p *Provisioner) workflowRuns(ctx context.Context, owner, repo string, run runState, query neturl.Values) ([]workflowRunSummary, error) {
+	if err := p.githubReady(owner, repo, "workflow-runs"); err != nil {
+		return nil, err
 	}
 	apiURL := fmt.Sprintf("%s/repos/%s/%s/actions/workflows/%d/runs",
 		p.GitHubAPIURL, neturl.PathEscape(owner), neturl.PathEscape(repo), run.workflowID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
-		log.Warn("could not list the workflow's newer runs; re-running without the superseded check",
-			"runID", runID, "error", err)
-		return workflowRunSummary{}, false
+		return nil, fmt.Errorf("build workflow-runs request: %w", err)
 	}
-	req.URL.RawQuery = neturl.Values{"branch": {run.headBranch}, "event": {run.event}, "per_page": {"1"}}.Encode()
+	query.Set("event", run.event)
+	req.URL.RawQuery = query.Encode()
 	status, body, err := p.githubSend(ctx, req)
-	if err == nil && (status < 200 || status > 299) {
-		err = fmt.Errorf("workflow-runs API returned %d", status)
+	if err != nil {
+		return nil, err
+	}
+	if status < 200 || status > 299 {
+		return nil, fmt.Errorf("workflow-runs API returned %d", status)
 	}
 	var list struct {
 		Runs []workflowRunSummary `json:"workflow_runs"`
 	}
-	if err == nil {
-		err = json.Unmarshal(body, &list)
+	if err := json.Unmarshal(body, &list); err != nil {
+		return nil, fmt.Errorf("decode workflow runs: %w", err)
 	}
-	if err != nil {
-		log.Warn("could not list the workflow's newer runs; re-running without the superseded check",
-			"runID", runID, "error", err)
-		return workflowRunSummary{}, false
-	}
-	if len(list.Runs) == 0 {
-		return workflowRunSummary{}, false
-	}
-	newest := list.Runs[0]
-	if newest.HeadSHA == run.headSHA ||
-		newest.HeadRepository.FullName != run.headRepo || !newest.CreatedAt.After(run.createdAt) {
-		return workflowRunSummary{}, false
-	}
-	return newest, true
+	return list.Runs, nil
 }

@@ -1281,9 +1281,9 @@ The command is in [Which Disruptions Auto-Re-Run a Job](troubleshooting.md#which
 
 **What changed.** The re-run of a disrupted job used to fire anyway, and its worker would fail to start too, spending a slot of `maxEvictionRetries`.
 While a worker of the set is placed and in `ImagePullBackOff`, and no worker still present has started since the oldest such worker was placed, the AGC now withholds the re-run (Q1320).
-A re-run of a job a later attempt already re-ran, or of a run that concluded `success`, is withheld too.
+A re-run of a job a later attempt already re-ran, of a run that concluded `success`, or of a merge-queue run whose pull request has a newer group (Q1381), is withheld too.
 
-**What you will see.** `actions_gateway_eviction_rerun_withheld_total` increments with `reason="worker_unstartable"`, `"already_rerun"` or `"run_succeeded"`, and a **Normal** `EvictionRerunWithheld` Event names the run and the reason.
+**What you will see.** `actions_gateway_eviction_rerun_withheld_total` increments with `reason="worker_unstartable"`, `"already_rerun"`, `"run_succeeded"` or `"superseded"`, and a **Normal** `EvictionRerunWithheld` Event names the run and the reason.
 
 **What to do.** Nothing at upgrade time.
 On `worker_unstartable`, [fix the image or its pull credentials](troubleshooting.md#the-reason-is-podsnotstarting-the-image-will-not-pull), then re-run the job by hand; the withhold is final for that disruption.

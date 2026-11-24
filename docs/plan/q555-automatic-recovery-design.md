@@ -1,7 +1,7 @@
 # Q555 automatic recovery: design
 
 **Status:** ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; so is Q1181's `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the scale-set tier (`rerun_futility.go`); so is Q555's detection (`flaky_jobs.go`): the `failures` map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up whose [readings](#readings-from-the-dogfood-turn-up-2026-11-22) (Q1236) refute three of its assumptions, one of them since corrected (Q1376), with the colocated proxy's readiness added by Q1237; the rest is not.
+Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; so are Q1181's `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` and Q1320's `already_rerun`, `run_succeeded` and `worker_unstartable` on the scale-set tier (`rerun_futility.go`), `superseded` for merge groups included (Q1381); so is Q555's detection (`flaky_jobs.go`): the `failures` map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up whose [readings](#readings-from-the-dogfood-turn-up-2026-11-22) (Q1236) refute three of its assumptions, one of them since corrected (Q1376), with the colocated proxy's readiness added by Q1237; the rest is not.
 It turns [the requirements draft](q555-flaky-job-retry.md) into components against the code as it stands, one per backlog row, and answers the draft's [open questions](q555-flaky-job-retry.md#open-questions-for-the-design-session).
 Each answer is marked **Decided** (the maintainer chose it, 2026-10-12), **Decide** (a recommendation still awaiting sign-off) or **Research** (needs a measurement before anyone can choose).
 The draft says *what* and *why*; this says *how*.
@@ -109,7 +109,7 @@ No fork pull request was disrupted end to end, so the AGC's own decode of a fork
   Comparing `head_repository` then separates one fork from another: fork `503badrr/docs` has runs 32531300946 and 32531324720 on two different head commits, 19 s apart, so the second supersedes the first.
   `per_page=1` returns whichever fork built last, though, so a fork's own newer commit is hidden whenever another fork's pull request from `main` has built since, and the check misses; a miss re-runs, so it costs a wasted re-run, never a withheld one.
 - **A merge-group run that loses its place is not cancelled by GitHub.** On this repository's queue on 2026-10-30, #2190 failed at the head and was removed (`failed_checks`, 17:56:25 UTC), and the groups behind it were rebuilt at 17:56:30; of the old groups' 30 runs, six concluded `success` after the removal, the last at 18:05:13, and the eight `cancelled` were each ended by one of their own jobs exceeding `timeout-minutes` before 17:56:25 (the jobs' check-run annotations).
-  So `run_cancelled` does not catch a displaced group's run, and nothing else does ([Q1381](../queue/Q1381.md)).
+  So `run_cancelled` does not catch a displaced group's run; `superseded` does, by the newer group (Q1381, [the readings](#readings-for-the-merge-group-check-2026-11-23)).
 
 ### Readings from GitHub's API, 2026-11-23
 
@@ -144,6 +144,21 @@ In run 45052015868, listed with `filter=all`, both `shared-name` jobs appear in 
 - **The completion's runner name is the job list's**, in 35 of 35 jobs of runs 45325262167 and 45326925782 (dogfood, read for M6), where it differs per execution.
 - **A matrix collides too**, where its legs' names pass 100 characters: GitHub truncates both to the same 97 and `...` (run 45326925782, two legs), on the wire as in the API.
   Ordinary legs do not, even under a static `name:`, which GitHub extends with the matrix values.
+
+### Readings for the merge-group check, 2026-11-23
+
+Taken from the REST API for the `merge_group` half of `superseded` (Q1381).
+
+- **A displaced group's ref is deleted at once, while its runs go on.** The repository activity API has the three groups of 2026-10-30 deleted at 17:56:26 and 17:56:27 UTC, one to two seconds after #2190's removal; a run of one of them concluded 527 s later (41099950920).
+  So the ref would show a displacement in time, but reading it needs `Contents: read`, which the tenant's App does not have, and a merged group's ref is deleted too, sometimes before its optional runs end (#2344's e2e-calico run ended 370 s after).
+- **GitHub accepts a re-run after the ref is gone, and it runs.** `rust-lang/cargo` run 43427210034 was re-run 4 min 42 s after its ref's deletion; its checkout succeeded and so did the attempt.
+  The queue did not use it: the pull request was queued again and built as a new group.
+- **No merged group had a newer group for its pull request, in three repositories.** The built check (`newerMergeGroupRun`), fed every later run of the workflow, matched 0 of 2,925 runs whose commit is on the default branch, and 369 of the 373 whose commit is not.
+  Each repository contributes one workflow: this one's `unit-test.yml` since 2026-08-12 (946 merged, 172 not), `rust-lang/cargo`'s `main.yml` (712, 107) and `rust-lang/rust-analyzer`'s `ci.yaml` (1,267, 94) since 2025-12-28.
+- **The check sees what has happened by the time it asks.** With only the runs created by then, and its own page limit, it matches 62 of the 373 at the run's conclusion, 161 ten minutes later, 265 after an hour and 342 after a day, still with no merged match.
+  The rest are pull requests removed and not yet queued again ([Q1391](../queue/Q1391.md)).
+  Of the 106 that concluded `failure`, the nearest the sample has to a lost required job, it matches 5 at the conclusion and 38 ten minutes later.
+- **The base commit in the branch name does not identify a group.** In `cilium/cilium`, whose queue merges by rebase, two live groups share it (#48687 and #48686), and one pull request queued twice on one base repeats its branch name at another commit, as cargo run 43427210034's did; so the check compares the pull request's number and the commit.
 
 ## Component 1: the failure ledger (Q555, R1 to R8)
 
@@ -371,7 +386,7 @@ The `EvictionRerunWithheld` Event names the reason and the fix.
 | `run_succeeded` | `conclusion: success`; GitHub refuses with a 403 | None |
 | `attempt_limit` | `run_attempt > 50`: GitHub caps a run at 50 re-runs, so attempt 51 is the last (changelog, 2026-04-10) | None |
 | `run_too_old` | `created_at` older than 30 days | None |
-| `superseded` | A newer run of the same `workflow_id`, `event` and `head_branch` from the same `head_repository`, with a different `head_sha`, exists (`GET …/workflows/{id}/runs?branch=…&event=…&per_page=1`), for `push` and `pull_request` only | None: a newer commit is building |
+| `superseded` | A newer run of the same `workflow_id`, `event` and `head_branch` from the same `head_repository`, with a different `head_sha`, exists (`GET …/workflows/{id}/runs?branch=…&event=…&per_page=1`), for `push` and `pull_request`; for `merge_group`, a newer run of the same `workflow_id` for another group of the pull request, with a different `head_sha` | None: a newer commit is building, or the queue has a newer group |
 | `same_class_again` | Class only: this job's failure entry already records a re-run by the same cause that failed again | The class does not fit this job; investigate |
 | `budget_exhausted` | The budget above | As today's `EvictionRetriesExhausted` |
 | `worker_unstartable` | A worker of the set is placed and in startup backoff (Q714), and none has started since the oldest such worker was placed | The verdict's own remediation |
@@ -385,9 +400,9 @@ Notes on the table:
 - **`already_rerun` asks about the job, not the run.** A single-job re-run moves `run_attempt` ([measured](#readings-from-githubs-api-2026-11-23)) without touching the job's siblings, so "the attempt moved" would withhold a job that nobody re-ran.
   The jobs-list call it needs happens only when the attempt has moved, which is rare.
   An arm that does not know its attempt takes it as moved when `run_started_at` is later than the worker's provisioning ([as built](../design/04-operational-flows.md#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set)).
-- **`superseded` is the other extra call**, and only on the two events where a branch can move.
+- **`superseded` is the other extra call**, and only on `push`, `pull_request` and `merge_group`.
   Filtering on `event` and comparing `head_repository` keeps a fork's `main` from matching upstream's (M5, [measured](#readings-from-githubs-api-2026-11-22)); with `per_page=1` another fork's newer run can hide the fork's own, which re-runs.
-  A merge-group run that loses its place is not cancelled by GitHub, so `run_cancelled` does not catch it ([measured](#readings-from-githubs-api-2026-11-22), [Q1381](../queue/Q1381.md)).
+  A merge-group run that loses its place is not cancelled by GitHub, so `run_cancelled` does not catch it ([measured](#readings-from-githubs-api-2026-11-22)); a newer group for the pull request does (Q1381, built, [measured](#readings-for-the-merge-group-check-2026-11-23)), asked again before the re-run call.
 - **`worker_unstartable` reads the startup half of the verdict, on every set** (Q1320), gated or not, since Q906 publishes it ungated.
   The placeability half is left out: a full cluster reads as unschedulable, so a drain on a fixed-size cluster would withhold every disrupted job's re-run, finally, where the re-run's job would only have queued; and the arm it was for has no need of it, because the abandoned arm is released by a pod being bound.
   It runs before the reservation, where it spends nothing, so a run past its budget can report it in place of `budget_exhausted`.
@@ -780,7 +795,7 @@ The disruption arms stay run-granular; nothing in the readings argues otherwise.
 
 1. The dogfood turn-up of 2026-11-22 settled M1 to M4 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)), and the API settled M5 ([the readings](#readings-from-githubs-api-2026-11-22)); M6 was measured on 2026-11-24 ([the readings](#m6-readings-from-the-job-granular-probe-2026-11-24)).
 2. Q1182 (built) created the ledger store, with its version rules, `reruns` map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as `selfCancelledAttempt`.
-3. Q1181 (built): `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the widened run read, honouring `selfCancelledAttempt`, between the run read and the reservation in `handleScaleSetEviction`; Q1320 (built) added `already_rerun`, `run_succeeded` and `worker_unstartable` there, and the classic tier takes none.
+3. Q1181 (built): `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the widened run read, honouring `selfCancelledAttempt`, between the run read and the reservation in `handleScaleSetEviction`; Q1320 (built) added `already_rerun`, `run_succeeded` and `worker_unstartable` there, Q1381 (built) `superseded` for merge groups, and the classic tier takes none.
 4. Q555 (built) added the `failures` map, the snapshot, the pairing and the metrics on that store.
    Two departures from Component 1: event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.
 5. Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the `pending` map, Q1245 (built) added the alert, the gauge and the annotation, and job-granular re-run (Q1319) is unbuilt, with M6 measured.
