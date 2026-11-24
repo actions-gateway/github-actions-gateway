@@ -277,6 +277,7 @@ func TestFutileRerun_AlreadyRerun(t *testing.T) {
 
 			assertWithheld(t, p, target, api, recoveryCauseVanished, rerunWithheldReasonAlreadyRerun, false)
 			assert.Equal(t, "/repos/myorg/myrepo/actions/runs/4242/attempts/2/jobs", api.lastJobsPath)
+			assert.Contains(t, strings.Join(target.messages, "\n"), "up to attempt 2, and that re-run covers the lost job")
 		})
 	}
 }
@@ -552,6 +553,7 @@ func TestFutileRerun_WorkerUnstartable(t *testing.T) {
 			assert.Contains(t, target.events, "EvictionRerunWithheld")
 			assert.Equal(t, float64(0), testutil.ToFloat64(p.Metrics.EvictionRetries.WithLabelValues(
 				"team-a", "gpu", recoveryCauseAbandoned)), "no slot is spent")
+			assert.Contains(t, strings.Join(target.messages, "\n"), "fix the image or its pull credentials, then re-run it by hand")
 		})
 	}
 }

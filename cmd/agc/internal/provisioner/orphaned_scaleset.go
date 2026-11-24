@@ -183,7 +183,7 @@ func (p *Provisioner) RecoverOrphanedScaleSetWorkers(ctx context.Context, target
 		podLog.Warn("worker pod for an unconcluded job was gone when this AGC started; its run lost its worker unobserved",
 			"runID", w.RunID)
 		target.RecordEvent(corev1.EventTypeWarning, "OrphanedWorkerRecovered", "RecoverOrphanedWorker",
-			fmt.Sprintf("the worker for job %s was gone when this controller started and the job never concluded, so run %s is being re-run; the disruption's cause was lost with the pod", w.JobID, w.RunID))
+			fmt.Sprintf("the worker for job %s was gone when this controller started and the job never concluded, so run %s is being recovered; the disruption's cause was lost with the pod", w.JobID, w.RunID))
 		recoveries = append(recoveries,
 			p.handleEviction(ctx, target, w.Owner, w.Repository, w.RunID, podLog,
 				spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, recoveryCauseVanished,

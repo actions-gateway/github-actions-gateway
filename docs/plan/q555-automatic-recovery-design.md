@@ -279,10 +279,10 @@ Notes on the table:
   The abandoned arm also reads the conclusion **before** force-cancelling: a run a user or a concurrency group already cancelled is withheld, not cancelled again and re-run.
 - **`already_rerun` asks about the job, not the run.** A single-job re-run moves `run_attempt` ([measured](#readings-from-githubs-api-2026-11-23)) without touching the job's siblings, so "the attempt moved" would withhold a job that nobody re-ran.
   The jobs-list call it needs happens only when the attempt has moved, which is rare.
+  An arm that does not know its attempt takes it as moved when `run_started_at` is later than the worker's provisioning ([as built](../design/04-operational-flows.md#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set)).
 - **`superseded` is the other extra call**, and only on the two events where a branch can move.
   Filtering on `event` and comparing `head_repository` keeps a fork's `main` from matching upstream's (M5, [measured](#readings-from-githubs-api-2026-11-22)); with `per_page=1` another fork's newer run can hide the fork's own, which re-runs.
   A merge-group run that loses its place is not cancelled by GitHub, so `run_cancelled` does not catch it ([measured](#readings-from-githubs-api-2026-11-22), [Q1381](../queue/Q1381.md)).
-  An arm that does not know its attempt takes it as moved when `run_started_at` is later than the worker's provisioning ([as built](../design/04-operational-flows.md#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set)).
 - **`worker_unstartable` reads the startup half of the verdict, on every set** (Q1320), gated or not, since Q906 publishes it ungated.
   The placeability half is left out: a full cluster reads as unschedulable, so a drain on a fixed-size cluster would withhold every disrupted job's re-run, finally, where the re-run's job would only have queued; and the arm it was for has no need of it, because the abandoned arm is released by a pod being bound.
   It runs before the reservation, where it spends nothing, so a run past its budget can report it in place of `budget_exhausted`.
