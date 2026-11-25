@@ -263,7 +263,7 @@ func (p *Provisioner) cancelledByOther(ctx context.Context, target Target, owner
 		}) {
 			return true, nil
 		}
-		before, err := p.readRun(ctx, owner, repo, runID, run.attempt-1)
+		before, err := p.attemptConclusion(ctx, owner, repo, runID, run.attempt-1)
 		if errors.Is(err, errRunConclusionUnreadable) {
 			return true, err
 		}

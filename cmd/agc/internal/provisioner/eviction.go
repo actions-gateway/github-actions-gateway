@@ -12,7 +12,6 @@ import (
 	"log/slog"
 	"net/http"
 	neturl "net/url"
-	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -796,16 +795,30 @@ type runState struct {
 	cancelled bool
 }
 
-// runConclusion reads the run's latest attempt.
+// runConclusion calls GET /repos/{owner}/{repo}/actions/runs/{run_id}, the run's latest
+// attempt.
 func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID string) (runState, error) {
-	return p.readRun(ctx, owner, repo, runID, 0)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/repos/%s/%s/actions/runs/%s",
+		p.GitHubAPIURL, neturl.PathEscape(owner), neturl.PathEscape(repo), neturl.PathEscape(runID)), nil)
+	if err != nil {
+		return runState{}, fmt.Errorf("build run-status request: %w", err)
+	}
+	return p.readRun(ctx, owner, repo, req)
 }
 
-// readRun calls GET /repos/{owner}/{repo}/actions/runs/{run_id}, or its /attempts/{n}
-// where attempt is not 0, and returns the run's status, conclusion and attempt. The
-// guards mirror rerunFailedJobs,
-// except that a run this cannot address is an error rather than a warning: the caller
-// asks in order to decide, and a silent empty answer would read as "not cancelled".
+// attemptConclusion calls GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{n}.
+func (p *Provisioner) attemptConclusion(ctx context.Context, owner, repo, runID string, attempt int) (runState, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/repos/%s/%s/actions/runs/%s/attempts/%d",
+		p.GitHubAPIURL, neturl.PathEscape(owner), neturl.PathEscape(repo), neturl.PathEscape(runID), attempt), nil)
+	if err != nil {
+		return runState{}, fmt.Errorf("build run-attempt request: %w", err)
+	}
+	return p.readRun(ctx, owner, repo, req)
+}
+
+// readRun sends req, a read of a run or of one attempt of it, and returns the run's
+// status, conclusion and attempt. The guards mirror rerunFailedJobs, except that a run
+// this cannot address is an error rather than a warning: the caller asks in order to decide, and a silent empty answer would read as "not cancelled".
 //
 // Failures are split the way the re-run call's are, and for the same reason: only the
 // ones a later attempt could answer differently — the request never completing, and a
@@ -814,21 +827,9 @@ func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID stri
 // 2xx carrying something other than a run is an endpoint that is not the API (a proxy's
 // error page, a misconfigured GHES), and re-asking it thirty times only delays the Event
 // that tells an operator so.
-func (p *Provisioner) readRun(ctx context.Context, owner, repo, runID string, attempt int) (runState, error) {
+func (p *Provisioner) readRun(ctx context.Context, owner, repo string, req *http.Request) (runState, error) {
 	if err := p.githubReady(owner, repo, "run-status"); err != nil {
 		return runState{}, err
-	}
-	apiURL := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%s",
-		p.GitHubAPIURL,
-		neturl.PathEscape(owner),
-		neturl.PathEscape(repo),
-		neturl.PathEscape(runID))
-	if attempt != 0 {
-		apiURL += "/attempts/" + strconv.Itoa(attempt)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		return runState{}, fmt.Errorf("build run-status request: %w", err)
 	}
 	status, body, err := p.githubSend(ctx, req)
 	switch {

@@ -1078,4 +1078,31 @@ func TestRunStatusReadCountsAttempts(t *testing.T) {
 	if got := attempt("4343"); got != 1 {
 		t.Fatalf("another run's attempt %d, want 1: attempts are per run", got)
 	}
+
+	for _, tc := range []struct {
+		path, conclusion string
+		status, attempt  int
+	}{
+		{"/repos/o/r/actions/runs/4242/attempts/1", "failure", http.StatusOK, 1},
+		{"/api/v3/repos/o/r/actions/runs/4242/attempts/1", "failure", http.StatusOK, 1},
+		{"/repos/o/r/actions/runs/4242/attempts/2", "", http.StatusOK, 2},
+		{"/repos/o/r/actions/runs/4242/attempts/3", "", http.StatusNotFound, 0},
+		{"/repos/o/r/actions/runs/4242/attempts/x", "", http.StatusNotFound, 0},
+	} {
+		resp, err := http.Get(main.URL + tc.path)
+		if err != nil {
+			t.Fatalf("read %s: %v", tc.path, err)
+		}
+		var body struct {
+			Attempt    int    `json:"run_attempt"`
+			Conclusion string `json:"conclusion"`
+		}
+		if resp.StatusCode == http.StatusOK {
+			err = json.NewDecoder(resp.Body).Decode(&body)
+		}
+		_ = resp.Body.Close()
+		if err != nil || resp.StatusCode != tc.status || body.Attempt != tc.attempt || body.Conclusion != tc.conclusion {
+			t.Fatalf("%s: status %d, attempt %d, conclusion %q, err %v", tc.path, resp.StatusCode, body.Attempt, body.Conclusion, err)
+		}
+	}
 }
