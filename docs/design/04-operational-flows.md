@@ -727,6 +727,16 @@ A re-run of an attempt is attributed from what the same ledger says GAG re-ran o
 
 A succeeded attempt deletes the record; a failed one updates it, keeping the first failure's time and context.
 A succeeded completion with no record, the common case, reads an in-memory index of the ledger's keys and costs no API call; the index is refreshed on each read and write of the ledger, so a record another replica wrote since is missed and counts nothing.
+A job its `timeout-minutes` killed completes `canceled`, as a user's cancel does, and only an annotation on its check run tells the two apart (Q1374).
+So a `canceled` completion that a runner had started and no claim names is held in memory: its runner, and nothing in the ledger.
+A later success of that run and job name joins the batch above, and where the list shows it re-ran the held job, the job's annotations are read once, after the batch's ledger write, off the listener.
+A re-run of a job GitHub says exceeded its limit counts as a failed job's does.
+A cancel that is never re-run costs no call: a superseded run's jobs, the bulk of them, stay in memory until they age out.
+At most 4,096 are held for 7 days, oldest dropped first, and a restart loses them; a job that timed out and whose re-run fails is not read, and counts nothing.
+One read per re-run of a cancelled job, in a 30-second budget per batch: 100 legs cancelled, re-run and passed together cost 100 reads beside the list.
+The annotations are the job's own output too, so an answered body is never logged.
+Reading them needs the App's `Checks` permission on a private repository, which stays optional: a refusal raises a Normal `CancelledJobUnread` Event.
+
 Failure records are evicted oldest first once the ledger passes half its 512 KiB cap, and budget records never are: `v1.10.0` writes the same object, keeps failure records it does not know, cannot evict them, and refuses a write past the cap, so records allowed to fill it would withhold that version's every reservation during a rollout or after a rollback.
 
 #### Why preemption *deletes* rather than *evicts*, and what that costs us

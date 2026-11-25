@@ -422,6 +422,7 @@ type Provisioner struct {
 	failureIndex    failureIndex
 	workerSnapshots workerSnapshots
 	pairings        pairingQueue
+	cancelHolds     cancelHolds
 	// pairingDelay is how long a run's completions gather before its jobs are read.
 	pairingDelay time.Duration
 

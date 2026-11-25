@@ -336,7 +336,7 @@ func (w *workerSnapshots) put(key string, s *workerSnapshot, jobCompleted bool) 
 	if w.byID == nil {
 		w.byID = map[string]*workerSnapshot{}
 	}
-	putBounded(w.byID, key, s, func(s *workerSnapshot) time.Time { return s.takenAt })
+	putBounded(w.byID, key, s, maxWorkerSnapshots, func(s *workerSnapshot) time.Time { return s.takenAt })
 	return nil
 }
 
@@ -361,13 +361,13 @@ func (w *workerSnapshots) hold(key string, r *recordedFailure) *workerSnapshot {
 	if w.recorded == nil {
 		w.recorded = map[string]*recordedFailure{}
 	}
-	putBounded(w.recorded, key, r, func(r *recordedFailure) time.Time { return r.at })
+	putBounded(w.recorded, key, r, maxWorkerSnapshots, func(r *recordedFailure) time.Time { return r.at })
 	return nil
 }
 
-// putBounded sets m[key], dropping the oldest entry past maxWorkerSnapshots.
-func putBounded[T any](m map[string]T, key string, v T, at func(T) time.Time) {
-	if _, ok := m[key]; !ok && len(m) >= maxWorkerSnapshots {
+// putBounded sets m[key], dropping the oldest entry past limit.
+func putBounded[T any](m map[string]T, key string, v T, limit int, at func(T) time.Time) {
+	if _, ok := m[key]; !ok && len(m) >= limit {
 		oldest := ""
 		for k, v := range m {
 			if oldest == "" || at(v).Before(at(m[oldest])) {
@@ -522,6 +522,8 @@ type completionPairing struct {
 	cause   string
 	event   string
 	flaky   bool
+	// timedOut: the earlier attempt was not a failure but a cancel by its own limit.
+	timedOut bool
 }
 
 // SnapshotScaleSetWorker records a scale-set worker's platform context at its terminal
@@ -572,7 +574,8 @@ func ownJobCompleted(pod *corev1.Pod) bool {
 // RecordScaleSetJobCompleted records a scale-set job's completion in target's failure
 // ledger: a failed or disrupted completion records the job and its worker's context,
 // and a later attempt of a recorded job is attributed to whoever re-ran it. A cancelled
-// completion with no disruption behind it is a user's cancel and records nothing. It is
+// completion with no disruption behind it records nothing: it is a user's cancel or a job
+// that timed out, and is held until a later attempt succeeds (timed_out_jobs.go). It is
 // idempotent per job.JobID.
 //
 // A failed job whose worker still runs is recorded at once, so a restart cannot lose its
@@ -593,16 +596,24 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 			"jobID", job.JobID, "result", result)
 		return closedChan(), nil
 	}
-	failed := result != jobResultSucceeded
-	if !failed && p.failureIndex.lacks(key, failureKey(runID, jobName)) {
-		return closedChan(), nil
+	failed, fkey := result != jobResultSucceeded, failureKey(runID, jobName)
+	c := &jobCompletion{target: target, job: job, runID: runID, jobName: jobName, result: result}
+	if !failed && job.RunnerName != "" {
+		c.hold = p.cancelHolds.find(key, fkey, at)
+	}
+	if !failed && p.failureIndex.lacks(key, fkey) {
+		if c.hold == nil {
+			return closedChan(), nil
+		}
+		return p.queuePairing(ctx, c), nil
 	}
 
-	var cause string
-	var contextJSON json.RawMessage
 	if failed {
-		cause = p.disruptionCause(ctx, target, job.JobID)
-		if result == jobResultCanceled && cause == "" {
+		c.cause = p.disruptionCause(ctx, target, job.JobID)
+		if result == jobResultCanceled && c.cause == "" {
+			if job.RunnerName != "" {
+				p.cancelHolds.put(key, fkey, &cancelHold{jobID: job.JobID, runner: job.RunnerName, event: job.EventName, at: at})
+			}
 			return closedChan(), nil
 		}
 		if snap == nil && job.RunnerName != "" {
@@ -614,32 +625,31 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 			}
 		}
 		if snap != nil {
-			contextJSON, _ = json.Marshal(snap)
+			c.context, _ = json.Marshal(snap)
 		}
 	}
 
-	c := &jobCompletion{target: target, job: job, runID: runID, jobName: jobName, result: result, cause: cause, context: contextJSON}
 	var o completionPairing
 	err := p.updateRerunLedger(ctx, target, func(l *rerunLedger, now time.Time) (changed bool) {
 		o, changed = c.apply(l, now, nil)
 		return changed
 	})
-	if err != nil {
-		return nil, err
-	}
 	done := closedChan()
-	if o.matched && job.RunnerName != "" {
+	if (o.matched && job.RunnerName != "") || c.hold != nil {
 		done = p.queuePairing(ctx, c)
+	}
+	if err != nil {
+		return done, err
 	}
 	reported := failed && (o.recorded || o.matched)
 	if reported {
-		p.reportFailedJob(target, runID, jobName, cause, snap, snap.faults(), p.completionLog(c))
+		p.reportFailedJob(target, runID, jobName, c.cause, snap, snap.faults(), p.completionLog(c))
 	}
 	if !reported || snap == nil || snap.ended() {
 		return done, nil
 	}
-	r := &recordedFailure{target: target, runID: runID, jobName: jobName, jobID: job.JobID, cause: cause,
-		snap: snap, last: snap, context: contextJSON, at: at}
+	r := &recordedFailure{target: target, runID: runID, jobName: jobName, jobID: job.JobID, cause: c.cause,
+		snap: snap, last: snap, context: c.context, at: at}
 	s := p.workerSnapshots.hold(workerKey, r)
 	if s == nil {
 		// The pod can have changed since the completion read it, with no failure held yet
@@ -736,9 +746,13 @@ func (p *Provisioner) reportRerunJob(target Target, runID, jobName, result strin
 	if o.trigger == rerunTriggerGAGCollateral {
 		by = "GAG, beside a disrupted job"
 	}
+	ended := "failed with no disruption attributed"
+	if o.timedOut {
+		ended = "reached its time limit"
+	}
 	target.RecordEvent(corev1.EventTypeNormal, "FlakyJobDetected", "DetectFlakyJob",
-		fmt.Sprintf("Job %q of run %s failed with no disruption attributed and then succeeded when re-run by %s.",
-			jobName, runID, by))
+		fmt.Sprintf("Job %q of run %s %s and then succeeded when re-run by %s.",
+			jobName, runID, ended, by))
 }
 
 // disruptionCause returns the cause a recovery claim records for jobID's worker, ""

@@ -38,7 +38,8 @@ The readings are the AGC's `scaleset: job assigned`, `job completed`, `scale-set
 `scaleset_jobs_completed_total` itself was not queried: the listener increments it with the same `result` it logs, in the same once-per-job block.
 
 - **M1.** A red step completes `failed` (jobs `82a2530d…`, `abe6cad3…`, `ee99fae0…`).
-  A job killed by `timeout-minutes` completes `canceled` (`b31558d4…`, `486169c1…`; the jobs API says `cancelled`), exactly as a user's cancel does (`3762586f…`), so detection records no timed-out job and never counts its later success as flaky ([Q1374](../queue/Q1374.md)).
+  A job killed by `timeout-minutes` completes `canceled` (`b31558d4…`, `486169c1…`; the jobs API says `cancelled`), exactly as a user's cancel does (`3762586f…`), so detection recorded no timed-out job and never counted its later success as flaky.
+  Q1374 counts one whose re-run passes since ([Timed-out jobs](#timed-out-jobs-q1374)).
   A job whose runner an out-of-memory kill ended completes `failed`, 9 min 48 s after the kill, when the job lock lapses (`ff028f4b…`, run 45052020040).
 - **M2.** A re-run of the failed job arrives with a new job UUID (`abe6cad3…`, then `4349fbb7…`) under the same run ID and `jobDisplayName`, and pairs as `trigger=other`, flaky, as designed.
   GitHub accepts two jobs sharing one `name:`, and they share one failure key: the green twin's success paired with the red twin's failure and emitted a false `FlakyJobDetected` (18:05:32 UTC), and the red twin's re-run at 18:07:02 logged as a fresh failure rather than a pairing, so its record was gone.
@@ -317,6 +318,54 @@ Attribution happens when the later attempt completes, so the order of a disrupti
 A succeeded pairing deletes the failure entry.
 A disruption whose pod belongs to another `RunnerSet` marks that set's ledger, not this one's, so a run spread across sets reads its collateral re-runs here as `other`: an R5 blind spot, overcounting the manual rate for multi-set runs.
 
+### Timed-out jobs (Q1374)
+
+A job killed by `timeout-minutes` completes `canceled`, as a user's cancel does, and is not recorded.
+It is held in memory and counted once a later attempt of it **passes** and GitHub's annotation says it exceeded its limit ([what ships](../design/04-operational-flows.md#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555)).
+
+What detection missed without it, over every run of this repository created 2026-11-08 to 2026-11-21 (5,343 runs, jobs of all attempts; the 275 re-run, cancelled or failed ones read):
+
+- 8 jobs timed out, in 8 runs between 16 November 21:01 and 18 November 00:03 UTC; 7 were hung in `actions/checkout`.
+  4 of them were re-run, and all 4 passed.
+- 4 failed jobs passed on a re-run, and they are the same 4 runs: each is the required gate over the others, red because `a gating job concluded 'cancelled'`.
+  So every red job a re-run turned green there followed a timeout, and recording failures alone would have counted 4 re-runs of 8, under the gate's name.
+- All of it ran on `ubuntu-latest` within 27 hours, so nothing here says how often a scale set's job times out, or any job.
+
+The facts weighed:
+
+- **The run's conclusion, on the next attempt's completion.** It does not separate them: attempt 1 of run 45052015868, which timed out, and run 45053166409, which a user cancelled, both conclude `cancelled`, and so do their jobs and the steps that were running.
+- **The check run's annotation, read per cancelled job.** It does, and it is a read for every cancelled job, which R6 rules out: 325 in that window for 8 timeouts, or 91 for the ones a runner started.
+- **Recording every `canceled` completion in the ledger**, and reading the annotation only if a later attempt completes.
+  A ledger write for each cancel, on the listener, and cancels would evict real failures from a capped map; a superseded run's jobs are the bulk of them and are never re-run.
+- **The job's own limit, against how long it ran.** `timeout-minutes` is in no message the AGC receives (Q438).
+- **Built: the annotation, read only for a held cancel whose re-run passed.** 4 reads in that window, and none for a superseded run's jobs.
+  A fail-fast matrix or a whole run that a user cancelled and re-ran costs a read per leg that passes, with nothing to count at the end.
+
+What the annotation looks like, read 2026-11-24 on the 8 timeouts above and the 2 of scale-set run 45052015868: all 10 carry `The job has exceeded the maximum execution time of <limit>`, first in the list, at path `.github` and level `failure`, where run 45053166409's carries `The run was canceled by @…`.
+A job's own `::error::` has that path and level too, so the match is the message's start.
+Public issues quote an older form, `The job running on runner <name> has exceeded …`, which is matched as well since GitHub Enterprise Server may still write it; no such server was read.
+The job's ID was its check run's on all 11.
+A `canceled` completion names the job's runner, the one the jobs list has: the AGC's log did for both timeouts and the user's cancel of those two runs (2026-11-22).
+A later attempt that did not re-run a job lists it again under another ID, so the row read is the one where it ran.
+
+What was left out, each an undercount (R5):
+
+- A timed-out job whose re-run fails: reading the annotation on every later completion would count it, at a read per re-run instead of per re-run that passed.
+- A hold that GitHub's redelivery of an older attempt's cancel replaces, since no completion the AGC decodes carries an attempt number.
+- Holds lost to a restart, which is why [failures are not kept in memory](#where-the-ledger-lives-open-question-1).
+  A ledger write per cancel was the cost of keeping them.
+- A private repository where the App lacks `Checks: Read`, which is [optional](../operations/tenant-onboarding.md#0a-create-the-app-web-ui): GitHub documents the permission, and a public repository's annotations answered HTTP 200 with no credential (2026-11-24).
+  The refusal's status and words are from recall, not read.
+- A change in GitHub's wording, which reads as a cancel and leaves no sign.
+
+Nothing here has met GitHub from an AGC: the tests answer from a fake that replays the two captured annotation lists.
+
+A step-level `timeout-minutes` fails its step (the runner sets `TaskResult.Failed`, `StepsRunner.cs` at v2.338.2), and the job concludes `failure`, so it counts whatever its re-run does.
+Measured from the API: in `home-assistant/core` run 45247954762 the step `Run pytest` timed out after 60 minutes, `failure`, and its job concluded `failure` with no other failed step.
+A job that concludes `failure` on a step completes `failed` on the wire (M1); one that did so on a step's timeout was not seen there.
+A job with no `timeout-minutes` has a limit of 360 minutes by GitHub's documentation; that it ends the same way is not measured.
+Look again if GitHub's completion ever carries a reason.
+
 ### What the operator sees (R3, R4, R8)
 
 Detection is on for every scale-set `RunnerSet` with no field (R4); it changes no behaviour.
@@ -324,7 +373,7 @@ Detection is on for every scale-set `RunnerSet` with no field (R4); it changes n
 | Metric | Labels | Meaning |
 |---|---|---|
 | `actions_gateway_scaleset_job_reruns_total` | `namespace`, `runner_set`, `trigger` (`gag`, `gag_collateral`, `other`) | A later attempt of a failed job completed. `trigger="other"` over `scaleset_jobs_completed_total` is the manual re-run rate, the success metric |
-| `actions_gateway_scaleset_flaky_jobs_total` | `namespace`, `runner_set`, `trigger` | A failed job later succeeded with no disruption or class attributed |
+| `actions_gateway_scaleset_flaky_jobs_total` | `namespace`, `runner_set`, `trigger` | A failed or timed-out job later succeeded with no disruption or class attributed |
 | `actions_gateway_eviction_rerun_outcomes_total` | `namespace`, `runner_group`, `tier`, `cause`, `event`, `result` | The result of each attempt GAG re-ran, per cause (R14); `result="failed"` over the total is a cause's failure rate |
 
 The third keeps the `eviction_` prefix and `runner_group` label of the family it extends, so one query joins it to `eviction_retries_total`.

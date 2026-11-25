@@ -22,6 +22,7 @@
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/rerun-failed-jobs — eviction auto-retry
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/force-cancel — abandoned-run fast ending (Q683)
 //	POST /api/v3/repos/{o}/{r}/check-runs        — fork pull request refusal reason (Q1330)
+//	GET  /api/v3/repos/{o}/{r}/check-runs/{id}/annotations — a cancelled job's, always none (Q1374)
 //	POST /api/v3/.../actions/runners/registration-token — scale-set bootstrap, hop 1
 //	POST /api/v3/actions/runner-registration     — scale-set bootstrap, hop 2 (RemoteAuth)
 //	     /_apis/runtime/...                      — scale-set Actions Service
@@ -496,6 +497,10 @@ func (s *server) handleRunnerAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasSuffix(path, "/check-runs") && r.Method == http.MethodPost {
 		handleCreateCheckRun(w)
+		return
+	}
+	if isAnnotationsPath(path) && r.Method == http.MethodGet {
+		handleAnnotations(w)
 		return
 	}
 	// The run read (Q811) is served on both prefixes for the same reason the two
@@ -1435,6 +1440,10 @@ func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 		handleCreateCheckRun(w)
 		return
 	}
+	if isAnnotationsPath(r.URL.Path) && r.Method == http.MethodGet {
+		handleAnnotations(w)
+		return
+	}
 	if id, ok := runIDFromRunPath(r.URL.Path); ok && r.Method == http.MethodGet {
 		s.handleRunStatus(w, id)
 		return
@@ -1623,6 +1632,25 @@ func handleCreateCheckRun(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": 1})
+}
+
+// isAnnotationsPath reports a .../check-runs/{check_run_id}/annotations path.
+func isAnnotationsPath(path string) bool {
+	_, rest, ok := strings.Cut(path, "/check-runs/")
+	id, ok2 := strings.CutSuffix(rest, "/annotations")
+	return ok && ok2 && id != "" && !strings.Contains(id, "/")
+}
+
+// handleAnnotations serves the annotations the AGC reads of a cancelled job that a re-run
+// has passed since (Q1374):
+//
+//	GET /api/v3/repos/{owner}/{repo}/check-runs/{check_run_id}/annotations
+//
+// It lists none, so no cancelled job reads as timed out.
+func handleAnnotations(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode([]any{})
 }
 
 // rerunRunID extracts the run_id segment from a rerun-failed-jobs path

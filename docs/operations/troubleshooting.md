@@ -2298,7 +2298,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 | `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) · [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) |
 | `EvictionRerunFailed` | Warning | A disrupted run's automatic re-run was never accepted by GitHub — refused past the 15-minute re-run window, or a terminal API error (Q503). The budget slot is spent; the named run needs a manual re-run. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |
 | `EvictionRerunWithheld` | Normal | Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded `cancelled` by someone other than GAG, so the cancel stands (Q811, Q1181); or the kubelet evicted the worker for exceeding its own `ephemeral-storage` or `emptyDir` limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181) or a newer merge group for the same pull request (Q1381); or already re-run by a later attempt, of a run that concluded `success`, or for a set whose workers are placed and cannot pull their image, which needs the image fixed and a manual re-run (Q1320); or a runner killed for memory that a re-run would repeat, or while out-of-memory retries are paused (Q1183). Only a cancel, a success or a newer merge group seen after detection spends a slot. | [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod); [Which Disruptions Auto-Re-Run a Job](#which-disruptions-auto-re-run-a-job-and-which-never-do) |
-| `FlakyJobDetected` | Normal | A scale-set job failed with no disruption attributed to it, and a later attempt of it succeeded: a flake, re-run by a human or by GAG alongside a disrupted job (Q555). Names the run and the job. Not a fault of the platform; a run of them on one job is a test worth fixing. | [Flaky Jobs and Platform Faults on Failed Jobs](#flaky-jobs-and-platform-faults-on-failed-jobs) |
+| `FlakyJobDetected` | Normal | A scale-set job failed with no disruption attributed to it, or [timed out](#timed-out-jobs), and a later attempt of it succeeded: a flake, re-run by a human or by GAG alongside a disrupted job (Q555). Names the run and the job. Not a fault of the platform; a run of them on one job is a test worth fixing. | [Flaky Jobs and Platform Faults on Failed Jobs](#flaky-jobs-and-platform-faults-on-failed-jobs) |
 | `MemoryLimitRaisedForRetry` | Normal | A scale-set worker's runner was killed at its own memory limit, and the `Binpack` or `Throughput` profile gives the job's next attempt a higher one, so the run is re-run as `cause="oom"` once GitHub concludes it, waiting up to 24 hours (Q1183, Q1244). Names the job, the run and both limits. One per job: a second kill is withheld. A rising rate is jobs outgrowing their history, or a change that grew one. | [When a job runs out of memory](worker-rightsizing.md#when-a-job-runs-out-of-memory) |
 | `AutoRetryPaused` | Warning | More than 10 distinct runs on this set were re-run after a runner was killed for memory within 10 minutes, so out-of-memory retries are paused for 30 (Q1183). That many at once points at a shared cause, such as a node packed past its memory or a dependency that bloated every job, rather than each job's own growth. Each kill in the pause is withheld as `reason="breaker_open"`, and `actions_gateway_auto_retry_paused{cause="oom"}` reads 1 until the pause ends (Q1245). | [When a job runs out of memory](worker-rightsizing.md#when-a-job-runs-out-of-memory) |
 | `PlatformFaultOnFailedJob` | Warning | A scale-set job failed and its worker shows a platform fault: the pod `Failed`, a `DisruptionTarget` condition, a container `OOMKilled`, the runner container exiting non-zero, or the set's colocated EgressProxy not `Ready` or with no ready replica (Q555, Q1237). Names the run, the job, the worker and the fault. | [Flaky Jobs and Platform Faults on Failed Jobs](#flaky-jobs-and-platform-faults-on-failed-jobs) |
@@ -2306,6 +2306,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 | `WorkerTerminating` | Normal | A scale-set job replayed to a re-created session is waiting for its previous worker pod to finish terminating; it is re-offered on a backoff until that pod is gone. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Job Waiting for Its Previous Worker to Terminate](#scale-set-job-waiting-for-its-previous-worker-to-terminate-workerterminating) |
 | `JobSourceUnverified` | Warning | A pull request job on a set refusing fork pull requests is held because its run could not be read to check for a fork; it is re-read on a backoff and never run unchecked. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Job Held Because Its Run Could Not Be Read](#scale-set-job-held-because-its-run-could-not-be-read-jobsourceunverified) |
 | `ForkJobRefused` | Warning | A fork pull request's job was refused because the set does not set `spec.forkPullRequests: Accept`: no runner was minted and its run was force-cancelled. Names the head repository and the run. | [Fork Pull Request Job Refused](#fork-pull-request-job-refused-forkjobrefused) |
+| `CancelledJobUnread` | Normal | A cancelled scale-set job's re-run passed, and GitHub refused to say whether the job had timed out because the App lacks the optional `Checks: Read`, so the re-run is not counted (Q1374). Nothing else is affected. | [Timed-Out Jobs](#timed-out-jobs) |
 | `ForkRefusalCheckRunSkipped` | Normal | The check run explaining a fork refusal could not be written, usually because the GitHub App lacks `Checks: Read and write`; the refusal still happened. | [Fork Pull Request Job Refused](#fork-pull-request-job-refused-forkjobrefused) |
 | `WorkerCeilingReached` | Normal | Scale-set jobs are waiting because the set is already running as many workers as its spec allows; they are re-offered until capacity frees. Expected backpressure, hence Normal. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Jobs Waiting at the Worker Ceiling](#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached) |
 | `AssignmentAbandoned` | Warning | The listener gave up on assigned jobs it was holding, because the scale set reported no assigned jobs at all on two consecutive readings — GitHub is no longer holding them, and never reported them complete. Each is a workflow run that will not run. Clears `JobProvisionStalled` and steps `…_jobs_abandoned_total`. | [Scale-Set Assignments Abandoned](#scale-set-assignments-abandoned-assignmentabandoned) |
@@ -3104,7 +3105,7 @@ When a scale-set job completes `failed`, the AGC records it in the set's failure
 The record holds the worker's state (`context`): pod phase, reason and a truncated message, its conditions, the node and pod IP, and each container's termination reason, exit code and restart count, with the termination before it (`previousReason`, `previousExitCode`) for a sidecar that crashed, restarted and then exited.
 The context is the worker as it finished.
 For a job that ends on a step's result, GitHub's completion arrives while the worker's pod still runs (measured 2026-11-22), so the record first holds the pod as `Running` and is rewritten when the pod finishes (Q1376).
-A `canceled` completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing, and neither does a job that reached its `timeout-minutes`, which GitHub also reports `canceled` (Q1374).
+A `canceled` completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing, and neither does a job that reached its `timeout-minutes`, which GitHub also reports `canceled` ([what is counted of one](#timed-out-jobs)).
 
 When a later attempt of the same job (same run, same job name, and a re-run by the run's own job list) completes, it is paired with that record and counted in `actions_gateway_scaleset_job_reruns_total{trigger}`:
 
@@ -3144,8 +3145,60 @@ A re-run more than 7 days after the failure, or one that lands on another `Runne
 Two jobs of one run that share a `name:` share one record, the first failure's, so a re-run counts only where it re-ran that job and no other of its name: re-running both counts nothing, and neither does any re-run of a name under which the run also skipped a job.
 Telling a re-run from a job of the same name reads the run's jobs from GitHub, with the `Actions` permission, at most once per run and set every 30 seconds, so a re-run is counted that long after it completes.
 A read is one request per 100 jobs the run lists over its attempts, up to 10.
-A re-run counts nothing where that read fails or takes over 10 seconds, or the run lists more than 1,000 jobs over its attempts (the AGC log says `could not read the run's jobs`), where the AGC restarts before the read, where it completed before GitHub listed the attempt's other jobs of its name, or where it follows a re-run that was cancelled or counted nothing.
+A re-run counts nothing where that read fails or takes over 10 seconds, or the run lists more than 1,000 jobs over its attempts (the AGC log says `could not read the run's jobs`), where the AGC restarts before the read, where it completed before GitHub listed the attempt's other jobs of its name, or where it follows a re-run that counted nothing or that a user cancelled.
 One false flake is left: a job that GitHub first lists under the failed job's name in a later attempt, such as a leg a dynamic matrix gains, and that completes while the failed job's own re-run still waits on its `needs`.
+
+### Timed-Out Jobs
+
+GitHub completes a job its `timeout-minutes` killed as `canceled`, as it does a user's cancel (measured 2026-11-22), and tells them apart only in an annotation on the job's check run.
+So the AGC holds each cancelled job in memory, and reads its annotations once a later attempt of it passes (Q1374).
+A job that had timed out then counts in `actions_gateway_scaleset_job_reruns_total` and `actions_gateway_scaleset_flaky_jobs_total`, with a `FlakyJobDetected` Event that says it reached its time limit; a cancelled one counts nothing.
+A cancelled job that is never re-run costs no GitHub call.
+
+A timed-out job counts nothing where:
+
+- its re-run failed, or timed out too;
+- the AGC restarted between the two, since the hold is in memory, or more than 4,096 jobs were cancelled in between;
+- its annotations could not be read: the AGC log says `could not read whether a cancelled job that was re-run had timed out`, with GitHub's answer, and there is no retry;
+- a batch of re-runs needed more than 30 seconds of reads (`ran out of time to read`), one read per re-run of a cancelled job;
+- GitHub words the annotation some other way, of which there is no sign;
+- two jobs of its name were cancelled in one attempt, or any of the limits above on pairing a failed job applies.
+
+**A `CancelledJobUnread` Event** means a cancelled job's re-run passed and GitHub refused the read, because the App lacks the optional `Checks: Read` permission on a private repository.
+[Grant it](tenant-onboarding.md#0a-create-the-app-web-ui) to have such jobs counted, or leave it: nothing else uses the answer.
+Until a cancelled job is re-run there is no Event, so an App without the permission looks like a set with nothing to count.
+
+A job that declares no `timeout-minutes` still has one, 360 minutes by GitHub's documentation.
+A job that fails because the timed-out one did not succeed, such as a required gate over the others, is recorded as a failure of its own, so one timeout and its re-run can count under both names.
+
+To have a hang counted whatever becomes of its re-run, put `timeout-minutes` on each step that can hang, shorter than the job's:
+
+```yaml
+jobs:
+  test:
+    timeout-minutes: 30 # the backstop; GitHub reports this one as a cancel
+    steps:
+      - uses: actions/checkout@v7
+        timeout-minutes: 3 # a hang fails the step, and so the job
+      - run: make test
+        timeout-minutes: 20
+```
+
+A step that times out fails, so its job completes `failed` and is recorded like any other failure.
+A step with `continue-on-error: true` does not fail its job, so its timeout is not recorded either.
+
+A hang outside a step, such as while the job is set up, still ends as a cancel.
+
+To find the timed-out jobs of a run by hand, over all its attempts, read its annotations:
+
+```bash
+gh api --paginate "repos/<owner>/<repo>/actions/runs/<run-id>/jobs?filter=all&per_page=100" \
+  --jq '.jobs[] | select(.conclusion == "cancelled") | "\(.id) \(.run_attempt) \(.name)"' |
+  while read -r id attempt name; do
+    gh api "repos/<owner>/<repo>/check-runs/$id/annotations" --jq '.[].message' |
+      grep -q 'exceeded the maximum execution time' && echo "attempt $attempt: $name"
+  done
+```
 
 ---
 

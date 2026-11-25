@@ -58,6 +58,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner](#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner)
   - [Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run](#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run)
   - [Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically](#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically)
+  - [A timed-out job whose re-run passes counts as flaky](#a-timed-out-job-whose-re-run-passes-counts-as-flaky)
   - [A disrupted job is not re-run while its set's workers cannot pull their image](#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image)
   - [A worker evicted for its own storage limit is no longer re-run](#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run)
   - [Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once](#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once)
@@ -1274,6 +1275,19 @@ A `NotReady` node with no taint is unchanged: its worker stays `Running` until y
 The command is in [Which Disruptions Auto-Re-Run a Job](troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
 **Rolling back** returns the job on such a node to staying failed.
+
+### A timed-out job whose re-run passes counts as flaky
+
+**Who is affected:** anyone who alerts on or charts flaky jobs or the manual re-run rate of a scale-set `RunnerSet`.
+
+**What changed.** GitHub reports a job that its `timeout-minutes` killed as a cancel, so its re-run used to count nothing.
+When that re-run passes, the AGC now reads the cancelled job's annotations to tell a timeout from a cancel, and counts a timeout as it does a failure (Q1374).
+
+**What you will see.** `actions_gateway_scaleset_job_reruns_total` and `actions_gateway_scaleset_flaky_jobs_total` can step up with no change in your jobs.
+In a private repository whose GitHub App lacks `Checks: Read`, a **Normal** `CancelledJobUnread` Event instead, and no change in the counts.
+
+**What to do.** Nothing.
+To have timed-out jobs counted in a private repository, grant the App the optional [`Checks: Read`](tenant-onboarding.md#0a-create-the-app-web-ui).
 
 ### A disrupted job is not re-run while its set's workers cannot pull their image
 

@@ -124,8 +124,10 @@ There is **no `gh` command to create a GitHub App** (the GitHub CLI has no `gh a
      For an organization URL that is **Organization permissions → Self-hosted runners**; for a repository URL it is **Repository permissions → Administration**.
      GitHub has no read-only way to register a runner: `generate-jitconfig` and `registration-token` both require write.
    - **Repository permissions → Metadata: Read-only** is added by GitHub automatically.
-   - **Optional: Repository permissions → Checks: Read and write.** Used only to write a failed check run on a pull request whose fork job a `RunnerSet` refused, naming the set and `spec.forkPullRequests`, because the cancelled run shows no reason ([what a refusal does](security-operations.md#fork-pull-requests-choose-their-own-runner-label)).
+   - **Optional: Repository permissions → Checks: Read and write.** Write is used only to write a failed check run on a pull request whose fork job a `RunnerSet` refused, naming the set and `spec.forkPullRequests`, because the cancelled run shows no reason ([what a refusal does](security-operations.md#fork-pull-requests-choose-their-own-runner-label)).
      Without it the refusal still happens.
+     Read is used only to tell a cancelled job that [timed out](troubleshooting.md#timed-out-jobs) from a user's cancel once its re-run has passed.
+     Without it such a job in a private repository is not counted.
    - Leave **Contents**, **Pull requests**, and the rest at **No access**: the gateway never reads tenant code or writes to repositories.
 6. **Where can this GitHub App be installed?** — **Only on this account** is the typical choice for a single-org deployment.
 7. Click **Create GitHub App**.

@@ -75,6 +75,8 @@ type jobCompletion struct {
 	job                           ScaleSetJob
 	runID, jobName, result, cause string
 	context                       json.RawMessage
+	// hold is the cancelled job a succeeded completion may have re-run, nil for none.
+	hold *cancelHold
 }
 
 // apply records a failed c in l, or pairs c with the record it re-ran, which takes the
@@ -171,14 +173,19 @@ func (p *Provisioner) pairBatch(ctx context.Context, run string, b *pairingBatch
 		log.Warn("could not read the run's jobs to pair its failed jobs' re-runs; they go uncounted", "error", err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(ctx, pairingWriteBudget)
+	writeCtx, cancel := context.WithTimeout(ctx, pairingWriteBudget)
 	defer cancel()
-	pairings := make([]completionPairing, len(b.completions))
-	err = p.updateRerunLedger(ctx, first.target, func(l *rerunLedger, now time.Time) (changed bool) {
+	pairings, held := make([]completionPairing, len(b.completions)), make([]*heldRerun, len(b.completions))
+	err = p.updateRerunLedger(writeCtx, first.target, func(l *rerunLedger, now time.Time) (changed bool) {
 		for i, c := range b.completions {
 			var wrote bool
 			pairings[i], wrote = c.apply(l, now, jobs)
 			changed = changed || wrote
+			// One completion re-ran one job, and a record of it is the better evidence.
+			held[i] = nil
+			if !pairings[i].paired {
+				held[i] = heldRerunOf(c, jobs, l.Reruns[c.runID])
+			}
 		}
 		return changed
 	})
@@ -190,9 +197,12 @@ func (p *Provisioner) pairBatch(ctx context.Context, run string, b *pairingBatch
 		switch o := pairings[i]; {
 		case o.paired:
 			p.reportRerunJob(c.target, c.runID, c.jobName, c.result, o, p.completionLog(c))
-		case o.matched:
+		case o.matched && held[i] == nil:
 			p.completionLog(c).Info("scale-set job is not known to re-run the failed job that shares its name; paired with nothing")
 		}
+	}
+	if held = slices.DeleteFunc(held, func(h *heldRerun) bool { return h == nil }); len(held) > 0 {
+		p.pairTimedOut(ctx, held, log)
 	}
 }
 
