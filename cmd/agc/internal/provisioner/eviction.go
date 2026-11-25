@@ -542,7 +542,7 @@ func (p *Provisioner) attemptRerun(ctx context.Context, target Target, owner, re
 		if checksCancel && run.status == runStatusCompleted && run.conclusion == runConclusionCancelled {
 			// The classic tier holds no ledger, and its jobs are never re-run alone.
 			cancelled := true
-			if tier == evictionTierScaleSet && run.attempt != 0 {
+			if tier == evictionTierScaleSet {
 				var err error
 				if cancelled, err = p.cancelledByOther(ctx, target, owner, repo, runID, run); err != nil {
 					return fmt.Errorf("read who cancelled the run before re-running it: %w", err)
@@ -603,12 +603,16 @@ func (p *Provisioner) recordRerunWithheld(target Target, runID, cause, reason, m
 // was spent and eviction_retries_total incremented, but the job was not re-run, so
 // without this the operator-visible story reads as a recovery that happened (Q503).
 func (p *Provisioner) recordRerunFailure(target Target, runID, cause, reason string, err error) {
+	p.recordRerunFailed(target, cause, reason,
+		fmt.Sprintf("the automatic re-run for run %s (lost to %s) was never accepted by GitHub (%v); a manual re-run is required", runID, cause, err))
+}
+
+func (p *Provisioner) recordRerunFailed(target Target, cause, reason, message string) {
 	key := target.Key()
 	if p.Metrics != nil && p.Metrics.EvictionRerunFailures != nil {
 		p.Metrics.EvictionRerunFailures.WithLabelValues(key.Namespace, key.Name, cause, reason).Inc()
 	}
-	target.RecordEvent(corev1.EventTypeWarning, "EvictionRerunFailed", "RetryEvictedJob",
-		fmt.Sprintf("the automatic re-run for run %s (lost to %s) was never accepted by GitHub (%v); a manual re-run is required", runID, cause, err))
+	target.RecordEvent(corev1.EventTypeWarning, "EvictionRerunFailed", "RetryEvictedJob", message)
 }
 
 // rerunWindow returns the re-run retry window, honouring the EvictionRerunWindow

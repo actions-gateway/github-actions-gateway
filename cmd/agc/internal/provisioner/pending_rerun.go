@@ -76,7 +76,9 @@ type pendingRerun struct {
 func (r *pendingRerun) siblingsKey() string { return r.Disruption + "/siblings" }
 
 // parkRerun records r in l, reporting whether it changed l. An attempt has one entry, which
-// lists every worker killed in it (Q1327).
+// lists every worker killed in it (Q1327). A job killed again, in the attempt its own
+// re-run started, takes the place of an entry left for its siblings: the attempt r's release
+// starts carries the same cancelled jobs.
 func parkRerun(l *rerunLedger, now time.Time, r pendingRerun) bool {
 	for _, e := range l.Pending {
 		if e != nil && r.FailedAttempt > 0 && e.RunID == r.RunID && e.FailedAttempt == r.FailedAttempt {
@@ -84,7 +86,7 @@ func parkRerun(l *rerunLedger, now time.Time, r pendingRerun) bool {
 		}
 	}
 	key := failureKey(r.RunID, r.Job)
-	if l.Pending[key] != nil {
+	if e := l.Pending[key]; e != nil && (len(e.Workers) > 0 || e.StartedAttempt == 0) {
 		return false
 	}
 	r.FiredAt = now
@@ -297,6 +299,15 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 	if !p.pendingSets.due(entry, runKey, age, now, readFrom) {
 		return nil, false
 	}
+	// siblings marks the turn of the jobs GitHub cancelled, with no killed worker left.
+	siblings := len(e.workers()) == 0
+	fail := func(reason string, err error) {
+		if siblings {
+			p.recordRerunFailed(target, e.Cause, reason, fmt.Sprintf("the jobs GitHub cancelled beside a job of run %s that was lost to %s were not re-run (%v); re-run the run's failed jobs by hand", e.RunID, e.Cause, err))
+			return
+		}
+		p.recordRerunFailure(target, e.RunID, e.Cause, reason, err)
+	}
 	drop := func() {
 		p.pendingSets.settle(entry, runKey, p.finishPendingRerun(ctx, target, key, e, nil, startedJob{}, log))
 	}
@@ -309,7 +320,7 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 			msg = "the run could not be read when its re-run's wait ended; manual rerun may be required"
 		}
 		log.Error(msg, "runID", e.RunID, "job", e.Job, "cause", e.Cause, "waited", pendingRerunMaxWait, "error", err)
-		p.recordRerunFailure(target, e.RunID, e.Cause, rerunFailureReasonNeverConcluded, err)
+		fail(rerunFailureReasonNeverConcluded, err)
 		drop()
 	}
 	retryRead := func(err error) {
@@ -334,7 +345,7 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 		}
 		log.Error("a parked re-run's run is gone at GitHub; manual rerun may be required",
 			"runID", e.RunID, "cause", e.Cause, "error", err)
-		p.recordRerunFailure(target, e.RunID, e.Cause, rerunFailureReasonAPIError, err)
+		fail(rerunFailureReasonAPIError, err)
 		drop()
 		return nil, false
 	case err != nil:
@@ -370,7 +381,8 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 		}
 		dependents = redDependents(e.StartedJob, run, before, jobs)
 	}
-	siblings := len(e.Workers) == 0 && e.StartedAttempt > 0 && run.attempt <= e.StartedAttempt
+	// The call re-runs a killed job that needs the one it names, too.
+	siblings = len(workers) == 0 && e.StartedAttempt > 0 && run.attempt <= e.StartedAttempt
 	switch {
 	case len(workers) == 0 && !siblings:
 		if !p.pendingSets.claimRelease(runKey) {
@@ -399,7 +411,7 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 	}
 	// A full entry may not list every worker killed, and a run that succeeded is the
 	// futility checks' to withhold.
-	if len(e.Workers) > 0 && len(e.Workers) < maxMergedPerAttempt && run.conclusion != runConclusionSuccess {
+	if !siblings && len(e.Workers) > 0 && len(e.Workers) < maxMergedPerAttempt && run.conclusion != runConclusionSuccess {
 		if scope, workers = planJobRerun(workers, jobs, dependents); len(workers) == 0 {
 			log.Info("no failed job of the run ran on the killed worker's runner; the parked re-run is dropped",
 				"runID", e.RunID, "runAttempt", run.attempt, "job", e.Job, "cause", e.Cause)

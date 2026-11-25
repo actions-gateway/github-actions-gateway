@@ -57,6 +57,10 @@ type jobsAPI struct {
 	failAttempt map[int]int
 	// oldRun serves the run as the attempt before the latest left it.
 	oldRun bool
+	// gone answers every request as for a run GitHub no longer has.
+	gone bool
+	// succeeds concludes the run success, whatever its jobs ended as.
+	succeeds bool
 	// moveAfter, where set, is how many run reads are answered before somebody re-runs job 3.
 	moveAfter int
 	// stale answers that many job re-runs as GitHub refuses an earlier attempt's ID.
@@ -77,6 +81,8 @@ func (j runJob) failed() bool { return j.conclusion != "success" && j.conclusion
 // job is cancelled, though none it ran was (measured 2026-11-24).
 func (a *jobsAPI) conclusion(attempt int, jobs []runJob) string {
 	switch {
+	case a.succeeds:
+		return "success"
 	case !slices.ContainsFunc(jobs, runJob.failed):
 		return "success"
 	case attempt > 1 && slices.ContainsFunc(jobs, func(j runJob) bool { return j.conclusion == "cancelled" }):
@@ -158,6 +164,8 @@ func (a *jobsAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/repos/myorg/myrepo/actions/")
 	switch {
+	case a.gone:
+		w.WriteHeader(http.StatusNotFound)
 	case path == "runs/4242/rerun-failed-jobs" && r.Method == http.MethodPost:
 		if a.running || a.busy {
 			_ = r.Body.Close()
@@ -558,6 +566,21 @@ func TestSiblings_ARedGateIsNoOtherFailure(t *testing.T) {
 			want: []string{"r-a", "human"}, count: 1},
 		{name: "somebody cancelled the re-run", jobs: matrixJobs("cancelled", "cancelled"), killed: []string{"a"}, next: map[string]string{"gate": "cancelled"},
 			want: []string{"r-a"}, count: 1},
+		{name: "the other killed job was its dependent", jobs: matrixJobs("cancelled", "cancelled", runJob{name: "gate2", runner: "r-gate2", conclusion: "failure", needs: []string{"a", "b", "c"}, gate: true}), killed: []string{"a", "gate"},
+			want: []string{"r-a", "failed-jobs"}, count: 2},
+		{name: "somebody re-ran what the killed job and a red one need", jobs: []runJob{
+			{name: "build", runner: "r-build", conclusion: "success"},
+			{name: "a", runner: "r-a", conclusion: "failure", needs: []string{"build"}},
+			{name: "lint", runner: "r-lint", conclusion: "failure", needs: []string{"build"}},
+			{name: "b", runner: "r-b", conclusion: "failure"}}, killed: []string{"a", "b"}, next: map[string]string{"lint": "failure"}, between: func(a *jobsAPI) { a.humanReruns(0) },
+			want: []string{"r-a", "human", "r-b"}, count: 2},
+		{name: "a killed job no red one needs goes after it", jobs: matrixJobs("cancelled", "cancelled", runJob{name: "z", runner: "r-z", conclusion: "failure"}), killed: []string{"a", "z"},
+			want: []string{"r-a", "failed-jobs"}, count: 2},
+		{name: "a matrix of its own lost a leg too", jobs: matrixJobs("cancelled", "cancelled",
+			runJob{name: "x", runner: "r-x", conclusion: "failure"},
+			runJob{name: "y", runner: "r-y", conclusion: "cancelled"},
+			runJob{name: "gatex", runner: "r-gatex", conclusion: "failure", needs: []string{"x", "y"}, gate: true}), killed: []string{"a", "x"}, budget: 3,
+			want: []string{"r-a", "r-x"}, count: 2},
 		{name: "the budget is one", jobs: matrixJobs("cancelled", "cancelled"), killed: []string{"a"}, budget: 1,
 			want: []string{"r-a"}, count: 1},
 	} {
@@ -760,6 +783,28 @@ func TestParkRerun_JoinsAnEntryWaitingForItsSiblings(t *testing.T) {
 	}
 }
 
+// TestParkRerun_ASecondKillOfAJob takes the place of an entry left for the job's siblings,
+// and of no other.
+func TestParkRerun_ASecondKillOfAJob(t *testing.T) {
+	again := []killedWorker{{Job: "a", Runner: "r-a-2", Disruption: "pod-a-2"}}
+	for _, tc := range []struct {
+		name    string
+		workers []killedWorker
+		started int
+		want    bool
+	}{
+		{"its siblings", nil, 2, true},
+		{"another killed job too", []killedWorker{{Job: "b", Disruption: "pod-b"}}, 2, false},
+		{"no job re-run yet", []killedWorker{{Job: "a", Disruption: "pod-a"}}, 0, false},
+		{"an older AGC's", nil, 0, false},
+	} {
+		l := &rerunLedger{Pending: map[string]*pendingRerun{"4242/a": {RunID: "4242", Job: "a", FailedAttempt: 1, Workers: tc.workers, StartedAttempt: tc.started}}}
+		changed := parkRerun(l, time.Now(), pendingRerun{RunID: "4242", Job: "a", FailedAttempt: 2, Workers: again})
+		assert.Equal(t, tc.want, changed, tc.name)
+		assert.Equal(t, tc.want, l.Pending["4242/a"].FailedAttempt == 2, tc.name)
+	}
+}
+
 // TestSiblings_NoTurnIsLeft covers the single-job re-runs after which the entry is gone.
 func TestSiblings_NoTurnIsLeft(t *testing.T) {
 	for _, tc := range []struct {
@@ -781,6 +826,90 @@ func TestSiblings_NoTurnIsLeft(t *testing.T) {
 			assert.Empty(t, readLedger(t, p, target).Pending)
 		})
 	}
+}
+
+// TestSiblings_AKilledJobNoRedOneNeedsGoesFirst: its re-run shows no dependent, so it costs
+// the siblings' turn its slot.
+func TestSiblings_AKilledJobNoRedOneNeedsGoesFirst(t *testing.T) {
+	for budget, want := range map[int][]string{2: {"r-z", "r-a"}, 3: {"r-z", "r-a", "failed-jobs"}} {
+		p, api, target, clock, _ := jobsFixture(t, matrixJobs("cancelled", "cancelled", runJob{name: "z", runner: "r-z", conclusion: "failure"})...)
+		target.spec.MaxEvictionRetries = budget
+		parkKill(p, target, "pod-z", "z", "r-z")
+		parkKill(p, target, "pod-a", "a", "r-a")
+		for range 3 {
+			release(t, p, api, clock, 1)
+		}
+		assert.Equal(t, want, api.accepted())
+		assert.Equal(t, budget == 2, strings.Contains(strings.Join(target.messages, ""), "the jobs GitHub cancelled beside"))
+	}
+}
+
+// TestSiblings_WithoutARunnerName: a killed worker whose pod names no runner is not a
+// cancelled job that never had one.
+func TestSiblings_WithoutARunnerName(t *testing.T) {
+	jobs := matrixJobs("cancelled", "cancelled")
+	jobs[1].runner, jobs[2].runner = "", ""
+	p, api, target, clock, _ := jobsFixture(t, jobs...)
+	parkKill(p, target, "pod-a", "a", "")
+	release(t, p, api, clock, 1)
+	release(t, p, api, clock, 1)
+	assert.Equal(t, []string{"r-a", "failed-jobs"}, api.accepted())
+}
+
+// TestSiblings_ASuccessfulRunHasNoTurn: GitHub refuses to re-run one, so the turn is dropped
+// and not withheld.
+func TestSiblings_ASuccessfulRunHasNoTurn(t *testing.T) {
+	p, api, target, clock, _ := siblingsFixture(t)
+	api.succeeds = true
+	release(t, p, api, clock, 0)
+	assert.Empty(t, readLedger(t, p, target).Pending)
+	assert.Zero(t, testutil.ToFloat64(p.Metrics.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", recoveryCauseOOM, rerunWithheldReasonRunSucceeded)))
+}
+
+// TestSiblings_TheTurnsEndNamesTheSiblings: the killed job's own re-run was accepted, which
+// an older AGC's entry does not say.
+func TestSiblings_TheTurnsEndNamesTheSiblings(t *testing.T) {
+	const siblings, job = "the jobs GitHub cancelled beside a job of run 4242", "never accepted"
+	for _, tc := range []struct {
+		legacy, gone bool
+		reason       string
+	}{
+		{false, false, rerunFailureReasonNeverConcluded},
+		{true, false, rerunFailureReasonNeverConcluded},
+		{false, true, rerunFailureReasonAPIError},
+		{true, true, rerunFailureReasonAPIError},
+	} {
+		p, api, target, clock, _ := siblingsFixture(t)
+		api.gone = tc.gone
+		if tc.legacy {
+			require.NoError(t, p.updateRerunLedger(context.Background(), target, func(l *rerunLedger, _ time.Time) bool {
+				e := l.Pending["4242/a"]
+				e.FailedAttempt, e.StartedAttempt = e.StartedAttempt, 0
+				return true
+			}))
+		}
+		clock.advance(pendingRerunMaxWait)
+		sweepPendingAndWait(t, p, context.Background(), 0)
+		assert.Equal(t, []string{"r-a"}, api.accepted())
+		assert.Empty(t, readLedger(t, p, target).Pending)
+		assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues("team-a", "gpu", recoveryCauseOOM, tc.reason)))
+		messages := strings.Join(target.messages, "")
+		assert.Equal(t, !tc.legacy, strings.Contains(messages, siblings))
+		assert.Equal(t, tc.legacy, strings.Contains(messages, job))
+	}
+}
+
+// TestSiblings_ASecondKillOfTheJobTakesTheEntry: the killed job's second kill, in the attempt
+// its re-run started, parks under the key the siblings' turn waits at.
+func TestSiblings_ASecondKillOfTheJobTakesTheEntry(t *testing.T) {
+	p, api, target, clock, _ := siblingsFixture(t)
+	target.spec.MaxEvictionRetries = 3
+	api.jobs[0].conclusion = "failure"
+	evictScaleSet(p, target, "4242", 3, recoveryCauseOOM, rerunDisruption{key: "pod-a-2", job: "a", workerRunner: "r-a-2", park: true})
+	release(t, p, api, clock, 1)
+	release(t, p, api, clock, 1)
+	assert.Equal(t, []string{"r-a", "r-a-2", "failed-jobs"}, api.accepted())
+	assert.Empty(t, readLedger(t, p, target).Pending)
 }
 
 // TestFutileRerun_WhoCancelledIsReadAgain: an attempt that carries cancelled jobs is no
@@ -872,6 +1001,16 @@ func TestCancelledByOther(t *testing.T) {
 			assert.Equal(t, tc.retry, errors.Is(err, errRunConclusionUnreadable))
 		})
 	}
+}
+
+// TestCancelledByOther_ARunThatNamesNoAttempt is somebody's cancel: no force-cancel of GAG's
+// is recorded for attempt 0.
+func TestCancelledByOther_ARunThatNamesNoAttempt(t *testing.T) {
+	p, _, target, _, _ := jobsFixture(t)
+	got, err := p.cancelledByOther(context.Background(), target, "myorg", "myrepo", "4242",
+		runState{status: runStatusCompleted, conclusion: runConclusionCancelled})
+	require.NoError(t, err)
+	assert.True(t, got)
 }
 
 // TestJobRerun_ARefusedReleaseEndsWithTheWait: a run that reads concluded and is refused as

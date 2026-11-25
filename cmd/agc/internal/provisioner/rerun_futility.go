@@ -249,7 +249,7 @@ func (p *Provisioner) cancelledByOther(ctx context.Context, target Target, owner
 	}
 	for self := p.selfCancelledAttempt(ctx, target, runID); run.conclusion == runConclusionCancelled; {
 		switch {
-		case run.attempt == self:
+		case run.attempt == self && self > 0:
 			return false, nil
 		case run.attempt <= 1:
 			return true, nil

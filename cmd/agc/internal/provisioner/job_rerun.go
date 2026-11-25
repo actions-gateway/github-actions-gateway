@@ -109,7 +109,7 @@ func onlyCancelledLeft(jobs []workflowJobSummary, dependents map[int64]bool) boo
 func cancelledBeside(jobs []workflowJobSummary, workers []killedWorker) bool {
 	return slices.ContainsFunc(jobs, func(j workflowJobSummary) bool {
 		return j.Conclusion == runConclusionCancelled && !slices.ContainsFunc(workers, func(w killedWorker) bool {
-			return w.Runner == j.RunnerName || w.Runner == "" && w.Job == j.Name
+			return w.Runner == j.RunnerName && w.Runner != "" || w.Runner == "" && w.Job == j.Name
 		})
 	})
 }
