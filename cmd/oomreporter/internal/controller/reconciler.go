@@ -164,8 +164,11 @@ func (r *Reconciler) expire(ctx context.Context, node string, cm *corev1.ConfigM
 	if left := idleFor - r.Now().Sub(since); left > 0 {
 		return left, nil
 	}
+	if err := client.IgnoreNotFound(r.Delete(ctx, cm, client.Preconditions{UID: &cm.UID})); err != nil {
+		return 0, err
+	}
 	delete(r.idle, node)
-	return 0, client.IgnoreNotFound(r.Delete(ctx, cm, client.Preconditions{UID: &cm.UID}))
+	return 0, nil
 }
 
 // apply says what node's kills say of its pods.

@@ -60,6 +60,13 @@ func TestRun_TakesItsPlaceFromTheEnvironment(t *testing.T) {
 	require.ErrorContains(t, tried(vars, "controller", "-agents=app=agent"), "want one of -namespaces")
 }
 
+func TestRun_NeedsAClusterItCanReach(t *testing.T) {
+	for _, args := range [][]string{{"agent", "-node=node-a", "-namespace=oom"}, {"controller", "-namespace=oom", "-agents=app=agent", "-all-namespaces"}} {
+		bad := func() (*rest.Config, error) { return &rest.Config{Host: "http://[::1"}, nil }
+		require.ErrorContains(t, run(t.Context(), args, env(nil), bad, noLog), "host must be a URL")
+	}
+}
+
 func TestRun_NeedsACluster(t *testing.T) {
 	none := errors.New("no cluster")
 	err := run(t.Context(), []string{"agent"}, env(nil), func() (*rest.Config, error) { return nil, none }, noLog)

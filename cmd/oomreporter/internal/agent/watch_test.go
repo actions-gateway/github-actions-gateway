@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -73,6 +74,22 @@ func TestWatcher_LeavesAPodThatIsGone(t *testing.T) {
 
 	w.Follow(following(uid, other))
 	assert.Contains(t, w.paths, other)
+}
+
+func TestWatcher_GoesOnAfterAnErrorAndEndsWhereItIsClosed(t *testing.T) {
+	dir, logged := t.TempDir(), &bytes.Buffer{}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, uid), nil, 0o600))
+	w, err := NewWatcher(dir, func(id string) (string, bool) { return id, true }, slog.New(slog.NewTextHandler(logged, nil)))
+	require.NoError(t, err)
+	w.Follow(following(uid))
+	done := make(chan struct{})
+	go func() { defer close(done); w.Run(t.Context()) }()
+	w.fs.Errors <- fsnotify.ErrEventOverflow
+	change1(t, dir, uid)
+	assert.Equal(t, uid, <-w.Changed)
+	assert.Contains(t, logged.String(), "overflow")
+	require.NoError(t, w.fs.Close())
+	<-done
 }
 
 func TestWatcher_SaysOnceThatItCannotWatch(t *testing.T) {

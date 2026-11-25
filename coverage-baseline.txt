@@ -7,7 +7,7 @@
 ./broker	84.5
 ./cmd/agc	83.5
 ./cmd/gmc	81.4
-./cmd/oomreporter	98.3
+./cmd/oomreporter	97.8
 ./cmd/probe	81.6
 ./cmd/proxy	80.8
 ./cmd/worker	84.3

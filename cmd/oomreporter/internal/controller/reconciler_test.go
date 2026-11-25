@@ -434,6 +434,58 @@ func TestReconcile_ARefusedWriteIsTriedAgainAndHoldsUpNoOther(t *testing.T) {
 	}
 }
 
+func TestReconcile_WhatCannotBeReadIsTriedAgainAndWritesNothing(t *testing.T) {
+	refused := apierrors.NewForbidden(schema.GroupResource{}, "", errors.New("no grant"))
+	for name, funcs := range map[string]interceptor.Funcs{
+		"the agents": {List: func(ctx context.Context, c client.WithWatch, l client.ObjectList, opts ...client.ListOption) error {
+			if (&client.ListOptions{}).ApplyOptions(opts).Namespace == ownNamespace {
+				return refused
+			}
+			return c.List(ctx, l, opts...)
+		}},
+		"the pods": {List: func(ctx context.Context, c client.WithWatch, l client.ObjectList, opts ...client.ListOption) error {
+			if (&client.ListOptions{}).ApplyOptions(opts).Namespace != ownNamespace {
+				return refused
+			}
+			return c.List(ctx, l, opts...)
+		}},
+		"the report": {Get: func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+			return refused
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a", own(killedAt, 1)), pod(dead("runner", 1, killedAt)))
+			w.Client = interceptor.NewClient(w.Client.(client.WithWatch), funcs)
+			_, err := w.Reconcile(t.Context(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "node-a"}})
+			require.ErrorContains(t, err, "no grant")
+			assert.Empty(t, w.writes)
+			assert.Empty(t, w.idle)
+		})
+	}
+}
+
+func TestReconcile_AReportThatCannotBeDeletedIsTriedAgain(t *testing.T) {
+	w := newWorld(t, reportOf(t, "node-a"))
+	w.reconcile(t, "node-a")
+	w.now = w.now.Add(idleFor)
+	w.Client = interceptor.NewClient(w.Client.(client.WithWatch), interceptor.Funcs{
+		Delete: func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
+			return errors.New("no grant")
+		},
+	})
+	for range 2 {
+		_, err := w.Reconcile(t.Context(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "node-a"}})
+		require.ErrorContains(t, err, "no grant")
+	}
+}
+
+func TestReconcile_ARefusedEventOfNoContainerIsTriedAgain(t *testing.T) {
+	w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a", report.Kill{Pod: podUID, At: killedAt.UnixMilli(), Processes: 1}), pod(alive("runner", 1)))
+	w.failing("create event", errors.New("by policy"))
+	_, err := w.Reconcile(t.Context(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "node-a"}})
+	require.ErrorContains(t, err, "by policy")
+}
+
 func invalid(name string) error {
 	return apierrors.NewInvalid(schema.GroupKind{Kind: "Pod"}, "worker", field.ErrorList{field.Invalid(field.NewPath("metadata", name), "x", "refused")})
 }
