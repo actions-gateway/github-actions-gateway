@@ -306,7 +306,7 @@ Both, on the pod, in the pod's namespace:
   It says what the **last** kill was: nothing clears it, a container that restarts keeps it, and a second kill with the same reason leaves `lastTransitionTime` where it was.
   So the message carries the time that container ended and its ID, which is what a reader compares.
   Both are the pod's status's, so a report's clock is in neither, and a kill reported again changes nothing.
-  One condition is written at most once a minute, so an agent that changes its mind cannot keep the controller from other nodes' pods.
+  One condition is written at most three times a minute, so an agent that changes its mind cannot keep the controller from other nodes' pods, and the node's next report can still correct an answer inside the AGC's wait.
   A kill the agent was late for, or too far from that end to be its, claims nothing and takes back no answer already written for that container ID.
 - **An Event** with the same words, for people, whose reason is `OOM` and the condition's reason, or `OOMProcessKilled` for a kill that ended no container.
   It outlives the pod, and it covers a kill that ended no container, such as a build's child process, where a condition would mislead.
@@ -630,7 +630,7 @@ PRs 1 to 6 are [Q1403](../queue/Q1403.md), which gates 2.1; the three that do no
 |---|---|---|---|
 | 1 | The counter reader and the rule, tested on figures a local container gave, and on a kubelet's files once there are any; finding the pods' root | M | The tool |
 | 2 | Agent, report ConfigMap, controller; condition and Event | M | The tool |
-| 3 | Chart: RBAC, the admission policies and their envtest, the node affinity, NetworkPolicy; the no-import gate | M | The tool |
+| 3 | Chart: RBAC, the admission policies and their envtest, the node affinity, NetworkPolicy; the no-import gate. From PR 2's review: policy 1 refuses the agent `immutable`, finalizers and owner references, the chart sets `-pods-root`, and a test holds a condition's writes and the Events to their limits against a real API server | M | The tool |
 | 4 | Image and publish: a `Dockerfile` stage, `docker-bake.hcl`, the `publish.yml` matrix (seven images become eight) and a third chart, SBOM, Trivy, `verify-release.sh` and the docs that count seven | M | The tool, outside a source build |
 | 5 | kind e2e: one kill per reason, the condition and the Event; the operator's page | M | The tool, trusted |
 | 6 | AGC, the record: the edge, and the reason in the failed job's record and Event, with a test for each of [its limits](#reading-it) | S | The answer outliving the worker |
