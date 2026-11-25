@@ -37,6 +37,7 @@ func mount(dirs ...string) fstest.MapFS {
 		m[path.Join(dir, subtreeFile)] = eventsFile(Events{n, n, n})
 		m[path.Join(dir, localFile)] = eventsFile(Events{n, n, n})
 		m[path.Join(dir, groupFile)] = &fstest.MapFile{Data: []byte("1\n")}
+		m[path.Join(dir, statFile)] = &fstest.MapFile{Data: []byte("nr_descendants 0\nnr_dying_descendants 0\n")}
 	}
 	return m
 }
@@ -175,7 +176,7 @@ func (h *hookFS) Open(name string) (fs.File, error) {
 func TestSample_LeavesOutWhatGoesAsItIsRead(t *testing.T) {
 	dirs := systemd("")
 	for name, gone := range map[string]error{"path": fs.ErrNotExist, "open file": syscall.ENODEV} {
-		for _, file := range []string{localFile, groupFile} {
+		for _, file := range []string{localFile, groupFile, statFile} {
 			t.Run(name+" of "+file, func(t *testing.T) {
 				h := &hookFS{FS: mount(dirs...), open: func(string) error { return nil }}
 				tree, err := Open(h, "")
@@ -208,9 +209,55 @@ func TestSample_MarksAContainerNotKilledWhole(t *testing.T) {
 	assert.Equal(t, map[string]bool{runnerID: true}, got.Pods[burstableUID].Single)
 }
 
+func TestSample_MarksAPodWithACgroupBelowAContainer(t *testing.T) {
+	dirs := systemd("")
+	for stat, want := range map[string]bool{
+		"nr_descendants 0\nnr_dying_descendants 0\n":  false,
+		"nr_descendants 12\nnr_dying_descendants 0\n": true,
+		"nr_descendants 0\nnr_dying_descendants 1\n":  true,
+	} {
+		m := mount(dirs...)
+		m[path.Join(dirs[4], statFile)] = &fstest.MapFile{Data: []byte(stat)}
+		tree, err := Open(m, "")
+		require.NoError(t, err)
+		got, err := tree.Sample()
+		require.NoError(t, err)
+		assert.Equal(t, want, got.Pods[burstableUID].Nested, stat)
+		assert.False(t, got.Pods[guaranteedUID].Nested)
+	}
+}
+
+func TestSample_MarksAPodWithACgroupThatIsNoContainers(t *testing.T) {
+	id := strings.Repeat("c", 64)
+	for name, tc := range map[string]struct {
+		dirs   []string
+		child  string
+		nested bool
+	}{
+		"Docker's":                        {systemd(""), "docker-" + id + ".scope", true},
+		"a slice":                         {systemd(""), "docker.slice", true},
+		"Docker's, its own driver":        {systemd(""), id, true},
+		"a container's, and more":         {systemd(""), "x-cri-containerd-" + id + ".scope", true},
+		"a container's, the other driver": {cgroupfs(""), "cri-containerd-" + id + ".scope", true},
+		"Docker's under cgroupfs":         {cgroupfs(""), "docker", true},
+		"CRI-O's monitor":                 {systemd(""), "crio-conmon-" + id + ".scope", false},
+		"CRI-O's monitor, under cgroupfs": {cgroupfs(""), "crio-conmon-" + id, false},
+		"CRI-O's container":               {systemd(""), "crio-" + id + ".scope", false},
+		"one no driver's name tells":      {cgroupfs(""), id, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tree, err := Open(mount(append(tc.dirs, path.Join(tc.dirs[3], tc.child))...), "")
+			require.NoError(t, err)
+			got, err := tree.Sample()
+			require.NoError(t, err)
+			assert.Equal(t, tc.nested, got.Pods[burstableUID].Nested)
+		})
+	}
+}
+
 func TestSample_FailsWhereItMayNotRead(t *testing.T) {
 	dirs := systemd("")
-	files := []string{path.Join(dirs[4], groupFile)}
+	files := []string{path.Join(dirs[4], groupFile), path.Join(dirs[4], statFile)}
 	for _, dir := range dirs {
 		files = append(files, path.Join(dir, localFile))
 	}

@@ -24,6 +24,7 @@ const (
 	subtreeFile = "memory.events"
 	localFile   = "memory.events.local"
 	groupFile   = "memory.oom.group"
+	statFile    = "cgroup.stat"
 )
 
 func readEvents(fsys fs.FS, name string) (Events, error) {

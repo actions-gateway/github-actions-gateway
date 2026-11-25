@@ -1,10 +1,12 @@
 package rule
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -74,11 +76,16 @@ func nestedKill(uid string) event {
 	return func(n *node) { n.change(uid, func(p *cgroup.Pod) { kill(&p.Subtree) }) }
 }
 func nestedOOM(uid string) event {
-	return func(n *node) { n.change(uid, func(p *cgroup.Pod) { oom(&p.Subtree) }) }
+	return func(n *node) { n.change(uid, func(p *cgroup.Pod) { p.Nested = true; oom(&p.Subtree) }) }
 }
 
 // whole is the count that follows a container's processes being killed together.
 func whole(uid, name string) event { return func(n *node) { n.inContainer(uid, name, groupKill) } }
+
+// goes is a container's cgroup removed.
+func goes(uid, name string) event {
+	return func(n *node) { n.change(uid, func(p *cgroup.Pod) { delete(p.Containers, name) }) }
+}
 
 // death is what the kernel counts for one container killed at one limit.
 func death(uid, name string, limit ...event) []event {
@@ -147,15 +154,18 @@ func TestDecide_OneKillWhereverTheSamplesFall(t *testing.T) {
 		events   []event
 		podLimit bool
 		want     Reason
+		goes     bool
 	}{
-		"the container's limit":             {death(pod, runner, containerOOM(pod, runner)), false, ContainerLimit},
-		"the container's, in a limited pod": {death(pod, runner, containerOOM(pod, runner)), true, ContainerLimit},
-		"a one-container pod's cap":         {death(pod, runner, podOOM(pod)), false, ContainerLimit},
-		"the pod's limit":                   {death(pod, runner, podOOM(pod)), true, PodLimit},
-		"the limit all pods share":          {death(pod, runner, podsOOM), true, PodsLimit},
-		"the QoS class's":                   {death(pod, runner, qosOOM), true, PodsLimit},
-		"the node's memory":                 {death(pod, runner), true, AbovePods},
-		"a limit met again as it dies":      {death(pod, runner, podOOM(pod), podOOM(pod)), true, PodLimit},
+		"the container's limit":             {death(pod, runner, containerOOM(pod, runner)), false, ContainerLimit, false},
+		"the container's, in a limited pod": {death(pod, runner, containerOOM(pod, runner)), true, ContainerLimit, false},
+		"a one-container pod's cap":         {death(pod, runner, podOOM(pod)), false, ContainerLimit, false},
+		"the pod's limit":                   {death(pod, runner, podOOM(pod)), true, PodLimit, false},
+		"the limit all pods share":          {death(pod, runner, podsOOM), true, PodsLimit, false},
+		"the QoS class's":                   {death(pod, runner, qosOOM), true, PodsLimit, false},
+		"the node's memory":                 {death(pod, runner), true, AbovePods, false},
+		"a limit met again as it dies":      {death(pod, runner, podOOM(pod), podOOM(pod)), true, PodLimit, false},
+		"the container's, and it goes":      {append(death(pod, runner, containerOOM(pod, runner)), goes(pod, runner)), false, ContainerLimit, true},
+		"the node's, and it goes":           {append(death(pod, runner), goes(pod, runner)), false, AbovePods, true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			everySampling(tc.events, func(mask, skew uint) {
@@ -163,7 +173,9 @@ func TestDecide_OneKillWhereverTheSamplesFall(t *testing.T) {
 				require.Len(t, rises, 1, "mask %b skew %b", mask, skew)
 				r := rises[0]
 				assert.Equal(t, tc.want, Decide(r, tc.podLimit), "mask %b skew %b: %+v", mask, skew, r)
-				assert.Equal(t, []string{runner}, r.Containers, "mask %b skew %b", mask, skew)
+				if len(r.Containers) > 0 || !tc.goes {
+					assert.Equal(t, []string{runner}, r.Containers, "mask %b skew %b", mask, skew)
+				}
 			})
 		})
 	}
@@ -223,6 +235,15 @@ func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
 		"a nested kill a little before": {
 			then(nested, []event{func(*node) {}}, death(pod, runner)), 130 * time.Millisecond, 0,
 			map[string]Reason{runner: AbovePods}},
+		"a nested kill, then this at the node's, and it goes": {
+			then(nested, death(pod, runner), []event{goes(pod, runner)}), 100 * time.Millisecond, 0,
+			map[string]Reason{runner: AbovePods}},
+		"a container's limit met, then another's kill at the node's, and it goes": {
+			then([]event{containerOOM(pod, sidecar)}, death(pod, runner), []event{goes(pod, runner)}), 100 * time.Millisecond, 0,
+			map[string]Reason{runner: AbovePods}},
+		"two at their own limits, and one goes": {
+			then(death(pod, runner, containerOOM(pod, runner)), []event{goes(pod, runner)}, death(pod, sidecar, containerOOM(pod, sidecar))), time.Millisecond, 0,
+			map[string]Reason{runner: ContainerLimit, sidecar: ContainerLimit}},
 		"two nested kills before": {
 			then(nested, nested, death(pod, runner)), 100 * time.Millisecond, 0,
 			map[string]Reason{runner: AbovePods}},
@@ -266,6 +287,9 @@ func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
 					if got == Unknown {
 						continue
 					}
+					if len(r.Containers) == 0 {
+						assert.Contains(t, slices.Collect(maps.Values(tc.truth)), got, "mask %b skew %b: %+v", mask, skew, r)
+					}
 					for _, c := range r.Containers {
 						assert.Equal(t, tc.truth[c], got, "%s, mask %b skew %b: %+v", c, mask, skew, r)
 					}
@@ -284,22 +308,33 @@ func TestDecide_ANestedKillHidesNoLimitAboveIt(t *testing.T) {
 	}
 }
 
-// This pod is killed for the node's memory, and an allocation at the shared limit is there
-// that nothing has accounted for.
-func TestDecide_CannotTellANeighboursSpareAllocation(t *testing.T) {
+// This pod is killed for the node's memory, or at its container's limit, and a sample shows
+// an allocation at another limit that is no part of it.
+func TestDecide_CannotTellAnotherLimitsAllocation(t *testing.T) {
 	gone := []event{func(n *node) { delete(n.pods, peer) }}
+	wait := []event{func(*node) {}}
+	unseen := []event{func(n *node) { n.change(pod, func(p *cgroup.Pod) { oom(&p.Subtree); kill(&p.Subtree) }) }}
 	for name, tc := range map[string]struct {
 		events []event
+		gap    time.Duration
 		mask   uint
+		want   Reason
 	}{
-		"before its kill":      {[]event{podsOOM, killed(pod, runner), whole(pod, runner), killed(peer, runner), whole(peer, runner)}, 0b11111},
-		"two for its one kill": {then(death(peer, runner, podsOOM, podsOOM), death(pod, runner)), 0b111111},
-		"of a pod gone unread": {then(death(peer, runner, podsOOM), gone, death(pod, runner)), 0b110001},
+		"a neighbour's before its kill":      {[]event{podsOOM, killed(pod, runner), whole(pod, runner), killed(peer, runner), whole(peer, runner)}, 0, 0b11111, PodsLimit},
+		"a neighbour's two for its one kill": {then(death(peer, runner, podsOOM, podsOOM), death(pod, runner)), 0, 0b111111, PodsLimit},
+		"of a neighbour gone unread":         {then(death(peer, runner, podsOOM), gone, death(pod, runner)), 0, 0b110001, PodsLimit},
+		"the pod's, after another kill there": {
+			then(death(pod, sidecar, podOOM(pod)), wait, []event{podOOM(pod)}, death(pod, runner)), 0, 0b1111111, PodLimit},
+		"its own, waiting": {then([]event{containerOOM(pod, runner)}, death(pod, runner)), 0, 0b111, ContainerLimit},
+		"of a cgroup in the pod never sampled, and it goes": {
+			then(unseen, death(pod, runner), []event{goes(pod, runner)}), 0, 0b0001, ContainerLimit},
+		"the shared limit's, its own given up on": {
+			then([]event{containerOOM(pod, runner)}, wait, wait, death(pod, runner, podsOOM)), 2500 * time.Millisecond, 0b111111, PodsLimit},
 	} {
 		t.Run(name, func(t *testing.T) {
-			r := observe(tc.events, every(100*time.Millisecond), tc.mask, 0)[pod]
-			require.Len(t, r, 1)
-			assert.Equal(t, PodsLimit, Decide(r[0], false))
+			r := observe(tc.events, every(cmp.Or(tc.gap, 100*time.Millisecond)), tc.mask, 0)[pod]
+			require.NotEmpty(t, r)
+			assert.Equal(t, tc.want, Decide(r[len(r)-1], true), "%+v", r)
 		})
 	}
 }
@@ -322,6 +357,8 @@ func TestDecide_ClaimsNothing(t *testing.T) {
 		"of two limits":                         {GroupKills: 2, Inside: 1, Own: 1, Read: true, Pod: 1, Confirmed: true},
 		"of more kills than allocations inside": {GroupKills: 2, Inside: 1, Own: 1, Read: true, Confirmed: true},
 		"of a container not read":               {GroupKills: 1, Inside: 1, Confirmed: true},
+		"of two not read":                       {GroupKills: 2, Inside: 2, Confirmed: true},
+		"of one read, beside another's":         {GroupKills: 1, Inside: 1, Read: true, Confirmed: true, Recent: true},
 		"of one not read, and the pod's":        {GroupKills: 1, Inside: 1, Pod: 1, Confirmed: true},
 		"of a container's, and all pods'":       {GroupKills: 1, Inside: 1, Own: 1, Read: true, Pods: 1, Confirmed: true},
 		"of one read too soon":                  {GroupKills: 1, Inside: 1, Pod: 1, Read: true},
@@ -343,81 +380,211 @@ func TestDecide_ClaimsNothing(t *testing.T) {
 // which names the limit. The counts run on from one kill to the next.
 func TestDecide_AgreesWithTheKernelOnTheRecordedKills(t *testing.T) {
 	const qos = "kubepods.slice/kubepods-burstable.slice"
-	recorded, err := os.ReadFile("testdata/local-6.12.76.log")
-	require.NoError(t, err)
-	names := strings.NewReplacer(
-		"podown", "pod"+uid(1), "podlim", "pod"+uid(2), "podtop", "pod"+uid(3),
-		"containerd-own", "containerd-"+id(1), "containerd-lim", "containerd-"+id(2), "containerd-top", "containerd-"+id(3))
-
 	m := fstest.MapFS{"cgroup.controllers": {}}
-	dirs := []string{"kubepods.slice", qos, "kubepods.slice/kubepods-besteffort.slice"}
+	appear(m, "kubepods.slice", qos, "kubepods.slice/kubepods-besteffort.slice")
 	for i := 1; i <= 3; i++ {
 		podDir := fmt.Sprintf("%s/kubepods-burstable-pod%s.slice", qos, uid(i))
-		dirs = append(dirs, podDir, podDir+"/cri-containerd-"+id(i)+".scope")
+		appear(m, podDir, podDir+"/cri-containerd-"+id(i)+".scope")
 	}
-	for _, dir := range dirs {
-		m[dir+"/memory.events"], m[dir+"/"+local] = events(0, 0), events(0, 0)
-		m[dir+"/memory.oom.group"] = &fstest.MapFile{Data: []byte("1\n")}
+	want, got := replay(t, m, "local-6.12.76.log", strings.NewReplacer(
+		"podown", "pod"+uid(1), "podlim", "pod"+uid(2), "podtop", "pod"+uid(3),
+		"containerd-own", "containerd-"+id(1), "containerd-lim", "containerd-"+id(2), "containerd-top", "containerd-"+id(3)),
+		func(line string) bool { return strings.Contains(line, uid(2)) })
+	assert.Equal(t, []Reason{ContainerLimit, PodLimit, PodsLimit}, want)
+	assert.Equal(t, want, got)
+}
+
+// The kills on a kind cluster's two workers on the same kernel (kubelet v1.35.5, containerd
+// 2.3.1), read by an agent as the kubelet's own pods were killed. A P line names the pod that
+// follows. The agent did not read cgroup.stat, so the containers here that made a cgroup
+// below themselves are those the kernel's line shows one for.
+func TestDecide_AgreesWithTheKernelOnTheKindKills(t *testing.T) {
+	for worker, tc := range map[string]struct{ kernel, got []Reason }{
+		"worker": {
+			kernel: []Reason{
+				ContainerLimit, ContainerLimit, // the cap of a pod with one container
+				ContainerLimit, ContainerLimit, ContainerLimit, // one of two containers
+				PodLimit, PodLimit,
+				AbovePods,
+				nestedLimit, AbovePods,
+				ContainerLimit, nestedLimit,
+			},
+			got: []Reason{
+				ContainerLimit, ContainerLimit,
+				ContainerLimit, ContainerLimit, ContainerLimit,
+				PodLimit, PodLimit,
+				AbovePods,
+				Unknown, // 1.4 s after the nested one
+				ContainerLimit,
+			},
+		},
+		"worker2": {
+			kernel: []Reason{PodsLimit, PodsLimit, nestedLimit, PodsLimit},
+			got:    []Reason{PodsLimit, PodsLimit, PodsLimit},
+		},
+	} {
+		t.Run(worker, func(t *testing.T) {
+			m := fstest.MapFS{"cgroup.controllers": {}}
+			const root = "kubelet.slice/kubelet-kubepods.slice"
+			appear(m, root, root+"/kubelet-kubepods-burstable.slice", root+"/kubelet-kubepods-besteffort.slice")
+			limited := ""
+			kernel, got := replay(t, m, "kind-6.12.76-"+worker+".log", strings.NewReplacer(), func(line string) bool {
+				if f := strings.Fields(line); f[0] == "P" {
+					limited = f[2]
+				}
+				return strings.HasPrefix(limited, "pod-level-")
+			})
+			assert.Equal(t, tc.kernel, kernel)
+			assert.Equal(t, tc.got, got)
+		})
 	}
+}
+
+// nestedLimit is of a cgroup below a container.
+const nestedLimit Reason = "nested"
+
+// replay gives a tracker the readings recorded in a file of testdata, with those a sampler
+// makes in between and again after each kill, and returns the limits its kernel's lines name
+// and the reasons of the rises. podLimit is asked of every P and K line.
+func replay(t *testing.T, m fstest.MapFS, name string, names *strings.Replacer, podLimit func(line string) bool) (kernel, got []Reason) {
+	recorded, err := os.ReadFile("testdata/" + name)
+	require.NoError(t, err)
 	tree, err := cgroup.Open(m, "")
 	require.NoError(t, err)
 	var tr cgroup.Tracker
-	at := time.Unix(1_795_574_810, 0)
+	var at time.Time
 	observe := func() map[string]cgroup.Rise {
 		s, err := tree.Sample()
 		require.NoError(t, err)
-		at = at.Add(10 * time.Millisecond)
 		rises, _ := tr.Observe(s, at)
 		return rises
 	}
-	observe()
-
-	var want, got []Reason
-	var written [][3]string
-	for _, line := range strings.Split(strings.TrimSpace(names.Replace(string(recorded))), "\n") {
-		f := strings.Fields(line)
-		if f[0] == "N" {
-			counts, own, _ := strings.Cut(strings.Join(f[5:], " "), " | local ")
-			written = append(written, [3]string{f[4], counts, own})
-			continue
-		}
-		want = append(want, kernelsReason(line))
-		// The sampler also caught the first kill half counted: the allocation, no kill yet.
-		for _, w := range written {
-			for i, name := range []string{"memory.events", local} {
-				p := path.Join(w[0], name)
-				m[p] = file(halfCounted(string(m[p].Data), w[i+1]))
+	var pending []reading
+	write := func(half bool, which func(reading) bool) {
+		for _, r := range pending {
+			if which(r) {
+				r.write(m, half)
 			}
 		}
 		require.Empty(t, observe())
-		for _, w := range written {
-			m[path.Join(w[0], "memory.events")], m[path.Join(w[0], local)] = file(w[1]), file(w[2])
+	}
+	all := func(reading) bool { return true }
+	for _, line := range strings.Split(strings.TrimSpace(names.Replace(string(recorded))), "\n") {
+		f := strings.Fields(line)
+		if f[0] == "N" {
+			r := readingOf(t, f)
+			// What came and went before a kill is of other samples than its counts.
+			if r.rose() && !slices.ContainsFunc(pending, reading.rose) {
+				write(false, all)
+				pending = nil
+				for at = cmp.Or(at, r.at.Add(-time.Second)); at.Before(r.at); at = at.Add(250 * time.Millisecond) {
+					require.Empty(t, observe())
+				}
+			}
+			pending = append(pending, r)
+			continue
 		}
-		written = nil
-		require.Empty(t, observe())
-		for _, r := range observe() {
-			require.Len(t, r.Containers, 1)
-			got = append(got, Decide(r, strings.Contains(line, uid(2))))
+		limited := podLimit(line)
+		if f[0] != "K" {
+			continue
+		}
+		reason := kernelsReason(line, limited)
+		kernel = append(kernel, reason)
+		if reason == nestedLimit {
+			nest(m, line)
+		}
+		// The kernel counts the allocation first, and the local sampler caught the first kill
+		// there. A container that was read with its kill had gone by the next sample.
+		read := func(r reading) bool {
+			return slices.ContainsFunc(pending, func(o reading) bool { return o.rose() && o.dir == r.dir })
+		}
+		write(true, reading.rose)
+		write(false, func(r reading) bool { return r.rose() || !read(r) })
+		for _, r := range pending {
+			if !r.rose() {
+				r.write(m, false)
+			}
+		}
+		pending = nil
+		rises := observe()
+		require.LessOrEqual(t, len(rises), 1)
+		for _, r := range rises {
+			require.LessOrEqual(t, len(r.Containers), 1)
+			got = append(got, Decide(r, limited))
 		}
 	}
-	assert.Equal(t, []Reason{ContainerLimit, PodLimit, PodsLimit}, want)
-	assert.Equal(t, want, got)
+	return kernel, got
+}
+
+// reading is an N line.
+type reading struct {
+	at                     time.Time
+	kind, dir, counts, own string
+}
+
+func readingOf(t *testing.T, f []string) reading {
+	at, err := time.ParseDuration(f[1] + "s")
+	require.NoError(t, err)
+	counts, own, _ := strings.Cut(strings.Join(f[5:], " "), " | local ")
+	return reading{time.Unix(0, 0).Add(at), f[3], f[4], counts, own}
+}
+
+func (r reading) rose() bool { return strings.HasPrefix(r.kind, "r") }
+
+// write makes the file system as r read it, or as it was when the allocation alone had been
+// counted.
+func (r reading) write(m fstest.MapFS, half bool) {
+	switch {
+	case r.rose():
+		for name, counts := range map[string]string{"memory.events": r.counts, local: r.own} {
+			p := path.Join(r.dir, name)
+			if half {
+				counts = halfCounted(string(m[p].Data), counts)
+			}
+			m[p] = file(counts)
+		}
+	case r.kind == "appeared":
+		appear(m, r.dir)
+	default:
+		maps.DeleteFunc(m, func(p string, _ *fstest.MapFile) bool { return strings.HasPrefix(p, r.dir+"/") })
+	}
+}
+
+// appear makes cgroups in which nothing has been counted.
+func appear(m fstest.MapFS, dirs ...string) {
+	for _, dir := range dirs {
+		m[dir+"/memory.events"], m[dir+"/"+local] = file("oom 0 oom_kill 0 oom_group_kill 0"), file("oom 0 oom_kill 0 oom_group_kill 0")
+		m[dir+"/memory.oom.group"] = &fstest.MapFile{Data: []byte("1\n")}
+		m[dir+"/cgroup.stat"] = &fstest.MapFile{Data: []byte("nr_descendants 0\nnr_dying_descendants 0\n")}
+	}
+}
+
+// nest makes a cgroup below the container of the kernel's line.
+func nest(m fstest.MapFS, line string) {
+	_, after, _ := strings.Cut(line, "/kubelet.slice/")
+	dir, _, _ := strings.Cut(after, ".scope")
+	m["kubelet.slice/"+dir+".scope/cgroup.stat"] = &fstest.MapFile{Data: []byte("nr_descendants 1\nnr_dying_descendants 0\n")}
 }
 
 func uid(n int) string { return fmt.Sprintf("1b4e28ba_2fa1_11d2_883f_%012d", n) }
 func id(n int) string  { return fmt.Sprintf("%064d", n) }
 
-// kernelsReason is the limit a kernel's line names, where the pod's is its spec's.
-func kernelsReason(line string) Reason {
+// kernelsReason is the limit a kernel's line names. One on a pod's cgroup is the pod's only
+// where its spec has one.
+func kernelsReason(line string, podLimit bool) Reason {
 	_, after, _ := strings.Cut(line, ",oom_memcg=")
 	limit, _, _ := strings.Cut(after, ",")
 	switch base := path.Base(limit); {
-	case strings.HasSuffix(base, ".scope"):
+	case strings.Contains(limit, ".scope/"):
+		return nestedLimit
+	case strings.HasSuffix(base, ".scope"), strings.Contains(base, "-pod") && !podLimit:
 		return ContainerLimit
 	case strings.Contains(base, "-pod"):
 		return PodLimit
-	case base == "kubepods.slice":
+	case strings.HasSuffix(base, "kubepods.slice"):
 		return PodsLimit
+	case base == "kubelet.slice":
+		return AbovePods
 	}
 	return Unknown
 }
@@ -440,7 +607,3 @@ func halfCounted(was, now string) string {
 }
 
 const local = "memory.events.local"
-
-func events(oom, kills int) *fstest.MapFile {
-	return &fstest.MapFile{Data: fmt.Appendf(nil, "low 0\nhigh 0\nmax 0\noom %d\noom_kill %d\noom_group_kill %d\n", oom, kills, kills)}
-}

@@ -95,7 +95,7 @@ func TestObserve_AContainerThatGoesIsCountedAsLastRead(t *testing.T) {
 	}{
 		"not at all":        {[2]Pod{killed, killed}, Rise{Own: 1, Read: true, Containers: []string{runnerID}}},
 		"after its kill":    {[2]Pod{killed, without}, Rise{Own: 1, Containers: []string{runnerID}}},
-		"before it is read": {[2]Pod{without, without}, Rise{}},
+		"before it is read": {[2]Pod{without, without}, Rise{Own: 1}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var tr Tracker
@@ -147,6 +147,38 @@ func TestObserve_ReturnsAProcessKilledInAContainerThatIsNot(t *testing.T) {
 	}
 }
 
+func TestObserve_AKillOfAContainerThatHasGoneIsItsOwnLimits(t *testing.T) {
+	once, twice := Events{OOM: 1, OOMKill: 1, OOMGroupKill: 1}, Events{OOM: 2, OOMKill: 2, OOMGroupKill: 2}
+	with := func(e Events, containers map[string]Events) Pod { return Pod{Subtree: e, Containers: containers} }
+	both := map[string]Events{runnerID: {}, sandboxID: {}}
+	met := map[string]Events{runnerID: {}, sandboxID: {OOM: 1}}
+	left := map[string]Events{sandboxID: {}}
+	for name, tc := range map[string]struct {
+		before, after Pod
+		want          uint64
+	}{
+		"nothing else inside met one": {with(Events{}, both), with(once, left), 1},
+		"another container did":       {with(Events{}, both), with(once, map[string]Events{sandboxID: {OOM: 1}}), 0},
+		"another did before": {
+			with(Events{OOM: 1}, met), with(Events{OOM: 2, OOMKill: 1, OOMGroupKill: 1}, map[string]Events{sandboxID: {OOM: 1}}), 1},
+		"it was read, and none":   {with(Events{}, both), with(once, map[string]Events{sandboxID: {OOMGroupKill: 1}}), 0},
+		"none has gone":           {with(Events{}, both), with(once, both), 0},
+		"two have gone":           {with(Events{}, both), with(once, nil), 0},
+		"two were killed":         {with(Events{}, both), with(twice, left), 0},
+		"a limit inside it might": {with(Events{}, both), Pod{Nested: true, Subtree: once, Containers: left}, 0},
+		"one might have":          {Pod{Nested: true, Containers: both}, with(once, left), 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var tr Tracker
+			tr.Observe(one(tc.before), start)
+			tr.Observe(one(with(tc.before.Subtree, tc.before.Containers)), start.Add(time.Minute))
+			tr.Observe(one(tc.after), start.Add(2*time.Minute))
+			rises, _ := tr.Observe(one(tc.after), start.Add(2*time.Minute))
+			assert.Equal(t, tc.want, rises[burstableUID].Own)
+		})
+	}
+}
+
 func TestObserve_AProcessKilledElsewhereIsAPeers(t *testing.T) {
 	var tr Tracker
 	s := one(Pod{})
@@ -162,7 +194,7 @@ func TestObserve_AProcessKilledElsewhereIsAPeers(t *testing.T) {
 func TestObserve_AKillBelowAContainerIsNoContainers(t *testing.T) {
 	var tr Tracker
 	tr.Observe(one(Pod{}), start)
-	nested := Pod{Subtree: Events{OOM: 1, OOMKill: 1, OOMGroupKill: 1}, Containers: map[string]Events{runnerID: {}}}
+	nested := Pod{Nested: true, Subtree: Events{OOM: 1, OOMKill: 1, OOMGroupKill: 1}, Containers: map[string]Events{runnerID: {}}}
 	tr.Observe(one(nested), start)
 	rises, _ := tr.Observe(one(nested), start)
 	assert.Equal(t, map[string]Rise{burstableUID: {Confirmed: true, GroupKills: 1, Inside: 1}}, rises)

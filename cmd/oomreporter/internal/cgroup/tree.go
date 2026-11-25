@@ -21,7 +21,12 @@ var qosClasses = []string{"burstable", "besteffort"}
 
 var (
 	podUID      = regexp.MustCompile(`^(?:[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|[0-9a-f]{32})$`)
-	containerID = regexp.MustCompile(`^(?:cri-containerd-|crio-)?([0-9a-f]{64})(?:\.scope)?$`)
+	descendants = regexp.MustCompile(`(?m)^nr_(?:dying_)?descendants [1-9]`)
+	// A container's cgroup, under the systemd driver and under cgroupfs.
+	scopeName  = regexp.MustCompile(`^(?:cri-containerd|crio)-([0-9a-f]{64})\.scope$`)
+	cgroupName = regexp.MustCompile(`^(?:crio-)?([0-9a-f]{64})$`)
+	// CRI-O can put a container's monitor beside it (recall).
+	monitorName = regexp.MustCompile(`^crio-conmon-[0-9a-f]{64}(?:\.scope)?$`)
 )
 
 // Tree is the part of a cgroup v2 hierarchy the kubelet makes.
@@ -146,6 +151,10 @@ type Pod struct {
 	// the kubelet was told to make so, and on GKE those older than containerd's last start
 	// (6.8.0-1064-gke, containerd 2.2.7, Q1316).
 	Single map[string]bool
+	// Nested is set where a limit inside the pod need not be a container's: where one has had
+	// a cgroup below it, or the pod has one that is none's. A container that has the host's
+	// view of the tree can make that in another's pod (Q1396).
+	Nested bool
 }
 
 // Sample is every pod's counters, and the local events of the cgroups above them.
@@ -206,9 +215,14 @@ func (t *Tree) samplePod(dir string) (Pod, error) {
 		return Pod{}, err
 	}
 	pod := Pod{Containers: map[string]Events{}, Single: map[string]bool{}}
+	containerName := cgroupName
+	if t.systemdPrefix() != "" {
+		containerName = scopeName
+	}
 	for _, name := range names {
-		id := containerID.FindStringSubmatch(name)
+		id := containerName.FindStringSubmatch(name)
 		if id == nil {
+			pod.Nested = pod.Nested || !monitorName.MatchString(name)
 			continue
 		}
 		e, err := readEvents(t.fsys, path.Join(dir, name, localFile))
@@ -225,10 +239,19 @@ func (t *Tree) samplePod(dir string) (Pod, error) {
 		if err != nil {
 			return Pod{}, err
 		}
+		stat, err := fs.ReadFile(t.fsys, path.Join(dir, name, statFile))
+		if gone(err) {
+			continue
+		}
+		if err != nil {
+			return Pod{}, err
+		}
 		pod.Containers[id[1]] = e
 		if strings.TrimSpace(string(group)) != "1" {
 			pod.Single[id[1]] = true
 		}
+		// nr_dying_descendants counts those removed and still charged.
+		pod.Nested = pod.Nested || descendants.Match(stat)
 	}
 	if pod.Subtree, err = readEvents(t.fsys, path.Join(dir, subtreeFile)); err != nil {
 		return Pod{}, err

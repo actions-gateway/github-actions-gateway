@@ -39,7 +39,10 @@ type Rise struct {
 	// Inside, Pod and Pods count the allocations that met a limit inside the pod, the pod's
 	// own, and that of its QoS cgroup or the pods' root.
 	Inside, Pod, Pods uint64
-	// Own is how many of the whole kills a container's own limit accounts for.
+	// Own is how many of the whole kills a container's own limit accounts for. A container's
+	// cgroup is often gone milliseconds after its kill (kubelet v1.35.5, containerd 2.3.1):
+	// for a pod with one whole kill, one container gone, and no limit inside it but its
+	// containers', one is also told by an allocation that met no container's still there.
 	Own uint64
 	// Read: every whole kill is of a container whose own file was read at the last sample.
 	Read bool
@@ -77,6 +80,8 @@ type tracked struct {
 	above uint64
 	// gone is the containers not in the newest sample, whose events are the last read.
 	gone map[string]bool
+	// nested is set once a sample of the pod has been.
+	nested bool
 }
 
 // Observe takes the next sample, made at at, and returns by pod UID the rises it
@@ -100,7 +105,7 @@ func (t *Tracker) Observe(s Sample, at time.Time) (rises map[string]Rise, again 
 		m := mark{pod: now, above: s.Root.OOM + s.QoS[now.QoS].OOM, kills: t.kills}
 		p := t.pods[uid]
 		if p == nil {
-			t.pods[uid] = &tracked{base: m, last: m}
+			t.pods[uid] = &tracked{base: m, last: m, nested: now.Nested}
 			if _, left := rises[uid]; !left && killsOf(Pod{}, now) > 0 {
 				rises[uid] = lateRise(now)
 			}
@@ -108,7 +113,7 @@ func (t *Tracker) Observe(s Sample, at time.Time) (rises map[string]Rise, again 
 		}
 		m.mine = p.last.mine + mine[uid]
 		m.pod, p.gone = carry(p.last.pod, now)
-		p.last = m
+		p.last, p.nested = m, p.nested || now.Nested
 		r, done, more := p.step(at)
 		if done {
 			rises[uid] = r
@@ -227,7 +232,20 @@ func (p *tracked) rise() Rise {
 	r.Peers = p.last.kills - p.base.kills - (p.last.mine - p.base.mine)
 	r.count(was, now)
 	r.Read = r.Read && !slices.ContainsFunc(r.Containers, func(id string) bool { return p.gone[id] })
+	if !p.nested && r.GroupKills == 1 && len(p.gone) == 1 && len(r.Containers) == 0 && r.Inside > p.known() {
+		r.Own = 1
+	}
 	return r
+}
+
+// known is how many allocations met the limits of containers that are still there.
+func (p *tracked) known() (n uint64) {
+	for id, e := range p.last.pod.Containers {
+		if !p.gone[id] {
+			n += e.OOM - p.base.pod.Containers[id].OOM
+		}
+	}
+	return n
 }
 
 func lateRise(now Pod) Rise {
