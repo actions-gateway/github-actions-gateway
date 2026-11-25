@@ -668,7 +668,10 @@ A managed pool, which turns `False` at the start, was not tested.
 **What would see it** is the AGC noting, from the EgressProxies it already watches, when a pool has no ready replica, and reading that against the job's own span.
 That is not built or tested, and it does not help a job the AGC learns of only after the fact unless the note is kept.
 
-**The nearest tenant shape was not run.** A job that fails on a host its allowlist denies leaves the pool `Ready` with its replicas, since the proxy's `/readyz` depends on its listener and its drain and never on a destination (read from source).
+**The nearest tenant shape was not run.** A job that fails on a host its allowlist denies leaves the pool `Ready` with its replicas, since the proxy's `/readyz` depends on its listener and its drain and never on a destination (read from source), so that shape does separate from an outage.
+
+**A job that fails for its own reason during an outage does not.** It has no replica in its pool either, so a class on the pool's state sees what it sees of a victim, and would re-run a genuine failure (reasoned, not run).
+The readings record the pool and the pod, and neither says why a step failed.
 
 **What could have moved the times.** Two other kind clusters shared the Docker VM for part of B and C, one from 02:44:36 to 02:46:22 and one from 02:45:12 to 02:54:54 by their owners' figures, with the load average as high as 40 on 18 cores in the readings taken.
 They overlap B from the pools' drain to its end, and C from its dispatch to about five minutes into its outage.

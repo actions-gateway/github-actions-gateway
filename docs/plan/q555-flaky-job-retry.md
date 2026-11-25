@@ -312,7 +312,7 @@ What it could feed into this feature:
 |---|---|---|---|
 | Upstream unreachable during the job | A dial failure to an allowed destination from this job's worker | Retry class; GAG can watch it clear, because later dials to the same destination succeed | Failures attributed to a source |
 | Destination outage across jobs | Dial failures to one destination from many workers at once | Per-destination breaker: hold retries that depend on it until dials succeed | Failures labelled by destination |
-| Proxy pool unready or saturated | Pool readiness, active tunnels against capacity | Retry class | Already observable from the pool |
+| Proxy pool unready or saturated | Pool readiness, active tunnels against capacity | Retry class | Observable from the pool, but a read at the job's completion misses an outage the worker outlives and that is over by then ([the readings](q555-automatic-recovery-design.md#readings-for-the-egress-proxy-class-q1315)) |
 | Policy denial | A `destination not allowed` refusal from this job's worker | Futile: a retry is refused the same way. The event names the host and the allowlist change that fixes it | Denials attributed to a source |
 | Egress IP refused by GitHub | The proxy probing an unauthenticated GitHub endpoint from the tenant's egress IP and getting a 403 (the probe #1217 and #1977 built for CI) | Condition on the set; retries wait until it clears | A periodic self-probe |
 
