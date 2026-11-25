@@ -44,6 +44,7 @@ type Agent struct {
 	counts  map[string]cgroup.Events
 	bursts  map[string]time.Time
 	until   time.Time
+	doubled map[string]bool
 }
 
 // Run samples until ctx is done, or the tree cannot be read.
@@ -102,6 +103,7 @@ func (a *Agent) sample(now time.Time) (time.Duration, error) {
 	rises, again := a.tracker.Observe(s, now)
 	lost := a.strays.Observe(s, rises, now)
 	a.record(rises, lost, now)
+	a.warn(s)
 	a.compare(s, now)
 	if a.Watch != nil {
 		a.Watch(s)
@@ -113,6 +115,16 @@ func (a *Agent) sample(now time.Time) (time.Duration, error) {
 		return burstEvery, nil
 	}
 	return a.Poll, nil
+}
+
+// warn says once of each pod that has a second directory while it has one.
+func (a *Agent) warn(s cgroup.Sample) {
+	for uid := range s.Doubled {
+		if !a.doubled[uid] {
+			a.Log.Warn("a pod has two cgroups, and a kill of it is not judged; a container may have made one", "pod", uid)
+		}
+	}
+	a.doubled = s.Doubled
 }
 
 func (a *Agent) record(rises map[string]cgroup.Rise, lost map[string]uint64, now time.Time) {

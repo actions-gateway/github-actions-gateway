@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -84,6 +85,7 @@ func TestSample_ReadsTheKubeletsTree(t *testing.T) {
 		QoS:     map[string]Events{"burstable": n(2), "besteffort": n(3)},
 		Root:    n(1),
 		Refused: map[string]bool{},
+		Doubled: map[string]bool{},
 	}
 	for name, dirs := range map[string][]string{
 		"systemd":                       systemd(""),
@@ -298,6 +300,75 @@ func TestSample_LeavesOutAPodItMayNotRead(t *testing.T) {
 	}
 }
 
+// A container that has the host's view of the tree can make a cgroup named as another pod's, with
+// cgroups named as its containers' in it.
+func TestSample_LeavesOutAPodWithTwoDirectories(t *testing.T) {
+	under := strings.ReplaceAll(burstableUID, "-", "_")
+	for name, copied := range map[string]string{
+		"of its own class's place": "kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod" + burstableUID + ".slice",
+		"of one read before":       "kubepods.slice/kubepods-pod" + under + ".slice",
+		"of one read after":        "kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-pod" + under + ".slice",
+		"both":                     "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dirs := systemd("")
+			if copied != "" {
+				dirs = append(dirs, copied, copied+"/cri-containerd-"+runnerID+".scope")
+			} else {
+				dirs = append(dirs, "kubepods.slice/kubepods-pod"+under+".slice", "kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-pod"+under+".slice")
+			}
+			tree, err := Open(mount(dirs...), "")
+			require.NoError(t, err)
+			got, err := tree.Sample()
+			require.NoError(t, err)
+			assert.Equal(t, []string{guaranteedUID}, slices.Collect(maps.Keys(got.Pods)))
+			assert.Equal(t, map[string]bool{burstableUID: true}, got.Refused)
+			assert.Equal(t, map[string]bool{burstableUID: true}, got.Doubled)
+			_, ok := tree.PodFile(burstableUID)
+			assert.False(t, ok)
+		})
+	}
+}
+
+func TestSample_LeavesOutAPodWithADirectoryItMayNotRead(t *testing.T) {
+	dirs := append(systemd(""), "kubepods.slice/kubepods-pod"+strings.ReplaceAll(burstableUID, "-", "_")+".slice")
+	got, err := mayNotRead(t, dirs, path.Join(dirs[7], subtreeFile))
+	require.NoError(t, err)
+	assert.Equal(t, []string{guaranteedUID}, slices.Collect(maps.Keys(got.Pods)))
+	assert.True(t, got.Refused[burstableUID] && got.Doubled[burstableUID])
+}
+
+// What is done while there are two is not judged, and what is done after is.
+func TestSample_APodWithOneDirectoryAgainIsCountedFromThen(t *testing.T) {
+	dirs := systemd("")
+	m := mount(dirs...)
+	tree, err := Open(m, "")
+	require.NoError(t, err)
+	var tr Tracker
+	observe := func(after time.Duration) Rise {
+		s, err := tree.Sample()
+		require.NoError(t, err)
+		rises, _ := tr.Observe(s, start.Add(after))
+		return rises[burstableUID]
+	}
+	count := func(dir string, n uint64) {
+		m[path.Join(dir, subtreeFile)], m[path.Join(dir, localFile)] = eventsFile(Events{n, n, n}), eventsFile(Events{n, n, n})
+	}
+	observe(0)
+	copied := "kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-pod" + strings.ReplaceAll(burstableUID, "-", "_") + ".slice"
+	m[path.Join(copied, subtreeFile)], m[path.Join(copied, localFile)] = eventsFile(Events{90, 90, 90}), eventsFile(Events{90, 90, 90})
+	assert.Zero(t, observe(time.Second))
+	assert.Zero(t, observe(2*time.Second))
+	delete(m, path.Join(copied, subtreeFile))
+	delete(m, path.Join(copied, localFile))
+	assert.Zero(t, observe(3*time.Second))
+	count(dirs[3], 5)
+	observe(4 * time.Second)
+	r := observe(4 * time.Second)
+	assert.Equal(t, uint64(1), r.GroupKills)
+	assert.False(t, r.Late)
+}
+
 func TestSample_LeavesOutAContainerItMayNotRead(t *testing.T) {
 	dirs := systemd("")
 	for _, file := range []string{localFile, groupFile, statFile} {
@@ -323,6 +394,10 @@ func TestOpen_RefusesANodeWhosePodsItMayNotRead(t *testing.T) {
 		"all of them":    {dirs, []string{dirs[3], dirs[6]}, true},
 		"one of them":    {dirs, dirs[3:4], false},
 		"there are none": {dirs[:3], nil, false},
+		// It would not start while a job goes on doing so.
+		"all have two": {append(slices.Clone(dirs),
+			"kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod"+strings.ReplaceAll(guaranteedUID, "-", "_")+".slice",
+			"kubepods.slice/kubepods-pod"+strings.ReplaceAll(burstableUID, "-", "_")+".slice"), nil, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			h := &hookFS{FS: mount(tc.dirs...), open: func(n string) error {

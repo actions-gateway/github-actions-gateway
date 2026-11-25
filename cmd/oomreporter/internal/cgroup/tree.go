@@ -55,7 +55,7 @@ func Open(fsys fs.FS, root string) (*Tree, error) {
 	}
 	t := &Tree{fsys: fsys, root: root}
 	s, err := t.Sample()
-	if err == nil && len(s.Pods) == 0 && len(s.Refused) > 0 {
+	if err == nil && len(s.Pods) == 0 && len(s.Refused) > len(s.Doubled) {
 		err = fmt.Errorf("none of %d pods may be read: %w", len(s.Refused), fs.ErrPermission)
 	}
 	if err != nil {
@@ -170,21 +170,25 @@ type Sample struct {
 	Pods map[string]Pod // by UID
 	QoS  map[string]Events
 	Root Events
-	// Refused is the pods whose files may not be read, by UID.
+	// Refused is the pods whose files may not be read, or may not be the pod's, by UID.
 	Refused map[string]bool
+	// Doubled is those of them with two directories. The kubelet makes one, and a container that
+	// has the host's view of the tree can make another (Q1396).
+	Doubled map[string]bool
 }
 
 // Sample reads the tree. A pod or container is left out where it is removed while it is
 // read, or may not be read.
 func (t *Tree) Sample() (Sample, error) {
-	s := Sample{Pods: map[string]Pod{}, QoS: map[string]Events{}, Refused: map[string]bool{}}
+	s := Sample{Pods: map[string]Pod{}, QoS: map[string]Events{}, Refused: map[string]bool{}, Doubled: map[string]bool{}}
 	t.dirs = map[string]string{}
-	if err := t.samplePods(s, "", t.root); err != nil {
+	seen := map[string]bool{}
+	if err := t.samplePods(s, seen, "", t.root); err != nil {
 		return Sample{}, err
 	}
 	for _, class := range qosClasses {
 		dir := t.qosDir(class)
-		if err := t.samplePods(s, class, dir); err != nil {
+		if err := t.samplePods(s, seen, class, dir); err != nil {
 			return Sample{}, err
 		}
 		e, err := readEvents(t.fsys, path.Join(dir, localFile))
@@ -198,7 +202,7 @@ func (t *Tree) Sample() (Sample, error) {
 	return s, err
 }
 
-func (t *Tree) samplePods(s Sample, class, dir string) error {
+func (t *Tree) samplePods(s Sample, seen map[string]bool, class, dir string) error {
 	names, err := subdirs(t.fsys, dir)
 	if err != nil {
 		return err
@@ -208,6 +212,13 @@ func (t *Tree) samplePods(s Sample, class, dir string) error {
 		if !ok {
 			continue
 		}
+		if seen[uid] {
+			s.Refused[uid], s.Doubled[uid] = true, true
+			delete(s.Pods, uid)
+			delete(t.dirs, uid)
+			continue
+		}
+		seen[uid] = true
 		pod, err := t.samplePod(path.Join(dir, name))
 		if errors.Is(err, fs.ErrPermission) {
 			s.Refused[uid] = true

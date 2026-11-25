@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -136,6 +138,17 @@ func TestRun_ReportsAKillOnce(t *testing.T) {
 		require.Len(t, got, 1)
 		assert.Equal(t, uint64(1), got[0].Rise.Singles)
 	})
+}
+
+func TestRun_WarnsOnceOfAPodWithTwoCgroups(t *testing.T) {
+	var logged bytes.Buffer
+	a := &Agent{Log: slog.New(slog.NewTextHandler(&logged, nil))}
+	double := cgroup.Sample{Doubled: map[string]bool{uid: true}}
+	for _, s := range []cgroup.Sample{double, double, {}, double} {
+		a.warn(s)
+	}
+	assert.Equal(t, 2, strings.Count(logged.String(), "two cgroups"))
+	assert.Contains(t, logged.String(), uid)
 }
 
 // bursts is how many samples came sooner than a poll after the one before.
