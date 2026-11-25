@@ -2082,6 +2082,18 @@ Both were findable only by someone who already knew they existed.
 
 So when you take a live measurement, **file it where the next reader will look for the interface**, not only in the doc that commissioned it: name the question in the capture's or constant's own comment, and cite the results table from the code its answer constrains.
 
+### Check the deployed build and the prompts before booking a live run
+
+A live run can hold the cluster and not read what it was booked for, so settle two questions before taking the lease.
+Both went unsettled in [Q1316's second run](../plan/q1316-dogfood-reproduction.md#what-is-weak-in-it) on `gag-dogfood`, overnight into 2026-11-25.
+
+- **Does the deployed build hold the code under test?** That run's Kata readings bear on Q1395's rule, and the cluster ran `v2.0.1-rc.2`, which predates it, so they read the status the rule is keyed on and not the rule.
+  Take the tag from the running Deployment's image, fetch it, and read the code at it (`git show <tag>:<path>`); whether a commit is an ancestor of the tag misses a cherry-pick and a revert.
+- **Does a step that must land while a job is running wait on a permission prompt?** One fill's prompt waited 28 minutes, by which time both workers had ended, so that push read nothing and was repeated.
+  Give the job a window longer than a prompt can take; that has not been run here.
+  Set a cutoff past which the step is not applied, so a late yes costs a repeat and not a wrong reading, and keep it where it was set; that run raised its own from 400 to 458 seconds between one prompt and the next.
+  Never move the action out from behind its prompt to save the time: an object approved while it sleeps, and cued later, acts with nobody asked.
+
 ### A goroutine stack in the output is not always a failure
 
 Read the `--- FAIL` line and the exit code before attributing a stack trace to the test it appears under.

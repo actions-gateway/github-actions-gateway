@@ -178,6 +178,7 @@ R0's resident memory is what "the larger process goes" rests on for R3t: `Runner
 - **One node per kill and one kernel**, so nothing here says how another kernel or image picks.
 - **R3t's first push was void by the operator's prompt, not the cluster.** Its filler's confirmation waited 28 minutes, the two workers had ended and the node had gone, so it filled nothing; the next push is its repeat, and R3t is read twice.
   Prompt waits also put R3's second fill 6 min 34 s after its workers started, and R3t's first 7 min 3 s, both inside the samplers' 8.
+  That R3t command first refused an approval that came at 411 s, past its own 400 s cutoff; the run raised the cutoff to 458 s, asked again, and applied it at 422 s.
 - **R7a's kill is outside the host's reader**, as planned for.
 - **R7 read the status and not Q1395's rule.** The AGC was `v2.0.1-rc.2`, which does not hold that rule: it counts any container's `OOMKilled`, and it recorded both jobs' failures from a pod that was still `Running`, its sidecar's exit read as 0 and with no reason, before the API served `OOMKilled`, 143.
   It has no later read either, so no AGC judged that status.
