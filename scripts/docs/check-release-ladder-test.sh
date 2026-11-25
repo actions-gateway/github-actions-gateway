@@ -352,7 +352,7 @@ expect gates-cell-qualified 1 'a Gates? cell naming a gate with extra text fails
 # linked.
 write_plan bare 19 "$LEDGER_19"
 write_plan bare ga "$LEDGER_GA
-| Q5 | Landed, it says | \`2.0-gate\` | ✅ landed |"
+| Q5 | Bare | \`2.0-gate\` | 🔲 |"
 page="$(write_ladder bare)"
 store="$(write_labelled_store bare Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q5:ci,2.0-gate)"
 expect ledger-bare-live 1 'a live item written bare in a ledger fails' \
@@ -360,10 +360,23 @@ expect ledger-bare-live 1 'a live item written bare in a ledger fails' \
 
 write_plan bareride 19 "$LEDGER_19"
 write_plan bareride ga "$LEDGER_GA
-| Q5 | Rides, it says | rides | ✅ landed |"
+| Q5 | Rides, bare | rides | 🔲 |"
 page="$(write_ladder bareride)"
 store="$(write_labelled_store bareride Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q5:ci)"
 expect ledger-bare-riding 1 'a live riding item written bare in a ledger fails' \
+	"$page" "$store"
+
+write_plan ticked 19 "$LEDGER_19"
+write_plan ticked ga "$LEDGER_GA
+| [Q5](../queue/Q5.md) | Landed, it says | \`2.0-gate\` | ✅ landed |"
+page="$(write_ladder ticked)"
+store="$(write_labelled_store ticked Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q5:ci,2.0-gate)"
+expect ledger-ticked-live 1 'a live item a ledger marks ✅ fails' \
+	"$page" "$store"
+
+# A fixed flake's item stays, deferred, while it is watched.
+printf -- '---\nid: Q5\nlabels:\n    - flake\n    - 2.0-gate\nstatus: deferred\n---\n\n# Q5\n' > "$store/Q5.md"
+expect ledger-ticked-deferred 0 'a deferred item a ledger marks ✅ passes' \
 	"$page" "$store"
 
 write_plan dead 19 "$LEDGER_19"

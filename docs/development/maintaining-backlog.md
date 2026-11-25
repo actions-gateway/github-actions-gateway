@@ -871,7 +871,8 @@ Link each ID to its item page while it is open; a shipped or punted item's link 
 They were the collision: in the 2.1 plan 12 of 15 commits rewrote the index cell and 12 edited the banner, so each merge left the next PR conflicted (Q1185).
 What still conflicts is two PRs ticking neighbouring ledger rows, or each adding a row or a reason at the end; ticks on rows apart from each other merge.
 
-**The ledger row is held to the store instead.** `make release-ladder-check` fails a live item written bare, a closed one still linked, and a closed one whose row reads as open, which is what the index cell's links used to force.
+**The ledger row is held to the store instead.** `make release-ladder-check` fails a live item written bare or marked ✅, and a closed one still linked or reading as open, which is what the index cell's links used to force.
+A deferred item may be marked ✅, because a fixed flake's item stays while it is watched.
 
 **Delivered is a tick, not a narrative.** A row flips to ✅ in the same change that deletes its Queue row — the plan-docs-stay-current discipline already owns that edit, so the ledger costs nothing extra to keep true.
 

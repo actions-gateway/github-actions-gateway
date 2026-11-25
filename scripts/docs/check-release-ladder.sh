@@ -51,8 +51,9 @@
 #      gate with anything else in it fails, since read loosely it would drop a
 #      gating row out of this check.
 #   6. A ledger row links its Q-ID while the item is live and writes it bare once it
-#      is closed, and a closed item's row does not read as open (🔲 ❌ 🚧). The
-#      ledger is the one place that says what a release waits for (Q1185), so its
+#      is closed. A closed item's row does not read as open (🔲 ❌ 🚧), and a live
+#      one's does not read ✅ unless the item is deferred, which is how a fixed
+#      flake is watched. The ledger is the one place that says what a release waits for (Q1185), so its
 #      Status column is held to the store the way a plan's Status cell is.
 # "Names as gating" is the ledger's `Gates?` column, which every release plan
 # already carries by convention; the rest of a plan mentions many rows.
@@ -328,8 +329,8 @@ item_gate_labels() {
 	' "$1"
 }
 
-# "ID<TAB>linked<TAB>open<TAB>gates-cell" for each Q-ID row of a plan's scope ledger,
-# where linked and open are 0 or 1. Both columns are found by header rather than by
+# "ID<TAB>linked<TAB>state<TAB>gates-cell" for each Q-ID row of a plan's scope ledger,
+# where linked is 0 or 1 and state is open, done or other, read off the Status marker. Both columns are found by header rather than by
 # position, so a ledger that grows a column still reads. Exits 3 when the section
 # exists but no header names `Gates?`.
 ledger_rows() {
@@ -350,8 +351,10 @@ ledger_rows() {
 			g = cell[col]
 			gsub(/[`* \t]/, "", g)
 			linked = index(cell[2], "[" id "](") > 0
-			open = status && cell[status] ~ /^[ \t]*(🔲|❌|🚧)/
-			printf "%s\t%d\t%d\t%s\n", id, linked, open, g
+			state = "other"
+			if (status && cell[status] ~ /^[ \t]*(🔲|❌|🚧)/) state = "open"
+			if (status && cell[status] ~ /^[ \t]*✅/) state = "done"
+			printf "%s\t%d\t%s\t%s\n", id, linked, state, g
 		}
 		END { if (in_section && !col) exit 3 }
 	' "$1"
@@ -377,7 +380,7 @@ for version in "${!rung_plan[@]}"; do
 		printf 'release-ladder: %s has a scope ledger with no "Gates?" column, so nothing in it can be read as gating\n' "$plan" >&2
 		exit 2
 	fi
-	while IFS=$'\t' read -r id linked open cell; do
+	while IFS=$'\t' read -r id linked state cell; do
 		[[ -n "$id" ]] || continue
 		ledger_cell["$version/$id"]="$cell"
 		# 6. The row's link and status agree with the store.
@@ -386,10 +389,14 @@ for version in "${!rung_plan[@]}"; do
 				fail "$plan's scope ledger writes $id bare, the closed form, but it is still an item in $STORE
        write [$id](../queue/$id.md), so closing the item breaks the link and the row gets re-read"
 			fi
+			if [[ "$state" == "done" && "$(item_status "$id")" != deferred ]]; then
+				fail "$plan's scope ledger marks $id ✅, but it is still an item in $STORE
+       close the item in the change that ticks the row, or leave the row open"
+			fi
 		elif ((linked)); then
 			fail "$plan's scope ledger links $id, which is no longer an item in $STORE
        re-read the row's status, then write the ID bare"
-		elif ((open)); then
+		elif [[ "$state" == open ]]; then
 			fail "$plan's scope ledger reads as open for $id, which is no longer an item in $STORE
        the item closed, so say in the row what happened to it"
 		fi
