@@ -485,7 +485,7 @@ The scale-set tier now judges the run read it takes before reserving a slot ([`r
 | `reason` | Withheld when | What the Event says to do |
 |---|---|---|
 | `already_rerun` | The run is past the attempt the job failed in, and its latest attempt's jobs (`GET …/runs/{id}/attempts/{n}/jobs`) show that attempt re-ran the job | Nothing: it was re-run |
-| `run_cancelled` | The run concluded `cancelled` and the ledger does not record GAG force-cancelling that attempt. Also checked on every pass of the re-run loop, since at detection the run has usually not concluded; a cancel seen there has already spent its slot. The abandoned arm takes the same check on its own run read, before force-cancelling: a run already cancelled that way is withheld with `cause="abandoned"`, neither cancelled again nor recorded as GAG's cancel (Q1232). The conclusion does not say who cancelled, so this includes GitHub's own ~15-minute unstarted-job timeout, which lands before the reap when `pendingPodDeadline` is set past it; that run needs a manual re-run | Re-run by hand if the cancel was not intended |
+| `run_cancelled` | The run concluded `cancelled`, the ledger does not record GAG force-cancelling that attempt, and the attempt does not merely carry an earlier one's cancelled jobs ([how](#who-cancelled-an-attempt-q1401)). Also checked on every pass of the re-run loop, since at detection the run has usually not concluded; a cancel seen there has already spent its slot. The abandoned arm takes the same check on its own run read, before force-cancelling: a run already cancelled that way is withheld with `cause="abandoned"`, neither cancelled again nor recorded as GAG's cancel (Q1232). The conclusion does not say who cancelled, so this includes GitHub's own ~15-minute unstarted-job timeout, which lands before the reap when `pendingPodDeadline` is set past it; that run needs a manual re-run | Re-run by hand if the cancel was not intended |
 | `run_succeeded` | The run concluded `success`, whose failed jobs GitHub refuses to re-run with a 403. Also checked on every pass of the re-run loop, where the slot is already spent | Nothing |
 | `attempt_limit` | `run_attempt` is past 50, so the run has already been re-run 50 times, GitHub's cap on re-runs of a run, full or partial ([changelog, 2026-04-10](https://github.blog/changelog/2026-04-10-actions-workflows-are-limited-to-50-reruns/)) | Start a new run |
 | `run_too_old` | The run was created more than 30 days ago, outside GitHub's re-run window | Start a new run |
@@ -493,7 +493,9 @@ The scale-set tier now judges the run read it takes before reserving a slot ([`r
 | `worker_unstartable` | A worker pod of the set is bound and in `ImagePullBackOff`, and no worker of the set still present has started since the oldest such pod was placed | Fix the image or its pull credentials, then re-run by hand |
 
 A field GitHub did not send skips its check rather than withholding.
-Two checks cost a call, and neither withholds on an answer it cannot read, because each only ever withholds: `superseded` lists the workflow's runs, newest first, filtered to the event and to the branch, or for a `merge_group` run to those created since it (at most 3 pages of 30); `already_rerun` lists a moved attempt's jobs.
+Three checks cost a call.
+`run_cancelled` lists jobs only for an attempt past the first that concluded `cancelled`, and withholds on a list GitHub refuses, since re-running somebody's cancelled run is the worse mistake.
+The other two do not withhold on an answer they cannot read, because each only ever withholds: `superseded` lists the workflow's runs, newest first, filtered to the event and to the branch, or for a `merge_group` run to those created since it (at most 3 pages of 30); `already_rerun` lists a moved attempt's jobs.
 
 `already_rerun` makes its call only when the attempt has moved, which for a disruption detected live it has not (Q1320).
 An arm that knows its attempt compares it; every other arm compares the run's `run_started_at` against when the job's worker was provisioned, allowing a minute of clock skew, and a worker with no such time is taken as unmoved.
@@ -505,6 +507,22 @@ A job found not re-run is recovered from the latest attempt, where its failure s
 Where the jobs do not say, the pre-reservation check lets the re-run through.
 The re-run loop and the parked re-runs then stand down on the attempt alone where the attempt the job failed in is known, since a second re-run of one attempt is the worse mistake; an arm that does not know it takes the moved attempt as its own, so one list it cannot read can end in a second re-run of a job already re-run and failed.
 The vanished arm knows neither the runner nor the job's name, so it withholds only where no failure was carried; with another job's failure carried, it re-runs even a job that was already re-run.
+
+###### Who cancelled an attempt (Q1401)
+
+GitHub concludes an attempt `cancelled` with nobody having cancelled it, where a single-job re-run carries cancelled jobs from the attempt before ([measured](../plan/q555-automatic-recovery-design.md#readings-for-a-cancelled-sibling-2026-11-24)).
+So the scale-set tier's check before the reservation and the one in the re-run loop ask who cancelled, an attempt at a time from the newest ([`cancelledByOther`](../../cmd/agc/internal/provisioner/rerun_futility.go)):
+
+| The attempt, concluded `cancelled` | Read as |
+|---|---|
+| GAG force-cancelled it, by the ledger | Not somebody's cancel |
+| It is attempt 1 | Somebody's cancel |
+| It ran a job the list calls `cancelled` | Somebody's cancel |
+| It ran none | What the attempt before it is, and no cancel where that one concluded anything else |
+
+A read that fails with a 5xx is retried, and one GitHub refuses counts as somebody's cancel.
+A cancel that lands while only an `if: always()` job is running can leave no job of the attempt `cancelled`, by GitHub's documentation of what a cancel does to such a job, so it reads as carried and the run is re-run; this is not measured.
+The fork refusal and the abandoned arm's read before its force-cancel keep the conclusion as GitHub gives it, and the classic tier does too, since it re-runs no job alone.
 
 `worker_unstartable` reads the worker pods, not the capacity gate, so it holds on a set with no `spec.capacityGate`: it is the startup half of the verdict [`WorkersNotStarting`](../operations/troubleshooting.md#the-reason-is-podsnotstarting-the-image-will-not-pull) publishes on every set, plus the requirement that nothing started since, so one node that cannot reach the registry does not withhold (Q1320).
 A started worker counts only until it is deleted (`completedPodTTL`, 5 minutes by default), and a failing pod counts until it is reaped (`pendingPodDeadline`, 10 minutes by default) even if its image reference has been fixed since, so either can withhold a re-run that would have worked for a few minutes.
@@ -724,20 +742,20 @@ Two jobs of a run can share a display name, and a worker often runs a job other 
 
 | In the latest attempt | Re-run | Slots |
 |---|---|---|
-| Every failed job is a killed one | `rerun-failed-jobs`, which takes the cancelled jobs too | One |
+| Every failed job is a killed one or its [red dependent](#the-jobs-a-killed-job-took-with-it-q1401) | `rerun-failed-jobs`, which takes the cancelled jobs too | One |
 | One killed job, and another job failed | `POST …/jobs/{id}/rerun` for the killed one, which GitHub extends to its `needs:` dependents | One |
 | Several killed jobs, and another job failed | The first alone. The others stay parked and are judged again once the attempt it starts concludes | One each |
+| No killed job is left, and every failed job is a red dependent beside a cancelled one | `rerun-failed-jobs`, as the [siblings' turn](#the-jobs-a-killed-job-took-with-it-q1401) | One |
 | No failed job ran on a killed worker's runner | None: `reason="job_not_found"` | The one taken when the class fired |
 | The list is refused or empty, a display name does not name exactly one job, 16 workers are listed, or an older AGC wrote the entry | `rerun-failed-jobs`, as before Q1319 | One |
 
 A list GitHub fails to serve retries at the next poll, like the run read.
 Taking turns is GitHub's limit as much as the budget's: it refuses a single-job re-run while the run is in progress.
-The list carries no `needs:`, so a dependent that failed because a killed job did, such as an `if: always()` aggregate, counts as another failure; the killed job's re-run takes it along.
+The list carries no `needs:`, so in the attempt of the kill a dependent that failed because a killed job did, such as an `if: always()` aggregate, counts as another failure; the killed job's re-run takes it along.
 A job GitHub cancelled is not another failure here, so a killed leg of a fail-fast matrix and the siblings GitHub cancelled with it are re-run together, as they were before Q1319.
-Beside another failure the leg is re-run alone and those siblings wait for a re-run by hand.
+Beside another failure the leg is re-run alone, and the siblings are re-run only where that failure turns out to be its [dependent](#the-jobs-a-killed-job-took-with-it-q1401).
 The list says `cancelled` for a fail-fast matrix's sibling, a job past its `timeout-minutes` and a job a concurrency group cancelled alike ([measured](../plan/q555-automatic-recovery-design.md#readings-for-a-cancelled-sibling-2026-11-24)), so the last two are re-run with the siblings.
-A run GitHub itself concludes `cancelled`, as it can one holding a timeout, is not re-run at all (`run_cancelled`).
-That includes the attempt a single-job re-run starts, where the killed leg passes, an aggregate is red again and the matrix's other legs are still cancelled, so a second killed leg's turn can end there ([Q1401](../queue/Q1401.md)).
+A run GitHub itself concludes `cancelled`, as it can one holding a timeout, is not re-run at all (`run_cancelled`), unless the attempt only [carries its cancelled jobs](#who-cancelled-an-attempt-q1401).
 
 **The reservation follows the call.** A kill reserves its attempt's one slot when it fires, with scope `FailedJobs`, and later kills of the attempt merge into it.
 A release that re-runs one job narrows that record to the job, scope `Job`, in the write before the call, so each job that waits reserves a slot of its own at its turn, and a release that crashes before the call resumes the same job on the same slot.
@@ -751,6 +769,34 @@ Past the 24 hours a refused release waits out the 15-minute window instead and t
 
 Runs whose jobs span two sets are judged by each set's own ledger, so a job another set's class killed is a failure this one did not classify.
 Each set re-runs its own jobs alone, one set after the other, since GitHub refuses the second call until the first's attempt concludes.
+
+##### The jobs a killed job took with it (Q1401)
+
+A single-job re-run tells what the list does not: GitHub runs the job, its `needs:` dependents and nothing else ([M6](../plan/q555-automatic-recovery-design.md#m6-readings-from-the-job-granular-probe-2026-11-24)).
+So the entry records the attempt its accepted call started and the display name of the job it re-ran (`startedAttempt`, `startedJob`), and a release whose latest attempt is that one also lists the attempt before.
+A job is a **red dependent** where that attempt ran it, it is not the job called, it ended `failure` there and in the attempt before, and its name is one row of each list.
+It is not another failure, so a run whose only other failure is an aggregate is recovered in two attempts: the killed job and the aggregate, then every other killed job and every cancelled one with the aggregate again.
+
+| Attempt 1 | Attempt 2, re-running `a` and `gate` | Attempt 3 | Slots |
+|---|---|---|---|
+| `a` killed, siblings cancelled, `gate` red | `a` passes, `gate` red again | The siblings and `gate` | 2 |
+| `a`, `b` and `c` killed, `gate` red | `a` passes, `gate` red again | `b`, `c` and `gate` | 2 |
+| `a` killed, siblings cancelled, `gate` and `lint` red | `a` passes, `gate` red again, `lint` carried | None: `lint` failed on its own | 1 |
+| `a` killed, siblings cancelled, `gate` red | `a` fails again | None: `a` failed on its own | 1 |
+
+**Red in both attempts is what keeps a genuine failure out.** A `deploy` that needs the killed `build` is skipped in attempt 1, and red in attempt 2 for its own reason; it is a dependent and it is not re-run.
+One red in both, such as a cleanup job with a bug, is re-run once more; nothing in the list says why a job failed.
+
+**The siblings' turn** is the release with no killed job left, and the entry stays parked for it only where the list the last call was made from held a cancelled job that was not killed.
+It holds a slot of its own, under the last killed worker's key with `/siblings` appended, so it needs `maxEvictionRetries` of at least 2; on a spent budget it ends as `EvictionRetriesExhausted`, whose message names the siblings.
+It is dropped where the run succeeded, another job failed on its own, no cancelled job is left, or somebody re-ran the run since.
+
+What loses that turn, where a killed job still parked goes one at a time instead:
+
+- A restart between GitHub accepting the call and the record of it, or a call whose response is lost.
+  The ledger holds what GAG meant to call, not that the attempt was its own, and after a person's `rerun-failed-jobs` every red job would read as a dependent.
+- A list GitHub refuses, or two jobs of the called job's name, since the dependents are then unknown.
+- Another set's re-run of the same run in between, whose own last release takes the cancelled jobs where that set's ledger allows it.
 
 #### Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)
 
