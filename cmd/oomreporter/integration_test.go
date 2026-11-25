@@ -185,10 +185,21 @@ func (c *cluster) grant(t *testing.T, ns, account string, rules ...rbacv1.Policy
 	require.NoError(t, err)
 }
 
+// dry is for what is tried until it is refused, since one let through would leave nothing to refuse.
+var dry = []string{metav1.DryRunAll}
+
 // enforced waits until do is refused by a policy, which is a while after its binding is made.
 func enforced(t *testing.T, do func() error) {
 	t.Helper()
 	require.Eventually(t, func() bool { return refusal(do()) != "" }, apiTimeout, 100*time.Millisecond)
+}
+
+func reportsGuarded(t *testing.T) {
+	t.Helper()
+	enforced(t, func() error {
+		_, err := shared.admin.CoreV1().ConfigMaps(reporter).Create(t.Context(), configMap(report.Name("none")), metav1.CreateOptions{DryRun: dry})
+		return err
+	})
 }
 
 // refusal is what a policy of the chart said, or empty where none refused.
@@ -240,7 +251,7 @@ func TestPolicy_AReportIsWrittenOnlyByItsNodesAgent(t *testing.T) {
 		_, err := kube.CoreV1().ConfigMaps(reporter).Create(ctx, cm, metav1.CreateOptions{})
 		return err
 	}
-	enforced(t, func() error { return put(agentA, configMap(report.Name("node-b"))) })
+	reportsGuarded(t)
 	const notItsNodes, notAReport, kept = "whose token names its node", "no ConfigMap but its node's report", "no immutable, finalizers or ownerReferences"
 	for name, tc := range map[string]struct {
 		err  error
@@ -262,6 +273,7 @@ func TestPolicy_AReportIsWrittenOnlyByItsNodesAgent(t *testing.T) {
 		"by an administrator":             {put(c.admin, configMap(report.Name("node-a"))), notItsNodes},
 		"another's, by its own":           {put(other, configMap("another")), ""},
 		"made by another, of no report":   {create(other, configMap("others")), ""},
+		"made by another, for good":       {create(other, configMap("kept", func(cm *corev1.ConfigMap) { cm.Immutable = new(true) })), ""},
 		"made by another, of near a name": {create(other, configMap("oom-reports")), ""},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -282,6 +294,7 @@ func TestPolicy_AReportIsWrittenOnlyByItsNodesAgent(t *testing.T) {
 
 // The control plane writes it to each namespace, and both components' tokens are mounted with it.
 func TestPolicy_TheRootCAIsStillPublished(t *testing.T) {
+	reportsGuarded(t)
 	cfg := rest.CopyConfig(shared.cfg)
 	cfg.Impersonate = rest.ImpersonationConfig{UserName: "system:serviceaccount:kube-system:root-ca-cert-publisher"}
 	publisher, err := kubernetes.NewForConfig(cfg)
@@ -306,7 +319,10 @@ func (c *cluster) worker(t *testing.T, name string) *corev1.Pod {
 		assert.NoError(t, pods.Delete(context.WithoutCancel(t.Context()), name, metav1.DeleteOptions{GracePeriodSeconds: new(int64(0))}))
 	})
 	p.Status.Phase = corev1.PodRunning
-	p.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionFalse, Reason: "Is"}}
+	p.Status.Conditions = []corev1.PodCondition{
+		{Type: corev1.PodReady, Status: corev1.ConditionFalse, Reason: "Is"},
+		{Type: "not.oom.actions-gateway.com/ours", Status: corev1.ConditionTrue},
+	}
 	p, err = pods.UpdateStatus(t.Context(), p, metav1.UpdateOptions{})
 	require.NoError(t, err)
 	return p
@@ -324,7 +340,10 @@ func TestPolicy_TheControllerChangesNothingOfAPodButItsConditions(t *testing.T) 
 	condition := func(of, status string) string {
 		return fmt.Sprintf(`{"status":{"conditions":[{"type":%q,"status":%q,"reason":"R"}]}}`, of, status)
 	}
-	enforced(t, func() error { return merge(`{"metadata":{"labels":{"c":"d"}}}`) })
+	enforced(t, func() error {
+		_, err := controller.CoreV1().Pods(tenant).Patch(ctx, p.Name, types.MergePatchType, []byte(`{"metadata":{"labels":{"c":"d"}}}`), metav1.PatchOptions{DryRun: dry}, "status")
+		return err
+	})
 
 	for _, of := range []string{"runner", strings.Repeat("a", 63)} {
 		for _, status := range []string{"True", "Unknown", "True"} {
@@ -333,27 +352,28 @@ func TestPolicy_TheControllerChangesNothingOfAPodButItsConditions(t *testing.T) 
 	}
 	got, err := c.admin.CoreV1().Pods(tenant).Get(ctx, p.Name, metav1.GetOptions{})
 	require.NoError(t, err)
-	assert.Len(t, got.Status.Conditions, 3)
+	assert.Len(t, got.Status.Conditions, 4)
 	require.NoError(t, merge(`{"status":{"conditions":[{"$patch":"delete","type":"oom.actions-gateway.com/runner"}]}}`))
 
 	const conditions = "no pod condition outside oom.actions-gateway.com"
 	for body, want := range map[string]string{
-		condition("Ready", "True"):                                       conditions,
-		condition("DisruptionTarget", "True"):                            conditions,
-		condition("oom.actions-gateway.com", "True"):                     conditions,
-		condition("oom.actions-gateway.com.evil/x", "True"):              conditions,
-		condition("x.oom.actions-gateway.com/x", "True"):                 conditions,
-		`{"status":{"conditions":[{"$patch":"delete","type":"Ready"}]}}`: conditions,
-		`{"metadata":{"labels":{"c":"d"}}}`:                              "metadata.labels",
-		`{"metadata":{"labels":null}}`:                                   "metadata.labels",
-		`{"metadata":{"annotations":{"a":"c"}}}`:                         "metadata.annotations",
-		`{"metadata":{"finalizers":["example.com/x"]}}`:                  "metadata.finalizers",
-		`{"status":{"phase":"Failed"}}`:                                  "status.phase",
-		`{"status":{"message":"m"}}`:                                     "status.message",
-		`{"status":{"reason":"Evicted"}}`:                                "status.reason",
-		`{"status":{"hostIP":"10.0.0.1","hostIPs":[{"ip":"10.0.0.1"}]}}`: "status.hostIP",
-		`{"status":{"podIP":"10.0.0.2","podIPs":[{"ip":"10.0.0.2"}]}}`:   "status.podIP",
-		`{"status":{"startTime":"2026-11-25T00:00:00Z"}}`:                "status.startTime",
+		condition("Ready", "True"):                                                                  conditions,
+		condition("DisruptionTarget", "True"):                                                       conditions,
+		condition("oom.actions-gateway.com", "True"):                                                conditions,
+		condition("oom.actions-gateway.com.evil/x", "True"):                                         conditions,
+		condition("x.oom.actions-gateway.com/x", "True"):                                            conditions,
+		`{"status":{"conditions":[{"$patch":"delete","type":"not.oom.actions-gateway.com/ours"}]}}`: conditions,
+		`{"status":{"conditions":[{"$patch":"delete","type":"Ready"}]}}`:                            conditions,
+		`{"metadata":{"labels":{"c":"d"}}}`:                                                         "metadata.labels",
+		`{"metadata":{"labels":null}}`:                                                              "metadata.labels",
+		`{"metadata":{"annotations":{"a":"c"}}}`:                                                    "metadata.annotations",
+		`{"metadata":{"finalizers":["example.com/x"]}}`:                                             "metadata.finalizers",
+		`{"status":{"phase":"Failed"}}`:                                                             "status.phase",
+		`{"status":{"message":"m"}}`:                                                                "status.message",
+		`{"status":{"reason":"Evicted"}}`:                                                           "status.reason",
+		`{"status":{"hostIP":"10.0.0.1","hostIPs":[{"ip":"10.0.0.1"}]}}`:                            "status.hostIP",
+		`{"status":{"podIP":"10.0.0.2","podIPs":[{"ip":"10.0.0.2"}]}}`:                              "status.podIP",
+		`{"status":{"startTime":"2026-11-25T00:00:00Z"}}`:                                           "status.startTime",
 		`{"status":{"containerStatuses":[{"name":"runner","image":"x","imageID":"x","ready":false,"restartCount":0,"state":{"terminated":{"exitCode":137,"reason":"OOMKilled"}}}]}}`: "status.containerStatuses",
 		`{"status":{"initContainerStatuses":[{"name":"i","image":"x","imageID":"x","ready":false,"restartCount":0}]}}`:                                                               "status.initContainerStatuses",
 	} {
@@ -364,6 +384,18 @@ func TestPolicy_TheControllerChangesNothingOfAPodButItsConditions(t *testing.T) 
 	}
 	// One beside it, and the same again.
 	assert.Contains(t, refusal(patch(controller, types.JSONPatchType, `[{"op":"add","path":"/status/conditions/-","value":{"type":"Ready","status":"False","reason":"Is"}}]`)), conditions)
+	// The API server takes two of one type, and neither may become the other.
+	for _, was := range [][2]corev1.ConditionStatus{{corev1.ConditionFalse, corev1.ConditionTrue}, {corev1.ConditionFalse, corev1.ConditionFalse}} {
+		doubled := []corev1.PodCondition{{Type: corev1.PodReady, Status: was[0]}, {Type: corev1.PodReady, Status: was[1]}}
+		got, err := c.admin.CoreV1().Pods(tenant).Get(ctx, p.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		got.Status.Conditions = doubled
+		got, err = c.admin.CoreV1().Pods(tenant).UpdateStatus(ctx, got, metav1.UpdateOptions{})
+		require.NoError(t, err)
+		require.Len(t, got.Status.Conditions, 2)
+		to := map[corev1.ConditionStatus]string{corev1.ConditionTrue: "False", corev1.ConditionFalse: "True"}[was[1]]
+		assert.Contains(t, refusal(patch(controller, types.JSONPatchType, `[{"op":"replace","path":"/status/conditions/1/status","value":"`+to+`"}]`)), conditions)
+	}
 	// None is refused what it may do already.
 	require.NoError(t, patch(c.admin, types.StrategicMergePatchType, `{"metadata":{"labels":{"c":"d"}},"status":{"phase":"Failed","conditions":[{"type":"Ready","status":"False","reason":"Was"}]}}`))
 	require.NoError(t, merge(condition("oom.actions-gateway.com/dind", "True")), "of a pod that ended")
@@ -392,7 +424,12 @@ func TestPolicy_TheControllersEventsCarryItsOwnReasons(t *testing.T) {
 		}, metav1.CreateOptions{})
 		return err
 	}
-	enforced(t, func() error { _, err := create(controller, "NotTriggerScaleUp"); return err })
+	enforced(t, func() error {
+		_, err := controller.CoreV1().Events(tenant).Create(ctx, &corev1.Event{
+			ObjectMeta: metav1.ObjectMeta{GenerateName: "x-", Namespace: tenant}, InvolvedObject: about, Reason: "NotTriggerScaleUp", Type: "Warning",
+		}, metav1.CreateOptions{DryRun: dry})
+		return err
+	})
 	const want = "Events of its own reasons alone"
 	var made string
 	for _, reason := range []string{"OOMContainerLimit", "OOMPodLimit", "OOMPodsLimit", "OOMAbovePods", "OOMUnknown", "OOMProcessKilled"} {
