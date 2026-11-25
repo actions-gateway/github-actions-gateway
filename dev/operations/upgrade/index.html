@@ -6487,14 +6487,24 @@ In a private repository whose GitHub App lacks <code>Checks: Read</code>, a <str
 To have timed-out jobs counted in a private repository, grant the App the optional <a href="../tenant-onboarding/#0a-create-the-app-web-ui"><code>Checks: Read</code></a>.</p>
 <h3 id="non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run">Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run<a class="headerlink" href="#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> a tenant with a <code>Binpack</code> or <code>Throughput</code> <code>RunnerSet</code>, whose jobs killed at a memory limit the profile chose are re-run automatically.
-Nothing to do, unless a matrix of such jobs uses GitHub's default <code>fail-fast: true</code> beside a job that fails too, such as one that reports on the matrix: its cancelled legs are then no longer re-run with the killed one.
-Set <code>fail-fast: false</code> on it, or re-run those legs by hand.</p>
+Nothing to do, unless a matrix of such jobs uses GitHub's default <code>fail-fast: true</code>, whose cancelled legs the old retry re-ran with the killed one.
+They now stay cancelled mainly in the four cases below (<a href="../../design/04-operational-flows/#the-jobs-a-killed-job-took-with-it-q1401">the rest</a>), and <code>fail-fast: false</code> on the matrix leaves none to cancel:</p>
+<ul>
+<li><strong>Beside a job that fails on its own.</strong> Re-run them by hand.</li>
+<li><strong>Behind a job that reports on the matrix</strong> (<code>if: always()</code>), with <code>maxEvictionRetries: 1</code>, since they take a second attempt and a second slot.
+  Raise it to 2, the default.</li>
+<li><strong>Behind such a job, where another killed job of the run went first</strong>, since each takes a slot of its own until the matrix's own killed leg is re-run.
+  Raise <code>maxEvictionRetries</code> where one run loses several jobs.</li>
+<li><strong>In a run with two such matrices and a job reporting on each</strong>, where each lost a leg (Q1404).
+  Re-run them by hand.</li>
+</ul>
 <p><strong>What changed.</strong> The retry called <code>rerun-failed-jobs</code>, so a sibling job that failed on its own was re-run with the killed one and could turn green.
 The AGC now finds the killed job by its runner's name and re-runs it alone; <a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">when it still re-runs every failed job</a> is listed with the retry (Q1319).</p>
 <p><strong>What you will see.</strong> The sibling keeps its <code>failure</code>, and the run stays red.
 Where several jobs of one run were killed and another failed on its own, the killed ones are re-run one attempt at a time, a slot of <code>maxEvictionRetries</code> each.
 Where two sets each lost a job of one run, the sets go one after the other.
-Where such jobs are legs of one <code>fail-fast: true</code> matrix that a red job reports on, only the first may be re-run: GitHub can conclude its attempt <code>cancelled</code>, which ends the retry with <code>EvictionRerunWithheld</code> and <code>reason="run_cancelled"</code> (Q1401).
+Behind a job that reports on them, the first killed job is re-run with that job, and the rest together in the attempt after, with the legs a <code>fail-fast: true</code> matrix cancelled (Q1401).
+A run whose latest attempt GitHub concluded <code>cancelled</code> only because it carries an earlier attempt's cancelled jobs no longer ends a scale-set re-run with <code>reason="run_cancelled"</code>.
 <code>actions_gateway_eviction_rerun_withheld_total</code> can carry <code>reason="job_not_found"</code>.</p>
 <p><strong>Rolling back</strong> returns the retry to <code>rerun-failed-jobs</code>, for the re-runs still waiting too.</p>
 <h3 id="non-breaking-an-out-of-memory-retry-waits-for-its-jobs-start">Non-breaking: an out-of-memory retry waits for its job's start<a class="headerlink" href="#non-breaking-an-out-of-memory-retry-waits-for-its-jobs-start" title="Permanent link">&para;</a></h3>

@@ -2708,7 +2708,7 @@
 <p>The check run's annotations tell them apart (the readings), so the release could re-run the siblings and never a timeout.
 That needs <code>Checks: read</code> in a private repository, which is optional for the App, one call for each cancelled job, and a wording that is GitHub's to change; without any of them it keeps the rule above.</p>
 <p>It stops at most the re-run of a timeout or a concurrency cancel beside a kill where nothing else failed: 1 and 3 of the 594 public failed runs read hold one, and 10 and 0 of this repository's 1,000.
-Two readings come first: a lost runner's leg cancelling its siblings, and <code>rerun-failed-jobs</code> re-running a cancelled sibling.
+One reading comes first: a lost runner's leg cancelling its siblings.
 Q1374 asks the same annotation of flaky-job detection, on its hot path.</p>
 
 

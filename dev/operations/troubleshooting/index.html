@@ -8057,7 +8057,7 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <li>GitHub refuses past the re-run window (<code>EvictionRerunFailed</code>): <a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a>.</li>
 </ul>
 <p><strong>Fires and deliberately stands down</strong>, and not a fault: the run had already concluded <code>cancelled</code>, so re-running it would undo a human's or a concurrency group's cancel.
-That is checked on every cause, and GAG's own force-cancel of an abandoned run is told apart and still re-run.
+That is checked on every cause, and GAG's own force-cancel of an abandoned run is told apart and still re-run, as is an attempt GitHub concluded <code>cancelled</code> only because it carries an earlier attempt's cancelled jobs (Q1401).
 No call is made, <code>eviction_rerun_withheld_total{reason="run_cancelled"}</code> increments, and a Normal <code>EvictionRerunWithheld</code> Event names the run (Q811, Q1181).
 See <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>.</p>
 <p><strong>Fires and is withheld as futile</strong>, before any budget slot is spent unless the table says otherwise (Q1181, Q1320).

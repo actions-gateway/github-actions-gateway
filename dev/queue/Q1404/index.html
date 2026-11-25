@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1401/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1404/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Recover a fail-fast matrix's siblings behind an aggregate job - GitHub Actions Gateway</title>
+        <title>Recover two fail-fast matrices that each lost a leg behind a gate - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#recover-a-fail-fast-matrixs-siblings-behind-an-aggregate-job" class="md-skip">
+        <a href="#recover-two-fail-fast-matrices-that-each-lost-a-leg-behind-a-gate" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Recover a fail-fast matrix's siblings behind an aggregate job
+              Recover two fail-fast matrices that each lost a leg behind a gate
             
           </span>
         </div>
@@ -2703,29 +2703,27 @@
   
 
 
-<h1 id="recover-a-fail-fast-matrixs-siblings-behind-an-aggregate-job">Recover a fail-fast matrix's siblings behind an aggregate job<a class="headerlink" href="#recover-a-fail-fast-matrixs-siblings-behind-an-aggregate-job" title="Permanent link">&para;</a></h1>
-<p>On a matrix with fail-fast siblings and an aggregate job (<code>if: always()</code>, red when one it needs is), 2.1 leaves the siblings cancelled where the retry before Q1319 re-ran them.
-Of 42 sampled runs where nothing independent failed, 30 have that shape, all of them one repository's workflow (<a href="../../plan/q555-automatic-recovery-design/#readings-for-a-cancelled-sibling-2026-11-24">the readings</a>); no run in the sample lost a runner.
-It gates 2.1 because job-granular re-run recovers less there than <code>v2.0.0</code> does.</p>
-<p><strong>The fix:</strong> GitHub re-runs a job's <code>needs:</code> dependents with it (M6), so the jobs the attempt after a single-job re-run ran, besides the killed one, are its dependents by GitHub's own reading.
-A dependent red there <strong>and in the attempt before</strong> is not another failure, so once every <code>failure</code> left is one, the release calls <code>rerun-failed-jobs</code>.
-One red there only, such as a <code>deploy</code> the killed <code>build</code> had kept skipped, failed on its own.
-That takes the cancelled siblings, and any number of killed legs still parked, and never a job that failed on its own without needing the killed one.
-It rests on <code>cancelled</code> not counting as another failure, which Q1319 builds.</p>
-<p><strong>What it costs:</strong> a second slot, so <code>maxEvictionRetries</code> of at least 2, the default; a second attempt; and the parked entry kept after its last killed job while a cancelled job is left.</p>
-<p><strong>What it must know:</strong></p>
+<h1 id="recover-two-fail-fast-matrices-that-each-lost-a-leg-behind-a-gate">Recover two fail-fast matrices that each lost a leg behind a gate<a class="headerlink" href="#recover-two-fail-fast-matrices-that-each-lost-a-leg-behind-a-gate" title="Permanent link">&para;</a></h1>
+<p>A run holds two matrices under GitHub's default <code>fail-fast: true</code>, each with an aggregate job of its own (<code>if: always()</code>, red when one it needs is), and each loses a leg to memory.
+The out-of-memory retry recovers one such matrix whole, since Q1401.
+Of two it recovers both legs and neither matrix's cancelled siblings, with a log line and no Event.
+<code>v2.0.0</code> re-runs that run whole, on one slot of <code>maxEvictionRetries</code>.</p>
+<p>Reproduced on the unit-test fake of GitHub's run and jobs endpoints, budget 3, by review and by a row of <code>TestSiblings_ARedGateIsNoOtherFailure</code> (<code>a matrix of its own lost a leg too</code>), not on a live run.
+How often a run has this shape has not been measured.</p>
+<p><strong>The cause:</strong> a red job is told from a genuine failure only in the attempt the last single-job re-run started.
+The second leg's attempt carries the first aggregate, which that attempt did not run, so it counts as another failure and the siblings' turn is dropped.</p>
+<p><strong>A fix:</strong> keep the red dependents found in one attempt in the parked entry, and go on reading a carried one as a dependent while every attempt since is one the AGC started.
+About 20 lines by estimate, not built or measured.
+It takes three slots, one for each leg and one for the siblings of both, and <code>maxEvictionRetries</code> defaults to 2, so at the default the run still ends short: with <code>EvictionRetriesExhausted</code> where today it is a log line.</p>
+<p>It also widens a stated limit: a dependent red for its own reason is re-run in more shapes.</p>
+<p><strong>Not built for 2.1</strong>, where the shape is documented instead, because at the default budget the fix does not recover it; at 3 and above it would.</p>
+<p>Cancelled legs stay cancelled in three more cases, which <a href="../../operations/upgrade/#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run">the upgrade note</a> lists beside this one and this fix leaves alone:</p>
 <ul>
-<li>That the attempt was GAG's call and not a person's, so the entry records the attempt its accepted single-job call started.
-  An accepted call names a job ID of the attempt read before it, and GitHub refuses an earlier attempt's, so that attempt is the next one.</li>
-<li>Which re-run job was the killed one, whose new failure is its own: matched by display name, and no re-run at all where two re-run jobs share it.</li>
-<li>Whether anybody cancelled that attempt: GitHub concluded it <code>cancelled</code> in both public runs read of this shape, which <code>run_cancelled</code> withholds today, a second killed leg's turn included.
-  An attempt that ran no job it lists as <code>cancelled</code> takes the verdict of the attempt before, back to GAG's own force-cancel or attempt 1.
-  A cancel that lands while only an <code>if: always()</code> job runs can look the same.</li>
+<li>Beside a job that fails on its own, which is the rule rather than a gap: one <code>rerun-failed-jobs</code> would re-run that failure too.</li>
+<li>Behind an aggregate at <code>maxEvictionRetries: 1</code>, since the siblings take a second slot.</li>
+<li>Behind an aggregate, where a killed job nothing red needs went first: it takes a slot and shows no dependent, so the run needs three where the other order takes two.</li>
 </ul>
-<p><strong>What it would misread:</strong> a dependent that fails for its own reason, such as a cleanup job with a bug, is re-run a second time.
-The single-job call already re-runs it once, and nothing in the list says why it failed.</p>
-<p>"Started after the killed job completed" is not the fact to use: over 195 runs with two or more failed jobs it named 171 jobs, 73 of which needed nothing of the first (the same readings).
-Q1399 is separate: it tells a cancelled sibling from a timeout, and leaves an aggregate as another failure.</p>
+<p><code>fail-fast: false</code> on the matrix leaves no leg to cancel, in all four.</p>
 
 
 

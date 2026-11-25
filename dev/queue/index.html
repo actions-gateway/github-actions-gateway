@@ -3232,20 +3232,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The jobs list spells <code>cancelled</code> a leg its fail-fast matrix cancelled, a job past its <code>timeout-minutes</code> and a job a concurrency group …</td>
 </tr>
 <tr>
+<td><a href="Q1404/">Q1404</a></td>
+<td><a href="../design/04-operational-flows/#the-jobs-a-killed-job-took-with-it-q1401">Recover two fail-fast matrices that each lost a leg behind a gate</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A run holds two matrices under GitHub's default <code>fail-fast: true</code>, each with an aggregate job of its own (<code>if: always()</code>, red when one it …</td>
+</tr>
+<tr>
 <td><a href="Q1315/">Q1315</a></td>
 <td><a href="../plan/q555-automatic-recovery-design/#readings-for-the-egress-proxy-class-q1315">Retry a job failed while its colocated egress proxy pool was unavailable</a></td>
 <td><code>feature</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>A job that fails because the tenant's egress proxy pool was down is a platform failure, and today it needs a manual re-run.</td>
-</tr>
-<tr>
-<td><a href="Q1401/">Q1401</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#readings-for-a-cancelled-sibling-2026-11-24">Recover a fail-fast matrix's siblings behind an aggregate job</a></td>
-<td><code>bug</code> <code>2.1-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>On a matrix with fail-fast siblings and an aggregate job (<code>if: always()</code>, red when one it needs is), 2.1 leaves the siblings cancelled …</td>
 </tr>
 <tr>
 <td><a href="Q1316/">Q1316</a></td>

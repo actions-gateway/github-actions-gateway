@@ -2765,7 +2765,8 @@ Q1389 gated it too: the out-of-memory class <code>v2.0.0</code> shipped could ac
 Q1395 gates it too, settled 2026-11-24: detection could name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
 Q1400 gates it too, settled 2026-11-24, for the same reason in the out-of-memory class <code>v2.0.0</code> shipped: it reads a runner killed for its node's memory as one killed at its own limit, so the Event and the raised limit name a cause it did not check.
 That is read from source, so its first step is reproducing it.
-Q1401 gates it too: job-granular re-run (Q1319) recovers less than <code>v2.0.0</code> on a fail-fast matrix behind an aggregate job, and this release adds recovery rather than taking any away.
+Q1401 gated it too: job-granular re-run (Q1319) recovered less than <code>v2.0.0</code> on a fail-fast matrix behind an aggregate job, and recovering less is the opposite of what this release is for.
+What it still recovers less of is <a href="../../operations/upgrade/#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run">in the upgrade notes</a>.
 Nothing here is a commitment to a date.</p>
 </blockquote>
 <h2 id="why-this-release-exists">Why this release exists<a class="headerlink" href="#why-this-release-exists" title="Permanent link">&para;</a></h2>
@@ -2856,10 +2857,10 @@ One known limit stays from <code>v2.0.0</code>: beside a memory kill, a job past
 <td>✅ landed: M6 measured 2026-11-24, and the out-of-memory retry re-runs the killed job alone</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1401/">Q1401</a></td>
+<td>Q1401</td>
 <td>Recover a fail-fast matrix's siblings behind an aggregate job</td>
 <td><code>2.1-gate</code></td>
-<td>🔲 open: Q1319 leaves them cancelled, where <code>v2.0.0</code> re-runs them</td>
+<td>✅ landed for one matrix and one aggregate, on a second attempt and a second slot of <code>maxEvictionRetries</code>; what is left is in the upgrade notes</td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1315/">Q1315</a></td>

@@ -1196,6 +1196,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Futile re-runs are withheld before a slot is spent (scale-set)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#who-cancelled-an-attempt-q1401" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who cancelled an attempt (Q1401)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -1244,6 +1261,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="The re-run takes only the killed jobs (Q1319)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-jobs-a-killed-job-took-with-it-q1401" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The jobs a killed job took with it (Q1401)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -3183,6 +3217,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Futile re-runs are withheld before a slot is spent (scale-set)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#who-cancelled-an-attempt-q1401" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who cancelled an attempt (Q1401)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
           <li class="md-nav__item">
@@ -3231,6 +3282,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="The re-run takes only the killed jobs (Q1319)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-jobs-a-killed-job-took-with-it-q1401" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The jobs a killed job took with it (Q1401)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -3844,7 +3912,7 @@ The scale-set tier now judges the run read it takes before reserving a slot (<a 
 </tr>
 <tr>
 <td><code>run_cancelled</code></td>
-<td>The run concluded <code>cancelled</code> and the ledger does not record GAG force-cancelling that attempt. Also checked on every pass of the re-run loop, since at detection the run has usually not concluded; a cancel seen there has already spent its slot. The abandoned arm takes the same check on its own run read, before force-cancelling: a run already cancelled that way is withheld with <code>cause="abandoned"</code>, neither cancelled again nor recorded as GAG's cancel (Q1232). The conclusion does not say who cancelled, so this includes GitHub's own ~15-minute unstarted-job timeout, which lands before the reap when <code>pendingPodDeadline</code> is set past it; that run needs a manual re-run</td>
+<td>The run concluded <code>cancelled</code>, the ledger does not record GAG force-cancelling that attempt, and the attempt does not merely carry an earlier one's cancelled jobs (<a href="#who-cancelled-an-attempt-q1401">how</a>). Also checked on every pass of the re-run loop, since at detection the run has usually not concluded; a cancel seen there has already spent its slot. The abandoned arm takes the same check on its own run read, before force-cancelling: a run already cancelled that way is withheld with <code>cause="abandoned"</code>, neither cancelled again nor recorded as GAG's cancel (Q1232). The conclusion does not say who cancelled, so this includes GitHub's own ~15-minute unstarted-job timeout, which lands before the reap when <code>pendingPodDeadline</code> is set past it; that run needs a manual re-run</td>
 <td>Re-run by hand if the cancel was not intended</td>
 </tr>
 <tr>
@@ -3875,7 +3943,9 @@ The scale-set tier now judges the run read it takes before reserving a slot (<a 
 </tbody>
 </table>
 <p>A field GitHub did not send skips its check rather than withholding.
-Two checks cost a call, and neither withholds on an answer it cannot read, because each only ever withholds: <code>superseded</code> lists the workflow's runs, newest first, filtered to the event and to the branch, or for a <code>merge_group</code> run to those created since it (at most 3 pages of 30); <code>already_rerun</code> lists a moved attempt's jobs.</p>
+Three checks cost a call.
+<code>run_cancelled</code> lists jobs only for an attempt past the first that concluded <code>cancelled</code>, and withholds on a list GitHub refuses, since re-running somebody's cancelled run is the worse mistake.
+The other two do not withhold on an answer they cannot read, because each only ever withholds: <code>superseded</code> lists the workflow's runs, newest first, filtered to the event and to the branch, or for a <code>merge_group</code> run to those created since it (at most 3 pages of 30); <code>already_rerun</code> lists a moved attempt's jobs.</p>
 <p><code>already_rerun</code> makes its call only when the attempt has moved, which for a disruption detected live it has not (Q1320).
 An arm that knows its attempt compares it; every other arm compares the run's <code>run_started_at</code> against when the job's worker was provisioned, allowing a minute of clock skew, and a worker with no such time is taken as unmoved.
 A moved attempt is then read from its jobs, because a single-job re-run moves <code>run_attempt</code> and leaves the failed siblings standing (<a href="../../plan/q555-automatic-recovery-design/#readings-from-githubs-api-2026-11-23">measured</a>).
@@ -3886,6 +3956,38 @@ A job found not re-run is recovered from the latest attempt, where its failure s
 Where the jobs do not say, the pre-reservation check lets the re-run through.
 The re-run loop and the parked re-runs then stand down on the attempt alone where the attempt the job failed in is known, since a second re-run of one attempt is the worse mistake; an arm that does not know it takes the moved attempt as its own, so one list it cannot read can end in a second re-run of a job already re-run and failed.
 The vanished arm knows neither the runner nor the job's name, so it withholds only where no failure was carried; with another job's failure carried, it re-runs even a job that was already re-run.</p>
+<h6 id="who-cancelled-an-attempt-q1401">Who cancelled an attempt (Q1401)<a class="headerlink" href="#who-cancelled-an-attempt-q1401" title="Permanent link">&para;</a></h6>
+<p>GitHub concludes an attempt <code>cancelled</code> with nobody having cancelled it, where a single-job re-run carries cancelled jobs from the attempt before (<a href="../../plan/q555-automatic-recovery-design/#readings-for-a-cancelled-sibling-2026-11-24">measured</a>).
+So the scale-set tier's check before the reservation and the one in the re-run loop ask who cancelled, an attempt at a time from the newest (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/rerun_futility.go"><code>cancelledByOther</code></a>):</p>
+<table>
+<thead>
+<tr>
+<th>The attempt, concluded <code>cancelled</code></th>
+<th>Read as</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GAG force-cancelled it, by the ledger</td>
+<td>Not somebody's cancel</td>
+</tr>
+<tr>
+<td>It is attempt 1</td>
+<td>Somebody's cancel</td>
+</tr>
+<tr>
+<td>It ran a job the list calls <code>cancelled</code></td>
+<td>Somebody's cancel</td>
+</tr>
+<tr>
+<td>It ran none</td>
+<td>What the attempt before it is, and no cancel where that one concluded anything else</td>
+</tr>
+</tbody>
+</table>
+<p>A read that fails with a 5xx is retried, and one GitHub refuses counts as somebody's cancel.
+A cancel that lands while only an <code>if: always()</code> job is running can leave no job of the attempt <code>cancelled</code>, by GitHub's documentation of what a cancel does to such a job, so it reads as carried and the run is re-run; this is not measured.
+The fork refusal and the abandoned arm's read before its force-cancel keep the conclusion as GitHub gives it, and the classic tier does too, since it re-runs no job alone.</p>
 <p><code>worker_unstartable</code> reads the worker pods, not the capacity gate, so it holds on a set with no <code>spec.capacityGate</code>: it is the startup half of the verdict <a href="../../operations/troubleshooting/#the-reason-is-podsnotstarting-the-image-will-not-pull"><code>WorkersNotStarting</code></a> publishes on every set, plus the requirement that nothing started since, so one node that cannot reach the registry does not withhold (Q1320).
 A started worker counts only until it is deleted (<code>completedPodTTL</code>, 5 minutes by default), and a failing pod counts until it is reaped (<code>pendingPodDeadline</code>, 10 minutes by default) even if its image reference has been fixed since, so either can withhold a re-run that would have worked for a few minutes.
 Every scale-set arm asks it, and it matters most to the abandoned arm, which is released by any pod of the set binding, one stuck pulling an image included; that release still counts <code>capacity_returned</code>.
@@ -4143,7 +4245,7 @@ Two jobs of a run can share a display name, and a worker often runs a job other 
 </thead>
 <tbody>
 <tr>
-<td>Every failed job is a killed one</td>
+<td>Every failed job is a killed one or its <a href="#the-jobs-a-killed-job-took-with-it-q1401">red dependent</a></td>
 <td><code>rerun-failed-jobs</code>, which takes the cancelled jobs too</td>
 <td>One</td>
 </tr>
@@ -4156,6 +4258,11 @@ Two jobs of a run can share a display name, and a worker often runs a job other 
 <td>Several killed jobs, and another job failed</td>
 <td>The first alone. The others stay parked and are judged again once the attempt it starts concludes</td>
 <td>One each</td>
+</tr>
+<tr>
+<td>No killed job is left, and every failed job is a red dependent beside a cancelled one</td>
+<td><code>rerun-failed-jobs</code>, as the <a href="#the-jobs-a-killed-job-took-with-it-q1401">siblings' turn</a></td>
+<td>One</td>
 </tr>
 <tr>
 <td>No failed job ran on a killed worker's runner</td>
@@ -4171,12 +4278,11 @@ Two jobs of a run can share a display name, and a worker often runs a job other 
 </table>
 <p>A list GitHub fails to serve retries at the next poll, like the run read.
 Taking turns is GitHub's limit as much as the budget's: it refuses a single-job re-run while the run is in progress.
-The list carries no <code>needs:</code>, so a dependent that failed because a killed job did, such as an <code>if: always()</code> aggregate, counts as another failure; the killed job's re-run takes it along.
+The list carries no <code>needs:</code>, so in the attempt of the kill a dependent that failed because a killed job did, such as an <code>if: always()</code> aggregate, counts as another failure; the killed job's re-run takes it along.
 A job GitHub cancelled is not another failure here, so a killed leg of a fail-fast matrix and the siblings GitHub cancelled with it are re-run together, as they were before Q1319.
-Beside another failure the leg is re-run alone and those siblings wait for a re-run by hand.
+Beside another failure the leg is re-run alone, and the siblings are re-run only where that failure turns out to be its <a href="#the-jobs-a-killed-job-took-with-it-q1401">dependent</a>.
 The list says <code>cancelled</code> for a fail-fast matrix's sibling, a job past its <code>timeout-minutes</code> and a job a concurrency group cancelled alike (<a href="../../plan/q555-automatic-recovery-design/#readings-for-a-cancelled-sibling-2026-11-24">measured</a>), so the last two are re-run with the siblings.
-A run GitHub itself concludes <code>cancelled</code>, as it can one holding a timeout, is not re-run at all (<code>run_cancelled</code>).
-That includes the attempt a single-job re-run starts, where the killed leg passes, an aggregate is red again and the matrix's other legs are still cancelled, so a second killed leg's turn can end there (<a href="../../queue/Q1401/">Q1401</a>).</p>
+A run GitHub itself concludes <code>cancelled</code>, as it can one holding a timeout, is not re-run at all (<code>run_cancelled</code>), unless the attempt only <a href="#who-cancelled-an-attempt-q1401">carries its cancelled jobs</a>.</p>
 <p><strong>The reservation follows the call.</strong> A kill reserves its attempt's one slot when it fires, with scope <code>FailedJobs</code>, and later kills of the attempt merge into it.
 A release that re-runs one job narrows that record to the job, scope <code>Job</code>, in the write before the call, so each job that waits reserves a slot of its own at its turn, and a release that crashes before the call resumes the same job on the same slot.
 The record is not narrowed where a disruption arm holds the attempt too, since its own loop calls <code>rerun-failed-jobs</code>, and the release then makes that call.
@@ -4187,6 +4293,65 @@ A release that re-runs every failed job instead, because the other failure is go
 Past the 24 hours a refused release waits out the 15-minute window instead and then ends as <code>run_never_concluded</code>.</p>
 <p>Runs whose jobs span two sets are judged by each set's own ledger, so a job another set's class killed is a failure this one did not classify.
 Each set re-runs its own jobs alone, one set after the other, since GitHub refuses the second call until the first's attempt concludes.</p>
+<h5 id="the-jobs-a-killed-job-took-with-it-q1401">The jobs a killed job took with it (Q1401)<a class="headerlink" href="#the-jobs-a-killed-job-took-with-it-q1401" title="Permanent link">&para;</a></h5>
+<p>A single-job re-run tells what the list does not: GitHub runs the job, its <code>needs:</code> dependents and nothing else (<a href="../../plan/q555-automatic-recovery-design/#m6-readings-from-the-job-granular-probe-2026-11-24">M6</a>).
+So the entry records the attempt its accepted call started and the display name of the job it re-ran (<code>startedAttempt</code>, <code>startedJob</code>), and a release whose latest attempt is that one also lists the attempt before.
+A job is a <strong>red dependent</strong> where that attempt ran it, it is not the job called, it ended <code>failure</code> there and in the attempt before, and its name is one row of each list.
+It is not another failure, so a run whose only other failure is an aggregate is recovered in two attempts: the killed job and the aggregate, then every other killed job and every cancelled one with the aggregate again.</p>
+<table>
+<thead>
+<tr>
+<th>Attempt 1</th>
+<th>Attempt 2, re-running <code>a</code> and <code>gate</code></th>
+<th>Attempt 3</th>
+<th>Slots</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>a</code> killed, siblings cancelled, <code>gate</code> red</td>
+<td><code>a</code> passes, <code>gate</code> red again</td>
+<td>The siblings and <code>gate</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>a</code>, <code>b</code> and <code>c</code> killed, <code>gate</code> red</td>
+<td><code>a</code> passes, <code>gate</code> red again</td>
+<td><code>b</code>, <code>c</code> and <code>gate</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>a</code> killed, siblings cancelled, <code>gate</code> and <code>lint</code> red</td>
+<td><code>a</code> passes, <code>gate</code> red again, <code>lint</code> carried</td>
+<td>None: <code>lint</code> failed on its own</td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>a</code> killed, siblings cancelled, <code>gate</code> red</td>
+<td><code>a</code> fails again</td>
+<td>None: <code>a</code> failed on its own</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Red in both attempts is what keeps a genuine failure out.</strong> A <code>deploy</code> that needs the killed <code>build</code> is skipped in attempt 1, and red in attempt 2 for its own reason; it is a dependent and it is not re-run.
+One red in both, such as a cleanup job with a bug, is re-run once more; nothing in the list says why a job failed.</p>
+<p><strong>The siblings' turn</strong> is the release with no killed job left, and the entry stays parked for it only where the list the last call was made from held a cancelled job that was not killed.
+It holds a slot of its own, under the last killed worker's key with <code>/siblings</code> appended, so it needs <code>maxEvictionRetries</code> of at least 2; on a spent budget it ends as <code>EvictionRetriesExhausted</code>, whose message names the siblings, as the Events that end its wait do.
+A killed job that needs the one the call named was re-run with it, so it is no longer waiting.
+The turn is dropped where the run succeeded, another job failed on its own, no cancelled job is left, or somebody re-ran the run since.</p>
+<p>What loses that turn, where a killed job still parked goes one at a time instead:</p>
+<ul>
+<li>A restart between GitHub accepting the call and the record of it, or a call whose response is lost.
+  The ledger holds what GAG meant to call, not that the attempt was its own, and after a person's <code>rerun-failed-jobs</code> every red job would read as a dependent.</li>
+<li>A red job that reports on another matrix.
+  Of two fail-fast matrices with a killed leg and an aggregate each, the second leg's attempt carries the first aggregate, which is then another failure, so the siblings of both stay cancelled (Q1404).</li>
+<li>A killed job no red job needs, handled before the leg whose aggregate is red.
+  It takes a slot and shows no dependent, so the leg and the siblings then need two more; the other order recovers all three on two.</li>
+<li>A list GitHub refuses, or two jobs of the called job's name, since the dependents are then unknown.</li>
+<li>Another set's re-run of the same run in between, whose own last release takes the cancelled jobs where that set's ledger allows it.</li>
+</ul>
+<p>Only the spent budget, a run gone at GitHub and the end of the 24 hours are reported in an Event; a dropped turn is a log line.</p>
 <h4 id="flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555">Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)<a class="headerlink" href="#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555" title="Permanent link">&para;</a></h4>
 <p>Detection records what each recovery did, and changes nothing it does.
 The listener reports every terminal <code>JobCompleted</code> once per process, with its result, run identity, triggering event and workflow ref.
