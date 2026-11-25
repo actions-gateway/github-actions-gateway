@@ -58,8 +58,7 @@ func (o controllerOptions) run(ctx context.Context, cfg *rest.Config, log *slog.
 	if err != nil {
 		return err
 	}
-	cfg = unlimited(cfg)
-	kube, err := kubernetes.NewForConfig(cfg)
+	kube, err := kubernetes.NewForConfig(unlimited(cfg))
 	if err != nil {
 		return err
 	}
@@ -169,7 +168,7 @@ func (o controllerOptions) again(ctx context.Context, kube kubernetes.Interface,
 }
 
 func (o controllerOptions) manager(ctx context.Context, cfg *rest.Config, r *controller.Reconciler) (ctrl.Manager, error) {
-	mgr, err := ctrl.NewManager(cfg, o.options(r.Namespaces))
+	mgr, err := ctrl.NewManager(unlimited(cfg), o.options(r.Namespaces))
 	if err != nil {
 		return nil, err
 	}

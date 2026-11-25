@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -63,7 +64,7 @@ func TestController_LeavesTheLimitToTheAPIServer(t *testing.T) {
 	o := controllerOptions{namespace: "oom", agents: "app=agent", all: true}
 	r, err := o.reconciler()
 	require.NoError(t, err)
-	mgr, err := o.manager(t.Context(), unlimited(cfg), r)
+	mgr, err := o.manager(t.Context(), cfg, r)
 	require.NoError(t, err)
 	assert.Negative(t, mgr.GetConfig().QPS)
 	assert.Zero(t, cfg.QPS)
@@ -271,6 +272,20 @@ func TestController_EndsWhereItsCachesDoNotSync(t *testing.T) {
 	o := soon("team-a")
 	o.syncedWithin = 100 * time.Millisecond
 	require.ErrorContains(t, ended(t, func() error { return o.run(context.WithoutCancel(t.Context()), cfg, noLog) }), "have not synced")
+}
+
+// What fails otherwise says nothing of a grant.
+func TestController_TakesNoOtherFailureForAMissingGrant(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) }))
+	t.Cleanup(s.Close)
+	kube, err := kubernetes.NewForConfig(&rest.Config{Host: s.URL})
+	require.NoError(t, err)
+	names := map[string]bool{"team-a": true}
+	_, err = unreadable(t.Context(), kube, names)
+	require.ErrorContains(t, err, "namespace team-a")
+	ctx, stop := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer stop()
+	require.NoError(t, soon("").again(ctx, kube, names))
 }
 
 func TestController_WaitsForWhatThePolicySays(t *testing.T) {
