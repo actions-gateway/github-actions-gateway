@@ -4,9 +4,10 @@
 # Q477): module_recipe (tab folding, line continuations, comment stripping, which
 # target a recipe belongs to, where a recipe ends), recipe_generators (which
 # tokens count as controller-gen generators), deepcopy_generator (turning the
-# registered `object` call into the argument controller-gen receives), and
+# registered `object` call into the argument controller-gen receives),
 # assert_registry_fidelity, the consumer that turns a parse into a pass or a
-# failure.
+# failure, and copy_tree (which top-level entries the DeepCopy half's copy leaves
+# out).
 #
 # The gate reads `manifests:` and `deepcopy:` recipes straight out of Makefiles,
 # and make recipes
@@ -20,8 +21,8 @@
 # The gate is only worth having if it fails when it should, so these assertions
 # are the permanent form of the invert-the-fix verification
 # (docs/development/testing.md § Diagnosing failures). None of them need
-# controller-gen: they stop at the parse and the registry assertions. Runs under
-# `make check` (via `make scripts-test`) and the CI shellcheck job.
+# controller-gen: they stop at the parse, the registry assertions and the copy.
+# Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 #
 # File-wide: every fixture body is make source text, so $(CONTROLLER_GEN) and
 # $(CURDIR) are make variable references that must reach the fixture Makefile
@@ -416,20 +417,21 @@ fi
 
 # --- copy_tree: what the DeepCopy half regenerates in --------------------------
 
-# A throwaway repository, so the ignored directory can be created without touching
-# this one.
+# A throwaway repository, so the ignored directories can be created without
+# touching this one. forced/ is ignored and holds a tracked file, so it is an input.
 copy_root="$FIXTURE_ROOT/copy-tree"
 git init -q "$copy_root"
-mkdir -p "$copy_root"/{api,docs-venv,tools}
-touch "$copy_root"/{api,docs-venv,tools}/file
-printf '/docs-venv/\n' >"$copy_root/.gitignore"
+mkdir -p "$copy_root"/{api,docs-venv,forced,tools}
+touch "$copy_root"/{api,docs-venv,forced,tools}/file
+printf '/docs-venv/\n/forced/\n' >"$copy_root/.gitignore"
+git -C "$copy_root" add -f forced/file
 (
 	REPO_ROOT="$copy_root"
 	GEN_TMP="$FIXTURE_ROOT/copy-out"
 	copy_tree
 )
 got_copy="$(cd "$FIXTURE_ROOT/copy-out/tree" && find . -mindepth 1 -type f | sort | tr '\n' ' ')"
-want_copy='./.gitignore ./api/file '
+want_copy='./.gitignore ./api/file ./forced/file '
 if [[ "$got_copy" == "$want_copy" ]]; then
 	printf 'ok   copy     %-28s -> [%s]\n' ignored-entries-left-out "$got_copy"
 else

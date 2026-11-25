@@ -38,7 +38,7 @@
 # the shared informer cache. Nothing failed to compile, and nothing failed CI.
 #
 # Costs about four seconds (six controller-gen runs over already-parsed packages,
-# plus one ~30 MB copy of the working tree) and the one-time .build/controller-gen
+# plus one ~60 MB copy of the working tree) and the one-time .build/controller-gen
 # build. Backs `make codegen-check` (part of `make check`) and the `lint` job in
 # .github/workflows/unit-test.yml.
 #
@@ -355,8 +355,8 @@ assert_no_drift() {
 }
 
 # is_skipped NAME — true when NAME is a top-level entry copy_tree leaves out. A
-# gitignored one holds no committed input, and another target may be writing it
-# while the copy runs, which makes cp fail.
+# gitignored one with no tracked file in it holds no committed input, and another
+# target may be writing it while the copy runs, which makes cp fail.
 is_skipped() {
 	local name="$1" entry
 	for entry in "${COPY_SKIP[@]}"; do
