@@ -340,7 +340,9 @@ func (w *workerSnapshots) awaits(key string) bool {
 
 // put returns the recorded failure whose worker s ends, or keeps s as the latest read of
 // one whose worker runs on. With none waiting it stores s where it is the worker's
-// terminal transition, unless the worker's job has completed and nothing will take it.
+// terminal transition, unless the worker's job has completed and nothing will take it. A
+// later read of a finished worker keeps the proxy readiness of the first, the nearer to
+// the job's end.
 func (w *workerSnapshots) put(key string, s *workerSnapshot, jobCompleted bool) *recordedFailure {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -362,6 +364,7 @@ func (w *workerSnapshots) put(key string, s *workerSnapshot, jobCompleted bool) 
 		w.byID = map[string]*workerSnapshot{}
 	}
 	if held := w.byID[key]; held != nil && held.Pod == s.Pod {
+		s.Proxy = held.Proxy
 		s.carryOOMReasons(held)
 	}
 	putBounded(w.byID, key, s, maxWorkerSnapshots, func(s *workerSnapshot) time.Time { return s.takenAt })
