@@ -35,18 +35,18 @@ So it should not appear for R3 and R4, and a node-wide kill, where it should, is
 ## Kill order, computed
 
 The kernel kills the process with the most of: resident memory, plus `oom_score_adj` thousandths of the limit that was hit (`oom_kill.c`, v6.12).
-On a 32 GiB node with 31.4 GiB usable and `kubepods` near 28 GiB (both from recall, and R0 reads them):
+On a node with 31.3 GiB and `kubepods` limited to 27.8, and dockerd at 905, all from the first run's R0:
 
 | Process | `oom_score_adj` | Score at a `kubepods` kill | Score at a node-wide kill |
 |---|---|---|---|
-| A BestEffort pod's | 1000 | 28.0 GiB plus its own | 31.4 GiB plus its own |
-| A Burstable DaemonSet container requesting 512Mi or less, not node-critical | 985 or more | 27.6 GiB or more | 30.9 GiB or more |
-| The runner's largest | 969 | 27.1 GiB plus its own | 30.4 GiB plus its own |
-| dockerd, at the shipped requests (1Gi runner, 3Gi sidecar) | 907 | 25.4 GiB plus its own | 28.5 GiB plus its own |
-| One plain-pod filler of 4 GiB, pod requesting 12Gi | about 618 | 17.3 + 4 GiB | 19.4 + 4 GiB |
+| A BestEffort pod's | 1000 | 27.8 GiB plus its own | 31.3 GiB plus its own |
+| A Burstable DaemonSet container requesting 512Mi or less, not node-critical | 985 or more | 27.4 GiB or more | 30.9 GiB or more |
+| The runner's largest | 969 | 27.0 GiB plus its own | 30.4 GiB plus its own |
+| dockerd, at the shipped requests (1Gi runner, 3Gi sidecar) | 905 | 25.2 GiB plus its own | 28.4 GiB plus its own |
+| One plain-pod filler of 4 GiB, pod requesting 12Gi | about 618 | 17.2 + 4 GiB | 19.4 + 4 GiB |
 | One job-container filler of 4 GiB | 0 | 4 GiB | 4 GiB |
 
-So a filler never outscores a worker while each of its processes stays at 4 GiB, and dockerd goes first at the shipped requests only with 1.7 GiB more resident than the runner.
+So a filler never outscores a worker while each of its processes stays at 4 GiB, and dockerd goes first at the shipped requests only with 1.8 GiB more resident than the runner.
 At a runner request of 3Gi or more the two tie, and the larger process goes.
 
 **The fillers stop at the first kill of a worker.** Other pods on the node can outscore one (the table's first two rows; a node-critical pod is -997 and cannot), so their kills are passed over and logged.
@@ -74,18 +74,20 @@ If the two land on different nodes, the reading is void and repeated once.
 ## Readings
 
 "Predicted" is from source or the local readings.
+Two files hold an `oom` count and they differ for a kill at a lower limit: `memory.events` counts the cgroup and everything below it, and `memory.events.local` the cgroup alone.
+Here a pod's `oom` is the one in `memory.events`, and `kubepods.slice`'s is the one in `memory.events.local`; R8 is why, since `kubepods.slice`'s `memory.events` read `oom` 1 for it.
 R0 is a gate: where a job cannot read `memory.events` of `kubepods` and of another pod, does not find exactly two workers by their sidecar's 4Gi `memory.max`, or reads the `oom_score_adj` of a runner's `Runner.Listener` or `Runner.Worker`, or of dockerd, more than 10 from the table above (a step may be at 500, which the runner asks for), the run stops and the plan is recomputed.
 R0 also reads, by read-only `kubectl`, the UID, QoS class, requests and priority class of every pod on the node, and lists the ones whose computed score is above a runner's.
 
 | ID | Runs | What is done | Platform or tenant | Predicted |
 |---|---|---|---|---|
-| R0 | 1 | Nothing: cgroup paths; `oom_score_adj` and resident memory of dockerd, the runner's processes and a nested container; node memory, kernel, `memory.oom.group`, `kubepods.slice`'s `memory.max` | | Nested containers outside the pod; 969, 907, 0; `kubepods` capped. Also answers Q1396's first step |
+| R0 | 1 | Nothing: cgroup paths; `oom_score_adj` and resident memory of dockerd, the runner's processes and a nested container; node memory, kernel, `memory.oom.group`, `kubepods.slice`'s `memory.max` | | Nested containers outside the pod; 969, 905, 0; `kubepods` capped. Also answers Q1396's first step |
 | R1 | 1 | A job runs a container past its own `-m 64m` | Tenant, honest | `Completed`, exit 0; nothing raised |
 | R6 | 2 | A job sends dockerd SIGKILL, then in a second run SIGABRT, from a `--pid=host` container | Tenant, deliberate | `Error` 137 and `Error` 2; the job fails with the runner alive |
-| R8 | 1 | One worker's step allocates 4 GiB, past the runner's own 3Gi limit | Tenant, honest | The runner `OOMKilled`, 137; pod `Failed`; withheld as `own_limit`, as R3 is; pod `oom` 1, `kubepods.slice` `oom` 0, no `SystemOOM` |
-| R3 | 2 | A plain pod on the same node, 12Gi requested and no limit, fills: seven 4 GiB processes | Platform: a neighbour over its request | One runner dies; `kubepods.slice` `oom` above 0; no `SystemOOM` |
+| R8 | 1 | One worker's step allocates 4 GiB, past the runner's own 3Gi limit | Tenant, honest | The runner `OOMKilled`, 137; pod `Failed`; withheld as `own_limit`, as R3 is; pod `oom` 1 (`memory.events`), `kubepods.slice` `oom` 0 (`memory.events.local`), no `SystemOOM` |
+| R3 | 2 | A plain pod on the same node, 12Gi requested and no limit, fills: seven 4 GiB processes | Platform: a neighbour over its request | One runner dies; pod `oom` 0 (`memory.events`), `kubepods.slice` `oom` above 0 (`memory.events.local`); no `SystemOOM` |
 | R3t | 2 | R3, with each worker's dockerd set to its runner's `oom_score_adj`, the tie a 3Gi runner request gives | Platform, tie | The larger process of the two goes, by R0's resident memory |
-| R4 | 1 | R3, with each dockerd at 1000 | Platform, forced | dockerd `OOMKilled`, 137; runner alive; pod `oom` 0 |
+| R4 | 1 | R3, with each dockerd at 1000 | Platform, forced | dockerd `OOMKilled`, 137; runner alive; pod `oom` 0 (`memory.events`), `kubepods.slice` `oom` above 0 (`memory.events.local`) |
 | R7 | 1 | Under Kata, one worker: the sidecar's `memory.oom.group` as the guest sees it, R1, then the job's containers past the sidecar's 8Gi | Tenant, honest | `memory.oom.group` 0, since Kata 3.32.0's agent does not set it (read). R1: `OOMKilled`, 143. Second: one process dies, and the sidecar reads `OOMKilled` with 143 if it was the job's, or 137 if it was dockerd |
 
 Order: R0, R3 twice, R3t twice, R4, then R7.
@@ -108,7 +110,7 @@ Times are the node's, UTC on 2026-11-25.
 | R0 | The gate passed. `oom_score_adj` 969 for the runner's processes, 905 for dockerd and 0 for a nested container; `kubepods.slice` `memory.max` 29870862336 and 32093 MiB of memory; nested containers under `/docker`, outside the pod. The uid-65534 reader opened all 150 files, owner root and mode 0444, with the profile `runc (unconfined)`; `/dev/kmsg` gave it `EPERM` with `dmesg_restrict` 1. One pod computes above a runner, the metrics collector at 999 |
 | R1 | Runner and sidecar `Completed`, exit 0; the kill's `oom_memcg` is the nested container, and no counter of the pod or `kubepods` rose; nothing raised |
 | R6 | `Error` 137, then `Error` 2, the runner alive and the job failed, with no fault raised. The sidecar restarted once; when the restarted container ended, about 5 seconds after the crash, the API server served no `lastState` any more. The AGC's record had kept it |
-| R8 | The runner `OOMKilled`, 137, pod `Failed`; `oom` in `memory.events.local` 1 for the container and 0 for the pod, its QoS slice and `kubepods.slice`; the kernel's `oom_memcg` is the container, so the two agree. The AGC withheld as `own_limit`, and raised `PlatformFaultOnFailedJob` 9 minutes 35 seconds after the kill. No `SystemOOM`; node-problem-detector's `OOMKilling` Event says `Memory cgroup out of memory` and names processes, not the pod |
+| R8 | The runner `OOMKilled`, 137, pod `Failed`; `oom` in `memory.events.local` 1 for the container and 0 for the pod, its QoS slice and `kubepods.slice`, whose `memory.events` all read 1; the kernel's `oom_memcg` is the container, so the two agree. The AGC withheld as `own_limit`, and raised `PlatformFaultOnFailedJob` 9 minutes 35 seconds after the kill. No `SystemOOM`; node-problem-detector's `OOMKilling` Event says `Memory cgroup out of memory` and names processes, not the pod |
 | R2 | Not read. The node's last report was about when the fill is computed to have started (04:50:03); `NodeNotReady` at 04:50:54, and the same node name was back with a new boot id at 05:04:07 and ready at 05:04:33. No kill, no `SystemOOM` and no `OOMKilling` was recorded, and both jobs' logs are lost. Both pods were `DeletionByTaintManager` at 04:55:54 and `DeletionByGCPControllerManager` from 05:04:08, and the AGC raised `PlatformFaultOnFailedJob` for both with an empty cause and that fault; no `own_limit` |
 
 Timings of R8's kill, for Q1403:
@@ -139,7 +141,7 @@ Step 5's lease check did not gate it; the lease read as this run's before and af
 1. **R2 and R5 are dropped.** R2's fill is what lost the node, and nothing the second run has to decide rests on either.
    Which of the two dies is read by R3 and R3t: the kernel scores a node-wide kill and a kill at `kubepods`' limit alike but for the limit, 31.3 GiB against 27.8, so the runner's lead over dockerd is 2.0 GiB against 1.8 and R3 is the closer call.
    Q1400's and Q1403's node-killed runner is R3's.
-   R5's `kubepods` `oom` is 0 by the kernel's code, which raises it for a kill at a cgroup's limit alone (`mem_cgroup_oom` in `memcontrol.c`, v6.8 upstream, read), so it would have compared R4 with a constant.
+   R5's `kubepods` `oom` is 0 in both files by the kernel's code, which raises it for a kill at a cgroup's limit alone (`mem_cgroup_oom` in `memcontrol.c`, v6.8 upstream, read), so it would have compared R4 with a constant.
    What is left unread, and is said so below: a node-wide kill's counters, kernel line and `SystemOOM` Event, which rest on source; and a job's own fill, whose one try recorded no kill.
    Asking the kernel for that kill through `/proc/sysrq-trigger` was considered and is not used: it would read what the source already fixes, at the cost of killing by hand on the cluster.
 2. **The fills that remain stop at `kubepods`' limit.** R3, R3t and R4 reach 27.8 GiB of 31.3, so the kubelet and containerd, outside `kubepods.slice`, keep about 3.5 GiB; run locally at 700 MiB, with no kubelet, and not on a node.
@@ -161,8 +163,8 @@ R3 and R3t decide whether the sidecar or the runner goes first, so whether Q1316
 | R3's runner dies first in 2 of 2 | At the shipped requests a node out of memory is not this class. The pod fails, and what the AGC does with it is Q1400's misreading, not a recovery |
 | R3t's sidecar dies with the runner alive | The class has a platform cause on a template that requests 3Gi or more for its runner, and R4 reads the counter that kill raises |
 | R3t's runner dies in 2 of 2 | The tie is decided by which process is larger in that job; R0's figures say by how much, and no general claim is made |
-| R4's `kubepods.slice` `oom` does not rise | R4's kill was not at `kubepods`' limit; R4 is unread |
-| R4's rises as predicted | A kill at `kubepods`' limit is told from R1's, R6's and R8's, where it stayed 0. A fill by a job's own containers is unread: the only one tried lost the node with no kill recorded. Nor is it a neighbour against the job: the job's own pod over its request raises `kubepods`' `oom` too, so a class needs the pod's usage at or under its request beside it. The shipped limits let two workers use 14Gi, which does not reach `kubepods`' limit, so that twin is not run |
+| R4's `kubepods.slice` `oom` in `memory.events.local` does not rise | R4's kill was not at `kubepods`' limit; R4 is unread |
+| It rises as predicted | A kill at `kubepods`' limit is told from R1's, R6's and R8's, where that file's stayed 0 (R8's `memory.events` did not). A fill by a job's own containers is unread: the only one tried lost the node with no kill recorded. Nor is it a neighbour against the job: the job's own pod over its request raises that one too, so a class needs the pod's usage at or under its request beside it. The shipped limits let two workers use 14Gi, which does not reach `kubepods`' limit, so that twin is not run |
 | The kubelet evicts a worker or the plain pod before any kill | The kill order is not read by that run; it is repeated once. Two such runs mean eviction comes first on this node, which the existing arms classify, and R3's question stays unread |
 | Another pod is killed before a worker | Expected where R0 lists it; the fill goes on and the kill is logged. It says nothing about the two workers' order |
 | A worker and another pod die in one window | The samples give the order to the second; where they do not, the statuses' `finishedAt` does |
@@ -174,20 +176,20 @@ R3 and R3t decide whether the sidecar or the runner goes first, so whether Q1316
 
 **Not buildable at the shipped requests**, with that bound stated: R3 runner-first in both runs, and no platform cause for the `Error` shapes, which the local runtime-loss readings already point to.
 
-**Buildable** needs all three: a platform fill kills the sidecar with its runner alive; R4's kill raises a counter that a job's own does not, with a job's own fill unread; and something carries the node's counters to the AGC.
+**Buildable** needs all three: a platform fill kills the sidecar with its runner alive; R4's kill raises `kubepods`' `oom` in `memory.events.local`, which R1's, R6's and R8's did not, with a job's own fill unread; and something carries the node's counters to the AGC.
 No carrier is known.
 The template's entrypoint is not one: on its restart it can read its own pod's counter, but the fact is `kubepods`' and a rise over a baseline, and a termination message is published when the restarted sidecar stops, after the job's completion.
 A node agent could, which is a new privileged component, and a message a container the job controls could write meets R9's "nothing tenant code writes".
-So a run in which R4's counter rises leaves the class to a design decision rather than building it.
+So a run in which that counter rises leaves the class to a design decision rather than building it.
 
 ## What it decides for Q1400
 
 R3 is the kill [Q1400](../queue/Q1400.md) describes, a runner killed for the node's memory, so one window serves both.
-They settle whether the pod reads `Failed` with the runner `OOMKilled` at the API server, what the AGC then says and does, and when its `PlatformFaultOnFailedJob` comes.
-R8 is the kill they are told apart from, a runner past its own limit, and the AGC is expected to treat it alike.
+It settles whether the pod reads `Failed` with the runner `OOMKilled` at the API server, what the AGC then says and does, and when its `PlatformFaultOnFailedJob` comes.
+R8 is the kill it is told apart from, a runner past its own limit, and the AGC is expected to treat it alike.
 [M3](q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22) read that kill's status and not its counters or Events.
 Each container's `current` and `peak` beside its `max` say how far below its own limit a node-killed runner was, which is the claim Q1400 makes.
-What separates them is expected to be the pod's `oom`, 1 for R8 (read) and 0 for R3; `kubepods`' `oom` and the `SystemOOM` Event would then tell a node-wide kill, which is not read.
+What separates them is expected to be the pod's `oom` in `memory.events`, 1 for R8 (read) and 0 for R3; `kubepods`' `oom` in `memory.events.local`, above 0 for R3, and the `SystemOOM` Event would then tell a node-wide kill, which is not read.
 None of those reaches the AGC today, so the readings say what honest wording can rest on and what a class would need.
 The set is `NodeShare`, so what is read is the withheld `own_limit` branch.
 Not read: a raise under `Binpack` or `Throughput`, which starts from the same two facts, and a runner with no limit.
