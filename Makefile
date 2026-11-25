@@ -518,6 +518,12 @@ template-library-check: ## Fail if deploy/templates/ ships an entry no dogfood e
 test-cache-inputs-check: ## Fail if a cached test reads a file outside its module root (go drops it from the test-cache key)
 	scripts/go/check-test-cache-inputs.sh
 
+# cmd/oomreporter is a tool of its own: it imports no other module here and none
+# imports it (Q1403).
+.PHONY: oomreporter-imports-check
+oomreporter-imports-check: ## Fail if cmd/oomreporter imports another module of this repository, or one imports it
+	scripts/go/check-oomreporter-imports.sh
+
 # Compile and vet the build-tagged Go files no other fast gate builds (Q404).
 # `make lint` and `make test` both use the DEFAULT tag set, so the integration
 # (envtest), e2e, and load packages are invisible to them and a compile break
@@ -786,9 +792,15 @@ cover-check: ## Fail if any module drops below its recorded coverage floor (the 
 	scripts/go/coverage.sh check
 
 .PHONY: test-integration
-test-integration: ## Run envtest-backed integration tests for cmd/agc and cmd/gmc
+test-integration: ## Run envtest-backed integration tests for cmd/agc, cmd/gmc and cmd/oomreporter
 	$(MAKE) -C cmd/agc test-integration
 	$(MAKE) -C cmd/gmc test-integration
+	$(MAKE) test-integration-oomreporter
+
+.PHONY: test-integration-oomreporter
+test-integration-oomreporter: $(SETUP_ENVTEST) ## Run cmd/oomreporter's envtest-backed tests of its chart's grants and policies (needs helm); RUN='TestName' narrows to matching tests
+	KUBEBUILDER_ASSETS="$$($(SETUP_ENVTEST) use "$$(awk -F= '$$1 == "ENVTEST_K8S_VERSION" { print $$2 }' scripts/ci/pins.env)" --bin-dir $(REPO_ROOT)/.build -p path)" \
+		scripts/go/go-test-integration.sh cmd/oomreporter $(if $(RUN),-run '$(RUN)') .
 
 # The in-process scale-set memory probe (Q722) measures the AGC's own cost of one
 # live scale-set session. It needs no cluster or credentials; see cmd/agc/test/load.
