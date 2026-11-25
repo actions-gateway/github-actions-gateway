@@ -227,9 +227,15 @@ Twelve constraints keep the inference from claiming too much:
   So what happened while it was shut is `Unknown`, and the next kill is counted from the first sample after (PR 2's; PR 1 keeps the older base).
 - **A pod with two cgroup directories is not judged.** The kubelet makes one for a UID, and a job with the host's view of the tree can make another in a different class, with a cgroup named as the victim's container in it.
   Read in its place, that copy's counts would name any limit it chose.
-  So such a pod is left out while both are there, and counted from when one is (PR 2's).
+  The copy can outlive the pod's own, so a pod that has had two is not judged again while any directory of its UID is there, and one whose directory went is not judged when another comes within 15 seconds (PR 2's).
+  Nor is one whose directory another took the place of between two samples, which its inode tells (that the kernel does not soon use one again is recall).
+  An agent that restarts forgets all three.
 - **A kill counts for a container only within 5 seconds before to 6 after its end** (the bound is a guess, for reading 3 to set), and two kills of one container with different limits are `Unknown`.
-  Once the kubelet has removed the pod's own directory, a copy stands alone, and this is what keeps it from a later say.
+  Once the kubelet has removed the pod's own directory, this is what keeps a copy the agent has no memory against from a later say.
+- **An answer that rests on the time of a container's end is held for 10 seconds after it** (PR 2's).
+  The kill may be another container's, and that of this one in the node's next report, which is written at most 8 seconds after the one before.
+  The times are the node's and the controller's: a controller ahead of the node holds for less, and one over 10 seconds behind it not at all.
+  Where a container's own counts show the kill, the answer waits for nothing.
 - **A limit lowered below use raises `oom` with no charge failing** (read, `memory_max_write`), as an in-place resize can; the kill that follows is that limit's, and reads so.
 
 #### The container that has gone
@@ -266,11 +272,12 @@ Each shape below needs a second limit to run out at the same moment, or a spare 
 | Killed above the pod, while an allocation at the same container's own limit waits | `ContainerLimit` | **Raise and re-run, as today** | No raise |
 | Killed at its own limit more than a minute after the allocation, with one at its pod's or the pods' limit beside it | `PodLimit` or `PodsLimit` | **No raise, no re-run** | Raise and re-run |
 | Killed above the pod, its file gone, just after a limit ran out in a cgroup of the pod, its own or one another tenant's job put there, that came and went between two samples | `ContainerLimit` | **Raise and re-run, as today** | No raise |
-| Killed in a way the agent did not see, and within 6 seconds a job with the host's view of the tree puts a copy of the pod's cgroups where the kubelet removed them, and has a kill in it | Whichever limit it filled | Follows that | Nothing to go on (reasoned, not run) |
+| Killed in a way the agent did not see, and within 6 seconds the kubelet removes the pod's cgroups, the agent restarts, and a job with the host's view of the tree has a kill in a copy of them | Whichever limit it filled | Follows that | Nothing to go on (reasoned, not run) |
+| Killed at its own limit within 6 seconds of another container's kill above the pod, whose end the status no longer names, and reported more than 10 seconds after its own end | `AbovePods` | **No raise, no re-run** | Raise and re-run |
 | Killed at its own limit, its `oom` raised between the read of the container's file and the read of the pod's in one sample, its file then gone, with one at the pods' limit beside it | `PodsLimit` | **No raise, no re-run** | Raise and re-run |
 
-So of the shapes known, three can withhold a raise and a re-run that were right.
-One needs an allocation to wait more than a minute for its kill, one a sample to straddle it by the time between two reads, expected to be microseconds (read, not measured), and one a job that forges cgroups in the seconds after the pod's are removed.
+So of the shapes known, four can withhold a raise and a re-run that were right.
+One needs an allocation to wait more than a minute for its kill, one a sample to straddle it by the time between two reads, expected to be microseconds (read, not measured), one a job that forges cgroups as the agent restarts, in the seconds after the pod's are removed, and one a container that ended twice in those seconds beside a report that is late.
 The others at worst leave a raise that was not right, which is what the AGC does now.
 Other orders of two limits were tried against the rule on fakes and read the right limit or `Unknown`; none was tried on a kernel.
 A re-run class that trusted `PodsLimit` would have to answer the first two ([Q1408](../queue/Q1408.md)).
@@ -306,7 +313,9 @@ Both, on the pod, in the pod's namespace:
   It says what the **last** kill was: nothing clears it, a container that restarts keeps it, and a second kill with the same reason leaves `lastTransitionTime` where it was.
   So the message carries the time that container ended and its ID, which is what a reader compares.
   Both are the pod's status's, so a report's clock is in neither, and a kill reported again changes nothing.
-  One condition is written at most three times a minute, so an agent that changes its mind cannot keep the controller from other nodes' pods, and the node's next report can still correct an answer inside the AGC's wait.
+  One condition is written at most three times a minute, so an agent that changes its mind cannot keep the controller from other nodes' pods.
+  For 110 pods with one killed container each that is at most 5.5 writes a second from one agent (computed), and the controller's client has no limit of its own for that to fill (PR 2's).
+  The AGC [acts on the first answer](#timing); a later one changes what a person reads.
   A kill the agent was late for, or too far from that end to be its, claims nothing and takes back no answer already written for that container ID.
 - **An Event** with the same words, for people, whose reason is `OOM` and the condition's reason, or `OOMProcessKilled` for a kill that ended no container.
   It outlives the pod, and it covers a kill that ended no container, such as a build's child process, where a condition would mislead.
@@ -413,8 +422,8 @@ An unsandboxed `privileged-dind` job can go further with no escape, since its da
 Under another pod, a nested kill there raises that pod's `oom` (read, `memcg_memory_event`) and not its `oom_group_kill` (read, `mem_cgroup_get_oom_group`), so on its own it would write an Event and no condition (reasoned from both).
 Beside a kill made above that pod it can change the condition too: to `Unknown` where the agent sampled the cgroup, and to `ContainerLimit` where it came and went between two samples, or passed for a container's, and the killed container's own file had gone ([the table](#where-it-names-the-wrong-limit)).
 That is a false cause on another tenant's pod, and the raise that pod gets today, so it undoes D3's withhold for that pod.
-A copy of the whole pod directory beside it silences that pod, which then gets what it gets today, and the agent logs it.
-One made after the kubelet removed the pod's own is [the one that could withhold](#where-it-names-the-wrong-limit).
+A copy of the whole pod directory beside it silences that pod for as long as either is there, which then gets what it gets today, and the agent logs it.
+One made after the kubelet removed the pod's own, as the agent restarts, is [the one that could withhold](#where-it-names-the-wrong-limit).
 It can probably also lower the victim's real limits, which is a true kill at a true limit (reasoned).
 A second pods' root, or a shallower one, stops an agent that has to find it or misleads it as it starts, so the chart sets `-pods-root`.
 So the Event says that a process in the pod's cgroup was killed, and not whose it was, and that pod's `oom` of 0 is no longer conclusive.
@@ -466,7 +475,7 @@ With the setting on, it would also wait until a condition with one of the counte
 - **The hold exists.** Q1389's start wait keeps such a pod for 15 minutes, and this wait would run beside it, from the pod's own end, so a restart of the AGC does not extend it.
 - **It needs widening to two arms.** `oomRetryable` (read) also asks for a memory limit and the sizing profile's annotation, so neither a runner with no limit nor a `Static`, `NodeShare` or `AwaitingSamples` worker is held today; the second is withheld at once as `own_limit`.
 
-The 30 seconds is a guess at several times the agent's and controller's delay.
+The 30 seconds is a guess at several times the agent's and controller's delay, of which 10 are [the hold](#the-rule) of an answer that rests on time.
 The agent's part was under 0.1 s on kind, from the first rise it read to its answer (measured); the rest waits for PR 2.
 
 ### By reason
