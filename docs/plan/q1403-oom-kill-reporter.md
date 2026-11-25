@@ -343,6 +343,8 @@ It needs `update` there and nothing else.
 
 **The controller** maps UID to pod (a static pod's cgroup has another UID than its mirror pod's (recall), so its kills are dropped), **drops and logs any whose `spec.nodeName` is not the node in the report's name**, which is what holds an agent to its own node's pods, decides the reason, writes the condition and the Event, and copies no string from a report into either: beyond the identifiers it looks up, a report is numbers.
 It creates each node's ConfigMap and deletes it when the node has no agent, which it learns from the agents' pods in its own namespace, so it needs no read of Nodes.
+A namespace whose pods it may not list, since whoever administers it deleted the RoleBinding or the namespace, is left out with a warning, and the others go on: an informer that never syncs would stop the controller for every tenant at its next start.
+It starts over once that one can be read.
 A ConfigMap and not a custom resource, because a CRD is a cluster-wide install and the controller checks the shape either way.
 It runs where tenants' jobs do not, and the chart has to make that so: it requires node affinity on a label of the `node-restriction.kubernetes.io/` namespace, which a kubelet may not set on its own node (read, `noderestriction/admission.go`).
 An ordinary node-pool label is not enough: outside the `kubernetes.io` and `k8s.io` namespaces a label is the kubelet's to set (read, `getForbiddenLabels`), so an escaped job could set one on its node and draw the controller's token there.
@@ -362,7 +364,7 @@ So one DaemonSet is a step down for every cluster that runs `privileged-dind` wi
 | Runs as | Non-root, read-only root filesystem, all capabilities dropped, `RuntimeDefault` seccomp | The same, and no `hostPath` |
 | API | `configmaps` update in its namespace | `pods` get/list/watch, `pods/status` patch, `events` create, in the namespaces the chart's values list; `configmaps` get/list/watch/create/delete and `pods` get/list/watch in its own |
 | Cluster-wide grant | None | None, unless the operator lists no namespaces and says so |
-| Network | The API server only | The API server only |
+| Network | Egress to the API server's ports, at any address unless the operator narrows it | The same |
 
 The option's container is neither: its privilege is [above](#the-kernel-log-as-an-option), and it has no API access.
 
@@ -374,13 +376,14 @@ Kubernetes' `edit` role can mint a token for, and impersonate, any service accou
 Three, in the reporter's chart, with `failurePolicy: Fail`:
 
 1. **A report is written only by its own node's agent.** A report's name is a fixed prefix and then the node's name.
-   On create and update in the reporter's namespace, a name with that prefix is refused to any writer but the controller and the agent whose token's node claim is the rest of it, and the agent is refused every other name, since its `configmaps` update covers the namespace.
+   On create and update in the reporter's namespace, a name with that prefix is refused to any writer but the controller and the agent whose token's node claim is the rest of it, and the agent and the controller are refused every other name, since what they may write covers the namespace.
    Other ConfigMaps stay writable by others: the control plane itself keeps `kube-root-ca.crt` in every namespace, which both pods' token volumes mount (read, `rootcacertpublisher` and `serviceaccount/admission.go`).
-   It also refuses the agent `immutable`, finalizers and owner references on its report: `immutable` would refuse its successor's writes until the node had had no agent for ten minutes (reasoned).
+   A report has no `immutable`, finalizer or owner reference: `immutable` would refuse the next agent's writes until the node had had no agent for ten minutes (reasoned).
+   It has no label or annotation either, and no data but the report's one key, of at most 256 KiB: dashboards' sidecars and replicators pick ConfigMaps by those, across namespaces (recall), so one node's stolen token would feed them.
    The claim is `authentication.kubernetes.io/node-name`, which a projected token carries (read, `ServiceAccountTokenPodNodeInfo`, locked on since 1.32; this chart's floor is 1.35); a token without it is refused.
 2. **The controller may change only its own conditions.** `pods/status` is wider than its name: the API server resets the spec, the deletion timestamp and the owner references on such a write, and not labels, annotations or finalizers (read, `podStatusStrategy.PrepareForUpdate`).
    The AGC keeps its recovery marks in annotations, so an unguarded grant could forge "already handled" on any worker.
-   The policy requires metadata unchanged but for `managedFields`, every other status field unchanged, every changed condition to be of the reporter's domain, and no more conditions outside it than before.
+   The policy requires metadata unchanged but for `managedFields`, every other status field unchanged, the conditions outside the reporter's domain to be the same list in the same order, and those in it to be at most 200, with bounded reasons and messages, since a pod too large to store is one its kubelet cannot write to (reasoned).
    A typed object's fields cannot be iterated, so it lists them; a test walks `PodStatus` and `ObjectMeta` and fails on a field the policy does not name, which is how a later release's field is caught.
 3. **The controller's Events carry only its own reasons.** It matches both Event API groups.
    The AGC's opt-in `AutoscalerVerdict` mode reads a `NotTriggerScaleUp` or `TriggeredScaleUp` Event by its reason and no other field (read, `classifyAutoscalerEvent`), so `events` create without this could gate or ungate a set's intake in every namespace it covers.
@@ -394,8 +397,12 @@ A selector that names the wrong namespace judges nothing, so reading 5 loads the
 Its rule reads the node claim for a name with the prefix and no other, since the publisher of `kube-root-ca.crt` has none.
 RBAC and policy take the name from one value, with a test.
 
-RBAC alone would let an agent write any node's report, so the chart has no way to install without them.
-None is written in the chart.
+RBAC alone would let an agent write any node's report, so no value of the chart leaves them out.
+**They can still be absent while the grants stand.** Helm makes them after the pods and the grants (read, the order of a render by Helm 4.2.3), so an install that fails there leaves both unguarded, as does one that applies part of the render.
+The controller therefore does nothing until it is refused, in a dry run, a ConfigMap that is no report, and exits after a minute; with no report made, an agent has nothing it may write either.
+That keeps an unguarded install from working unseen, and does not guard it: whoever takes a token then is held to RBAC alone, so the install command takes a failed install back.
+It looks once, at its start, so a policy that is deleted later is not missed.
+Their names begin with the release's namespace, as those of every object outside it do: two releases of one name, applied by something other than Helm, would otherwise replace each other's policies and leave one controller with none.
 Reading 5 has been taken: on an API server of 1.35.0 the three, with the bindings the chart renders, load within the cost limit and refuse what is listed here, to the tokens the two components' pods would have, and `kube-root-ca.crt` is still written.
 A field a later API server adds to a pod's status is the controller's to change until the chart names it; its test sees it when this repository takes that API.
 
