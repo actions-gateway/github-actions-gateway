@@ -7,14 +7,16 @@
 ## What it decides
 
 Q1316's retry class needs a fact that separates a platform's crash of the Docker-in-Docker sidecar from the job's own, and a platform cause that leaves the runner alive to fail the job.
-From the kernel's scoring, at the shipped requests the runner is expected to go first and the class to have no memory case (computed below); the run confirms or refutes that.
+From the kernel's scoring, at the shipped requests the runner is expected to go first and the class to have no memory case (computed below); the run confirms or refutes that for a kill at `kubepods`' limit, and a node-wide kill's order stays computed.
 The local readings leave five questions only the dogfood cluster answers:
 
-1. When a node runs out of memory, does the kernel kill the sidecar, or the runner first?
-2. Where the sidecar is killed, do the kernel's counters separate a neighbour from the job?
+1. When pods fill a node to `kubepods`' limit, does the kernel kill the sidecar, or the runner first?
+2. Where a neighbour's fill kills the sidecar, does `kubepods`' own counter rise, as no kill by the job in R1, R6 and R8 raised it?
+   A fill by the job is from source.
 3. Do the API server's statuses match the kubelet's, under `privileged-dind` and under Kata?
-4. Does the out-of-memory class read a node-killed runner as an own-limit kill ([Q1400](../queue/Q1400.md))?
-5. Can an unprivileged reader on the node say which limit ran out before the cgroups that say so are removed (Q1403, the node reporter, whose row is on `claude/q1400-oom-cause-text` and not on `main` yet)?
+4. Does the out-of-memory class read a runner killed at `kubepods`' limit as an own-limit kill ([Q1400](../queue/Q1400.md))?
+5. Can an unprivileged reader on the node say whether the container's limit or `kubepods`' ran out, before the cgroups that say so are removed (Q1403, the node reporter, whose row is on `claude/q1400-oom-cause-text` and not on `main` yet)?
+   The pod's limit is read locally, and the node's is from source.
 
 One platform cause is already out: locally, restarting containerd or the kubelet and killing containerd left the sidecar and the runner running, and killing the pod's shim ended both.
 Those readings are one run each, and nothing here repeats them.
@@ -140,7 +142,7 @@ Step 5's lease check did not gate it; the lease read as this run's before and af
 
 1. **R2 and R5 are dropped.** R2's fill is what lost the node, and nothing the second run has to decide rests on either.
    Which of the two dies is read by R3 and R3t: the kernel scores a node-wide kill and a kill at `kubepods`' limit alike but for the limit, 31.3 GiB against 27.8, so the runner's lead over dockerd is 2.0 GiB against 1.8 and R3 is the closer call.
-   Q1400's and Q1403's node-killed runner is R3's.
+   The runner Q1400 and Q1403 read is R3's, killed at `kubepods`' limit.
    R5's `kubepods` `oom` is 0 in both files by the kernel's code, which raises it for a kill at a cgroup's limit alone (`mem_cgroup_oom` in `memcontrol.c`, v6.8 upstream, read), so it would have compared R4 with a constant.
    What is left unread, and is said so below: a node-wide kill's counters, kernel line and `SystemOOM` Event, which rest on source; and a job's own fill, whose one try recorded no kill.
    Asking the kernel for that kill through `/proc/sysrq-trigger` was considered and is not used: it would read what the source already fixes, at the cost of killing by hand on the cluster.
@@ -150,9 +152,10 @@ Step 5's lease check did not gate it; the lease read as this run's before and af
 3. **R3 runs right after R0**, so a lost node costs the least, and it gives Q1316's first question first.
 4. **`set +e`** in the probe's script, so a failing command does not end the sampling (run under `bash -eo pipefail` with and without).
 5. **The recorder acts on the node.** It ends the reading once an e2e node has been not ready for 5 minutes, rather than at the reading's own end; replayed over the first run's node record it ends 5 minutes after the `Unknown` arrived.
-6. **The lease check gates the step**, in one command with it; the first run ran it beside step 5 and not before it.
+6. **The lease check gates each step that changes what another holder would use**, in one command with it; the first run ran it beside step 5 and not before it.
+   Removing this run's own objects is not gated, so they go whoever holds the lease.
 
-No mutation is added, the abort and the restore are unchanged, and step 2 pushes the new file.
+No mutation is added, the abort is unchanged, the restore deletes the probe branch earlier, and step 2 pushes the new file.
 
 R3 and R3t decide whether the sidecar or the runner goes first, so whether Q1316's class has a memory cause; R3 is the shape Q1403's counters and Q1400's runner are read in, at a limit above the pod; R4 reads the counters with a sidecar killed, if one dies at all.
 
@@ -160,7 +163,7 @@ R3 and R3t decide whether the sidecar or the runner goes first, so whether Q1316
 
 | Outcome | Conclusion |
 |---|---|
-| R3's runner dies first in 2 of 2 | At the shipped requests a node out of memory is not this class. The pod fails, and what the AGC does with it is Q1400's misreading, not a recovery |
+| R3's runner dies first in 2 of 2 | At the shipped requests a kill at `kubepods`' limit is not this class; a node-wide kill, where the runner's computed lead is larger, is not read. The pod fails, and what the AGC does with it is Q1400's misreading, not a recovery |
 | R3t's sidecar dies with the runner alive | The class has a platform cause on a template that requests 3Gi or more for its runner, and R4 reads the counter that kill raises |
 | R3t's runner dies in 2 of 2 | The tie is decided by which process is larger in that job; R0's figures say by how much, and no general claim is made |
 | R4's `kubepods.slice` `oom` in `memory.events.local` does not rise | R4's kill was not at `kubepods`' limit; R4 is unread |
@@ -172,9 +175,9 @@ R3 and R3t decide whether the sidecar or the runner goes first, so whether Q1316
 | R6 matches the local statuses | `Error` stays a status any job can produce; a class keyed on it needs a platform cause, and none is known |
 | R7's first is not `OOMKilled`, or exits 137 | Q1395's rule is wrong for Kata and is refiled |
 | R7's second reads `OOMKilled` with 143 | A job's container killed at the sidecar's own limit reads as one killed at its own, which Q1395's rule does not name; the rule's documented miss is confirmed |
-| R3's runner reads `OOMKilled` and the AGC withholds or raises | Q1400 is reproduced, with the counters and the Event that could have told |
+| R3's runner reads `OOMKilled` and the AGC withholds or raises | Q1400 is reproduced for a kill at `kubepods`' limit, with the counters that could have told |
 
-**Not buildable at the shipped requests**, with that bound stated: R3 runner-first in both runs, and no platform cause for the `Error` shapes, which the local runtime-loss readings already point to.
+**Not buildable at the shipped requests**, with the bound that a node-wide kill's order is computed and not read: R3 runner-first in both runs, and no platform cause for the `Error` shapes, which the local runtime-loss readings already point to.
 
 **Buildable** needs all three: a platform fill kills the sidecar with its runner alive; R4's kill raises `kubepods`' `oom` in `memory.events.local`, which R1's, R6's and R8's did not, with a job's own fill unread; and something carries the node's counters to the AGC.
 No carrier is known.
@@ -184,11 +187,11 @@ So a run in which that counter rises leaves the class to a design decision rathe
 
 ## What it decides for Q1400
 
-R3 is the kill [Q1400](../queue/Q1400.md) describes, a runner killed for the node's memory, so one window serves both.
+R3 is one of the kills [Q1400](../queue/Q1400.md) describes, a runner killed at `kubepods`' limit and below its own, so one window serves both; the node-wide one is from source.
 It settles whether the pod reads `Failed` with the runner `OOMKilled` at the API server, what the AGC then says and does, and when its `PlatformFaultOnFailedJob` comes.
 R8 is the kill it is told apart from, a runner past its own limit, and the AGC is expected to treat it alike.
 [M3](q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22) read that kill's status and not its counters or Events.
-Each container's `current` and `peak` beside its `max` say how far below its own limit a node-killed runner was, which is the claim Q1400 makes.
+Each container's `current` and `peak` beside its `max` say how far below its own limit that runner was, which is the claim Q1400 makes.
 What separates them is expected to be the pod's `oom` in `memory.events`, 1 for R8 (read) and 0 for R3; `kubepods`' `oom` in `memory.events.local`, above 0 for R3, and the `SystemOOM` Event would then tell a node-wide kill, which is not read.
 None of those reaches the AGC today, so the readings say what honest wording can rest on and what a class would need.
 The set is `NodeShare`, so what is read is the withheld `own_limit` branch.
@@ -311,7 +314,9 @@ EOF
 ```
 
 The holder is kept in a file because a shell variable does not outlive one command of an agent session.
-Each of steps 1 to 9, and the restore's NetworkPolicy deletion, is joined to this with `&&` in one command, so a step does not start where it fails, which an empty holder or an empty read makes it do:
+Each of steps 1 to 3 and 5 to 8, and the restore's NetworkPolicy deletion, is joined to this with `&&` in one command, so a step does not start where it fails, which an empty holder or an empty read makes it do.
+Steps 4 and 9 are not joined to it: they remove, by name, only what this run made, and leaving those on another holder's cluster is worse than deleting them there.
+
 
 ```bash
 lease_held() {
@@ -355,14 +360,14 @@ The system pool is a different pool.
 
 ## Restore
 
-1. Delete the plain pods and their ConfigMap, and cancel any probe run.
+1. Step 4, then cancel any probe run, then step 9, whoever holds the lease.
    Where the lease reads another holder, stop here and report: the cluster is that holder's, and the rest would tear down what it is using.
    Where there is no lease, take it again; if that fails, the same.
 2. Step 5, which leaves the tenant on its default overlay, then step 6.
    Where step 5 itself fails, `kubectl --context $CTX -n gag-dogfood-e2e delete networkpolicy e2e-open-egress` by hand, since `e2e-stop.sh` leaves it.
 3. Where step 6's drain times out it stops before deleting the gateway: read what it reports, cancel the probe run it names and re-run it.
    `SKIP_E2E_DRAIN=1` is not used, and a worker that is not this run's is left to finish.
-4. Steps 7 and 8 where they apply, and step 9.
+4. Steps 7 and 8 where they apply.
    Where step 7's drain times out the system pool stays up; that is reported with what is running, and not forced.
 5. `scripts/dogfood/ops.sh at-rest`, compared with the reading taken before step 1; the e2e pool scales to 0 on the autoscaler's schedule, so it is read again 35 minutes later.
 6. Step 10, once the pools are back.
