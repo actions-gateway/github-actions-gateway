@@ -29,8 +29,9 @@ const (
 	// The policies are in force a while after they are made, which is after the controller is.
 	guardedWithin, guardedEvery = time.Minute, 2 * time.Second
 	syncedWithin                = 2 * time.Minute
-	againEvery                  = time.Minute
-	stoppedIn                   = 10 * time.Second
+	// Each time the pods of every namespace are listed anew, and a tenant can bring it about.
+	againEvery = 5 * time.Minute
+	stoppedIn  = 10 * time.Second
 
 	// refused is what the report-writer policy says of a ConfigMap that is no report.
 	refused = "the oom-reporter writes no ConfigMap but its reports"
@@ -52,74 +53,105 @@ func controllerFlags(flags *flag.FlagSet, env func(string) string) func(context.
 	return func(ctx context.Context, cfg *rest.Config, log *slog.Logger) error { return o.run(ctx, cfg, log) }
 }
 
-// run runs the controller on the namespaces it can read, and returns once it can read another.
+// run runs the controller on the namespaces it can read, and again once it can read another.
 func (o controllerOptions) run(ctx context.Context, cfg *rest.Config, log *slog.Logger) error {
 	r, err := o.reconciler()
 	if err != nil {
 		return err
 	}
-	kube, err := kubernetes.NewForConfig(unlimited(cfg))
+	short := unlimited(cfg)
+	short.Timeout = o.guardedWithin
+	kube, err := kubernetes.NewForConfig(short)
 	if err != nil {
 		return err
 	}
 	if err := o.guarded(ctx, kube, log); ctx.Err() != nil || err != nil {
 		return err
 	}
-	without, err := unreadable(ctx, kube, r.Namespaces)
-	if err != nil {
-		return err
+	for names := r.Namespaces; ; {
+		without, err := unreadable(ctx, kube, names)
+		if err != nil {
+			return err
+		}
+		r.Namespaces = maps.Clone(names)
+		for name := range without {
+			log.Warn("running without a namespace whose pods it may not list", "namespace", name)
+			delete(r.Namespaces, name)
+		}
+		log.Info("starting", "namespaces", slices.Sorted(maps.Keys(r.Namespaces)), "allNamespaces", o.all)
+		if again, err := o.round(ctx, cfg, r, kube, without); !again || err != nil {
+			return err
+		}
 	}
-	for name := range without {
-		log.Warn("running without a namespace whose pods it may not list", "namespace", name)
-		delete(r.Namespaces, name)
-	}
+}
+
+// round runs r until ctx is done, or until one of without can be read, since a cache takes no more
+// namespaces. The process does not end for that: a tenant could have it end over and over.
+func (o controllerOptions) round(ctx context.Context, cfg *rest.Config, r *controller.Reconciler, kube kubernetes.Interface, without map[string]bool) (again bool, err error) {
+	ctx, stop := context.WithCancel(ctx)
+	synced := false
+	defer func() {
+		// A manager that is stopped before its caches have synced spins (v0.25.2). The process ends it.
+		if synced {
+			stop()
+		}
+	}()
 	mgr, err := o.manager(ctx, cfg, r)
 	if err != nil {
-		return err
+		return false, err
 	}
-	log.Info("starting", "namespaces", slices.Sorted(maps.Keys(r.Namespaces)), "allNamespaces", o.all)
-
-	ended := make(chan error, 3)
+	ended := make(chan error, 1)
 	go func() { ended <- mgr.Start(ctx) }()
-	go func() {
-		if err := o.synced(ctx, mgr); err != nil {
-			ended <- err
-		}
-	}()
-	go func() {
-		if err := o.again(ctx, kube, without); err != nil {
-			ended <- err
-		}
-	}()
+	ready := make(chan error, 1)
+	go func() { ready <- o.synced(ctx, mgr) }()
 	select {
 	case err := <-ended:
-		return err
-	case <-ctx.Done():
+		return false, err
+	case err := <-ready:
+		if err != nil {
+			return false, err
+		}
 	}
-	// A manager whose caches have not synced does not stop (v0.25.2). The process ends it.
+	synced = true
+	found := make(chan bool, 1)
+	go func() { found <- o.again(ctx, kube, without) }()
 	select {
 	case err := <-ended:
-		return err
+		return false, err
+	case again = <-found:
+	}
+	stop()
+	select {
+	case err := <-ended:
+		return again, err
 	case <-time.After(stoppedIn):
-		return nil
+		return false, errors.New("the controller did not stop")
 	}
 }
 
 // guarded waits until the admission policies refuse what the grants let through.
 func (o controllerOptions) guarded(ctx context.Context, kube kubernetes.Interface, log *slog.Logger) error {
-	late := time.After(o.guardedWithin)
+	within, cancel := context.WithTimeout(ctx, o.guardedWithin)
+	defer cancel()
+	var last error
 	for {
-		_, err := kube.CoreV1().ConfigMaps(o.namespace).Create(ctx,
+		_, err := kube.CoreV1().ConfigMaps(o.namespace).Create(within,
 			&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "not-a-report"}}, metav1.CreateOptions{DryRun: []string{metav1.DryRunAll}})
-		if apierrors.IsForbidden(err) && strings.Contains(err.Error(), refused) {
+		switch {
+		case apierrors.IsForbidden(err) && strings.Contains(err.Error(), refused):
 			return nil
+		case err == nil || apierrors.IsAlreadyExists(err):
+			last = errors.New("the admission policies are not in force")
+		case within.Err() == nil || last == nil:
+			last = fmt.Errorf("cannot tell whether the admission policies are in force: %w", err)
 		}
-		log.Info("waiting for the admission policies", "wantRefused", "a ConfigMap that is no report", "err", err)
+		log.Info("waiting for the admission policies", "last", last.Error())
 		select {
-		case <-ctx.Done():
-			return nil
-		case <-late:
-			return errors.New("the admission policies are not in force")
+		case <-within.Done():
+			if ctx.Err() != nil {
+				return nil
+			}
+			return last
 		case <-time.After(o.guardedEvery):
 		}
 	}
@@ -150,21 +182,19 @@ func (o controllerOptions) synced(ctx context.Context, mgr ctrl.Manager) error {
 	return errors.New("the caches have not synced: is there a namespace whose pods it may not list?")
 }
 
-// again returns once one of without can be read. The cache takes no more namespaces, so the
-// controller starts over.
-func (o controllerOptions) again(ctx context.Context, kube kubernetes.Interface, without map[string]bool) error {
-	for len(without) > 0 {
+// again returns true once one of without can be read, and false once ctx is done.
+func (o controllerOptions) again(ctx context.Context, kube kubernetes.Interface, without map[string]bool) bool {
+	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return false
 		case <-time.After(o.againEvery):
 		}
 		now, err := unreadable(ctx, kube, without)
 		if err == nil && len(now) < len(without) {
-			return errors.New("a namespace can be read that could not: starting over")
+			return true
 		}
 	}
-	return nil
 }
 
 func (o controllerOptions) manager(ctx context.Context, cfg *rest.Config, r *controller.Reconciler) (ctrl.Manager, error) {

@@ -68,11 +68,12 @@ helm install oom-reporter oci://ghcr.io/actions-gateway/charts/oom-reporter --ve
 Helm makes the admission policies last, after the grants and the pods, so an install that fails there leaves the grants without them.
 The controller does nothing until the policies refuse it, and no agent has a report to write until it does.
 One whose controller keeps exiting with `the admission policies are not in force` is such an install: uninstall it, since until then the grants are all that holds a token of either component.
+One that says it `cannot tell` was not answered, or was refused by something else, and says what: `networkPolicy.apiServerCIDRs` that do not hold the API server, for one.
 It looks once, as it starts, and for the policy on the reports alone: it does not see one of the others missing, or any deleted later.
 
 **A namespace it may not read is left out**, and the others are not.
 Whoever administers a tenant's namespace can delete its RoleBinding, and deleting the namespace does the same.
-The controller's log names it, and the controller starts over within a minute of being able to read it.
+The controller's log names it, and it is taken in within five minutes of being readable.
 
 The chart requires Kubernetes ≥ 1.35 and cgroup v2.
 `helm template` has no cluster to ask, so it checks the first against the version Helm was built for: pass `--kube-version <your cluster's version>` where that is older.

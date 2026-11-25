@@ -344,7 +344,8 @@ It needs `update` there and nothing else.
 **The controller** maps UID to pod (a static pod's cgroup has another UID than its mirror pod's (recall), so its kills are dropped), **drops and logs any whose `spec.nodeName` is not the node in the report's name**, which is what holds an agent to its own node's pods, decides the reason, writes the condition and the Event, and copies no string from a report into either: beyond the identifiers it looks up, a report is numbers.
 It creates each node's ConfigMap and deletes it when the node has no agent, which it learns from the agents' pods in its own namespace, so it needs no read of Nodes.
 A namespace whose pods it may not list, since whoever administers it deleted the RoleBinding or the namespace, is left out with a warning, and the others go on: an informer that never syncs would stop the controller for every tenant at its next start.
-It starts over once that one can be read.
+It looks again every five minutes, and takes in one that can be read by listing them all anew within the process, since ending it would let that tenant have it restarted into the kubelet's backoff.
+One that can be listed as it looks and not a moment later, as its cache is filled, still costs every tenant the two minutes after which it ends and looks again (measured, against a fake API server).
 A ConfigMap and not a custom resource, because a CRD is a cluster-wide install and the controller checks the shape either way.
 It runs where tenants' jobs do not, and the chart has to make that so: it requires node affinity on a label of the `node-restriction.kubernetes.io/` namespace, which a kubelet may not set on its own node (read, `noderestriction/admission.go`).
 An ordinary node-pool label is not enough: outside the `kubernetes.io` and `k8s.io` namespaces a label is the kubelet's to set (read, `getForbiddenLabels`), so an escaped job could set one on its node and draw the controller's token there.

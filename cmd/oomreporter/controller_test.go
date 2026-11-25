@@ -197,8 +197,59 @@ func TestController_DoesNothingWithoutThePolicies(t *testing.T) {
 	cfg, lists := api(t, func(r *http.Request) bool { return r.Method == http.MethodPost })
 	o := soon("team-a")
 	o.guardedWithin = 100 * time.Millisecond
-	require.ErrorContains(t, ended(t, func() error { return o.run(t.Context(), cfg, noLog) }), "policies are not in force")
+	require.Error(t, ended(t, func() error { return o.run(t.Context(), cfg, noLog) }))
 	assert.Empty(t, lists())
+}
+
+// An operator is told to uninstall a controller whose policies are not in force.
+func TestController_SaysThatThePoliciesAreNotInForceOnlyOfAWriteLetThrough(t *testing.T) {
+	status := func(code int) http.HandlerFunc {
+		return func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(code)
+			if code == http.StatusCreated {
+				_, _ = io.WriteString(w, `{"kind":"ConfigMap","apiVersion":"v1"}`)
+			}
+		}
+	}
+	for name, tc := range map[string]struct {
+		answer  http.HandlerFunc
+		unknown bool
+	}{
+		"let through":       {status(http.StatusCreated), false},
+		"there already":     {status(http.StatusConflict), false},
+		"refused by RBAC":   {status(http.StatusForbidden), true},
+		"unauthenticated":   {status(http.StatusUnauthorized), true},
+		"failed":            {status(http.StatusInternalServerError), true},
+		"never answered":    {func(_ http.ResponseWriter, r *http.Request) { <-r.Context().Done() }, true},
+		"not answered late": {nil, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var asked atomic.Int32
+			s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// The server sees a client go only once it has read what it sent.
+				_, _ = io.Copy(io.Discard, r.Body)
+				switch {
+				case tc.answer != nil:
+					tc.answer(w, r)
+				case asked.Add(1) == 1:
+					status(http.StatusCreated)(w, r)
+				default:
+					<-r.Context().Done()
+				}
+			}))
+			t.Cleanup(s.Close)
+			o := soon("team-a")
+			o.guardedWithin = 300 * time.Millisecond
+			err := ended(t, func() error { return o.run(t.Context(), &rest.Config{Host: s.URL}, noLog) })
+			if tc.unknown {
+				require.ErrorContains(t, err, "cannot tell whether")
+				return
+			}
+			require.ErrorContains(t, err, "policies are not in force")
+			assert.NotContains(t, err.Error(), "cannot tell")
+		})
+	}
 }
 
 func TestController_WaitsForThePolicies(t *testing.T) {
@@ -223,15 +274,16 @@ func TestController_StopsWhileItWaitsForThePolicies(t *testing.T) {
 
 // Who may edit a namespace can take its RoleBinding away.
 func TestController_RunsWithoutANamespaceItMayNotList(t *testing.T) {
-	var bound, read atomic.Bool
+	var bound, read, cached atomic.Bool
 	cfg, lists := api(t, func(r *http.Request) bool {
-		if bound.Load() || !strings.Contains(r.URL.Path, "/namespaces/team-b/") {
+		if !strings.Contains(r.URL.Path, "/namespaces/team-b/") {
 			return false
 		}
 		if r.URL.Query().Get("limit") != "1" {
 			read.Store(true)
+			cached.Store(bound.Load())
 		}
-		return true
+		return !bound.Load()
 	})
 	o := soon("team-a,team-b")
 	ctx, stop := context.WithCancel(t.Context())
@@ -248,8 +300,14 @@ func TestController_RunsWithoutANamespaceItMayNotList(t *testing.T) {
 		t.Fatal("stopped", err)
 	default:
 	}
-	bound.Store(true)
-	require.ErrorContains(t, first(t, done), "starting over")
+	// It comes, and goes, and neither ends the controller.
+	for _, now := range []bool{true, false, true} {
+		bound.Store(now)
+		time.Sleep(100 * time.Millisecond)
+	}
+	assert.Eventually(t, cached.Load, 20*time.Second, 20*time.Millisecond)
+	stop()
+	require.NoError(t, first(t, done))
 }
 
 func TestController_RunsWithNoNamespaceItMayList(t *testing.T) {
@@ -285,7 +343,7 @@ func TestController_TakesNoOtherFailureForAMissingGrant(t *testing.T) {
 	require.ErrorContains(t, err, "namespace team-a")
 	ctx, stop := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer stop()
-	require.NoError(t, soon("").again(ctx, kube, names))
+	assert.False(t, soon("").again(ctx, kube, names))
 }
 
 func TestController_WaitsForWhatThePolicySays(t *testing.T) {
