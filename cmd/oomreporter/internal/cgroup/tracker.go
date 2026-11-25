@@ -225,17 +225,19 @@ func (p *tracked) settled(r Rise, at time.Time) bool {
 	if p.last.pod.Torn {
 		return false
 	}
-	if own+r.Pods == 0 {
+	// A container's counts rise before its pod's.
+	behind := len(r.Containers) > 0 || p.known() > r.Inside
+	if own+r.Pods == 0 && !behind {
 		return true
 	}
 	if p.pending.IsZero() {
 		p.pending = at
 	}
-	if p.killed.IsZero() && p.last.pod.Subtree.OOMKill-p.base.pod.Subtree.OOMKill >= own {
+	if own > 0 && p.killed.IsZero() && p.last.pod.Subtree.OOMKill-p.base.pod.Subtree.OOMKill >= own {
 		p.killed = at
 	}
 	ownDone := own == 0 || !p.killed.IsZero() && at.Sub(p.killed) >= groupLag
-	return ownDone && r.Pods <= r.Peers || at.Sub(p.pending) >= settle
+	return ownDone && !behind && r.Pods <= r.Peers || at.Sub(p.pending) >= settle
 }
 
 func (p *tracked) advance(r Rise, at time.Time) {
