@@ -153,6 +153,7 @@ The repo uses a `go.work` workspace.
 (cd githubapp  && go test ./...)
 (cd cmd/agc   && go test ./...)
 (cd cmd/gmc   && go test ./...)
+(cd cmd/oomreporter && go test ./...)
 (cd cmd/probe && go test ./...)
 (cd cmd/proxy && go test ./...)
 (cd cmd/worker && go test ./...)
