@@ -414,6 +414,30 @@ else
 	fails=$((fails + 1))
 fi
 
+# --- copy_tree: what the DeepCopy half regenerates in --------------------------
+
+# A throwaway repository, so the ignored directory can be created without touching
+# this one.
+copy_root="$FIXTURE_ROOT/copy-tree"
+git init -q "$copy_root"
+mkdir -p "$copy_root"/{api,docs-venv,tools}
+touch "$copy_root"/{api,docs-venv,tools}/file
+printf '/docs-venv/\n' >"$copy_root/.gitignore"
+(
+	REPO_ROOT="$copy_root"
+	GEN_TMP="$FIXTURE_ROOT/copy-out"
+	copy_tree
+)
+got_copy="$(cd "$FIXTURE_ROOT/copy-out/tree" && find . -mindepth 1 -type f | sort | tr '\n' ' ')"
+want_copy='./.gitignore ./api/file '
+if [[ "$got_copy" == "$want_copy" ]]; then
+	printf 'ok   copy     %-28s -> [%s]\n' ignored-entries-left-out "$got_copy"
+else
+	printf 'FAIL copy     %-28s\n  want=[%s]\n  got =[%s]\n' \
+		ignored-entries-left-out "$want_copy" "$got_copy" >&2
+	fails=$((fails + 1))
+fi
+
 # --- the tracked tree ---------------------------------------------------------
 
 # Every real MODULES row still describes its module's real recipe, every module in
