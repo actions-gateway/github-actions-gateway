@@ -669,9 +669,10 @@ It delays no re-run, since the re-run waits for the run to conclude, which needs
 
 A start that the AGC could not record is redelivered and recorded later, except where one batch holds that start and the job's completion: the completion is handled after it and the start is then dropped, which ends in the last row.
 A listener that cannot open its session for those 15 minutes ends there too, and a start it reads later finds the pod claimed.
-The killed job's completion comes before that report, so detection records its failure with no cause, and a re-run by hand that passes counts as flaky.
+Since that claim covers no job, detection records the killed job's failure with no cause, and a re-run by hand that passes counts as flaky.
 
-A killed worker whose pod is gone before a restarted AGC's first scan is the vanished arm's: it re-runs every failed job of the run with no raise, as every disruption arm does.
+A killed worker whose pod is gone before a restarted AGC's first scan is left to the vanished arm, which re-runs every failed job of the run with no raise, as every disruption arm does.
+That arm re-runs nothing for a job whose own worker is still listed, with no start recorded or with an idle worker beside it, because such a job may still be queued.
 
 The reaper keeps an unclaimed kill past `completedPodTTL`, to 5 minutes after the wait ends.
 Only a kill the class could retry waits: a runner with its own memory limit and a name, on a pod a sizing profile built, that no disruption arm takes.
@@ -769,7 +770,7 @@ The record carries the worker's state at its terminal transition, which the pod 
 A worker whose completion has already been handled is not snapshotted, since nothing would take it; a record with neither a snapshot nor a pod has no context.
 A restart loses the snapshots waiting for a completion and the failures waiting for a worker, and the latter keep the running pod's context.
 The snapshot also carries the set's egress proxy pool as `proxy`, read from the AGC's cache: a colocated pool's `Ready` condition and `readyReplicas`, or `mode: shared` alone for a pool in another namespace, which that cache cannot see (Q1237).
-The cause a recovery claim names for the job is recorded with it, so a disrupted job is not read as flaky, but for a runner killed for memory whose [start never came](#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183).
+The cause a recovery claim names for the job is recorded with it, so a disrupted job is not read as flaky, with two exceptions: a runner killed for memory whose [start never came](#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183), and any other worker claimed before its start was recorded, where it ran a job other than the one it was created for ([Q1398](../queue/Q1398.md)).
 
 A later completion of the same key with a new job ID is the job's next attempt or another job with its `name:`, which GitHub allows in one run, and the completion carries no attempt number to tell them apart.
 So the AGC reads the run's jobs in every attempt (`GET …/actions/runs/{id}/jobs?filter=all`) and finds the completed job by its runner's name (Q1375).
