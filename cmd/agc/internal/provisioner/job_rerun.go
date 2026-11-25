@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	neturl "net/url"
+	"slices"
 )
 
 // Job-granular re-runs (Q1319). rerun-failed-jobs re-runs every failed job of the run, so
@@ -64,11 +65,12 @@ func (w killedWorker) find(jobs []workflowJobSummary) (job workflowJobSummary, f
 // where every other failed job of the attempt was cancelled, so that call re-runs no job
 // that ended failure on its own, or where the list does not say which jobs they are: an
 // unread or empty one, or a worker matched by a name that does not name one job.
+// dependents, the red dependents of a job re-run before, are no other failure.
 //
 // rerun-failed-jobs takes the cancelled jobs too, which are a fail-fast matrix's siblings
 // of a killed leg. The list spells a job past its own timeout the same way, and that one
 // is re-run with them.
-func planJobRerun(workers []killedWorker, jobs []workflowJobSummary) (scope string, standing []killedWorker) {
+func planJobRerun(workers []killedWorker, jobs []workflowJobSummary, dependents map[int64]bool) (scope string, standing []killedWorker) {
 	if len(jobs) == 0 || len(workers) == 0 {
 		return rerunScopeFailedJobs, workers
 	}
@@ -83,12 +85,71 @@ func planJobRerun(workers []killedWorker, jobs []workflowJobSummary) (scope stri
 			standing = append(standing, w)
 		}
 	}
-	for _, j := range jobs {
-		if j.failed() && j.Conclusion != runConclusionCancelled && !killed[j.ID] {
-			return rerunScopeJob, standing
-		}
+	if anotherFailed(jobs, killed, dependents) {
+		return rerunScopeJob, standing
 	}
 	return rerunScopeFailedJobs, standing
+}
+
+// anotherFailed reports whether a job of the attempt failed that is neither killed, a red
+// dependent nor cancelled.
+func anotherFailed(jobs []workflowJobSummary, killed, dependents map[int64]bool) bool {
+	return slices.ContainsFunc(jobs, func(j workflowJobSummary) bool {
+		return j.failed() && j.Conclusion != runConclusionCancelled && !killed[j.ID] && !dependents[j.ID]
+	})
+}
+
+// onlyCancelledLeft reports whether what a run needs re-run is its cancelled jobs and their
+// red dependents.
+func onlyCancelledLeft(jobs []workflowJobSummary, dependents map[int64]bool) bool {
+	return cancelledBeside(jobs, nil) && !anotherFailed(jobs, nil, dependents)
+}
+
+// cancelledBeside reports whether GitHub cancelled a job that ran on none of workers.
+func cancelledBeside(jobs []workflowJobSummary, workers []killedWorker) bool {
+	return slices.ContainsFunc(jobs, func(j workflowJobSummary) bool {
+		return j.Conclusion == runConclusionCancelled && !slices.ContainsFunc(workers, func(w killedWorker) bool {
+			return w.Runner == j.RunnerName || w.Runner == "" && w.Job == j.Name
+		})
+	})
+}
+
+// startedJob is an accepted single-job re-run: the attempt GitHub started for it, and the
+// job's display name.
+type startedJob struct {
+	attempt int
+	job     string
+}
+
+// redDependents returns the IDs of the jobs of now, run's latest attempt, that failed in it
+// and in the attempt before because job did: a single-job re-run of job started the attempt,
+// and GitHub re-runs a job's dependents with it and nothing else (the design's M6). One red
+// in the latest alone, such as a job its failed need had kept skipped, failed on its own. It
+// is nil where names do not tell the jobs apart.
+func redDependents(job string, run runState, before, now []workflowJobSummary) map[int64]bool {
+	named, red, ran := map[string]int{}, map[string]int{}, 0
+	for _, j := range before {
+		named[j.Name]++
+		if j.Conclusion == runConclusionFailure {
+			red[j.Name]++
+		}
+	}
+	for _, j := range now {
+		if j.Name == job && !j.carried(run) {
+			ran++
+		}
+	}
+	if ran != 1 {
+		return nil
+	}
+	ids := map[int64]bool{}
+	for _, j := range now {
+		if j.Name != job && !j.carried(run) && j.Conclusion == runConclusionFailure &&
+			named[j.Name] == 1 && red[j.Name] == 1 {
+			ids[j.ID] = true
+		}
+	}
+	return ids
 }
 
 // rerunJob re-runs the job d's worker ran, by its ID in attempt, the run's latest. GitHub
@@ -109,5 +170,13 @@ func (p *Provisioner) rerunJob(ctx context.Context, owner, repo, runID string, a
 	if err != nil {
 		return fmt.Errorf("build job rerun request: %w", err)
 	}
-	return p.sendRerun(ctx, req)
+	if err := p.sendRerun(ctx, req); err != nil {
+		return err
+	}
+	// GitHub takes an ID of the latest attempt alone, and none while the run is in progress,
+	// so the attempt it started is the next.
+	if d.onJobStarted != nil {
+		d.onJobStarted(attempt+1, j.Name)
+	}
+	return nil
 }

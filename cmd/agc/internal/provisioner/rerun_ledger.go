@@ -153,7 +153,7 @@ var (
 		"context"}
 	memoryFloorNames  = []string{"expiresAt", "pod", "container", "killedLimit", "limit", "requestsFollow"}
 	pendingRerunNames = []string{"expiresAt", "firedAt", "cause", "repository", "runID", "job", "disruption",
-		"failedAttempt", "workers"}
+		"failedAttempt", "workers", "startedAttempt", "startedJob"}
 	killedWorkerNames = []string{"job", "runner", "disruption"}
 )
 
@@ -372,6 +372,11 @@ type rerunDisruption struct {
 	onReserved func()
 	// onRerun, where set, is told the re-run's scope as its calls start.
 	onRerun func(scope string)
+	// onJobStarted, where set, is told the attempt GitHub started for an accepted
+	// single-job re-run, and the job's display name.
+	onJobStarted func(attempt int, job string)
+	// exhausted, where set, is the Event a spent budget ends d with.
+	exhausted string
 	// onRefused, where set, ends the recovery on the first call GitHub refuses as already
 	// running, instead of the loop waiting the run out.
 	onRefused func()
@@ -498,6 +503,9 @@ func (a *rerunAttempt) narrow(l *rerunLedger, runID string, d *rerunDisruption) 
 		if e != nil && e.RunID == runID {
 			for _, w := range e.Workers {
 				parked[w.Disruption] = true
+			}
+			if e.StartedAttempt > 0 {
+				parked[e.siblingsKey()] = true
 			}
 		}
 	}

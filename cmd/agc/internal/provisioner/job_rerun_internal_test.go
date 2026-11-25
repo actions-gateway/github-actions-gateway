@@ -29,6 +29,10 @@ type runJob struct {
 	name, runner, conclusion string
 	// ranIn is the attempt the job last ran in, 0 for attempt 1.
 	ranIn int
+	// needs is the jobs this one needs, by name, and gate marks one that runs whatever they
+	// ended as and fails where one did not succeed.
+	needs []string
+	gate  bool
 }
 
 // jobsAPI fakes one run as GitHub treats it (measured 2026-11-24, the design's M6): each
@@ -49,6 +53,12 @@ type jobsAPI struct {
 	emptyList                bool
 	// refuseFor is the runner whose job's re-run GitHub refuses for good.
 	refuseFor string
+	// failAttempt answers an attempt's jobs list with a status.
+	failAttempt map[int]int
+	// oldRun serves the run as the attempt before the latest left it.
+	oldRun bool
+	// moveAfter, where set, is how many run reads are answered before somebody re-runs job 3.
+	moveAfter int
 	// stale answers that many job re-runs as GitHub refuses an earlier attempt's ID.
 	stale int
 	// busy refuses every re-run as if the run were in progress, whatever its status says.
@@ -75,8 +85,24 @@ func (a *jobsAPI) conclusion(attempt int, jobs []runJob) string {
 	return "failure"
 }
 
-// rerun starts the next attempt with the jobs at indexes.
+// dependents is the jobs at indexes and every job that needs one of them, as GitHub re-runs
+// them.
+func (a *jobsAPI) dependents(indexes ...int) []int {
+	for grown := true; grown; {
+		grown = false
+		for i, j := range a.jobs {
+			if !slices.Contains(indexes, i) && slices.ContainsFunc(indexes, func(k int) bool { return slices.Contains(j.needs, a.jobs[k].name) }) {
+				indexes, grown = append(indexes, i), true
+			}
+		}
+	}
+	slices.Sort(indexes)
+	return indexes
+}
+
+// rerun starts the next attempt with the jobs at indexes, and those that need them.
 func (a *jobsAPI) rerun(call string, indexes ...int) {
+	indexes = a.dependents(indexes...)
 	if a.past == nil {
 		a.past = map[int][]runJob{}
 	}
@@ -88,6 +114,11 @@ func (a *jobsAPI) rerun(call string, indexes ...int) {
 		a.jobs[i].ranIn = a.attempt
 		a.jobs[i].runner = fmt.Sprintf("%s-%d", a.jobs[i].runner, a.attempt)
 		a.jobs[i].conclusion = "success"
+		if a.jobs[i].gate && slices.ContainsFunc(a.jobs, func(j runJob) bool {
+			return slices.Contains(a.jobs[i].needs, j.name) && j.conclusion != "success"
+		}) {
+			a.jobs[i].conclusion = "failure"
+		}
 		if c := a.next[a.jobs[i].name]; c != "" {
 			a.jobs[i].conclusion = c
 		}
@@ -162,6 +193,10 @@ func (a *jobsAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if attempt != a.attempt {
 			jobs = a.past[attempt]
 		}
+		if status := a.failAttempt[attempt]; status != 0 {
+			w.WriteHeader(status)
+			return
+		}
 		if a.jobsFailures > 0 {
 			a.jobsFailures--
 			w.WriteHeader(a.jobsStatus)
@@ -179,6 +214,9 @@ func (a *jobsAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"total_count": len(rows), "jobs": rows})
 	case strings.HasPrefix(path, "runs/4242") && r.Method == http.MethodGet:
 		attempt, jobs := a.attempt, a.jobs
+		if a.oldRun && path == "runs/4242" {
+			attempt, jobs = a.attempt-1, a.past[a.attempt-1]
+		}
 		if n, err := strconv.Atoi(strings.TrimPrefix(path, "runs/4242/attempts/")); err == nil && n != a.attempt {
 			attempt, jobs = n, a.past[n]
 		}
@@ -188,6 +226,10 @@ func (a *jobsAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": 4242, "status": status, "conclusion": conclusion, "run_attempt": attempt,
 			"run_started_at": time.Now().Add(-time.Duration(105-10*attempt) * time.Minute).Format(time.RFC3339)})
+		if a.moveAfter--; a.moveAfter == 0 {
+			a.rerun("human", 3)
+			a.running = false
+		}
 	default:
 		w.WriteHeader(http.StatusTeapot)
 	}
@@ -457,6 +499,290 @@ func TestJobRerun_ACarriedCancelDoesNotEndTheTurns(t *testing.T) {
 	assert.ElementsMatch(t, []string{"r-a", "r-b"}, api.accepted())
 }
 
+// matrixJobs is a fail-fast matrix of a, b and c behind a gate, a having been killed.
+func matrixJobs(b, c string, more ...runJob) []runJob {
+	return append([]runJob{
+		{name: "a", runner: "r-a", conclusion: "failure"},
+		{name: "b", runner: "r-b", conclusion: b},
+		{name: "c", runner: "r-c", conclusion: c},
+		{name: "gate", runner: "r-gate", conclusion: "failure", needs: []string{"a", "b", "c"}, gate: true},
+	}, more...)
+}
+
+// TestSiblings_ARedGateIsNoOtherFailure is Q1401: the attempt after a killed leg's own
+// re-run says what depends on it, so a gate red in both attempts does not keep the rest of
+// the matrix from one re-run of every failed job.
+func TestSiblings_ARedGateIsNoOtherFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		jobs   []runJob
+		killed []string
+		next   map[string]string
+		// between changes the run after the first re-run's attempt concludes.
+		between func(a *jobsAPI)
+		budget  int
+		want    []string
+		count   int
+	}{
+		{name: "its cancelled siblings", jobs: matrixJobs("cancelled", "cancelled"), killed: []string{"a"},
+			want: []string{"r-a", "failed-jobs"}, count: 2},
+		{name: "the other killed legs", jobs: matrixJobs("failure", "failure"), killed: []string{"a", "b", "c"},
+			want: []string{"r-a", "failed-jobs"}, count: 2},
+		{name: "a killed leg and a cancelled one", jobs: matrixJobs("failure", "cancelled"), killed: []string{"a", "b"},
+			want: []string{"r-a", "failed-jobs"}, count: 2},
+		{name: "nothing is left", jobs: matrixJobs("success", "success"), killed: []string{"a"},
+			want: []string{"r-a"}, count: 1},
+		{name: "another job failed on its own", jobs: matrixJobs("cancelled", "cancelled", runJob{name: "lint", runner: "r-lint", conclusion: "failure"}), killed: []string{"a"},
+			want: []string{"r-a"}, count: 1},
+		{name: "the killed leg fails again", jobs: matrixJobs("cancelled", "cancelled"), killed: []string{"a"}, next: map[string]string{"a": "failure"},
+			want: []string{"r-a"}, count: 1},
+		{name: "a job it had kept skipped fails on its own", jobs: matrixJobs("cancelled", "cancelled", runJob{name: "deploy", conclusion: "skipped", needs: []string{"a"}}), killed: []string{"a"}, next: map[string]string{"deploy": "failure"},
+			want: []string{"r-a"}, count: 1},
+		{name: "a job that had passed fails on its own", jobs: matrixJobs("cancelled", "cancelled", runJob{name: "report", runner: "r-report", conclusion: "success", needs: []string{"a"}}), killed: []string{"a"}, next: map[string]string{"report": "failure"},
+			want: []string{"r-a"}, count: 1},
+		{name: "two dependents share a name", jobs: matrixJobs("cancelled", "cancelled", runJob{name: "gate", runner: "r-gate2", conclusion: "failure", needs: []string{"a", "b"}, gate: true}), killed: []string{"a"},
+			want: []string{"r-a"}, count: 1},
+		{name: "a dependent has the killed leg's name", jobs: matrixJobs("cancelled", "cancelled", runJob{name: "a", runner: "r-a2", conclusion: "success", needs: []string{"a"}}), killed: []string{"a"},
+			want: []string{"r-a"}, count: 1},
+		{name: "a namesake that had passed fails on its own", jobs: matrixJobs("cancelled", "cancelled", runJob{name: "gate", runner: "r-gate2", conclusion: "success", needs: []string{"a"}}), killed: []string{"a"}, next: map[string]string{"gate": "failure"},
+			want: []string{"r-a"}, count: 1},
+		{name: "the cancelled jobs ran with the killed one", jobs: matrixJobs("success", "success", runJob{name: "down", runner: "r-down", conclusion: "cancelled", needs: []string{"a"}}), killed: []string{"a"}, next: map[string]string{"gate": "failure"},
+			want: []string{"r-a"}, count: 1},
+		{name: "somebody re-ran the other failure since", jobs: append(matrixJobs("cancelled", "cancelled")[:3:3], runJob{name: "lint", runner: "r-lint", conclusion: "failure"}), killed: []string{"a"}, between: func(a *jobsAPI) { a.humanReruns(3) },
+			want: []string{"r-a", "human"}, count: 1},
+		{name: "somebody re-ran a job since, and a namesake of the killed one is red", jobs: matrixJobs("cancelled", "cancelled", runJob{name: "a", runner: "r-a2", conclusion: "failure"}), killed: []string{"a"}, between: func(a *jobsAPI) { a.humanReruns(3) },
+			want: []string{"r-a", "human"}, count: 1},
+		{name: "somebody re-ran a job as the turn came", jobs: matrixJobs("cancelled", "cancelled"), killed: []string{"a"}, between: func(a *jobsAPI) { a.moveAfter = 1 },
+			want: []string{"r-a", "human"}, count: 2},
+		{name: "somebody re-ran a job since", jobs: matrixJobs("cancelled", "cancelled"), killed: []string{"a"}, between: func(a *jobsAPI) { a.humanReruns(3) },
+			want: []string{"r-a", "human"}, count: 1},
+		{name: "somebody cancelled the re-run", jobs: matrixJobs("cancelled", "cancelled"), killed: []string{"a"}, next: map[string]string{"gate": "cancelled"},
+			want: []string{"r-a"}, count: 1},
+		{name: "the budget is one", jobs: matrixJobs("cancelled", "cancelled"), killed: []string{"a"}, budget: 1,
+			want: []string{"r-a"}, count: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, api, target, clock, newP := jobsFixture(t, tc.jobs...)
+			if tc.budget > 0 {
+				target.spec.MaxEvictionRetries = tc.budget
+			}
+			for _, j := range tc.killed {
+				parkKill(p, target, "pod-"+j, j, "r-"+j)
+			}
+			for name, c := range tc.next {
+				api.next[name] = c
+			}
+			release(t, p, api, clock, 1)
+			require.Equal(t, []string{"r-a"}, api.accepted())
+			api.conclude()
+			if tc.between != nil {
+				tc.between(api)
+			}
+			p = newP()
+			require.NoError(t, p.AdoptPendingReruns(context.Background(), target))
+			for range 3 {
+				clock.advance(10 * time.Minute)
+				for _, done := range p.sweepPendingReruns(context.Background()) {
+					<-done
+				}
+				api.conclude()
+			}
+			assert.Equal(t, tc.want, api.accepted())
+			l := readLedger(t, p, target)
+			assert.Empty(t, l.Pending)
+			assert.Equal(t, tc.count, l.Reruns["4242"].Count)
+			assert.Equal(t, tc.budget == 1, strings.Contains(strings.Join(target.messages, ""), "the jobs GitHub cancelled beside"))
+			if tc.want[len(tc.want)-1] == "failed-jobs" {
+				assert.Equal(t, "success", api.conclusion(api.attempt, api.jobs), "the run ends green")
+			}
+		})
+	}
+}
+
+// siblingsFixture is a fail-fast matrix whose killed leg has been re-run alone and passed,
+// with its gate red again and its siblings still cancelled.
+func siblingsFixture(t *testing.T, more ...runJob) (*Provisioner, *jobsAPI, *stubTarget, *testClock, func() *Provisioner) {
+	t.Helper()
+	p, api, target, clock, newP := jobsFixture(t, matrixJobs("cancelled", "cancelled", more...)...)
+	parkKill(p, target, "pod-a", "a", "r-a")
+	release(t, p, api, clock, 1)
+	require.Equal(t, []string{"r-a"}, api.accepted())
+	require.Len(t, readLedger(t, p, target).Pending, 1, "the entry waits for the attempt it started")
+	return p, api, target, clock, newP
+}
+
+// TestSiblings_TwoSetsOfOneRun: each set's own jobs go first, and the set whose call was the
+// last recovers the cancelled ones.
+func TestSiblings_TwoSetsOfOneRun(t *testing.T) {
+	p, api, gpu, clock, _ := jobsFixture(t, matrixJobs("failure", "cancelled")...)
+	cpu := &stubTarget{key: client.ObjectKey{Namespace: "team-a", Name: "cpu"}, spec: gpu.spec}
+	parkKill(p, gpu, "pod-a", "a", "r-a")
+	parkKill(p, cpu, "pod-b", "b", "r-b")
+	for range 5 {
+		api.conclude()
+		clock.advance(10 * time.Minute)
+		for _, done := range p.sweepPendingReruns(context.Background()) {
+			<-done
+		}
+	}
+	calls := api.accepted()
+	require.Len(t, calls, 3)
+	assert.ElementsMatch(t, []string{"r-a", "r-b"}, calls[:2])
+	assert.Equal(t, "failed-jobs", calls[2])
+	assert.Equal(t, "success", api.conclusion(api.attempt, api.jobs))
+	assert.Empty(t, readLedger(t, p, gpu).Pending)
+	assert.Empty(t, readLedger(t, p, cpu).Pending)
+}
+
+// TestSiblings_AListGitHubFailsToServeWaits, and one it refuses names no dependent.
+func TestSiblings_AListGitHubFailsToServeWaits(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		want   []string
+	}{
+		{http.StatusBadGateway, []string{"r-a", "failed-jobs"}},
+		{http.StatusForbidden, []string{"r-a"}},
+	} {
+		t.Run(strconv.Itoa(tc.status), func(t *testing.T) {
+			p, api, target, clock, _ := siblingsFixture(t)
+			api.failAttempt = map[int]int{1: tc.status}
+			release(t, p, api, clock, 0)
+			assert.Equal(t, []string{"r-a"}, api.accepted())
+			api.failAttempt = nil
+			clock.advance(10 * time.Minute)
+			for _, done := range p.sweepPendingReruns(context.Background()) {
+				<-done
+			}
+			assert.Equal(t, tc.want, api.accepted())
+			assert.Empty(t, readLedger(t, p, target).Pending)
+		})
+	}
+}
+
+// TestSiblings_AnOldRunReadWaits: a read from before the call, which still shows the attempt
+// the call was made from concluded, decides nothing.
+func TestSiblings_AnOldRunReadWaits(t *testing.T) {
+	for _, more := range [][]string{{"a"}, {"a", "b"}} {
+		t.Run(strings.Join(more, ","), func(t *testing.T) {
+			p, api, target, clock, _ := jobsFixture(t, matrixJobs("failure", "cancelled")...)
+			if len(more) == 1 {
+				api.jobs[1].conclusion = "cancelled"
+			}
+			for _, j := range more {
+				parkKill(p, target, "pod-"+j, j, "r-"+j)
+			}
+			release(t, p, api, clock, 1)
+			api.oldRun = true
+			release(t, p, api, clock, 0)
+			assert.Equal(t, []string{"r-a"}, api.accepted())
+			require.Len(t, readLedger(t, p, target).Pending, 1)
+			api.oldRun = false
+			release(t, p, api, clock, 1)
+			assert.Equal(t, []string{"r-a", "failed-jobs"}, api.accepted())
+		})
+	}
+}
+
+// TestSiblings_ARestartBetweenTheSlotAndTheCall resumes the siblings' own slot, and leaves
+// the killed job's record where it is.
+func TestSiblings_ARestartBetweenTheSlotAndTheCall(t *testing.T) {
+	ctx := context.Background()
+	p, api, target, clock, newP := siblingsFixture(t)
+	d := rerunDisruption{key: "pod-a/siblings", failedAttempt: 2}
+	got, _, err := p.reserveScaleSetRerun(ctx, target, "4242", &d, recoveryCauseOOM, 2, nil)
+	require.NoError(t, err)
+	require.Equal(t, rerunReserved, got)
+
+	after := newP()
+	require.NoError(t, after.AdoptPendingReruns(ctx, target))
+	release(t, after, api, clock, 1)
+	assert.Equal(t, []string{"r-a", "failed-jobs"}, api.accepted())
+	r := readLedger(t, after, target).Reruns["4242"]
+	assert.Equal(t, 2, r.Count)
+	assert.Equal(t, rerunScopeJob, r.Attempts["1"].Scope)
+	assert.Equal(t, rerunScopeFailedJobs, r.Attempts["2"].Scope)
+}
+
+// TestSiblings_AKillInTheAttemptIsStillReRunAlone: a siblings' turn is a parked re-run, so
+// its record of the attempt does not widen a killed job's.
+func TestSiblings_AKillInTheAttemptIsStillReRunAlone(t *testing.T) {
+	ctx := context.Background()
+	p, _, target, _, _ := siblingsFixture(t)
+	for _, d := range []*rerunDisruption{
+		{key: "pod-a/siblings", failedAttempt: 2},
+		{key: "pod-x", job: "x", failedAttempt: 2, scope: rerunScopeJob},
+	} {
+		_, _, err := p.reserveScaleSetRerun(ctx, target, "4242", d, recoveryCauseOOM, 2, nil)
+		require.NoError(t, err)
+		if d.key == "pod-x" {
+			assert.Equal(t, rerunScopeJob, d.scope)
+		}
+	}
+	a := readLedger(t, p, target).Reruns["4242"].Attempts["2"]
+	assert.Equal(t, rerunScopeJob, a.Scope)
+	assert.Equal(t, []string{"x"}, a.Jobs)
+}
+
+// TestSiblings_AKillFoundLate parks for the attempt that carries its job, and the matrix
+// recovers whichever entry's turn comes first.
+func TestSiblings_AKillFoundLate(t *testing.T) {
+	for _, conclusion := range []string{"failure", "cancelled"} {
+		t.Run(conclusion, func(t *testing.T) {
+			p, api, target, clock, _ := jobsFixture(t, matrixJobs(conclusion, "cancelled")...)
+			target.spec.MaxEvictionRetries = 3
+			parkKill(p, target, "pod-a", "a", "r-a")
+			release(t, p, api, clock, 1)
+			require.Equal(t, []string{"r-a"}, api.accepted())
+			parkKill(p, target, "pod-b", "b", "r-b")
+			require.Len(t, readLedger(t, p, target).Pending, 2)
+			for range 5 {
+				api.conclude()
+				clock.advance(10 * time.Minute)
+				for _, done := range p.sweepPendingReruns(context.Background()) {
+					<-done
+				}
+			}
+			assert.Equal(t, "success", api.conclusion(api.attempt, api.jobs))
+			assert.Empty(t, readLedger(t, p, target).Pending)
+		})
+	}
+}
+
+// TestParkRerun_JoinsAnEntryWaitingForItsSiblings: an entry with no worker left is not one
+// an older AGC wrote.
+func TestParkRerun_JoinsAnEntryWaitingForItsSiblings(t *testing.T) {
+	b := killedWorker{Job: "b", Runner: "r-b", Disruption: "pod-b"}
+	for started, want := range map[int][]killedWorker{0: nil, 2: {b}} {
+		e := &pendingRerun{RunID: "4242", Job: "a", FailedAttempt: 1, StartedAttempt: started}
+		l := &rerunLedger{Pending: map[string]*pendingRerun{"4242/a": e}}
+		parkRerun(l, time.Now(), pendingRerun{RunID: "4242", Job: "b", FailedAttempt: 1, Workers: []killedWorker{b}})
+		assert.Equal(t, want, e.Workers)
+	}
+}
+
+// TestSiblings_NoTurnIsLeft covers the single-job re-runs after which the entry is gone.
+func TestSiblings_NoTurnIsLeft(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		jobs   []runJob
+		refuse bool
+	}{
+		{"nothing was cancelled", matrixJobs("success", "success"), false},
+		{"only the killed job was cancelled", append([]runJob{{name: "a", runner: "r-a", conclusion: "cancelled"}}, matrixJobs("success", "success")[1:]...), false},
+		{"GitHub refuses the call for good", matrixJobs("cancelled", "cancelled"), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, api, target, clock, _ := jobsFixture(t, tc.jobs...)
+			if tc.refuse {
+				api.refuseFor = "r-a"
+			}
+			parkKill(p, target, "pod-a", "a", "r-a")
+			release(t, p, api, clock, 1)
+			assert.Empty(t, readLedger(t, p, target).Pending)
+		})
+	}
+}
+
 // TestFutileRerun_WhoCancelledIsReadAgain: an attempt that carries cancelled jobs is no
 // cancel on any arm, and a list GitHub fails to serve is asked for again before that is
 // decided.
@@ -590,6 +916,8 @@ func TestJobRerun_ACancelledSiblingIsReRunWithTheKilledLeg(t *testing.T) {
 			release(t, p, api, clock, 1)
 			assert.Equal(t, tc.want, api.accepted())
 			assert.Equal(t, tc.sibling, api.jobs[2].conclusion)
+			release(t, p, api, clock, 0)
+			assert.Equal(t, tc.want, api.accepted())
 			l := readLedger(t, p, target)
 			assert.Empty(t, l.Pending)
 			assert.Equal(t, 1, l.Reruns["4242"].Count)
@@ -948,7 +1276,7 @@ func TestPlanJobRerun(t *testing.T) {
 		{"no workers", nil, jobs, rerunScopeFailedJobs, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			scope, standing := planJobRerun(tc.workers, tc.jobs)
+			scope, standing := planJobRerun(tc.workers, tc.jobs, nil)
 			assert.Equal(t, tc.wantScope, scope)
 			assert.Equal(t, tc.want, standing)
 		})

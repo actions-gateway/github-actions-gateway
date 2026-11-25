@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -139,6 +140,8 @@ const rerunWithheldReasonRunCancelled = "run_cancelled"
 // runConclusionCancelled is the conclusion GitHub records for a cancelled run — the one
 // value that stands a recovery down on both tiers.
 const runConclusionCancelled = "cancelled"
+
+const runConclusionFailure = "failure"
 
 // runConclusionSuccess is the conclusion whose failed jobs GitHub refuses to re-run.
 const runConclusionSuccess = "success"
@@ -293,7 +296,7 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 			p.recordRerunFailure(target, runID, cause, rerunFailureReasonBudgetUnrecorded, err)
 			return
 		case outcome == rerunRefused:
-			p.recordRetriesExhausted(target, runID, log, maxRetries, cause)
+			p.recordExhausted(target, runID, log, maxRetries, cause, cmp.Or(d.exhausted, retriesExhaustedMessage(runID, cause, maxRetries)))
 			return
 		case outcome == rerunMerged:
 			log.Info("a re-run is already reserved for this run attempt; this disruption spends no slot and re-runs only if that one never lands",
@@ -373,14 +376,21 @@ func (p *Provisioner) readRerunCandidate(ctx context.Context, target Target, own
 
 // recordRetriesExhausted surfaces a disruption refused for an exhausted budget.
 func (p *Provisioner) recordRetriesExhausted(target Target, runID string, log *slog.Logger, maxRetries int, cause string) {
+	p.recordExhausted(target, runID, log, maxRetries, cause, retriesExhaustedMessage(runID, cause, maxRetries))
+}
+
+func retriesExhaustedMessage(runID, cause string, maxRetries int) string {
+	return fmt.Sprintf("worker pod for run %s was lost to %s and the auto-retry budget (%d) is exhausted; a manual re-run is required", runID, cause, maxRetries)
+}
+
+func (p *Provisioner) recordExhausted(target Target, runID string, log *slog.Logger, maxRetries int, cause, message string) {
 	key := target.Key()
 	log.Warn("disruption retry budget exhausted; manual rerun required",
 		"runID", runID, "maxRetries", maxRetries, "cause", cause)
 	if p.Metrics != nil {
 		p.Metrics.EvictionRetriesExhausted.WithLabelValues(key.Namespace, key.Name, cause).Inc()
 	}
-	target.RecordEvent(corev1.EventTypeWarning, "EvictionRetriesExhausted", "RetryEvictedJob",
-		fmt.Sprintf("worker pod for run %s was lost to %s and the auto-retry budget (%d) is exhausted; a manual re-run is required", runID, cause, maxRetries))
+	target.RecordEvent(corev1.EventTypeWarning, "EvictionRetriesExhausted", "RetryEvictedJob", message)
 }
 
 // recordRetryStarted counts a reserved slot, before any re-run call is made.

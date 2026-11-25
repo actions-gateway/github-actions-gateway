@@ -63,8 +63,17 @@ type pendingRerun struct {
 	// maxMergedPerAttempt. An entry an older AGC wrote holds none, and its release re-runs
 	// every failed job.
 	Workers []killedWorker `json:"workers,omitempty"`
-	extra   map[string]json.RawMessage
+	// StartedAttempt is the attempt the entry's last accepted single-job re-run started, and
+	// StartedJob the job it re-ran, by display name. An entry with neither Workers nor
+	// StartedAttempt is one an older AGC wrote.
+	StartedAttempt int    `json:"startedAttempt,omitempty"`
+	StartedJob     string `json:"startedJob,omitempty"`
+	extra          map[string]json.RawMessage
 }
+
+// siblingsKey is the disruption that re-runs the jobs GitHub cancelled beside r's last
+// killed worker, once none is left. A pod's name holds no slash.
+func (r *pendingRerun) siblingsKey() string { return r.Disruption + "/siblings" }
 
 // parkRerun records r in l, reporting whether it changed l. An attempt has one entry, which
 // lists every worker killed in it (Q1327).
@@ -89,7 +98,7 @@ func parkRerun(l *rerunLedger, now time.Time, r pendingRerun) bool {
 func (r *pendingRerun) addWorkers(workers []killedWorker) bool {
 	changed := false
 	for _, w := range workers {
-		if len(r.Workers) == 0 || len(r.Workers) >= maxMergedPerAttempt ||
+		if (len(r.Workers) == 0 && r.StartedAttempt == 0) || len(r.Workers) >= maxMergedPerAttempt ||
 			slices.ContainsFunc(r.Workers, func(h killedWorker) bool { return h.Disruption == w.Disruption }) {
 			continue
 		}
@@ -289,7 +298,7 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 		return nil, false
 	}
 	drop := func() {
-		p.pendingSets.settle(entry, runKey, p.finishPendingRerun(ctx, target, key, e, nil, log))
+		p.pendingSets.settle(entry, runKey, p.finishPendingRerun(ctx, target, key, e, nil, startedJob{}, log))
 	}
 	expire := func(readErr error) {
 		err := fmt.Errorf("the run did not conclude within %s of the job failing", pendingRerunMaxWait)
@@ -333,7 +342,9 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 		return nil, false
 	}
 
-	concluded, moved := run.status == runStatusCompleted, run.attempt > e.FailedAttempt
+	// A run read that does not show the attempt the last call started is one from before it.
+	concluded := run.status == runStatusCompleted && run.attempt >= e.StartedAttempt
+	moved := run.attempt > e.FailedAttempt
 	var jobs []workflowJobSummary
 	if moved || (concluded && len(e.Workers) > 0) {
 		jobs, err = p.attemptJobs(rctx, owner, repo, e.RunID, run.attempt)
@@ -350,8 +361,18 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 	if moved {
 		workers = notReRun(workers, jobs, run)
 	}
+	var dependents map[int64]bool
+	if concluded && e.StartedAttempt > 0 && run.attempt == e.StartedAttempt {
+		before, err := p.attemptJobs(rctx, owner, repo, e.RunID, run.attempt-1)
+		if errors.Is(err, errRunConclusionUnreadable) {
+			retryRead(err)
+			return nil, false
+		}
+		dependents = redDependents(e.StartedJob, run, before, jobs)
+	}
+	siblings := len(e.Workers) == 0 && e.StartedAttempt > 0 && run.attempt <= e.StartedAttempt
 	switch {
-	case len(workers) == 0:
+	case len(workers) == 0 && !siblings:
 		if !p.pendingSets.claimRelease(runKey) {
 			return nil, false
 		}
@@ -370,10 +391,16 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 		return nil, false
 	}
 	scope := rerunScopeFailedJobs
+	if siblings && (run.conclusion == runConclusionSuccess || !onlyCancelledLeft(jobs, dependents)) {
+		log.Info("the jobs cancelled beside a killed one are not re-run: none is left, or another job of the run failed on its own",
+			"runID", e.RunID, "runAttempt", run.attempt, "cause", e.Cause)
+		drop()
+		return nil, false
+	}
 	// A full entry may not list every worker killed, and a run that succeeded is the
 	// futility checks' to withhold.
 	if len(e.Workers) > 0 && len(e.Workers) < maxMergedPerAttempt && run.conclusion != runConclusionSuccess {
-		if scope, workers = planJobRerun(workers, jobs); len(workers) == 0 {
+		if scope, workers = planJobRerun(workers, jobs, dependents); len(workers) == 0 {
 			log.Info("no failed job of the run ran on the killed worker's runner; the parked re-run is dropped",
 				"runID", e.RunID, "runAttempt", run.attempt, "job", e.Job, "cause", e.Cause)
 			p.recordRerunWithheld(target, e.RunID, e.Cause, rerunWithheldReasonJobNotFound, fmt.Sprintf("worker pod for run %s was lost to %s, but no failed job of the run's attempt %d ran on that worker's runner, so there is nothing to re-run automatically; if a job was lost, find it in the run's other attempts or in another run and re-run it by hand",
@@ -382,13 +409,18 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 			return nil, false
 		}
 	}
-	w := workers[0]
-	log.Info("the run concluded; releasing its parked re-run", "runID", e.RunID, "job", w.Job, "runner", w.Runner,
-		"cause", e.Cause, "scope", scope, "waited", age.Round(time.Second))
 	var ran string
 	var refused bool
-	d := rerunDisruption{key: w.Disruption, job: w.Job, runner: w.Runner, failedAttempt: e.FailedAttempt,
-		scope: scope, with: workers[1:], onRerun: func(scope string) { ran = scope }}
+	var started startedJob
+	d := rerunDisruption{key: e.siblingsKey(), failedAttempt: run.attempt, exhausted: fmt.Sprintf("the jobs GitHub cancelled beside a job of run %s that was lost to %s are not re-run, because the auto-retry budget is exhausted; re-run the run's failed jobs by hand", e.RunID, e.Cause)}
+	if !siblings {
+		w := workers[0]
+		d = rerunDisruption{key: w.Disruption, job: w.Job, runner: w.Runner, failedAttempt: e.FailedAttempt, with: workers[1:]}
+	}
+	log.Info("the run concluded; releasing its parked re-run", "runID", e.RunID, "job", d.job, "runner", d.runner,
+		"cause", e.Cause, "scope", scope, "siblings", siblings, "waited", age.Round(time.Second))
+	d.scope, d.onRerun = scope, func(scope string) { ran = scope }
+	d.onJobStarted = func(attempt int, job string) { started = startedJob{attempt, job} }
 	if !final {
 		d.onRefused = func() { refused = true }
 	}
@@ -405,14 +437,18 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 			p.pendingSets.settle(entry, runKey, false)
 			return
 		}
-		// A single-job re-run leaves the other workers parked, for the attempt it started.
+		// A single-job re-run leaves the other workers parked, for the attempt it started,
+		// and the jobs GitHub cancelled where it was the last.
 		var rest []killedWorker
 		if ran == rerunScopeJob {
 			rest = workers[1:]
 		}
+		if !cancelledBeside(jobs, workers) && len(rest) == 0 {
+			started = startedJob{}
+		}
 		// Dropped only once the release has finished, so a restart mid-release releases
 		// it again and the reservation resumes rather than reserving a second slot.
-		p.pendingSets.settle(entry, runKey, p.finishPendingRerun(context.WithoutCancel(ctx), target, key, e, rest, log))
+		p.pendingSets.settle(entry, runKey, p.finishPendingRerun(context.WithoutCancel(ctx), target, key, e, rest, started, log))
 	}()
 	return done, true
 }
@@ -420,7 +456,7 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 // workers is every worker r was parked for that it names. An entry an older AGC wrote
 // names one, and may have been parked for others.
 func (r *pendingRerun) workers() []killedWorker {
-	if len(r.Workers) > 0 {
+	if len(r.Workers) > 0 || r.StartedAttempt > 0 {
 		return r.Workers
 	}
 	return []killedWorker{{Job: r.Job, Disruption: r.Disruption}}
@@ -436,16 +472,17 @@ func notReRun(workers []killedWorker, jobs []workflowJobSummary, run runState) [
 	})
 }
 
-// finishPendingRerun leaves rest parked of the entry at key, e as its turn read it, or
-// deletes the entry where rest is empty. It reports whether the entry is gone.
-func (p *Provisioner) finishPendingRerun(ctx context.Context, target Target, key string, e pendingRerun, rest []killedWorker, log *slog.Logger) bool {
+// finishPendingRerun leaves rest parked of the entry at key, e as its turn read it, and
+// records the single-job re-run started. It deletes the entry where rest is empty and
+// started is zero, reporting whether the entry is gone.
+func (p *Provisioner) finishPendingRerun(ctx context.Context, target Target, key string, e pendingRerun, rest []killedWorker, started startedJob, log *slog.Logger) bool {
 	gone := false
 	err := p.updateRerunLedger(ctx, target, func(l *rerunLedger, _ time.Time) bool {
 		r := l.Pending[key]
 		if gone = r == nil || r.Disruption != e.Disruption; gone {
 			return false
 		}
-		if gone = len(rest) == 0; gone {
+		if gone = len(rest) == 0 && started.attempt == 0; gone {
 			delete(l.Pending, key)
 			return true
 		}
@@ -456,7 +493,13 @@ func (p *Provisioner) finishPendingRerun(ctx context.Context, target Target, key
 				left = append(left, w)
 			}
 		}
-		r.Workers, r.Job, r.Disruption = left, left[0].Job, left[0].Disruption
+		r.Workers = left
+		if len(left) > 0 {
+			r.Job, r.Disruption = left[0].Job, left[0].Disruption
+		}
+		if started.attempt > 0 {
+			r.StartedAttempt, r.StartedJob = started.attempt, started.job
+		}
 		return true
 	})
 	if err != nil {
