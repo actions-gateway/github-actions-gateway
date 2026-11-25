@@ -32,7 +32,7 @@ func mount(t *testing.T) (dir string, counts func(pod, own string)) {
 	dir = t.TempDir()
 	write := func(name, data string) {
 		path := filepath.Join(dir, name)
-		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
 		require.NoError(t, os.WriteFile(path, []byte(data), 0o600))
 	}
 	const none = "oom 0\noom_kill 0\noom_group_kill 0\n"
