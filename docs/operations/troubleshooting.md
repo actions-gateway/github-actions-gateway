@@ -3131,7 +3131,8 @@ kubectl get configmap -n <namespace> scaleset-failures-<runnerset> -o jsonpath='
 ```
 
 **A `PlatformFaultOnFailedJob` Warning** names the fault.
-`OOMKilled` on the runner means the job needs more memory than the worker template gives it.
+`OOMKilled` on the runner means it was killed for memory, at its own limit or because memory ran out above it, such as on its node (Q1400).
+At its own limit, the job needs more memory than the worker template gives it.
 On a sidecar it means the sidecar was killed with that reason, usually for its own memory limit.
 A sidecar that runs the job's containers in its own cgroup, as `kata-dind`'s does, is also marked `OOMKilled` when one of them passes its own `docker run -m` limit (measured with runc, not under Kata), so one killed later for another reason, such as the SIGKILL that ends its grace period, reads the same; check the job's log for a container that exited 137 before raising the sidecar's limit.
 A sidecar marked that way which then exits with any code but 137 is taken to have survived the kill, so it raises no Warning, and the record's `context` still shows the reason beside the exit code (Q1395).
