@@ -401,7 +401,7 @@ RBAC alone would let an agent write any node's report, so no value of the chart 
 **They can still be absent while the grants stand.** Helm makes them after the pods and the grants (read, the order of a render by Helm 4.2.3), so an install that fails there leaves both unguarded, as does one that applies part of the render.
 The controller therefore does nothing until it is refused, in a dry run, a ConfigMap that is no report, and exits after a minute; with no report made, an agent has nothing it may write either.
 That keeps an unguarded install from working unseen, and does not guard it: whoever takes a token then is held to RBAC alone, so the install command takes a failed install back.
-It looks once, at its start, so a policy that is deleted later is not missed.
+It looks once, at its start, and for policy 1 alone, which the render has last, since a dry run of what policy 2 refuses needs a pod: one of the others absent, or any deleted later, is not seen.
 Their names begin with the release's namespace, as those of every object outside it do: two releases of one name, applied by something other than Helm, would otherwise replace each other's policies and leave one controller with none.
 Reading 5 has been taken: on an API server of 1.35.0 the three, with the bindings the chart renders, load within the cost limit and refuse what is listed here, to the tokens the two components' pods would have, and `kube-root-ca.crt` is still written.
 A field a later API server adds to a pod's status is the controller's to change until the chart names it; its test sees it when this repository takes that API.

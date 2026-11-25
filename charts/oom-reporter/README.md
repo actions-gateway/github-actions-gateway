@@ -68,7 +68,7 @@ helm install oom-reporter oci://ghcr.io/actions-gateway/charts/oom-reporter --ve
 Helm makes the admission policies last, after the grants and the pods, so an install that fails there leaves the grants without them.
 The controller does nothing until the policies refuse it, and no agent has a report to write until it does.
 One whose controller keeps exiting with `the admission policies are not in force` is such an install: uninstall it, since until then the grants are all that holds a token of either component.
-It looks once, as it starts, and does not see a policy deleted later.
+It looks once, as it starts, and for the policy on the reports alone: it does not see one of the others missing, or any deleted later.
 
 **A namespace it may not read is left out**, and the others are not.
 Whoever administers a tenant's namespace can delete its RoleBinding, and deleting the namespace does the same.
