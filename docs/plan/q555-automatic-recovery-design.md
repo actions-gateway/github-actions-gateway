@@ -927,7 +927,7 @@ The jobs list gives `conclusion: cancelled` for every shape below; the failure-l
 | A concurrency group | `Canceling since a higher priority waiting request for refs/pull/72292/merge-asv-benchmarks exists` | 3 | 0 |
 | Never started | `The job was not acquired by Runner of type hosted …`, or an internal error | 0 | 4, one of them beside a timeout |
 
-- **The annotation separates them and the jobs list does not.** Reading it takes `Checks: read`, which the App has only where the optional `Checks: Read and write` that posts a fork refusal's check run is granted, and it is one call for each cancelled job.
+- **The annotation separates them and the jobs list does not.** In a private repository reading it takes `Checks: read`, which is optional for the App, and it is one call for each cancelled job.
 - **The time does not.** All 329 fail-fast siblings read ended at or after their run's first failure, but so did 12 of the 14 timeouts read and all 4 concurrency cancels.
 - **Most fail-fast runs hold another failed job too, usually an aggregate.** By each run's own workflow file at its head SHA, `needs:` followed transitively, 12 of the 63 hold nothing else, 30 only jobs that need the leg's matrix (all `rust-lang/cargo`'s `conclusion`), 15 such a job and an independent failure, and 6 an independent failure alone.
   A rule that lets `cancelled` through recovers the 12; `rerun-failed-jobs` recovers the 42 where nothing independent failed, and re-runs the independent failure in the other 21.

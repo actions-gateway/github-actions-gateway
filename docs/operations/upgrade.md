@@ -1290,7 +1290,6 @@ In a private repository whose GitHub App lacks `Checks: Read`, a **Normal** `Can
 **What to do.** Nothing.
 To have timed-out jobs counted in a private repository, grant the App the optional [`Checks: Read`](tenant-onboarding.md#0a-create-the-app-web-ui).
 
-
 ### Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run
 
 **Who is affected:** a tenant with a `Binpack` or `Throughput` `RunnerSet`, whose jobs killed at a memory limit the profile chose are re-run automatically.
