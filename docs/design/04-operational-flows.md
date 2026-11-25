@@ -672,9 +672,10 @@ The disruption arms are outside it: a mass Spot preemption is exactly when their
 The disruption arms' 15-minute window covers GitHub concluding a runner it lost, about 10 minutes, and not a sibling job that runs longer, and a job that outgrows its memory is often one of a long matrix.
 So the class takes its slot when it fires, with the run read and the futility checks the arms take, and parks the re-run in the failure ledger under `pending["<runID>/<job name>"]` in the same write, recording the attempt the job failed in.
 A sweep on the abandoned-run sweeper's 30-second tick reads each parked run every 30 seconds for its first 5 minutes, every 2 minutes to its first hour, then every 10, about 175 reads in a day.
-A run already past the recorded attempt has been re-run by someone, and the entry is dropped.
+A run past the recorded attempt whose latest attempt re-ran every job the entry is for has been re-run by someone, and the entry is dropped.
 A read that fails retries at the next poll, whatever the failure, since over a day of polling a rate limit or a token that would not mint is expected; only a 404 or 410 ends the wait early, as `eviction_rerun_failures_total{reason="api_error"}`.
 A concluded run is released into the arms' path with no delay: it reads the run and takes the futility checks again, its reservation resumes the slot already held, and the entry leaves the ledger once the re-run has finished.
+The release re-runs the killed jobs and no other where it can tell them apart ([below](#the-re-run-takes-only-the-killed-jobs-q1319)).
 At 24 hours the entry gets one last read, whatever the cadence, so a run that concluded while no process swept, or since the last due read, is still released, and one already re-run is still dropped.
 A run still in progress at that read ends the wait as `eviction_rerun_failures_total{reason="run_never_concluded"}` with an `EvictionRerunFailed` Event; a read that fails is retried at the 10-minute cadence for half an hour, about four reads, before ending the wait the same way, so one bad answer costs a poll rather than the re-run (Q1254); the entry is kept an hour past the 24 hours so a prune on another write does not drop it unreported.
 **A restart loses no parked re-run.** The entries are in the ledger; what a new process lacks is which sets to sweep, since the AGC runs no ConfigMap informer and a ledger does not hold the owner the release needs.
@@ -685,6 +686,43 @@ The disruption arms keep their 15-minute window.
 **The shape is the cgroup v2 one, measured on dogfood** ([R12](../plan/q555-flaky-job-retry.md#classified-platform-retry-phase-2)).
 On cgroup v2 with `memory.oom.group` at 1, as on its worker nodes (kubelet `v1.35.8-gke.1796000`, `singleProcessOOMKill` unset), an out-of-memory kill takes the whole container, so it ends the runner along with the step that used the memory.
 On cgroup v1, or with the kubelet's `singleProcessOOMKill`, only the largest process dies, the runner can survive to report the step's failure, and that pod is not recognised; this half is from recall of the kubelet, not measured here.
+
+#### The re-run takes only the killed jobs (Q1319)
+
+`rerun-failed-jobs` would re-run every failed job of the run, a sibling's genuine failure included, and hide it if it passed.
+So the parked entry lists each worker killed in the attempt with its runner's name, up to 16, and the release reads the latest attempt's jobs list, which is complete once the run has concluded ([`job_rerun.go`](../../cmd/agc/internal/provisioner/job_rerun.go)).
+A listed job whose `runner_name` is a killed worker's, and which failed, is one to re-run.
+Two jobs of a run can share a display name, and a worker often runs a job other than the one its pod was built for, so the runner's name is what identifies the job ([measured](../plan/q555-automatic-recovery-design.md#m6-readings-from-the-job-granular-probe-2026-11-24)); the display name is used only where the pod carries no runner name.
+
+| In the latest attempt | Re-run | Slots |
+|---|---|---|
+| Every failed job is a killed one | `rerun-failed-jobs`, which takes the cancelled jobs too | One |
+| One killed job, and another job failed | `POST …/jobs/{id}/rerun` for the killed one, which GitHub extends to its `needs:` dependents | One |
+| Several killed jobs, and another job failed | The first alone. The others stay parked and are judged again once the attempt it starts concludes | One each |
+| No failed job ran on a killed worker's runner | None: `reason="job_not_found"` | The one taken when the class fired |
+| The list is refused or empty, a display name does not name exactly one job, 16 workers are listed, or an older AGC wrote the entry | `rerun-failed-jobs`, as before Q1319 | One |
+
+A list GitHub fails to serve retries at the next poll, like the run read.
+Taking turns is GitHub's limit as much as the budget's: it refuses a single-job re-run while the run is in progress.
+The list carries no `needs:`, so a dependent that failed because a killed job did, such as an `if: always()` aggregate, counts as another failure; the killed job's re-run takes it along.
+A job GitHub cancelled is not another failure here, so a killed leg of a fail-fast matrix and the siblings GitHub cancelled with it are re-run together, as they were before Q1319.
+Beside another failure the leg is re-run alone and those siblings wait for a re-run by hand.
+The list says `cancelled` for a fail-fast matrix's sibling, a job past its `timeout-minutes` and a job a concurrency group cancelled alike ([measured](../plan/q555-automatic-recovery-design.md#readings-for-a-cancelled-sibling-2026-11-24)), so the last two are re-run with the siblings.
+A run GitHub itself concludes `cancelled`, as it can one holding a timeout, is not re-run at all (`run_cancelled`).
+That includes the attempt a single-job re-run starts, where the killed leg passes, an aggregate is red again and the matrix's other legs are still cancelled, so a second killed leg's turn can end there ([Q1401](../queue/Q1401.md)).
+
+**The reservation follows the call.** A kill reserves its attempt's one slot when it fires, with scope `FailedJobs`, and later kills of the attempt merge into it.
+A release that re-runs one job narrows that record to the job, scope `Job`, in the write before the call, so each job that waits reserves a slot of its own at its turn, and a release that crashes before the call resumes the same job on the same slot.
+The record is not narrowed where a disruption arm holds the attempt too, since its own loop calls `rerun-failed-jobs`, and the release then makes that call.
+An arm's disruption that finds a single-job re-run recorded for the attempt reserves beside it rather than merging, because that re-run does not cover its job.
+A resumed single-job re-run whose run has since moved on is recorded under the attempt it now re-runs from, so detection pairs the job with it.
+A release that re-runs every failed job instead, because the other failure is gone, widens the record to the killed jobs it takes.
+
+Releases of one run take turns, one at a time per set, and a release GitHub refuses as already running goes back to waiting: its entry stays parked, on the slot it holds, until the attempt in progress concludes.
+Past the 24 hours a refused release waits out the 15-minute window instead and then ends as `run_never_concluded`.
+
+Runs whose jobs span two sets are judged by each set's own ledger, so a job another set's class killed is a failure this one did not classify.
+Each set re-runs its own jobs alone, one set after the other, since GitHub refuses the second call until the first's attempt concludes.
 
 #### Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)
 
@@ -722,7 +760,7 @@ A re-run of an attempt is attributed from what the same ledger says GAG re-ran o
 | GAG re-ran the failed attempt and | Trigger | Flaky when it succeeds |
 |---|---|---|
 | listed this job | `gag` | Never; the result counts in `eviction_rerun_outcomes_total{cause}` |
-| re-ran failed jobs without listing it | `gag_collateral` | When its failure had no disruption cause |
+| re-ran another job without listing it: every failed job, or the jobs that need the one it re-ran | `gag_collateral` | When its failure had no disruption cause |
 | did neither | `other` | As above |
 
 A succeeded attempt deletes the record; a failed one updates it, keeping the first failure's time and context.

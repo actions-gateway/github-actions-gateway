@@ -20,6 +20,7 @@
 //	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}/jobs — a run's jobs, always none (Q1375)
 //	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}/attempts/{n}/jobs — an attempt's jobs, always none (Q1320)
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/rerun-failed-jobs — eviction auto-retry
+//	POST /api/v3/repos/{o}/{r}/actions/jobs/{id}/rerun — out-of-memory auto-retry of one job (Q1319)
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/force-cancel — abandoned-run fast ending (Q683)
 //	POST /api/v3/repos/{o}/{r}/check-runs        — fork pull request refusal reason (Q1330)
 //	GET  /api/v3/repos/{o}/{r}/check-runs/{id}/annotations — a cancelled job's, always none (Q1374)
@@ -286,8 +287,8 @@ type server struct {
 	// provisioner's fast honest ending for a worker removed before it ran (Q683).
 	// Always accepted 202, the answer live GitHub gave the standalone call.
 	forceCancelPaths []string
-	// rerunPaths records the request path of every accepted (201) rerun-failed-jobs
-	// call the AGC has made, in order — the eviction auto-retry signal (Q421).
+	// rerunPaths records the request path of every accepted (201) rerun-failed-jobs or
+	// single-job re-run call the AGC has made, in order — the auto-retry signal (Q421).
 	// Guarded by mu.
 	rerunPaths []string
 	// refusedRerunPaths records the rerun-failed-jobs calls refused with the 403
@@ -489,6 +490,10 @@ func (s *server) handleRunnerAPI(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	if strings.HasSuffix(path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
 		s.handleRerunFailedJobs(w, r)
+		return
+	}
+	if isJobRerunPath(path) && r.Method == http.MethodPost {
+		s.handleRerunJob(w, r)
 		return
 	}
 	if strings.HasSuffix(path, "/force-cancel") && r.Method == http.MethodPost {
@@ -1425,11 +1430,15 @@ func (s *server) handleJobStats(w http.ResponseWriter, r *http.Request) {
 
 // handleReposAPI routes the /repos/{owner}/{repo}/... REST endpoints the AGC
 // addresses directly off GITHUB_API_BASE_URL. Only the run read, the workflow-runs and
-// jobs lists, rerun-failed-jobs, force-cancel and check-run creation are served;
+// jobs lists, rerun-failed-jobs, a job's rerun, force-cancel and check-run creation are served;
 // anything else 404s, as an unimplemented endpoint should.
 func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.URL.Path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
 		s.handleRerunFailedJobs(w, r)
+		return
+	}
+	if isJobRerunPath(r.URL.Path) && r.Method == http.MethodPost {
+		s.handleRerunJob(w, r)
 		return
 	}
 	if strings.HasSuffix(r.URL.Path, "/force-cancel") && r.Method == http.MethodPost {
@@ -1506,7 +1515,8 @@ func isJobsPath(path string) bool {
 //
 // Both always list no jobs. Flaky-job detection (Q1375) then pairs no completion with a
 // failure, and the already_rerun check (Q1320) reads no answer, so a second recovery of a
-// run the AGC has re-run still stands down on the attempt alone.
+// run the AGC has re-run still stands down on the attempt alone. A parked out-of-memory
+// re-run (Q1319) finds no job to re-run alone, and calls rerun-failed-jobs.
 func handleJobs(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -1601,6 +1611,33 @@ func (s *server) handleRerunFailedJobs(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(map[string]any{})
+}
+
+// isJobRerunPath reports a .../actions/jobs/{job_id}/rerun path.
+func isJobRerunPath(path string) bool {
+	const marker = "/actions/jobs/"
+	i := strings.Index(path, marker)
+	if i < 0 {
+		return false
+	}
+	id, rest, ok := strings.Cut(path[i+len(marker):], "/")
+	return ok && id != "" && rest == "rerun"
+}
+
+// handleRerunJob serves the re-run of one job (Q1319):
+//
+//	POST /api/v3/repos/{owner}/{repo}/actions/jobs/{job_id}/rerun
+//
+// It answers 201 and records the path beside rerun-failed-jobs' for /control/reruns, so a
+// spec that asserts no re-run fired sees one of either kind. The jobs lists above are
+// always empty, so nothing but the parity probe reaches it.
+func (s *server) handleRerunJob(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.rerunPaths = append(s.rerunPaths, r.URL.Path)
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]any{})
 }

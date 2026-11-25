@@ -1,6 +1,7 @@
 package provisioner
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -73,9 +74,9 @@ const failureRecordsCeiling = rerunLedgerMaxBytes / 2
 // no slot either.
 const maxMergedPerAttempt = 16
 
-// Re-run scopes: what one re-run covered. rerun-failed-jobs, the only call GAG makes
-// today, covers every failed job of the attempt; scopeJob is reserved for a
-// single-job re-run, which covers only the jobs it lists.
+// Re-run scopes: what one re-run covered. rerun-failed-jobs covers every failed job of
+// the attempt; a single-job re-run covers only the jobs its attempt lists. A parked
+// re-run is recorded as the first until its release decides (planJobRerun).
 const (
 	rerunScopeFailedJobs = "FailedJobs"
 	rerunScopeJob        = "Job"
@@ -140,6 +141,7 @@ type (
 	failureRecordFields failureRecord
 	memoryFloorFields   memoryFloor
 	pendingRerunFields  pendingRerun
+	killedWorkerFields  killedWorker
 )
 
 // The JSON names each type declares, which the preserving helpers keep out of extra.
@@ -151,7 +153,8 @@ var (
 		"context"}
 	memoryFloorNames  = []string{"expiresAt", "pod", "container", "killedLimit", "limit", "requestsFollow"}
 	pendingRerunNames = []string{"expiresAt", "firedAt", "cause", "repository", "runID", "job", "disruption",
-		"failedAttempt"}
+		"failedAttempt", "workers"}
+	killedWorkerNames = []string{"job", "runner", "disruption"}
 )
 
 func (l *rerunLedger) UnmarshalJSON(b []byte) error {
@@ -200,6 +203,14 @@ func (r *pendingRerun) UnmarshalJSON(b []byte) error {
 
 func (r pendingRerun) MarshalJSON() ([]byte, error) {
 	return marshalPreserving(pendingRerunFields(r), r.extra)
+}
+
+func (w *killedWorker) UnmarshalJSON(b []byte) error {
+	return unmarshalPreserving(b, (*killedWorkerFields)(w), killedWorkerNames, &w.extra)
+}
+
+func (w killedWorker) MarshalJSON() ([]byte, error) {
+	return marshalPreserving(killedWorkerFields(w), w.extra)
 }
 
 // unmarshalPreserving decodes b into known and stores every key not in names in extra.
@@ -347,9 +358,23 @@ type rerunDisruption struct {
 	assignedAt time.Time
 	// runner is the GitHub runner that took the job, "" where no start was recorded.
 	runner string
+	// workerRunner is the runner registered for the worker, whether or not it started the
+	// job, "" where the pod names none. Only a parked re-run reads it.
+	workerRunner string
+	// scope is what the re-run covers, rerunScopeFailedJobs where it is "". The reservation
+	// widens a rerunScopeJob that another disruption's re-run of the attempt rules out.
+	scope string
+	// with is the other workers a parked release found standing, whose jobs a re-run of
+	// rerunScopeFailedJobs takes too.
+	with []killedWorker
 	// onReserved, where set, runs once the disruption holds a slot: a fresh
 	// reservation, or a merge into one this attempt already holds.
 	onReserved func()
+	// onRerun, where set, is told the re-run's scope as its calls start.
+	onRerun func(scope string)
+	// onRefused, where set, ends the recovery on the first call GitHub refuses as already
+	// running, instead of the loop waiting the run out.
+	onRefused func()
 	// park defers the re-run until the run concludes: the reservation records it in
 	// the ledger's pending map in the same write, and the recovery returns once the slot
 	// is held instead of re-running (pending_rerun.go).
@@ -377,12 +402,19 @@ const (
 // the 1-based number of GAG's re-run of the run it belongs to. A non-nil error means no
 // decision was recorded, and the caller withholds the re-run. A non-nil park is recorded
 // in the same write where the disruption holds a slot.
-func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, runID string, d rerunDisruption, cause string, maxRetries int, park *pendingRerun) (rerunReservation, int, error) {
+//
+// Where d re-runs one job, the attempt it resumes or merges into is narrowed to that job,
+// so a job it no longer covers reserves its own slot when its turn comes. d.scope is set
+// to rerunScopeFailedJobs instead where a disruption that is not a parked re-run holds the
+// attempt too: that one re-runs every failed job of it anyway.
+func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, runID string, d *rerunDisruption, cause string, maxRetries int, park *pendingRerun) (rerunReservation, int, error) {
 	var (
 		outcome rerunReservation
 		number  int
 	)
+	want := cmp.Or(d.scope, rerunScopeFailedJobs)
 	decide := func(l *rerunLedger, now time.Time) bool {
+		d.scope = want
 		r := l.Reruns[runID]
 		if r == nil {
 			r = &rerunRecord{}
@@ -393,20 +425,23 @@ func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, r
 		}
 		attemptKey := strconv.Itoa(d.failedAttempt)
 
-		for _, a := range r.Attempts {
+		for from, a := range r.Attempts {
 			if a != nil && slices.Contains(a.Disruptions, d.key) {
 				outcome, number = rerunResumed, r.Count
-				return false
+				changed := a.narrow(l, runID, d)
+				changed = r.advance(from, d) || changed
+				if r.Attempts[attemptKey] == a {
+					changed = a.cover(d) || changed
+				}
+				return changed
 			}
 		}
-		if a := r.Attempts[attemptKey]; a != nil &&
-			(a.Scope == rerunScopeFailedJobs || (d.job != "" && slices.Contains(a.Jobs, d.job))) {
+		a := r.Attempts[attemptKey]
+		if a != nil && (a.Scope == rerunScopeFailedJobs || (d.job != "" && slices.Contains(a.Jobs, d.job))) {
 			outcome = rerunMerged
-			if len(a.Disruptions) < maxMergedPerAttempt {
-				a.Disruptions = append(a.Disruptions, d.key)
-			}
-			if d.job != "" && len(a.Jobs) < maxMergedPerAttempt && !slices.Contains(a.Jobs, d.job) {
-				a.Jobs = append(a.Jobs, d.job)
+			if !a.narrow(l, runID, d) {
+				a.add(d)
+				a.cover(d)
 			}
 			r.ExpiresAt = now.Add(rerunRecordTTL)
 			return true
@@ -416,11 +451,17 @@ func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, r
 			return false
 		}
 		r.Count++
-		a := &rerunAttempt{Scope: rerunScopeFailedJobs, Cause: cause, Disruptions: []string{d.key}}
-		if d.job != "" {
-			a.Jobs = []string{d.job}
+		if a == nil {
+			a = &rerunAttempt{Scope: d.scope, Cause: cause}
+			r.Attempts[attemptKey] = a
 		}
-		r.Attempts[attemptKey] = a
+		// An attempt that already holds a single-job re-run keeps it, so that one still
+		// resumes. A re-run of every failed job covers both; a parked one decides later.
+		if d.scope == rerunScopeFailedJobs && park == nil {
+			a.Scope = rerunScopeFailedJobs
+		}
+		a.add(d)
+		a.cover(d)
 		r.ExpiresAt = now.Add(rerunRecordTTL)
 		outcome, number = rerunReserved, r.Count
 		return true
@@ -433,6 +474,73 @@ func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, r
 		return changed
 	})
 	return outcome, number, err
+}
+
+// add records d in a, up to maxMergedPerAttempt.
+func (a *rerunAttempt) add(d *rerunDisruption) {
+	if len(a.Disruptions) < maxMergedPerAttempt && !slices.Contains(a.Disruptions, d.key) {
+		a.Disruptions = append(a.Disruptions, d.key)
+	}
+	if d.job != "" && len(a.Jobs) < maxMergedPerAttempt && !slices.Contains(a.Jobs, d.job) {
+		a.Jobs = append(a.Jobs, d.job)
+	}
+}
+
+// narrow records that a's re-run covers d's job alone, where d re-runs one job and every
+// disruption a holds is a parked re-run of runID. Otherwise it sets d to a's scope where
+// that is the wider one. It reports whether it changed a.
+func (a *rerunAttempt) narrow(l *rerunLedger, runID string, d *rerunDisruption) bool {
+	if d.scope != rerunScopeJob || a.Scope != rerunScopeFailedJobs {
+		return false
+	}
+	parked := map[string]bool{d.key: true}
+	for _, e := range l.Pending {
+		if e != nil && e.RunID == runID {
+			for _, w := range e.Workers {
+				parked[w.Disruption] = true
+			}
+		}
+	}
+	full := len(a.Disruptions) >= maxMergedPerAttempt
+	if full || slices.ContainsFunc(a.Disruptions, func(key string) bool { return !parked[key] }) {
+		d.scope = rerunScopeFailedJobs
+		return false
+	}
+	a.Scope, a.Disruptions, a.Jobs = rerunScopeJob, []string{d.key}, nil
+	if d.job != "" {
+		a.Jobs = []string{d.job}
+	}
+	return true
+}
+
+// cover records the jobs d's release re-runs beside its own, which a is missing where a
+// single-job release GitHub refused narrowed it, or the run's records moved on without
+// them. It reports whether it changed a.
+func (a *rerunAttempt) cover(d *rerunDisruption) bool {
+	if d.scope != rerunScopeFailedJobs || len(d.with) == 0 {
+		return false
+	}
+	scope, size := a.Scope, len(a.Disruptions)+len(a.Jobs)
+	a.Scope = rerunScopeFailedJobs
+	for _, w := range d.with {
+		a.add(&rerunDisruption{key: w.Disruption, job: w.Job})
+	}
+	return a.Scope != scope || len(a.Disruptions)+len(a.Jobs) != size
+}
+
+// advance moves the single-job re-run at from, d's alone, to the later attempt d's job
+// stands failed in, so the attempt that re-runs it is paired with the re-run. It reports
+// whether it moved.
+func (r *rerunRecord) advance(from string, d *rerunDisruption) bool {
+	a, to := r.Attempts[from], strconv.Itoa(d.failedAttempt)
+	n, err := strconv.Atoi(from)
+	if err != nil || n >= d.failedAttempt || r.Attempts[to] != nil ||
+		a.Scope != rerunScopeJob || len(a.Disruptions) != 1 {
+		return false
+	}
+	delete(r.Attempts, from)
+	r.Attempts[to] = a
+	return true
 }
 
 // recordSelfCancel records that GAG is about to force-cancel attempt of runID, so the

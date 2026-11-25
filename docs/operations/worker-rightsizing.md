@@ -153,19 +153,37 @@ The history alone cannot be relied on to raise it, because a job killed at its l
 Under `Binpack` the memory request rises with it, and nothing checks that a node can hold the raised request.
 One that no node can hold leaves the re-run's worker `Pending` with `WorkersUnschedulable` set, until the AGC cancels the run; a later placement of any worker on the set then re-runs it into the same wait, on the same budget (measured on dogfood, 2026-11-24).
 So under `Binpack` set `maxRequests.memory` no higher than the memory an empty worker node has free after its DaemonSets, less what the pod's other containers request: the cap applies to each container, not to the pod.
-The run is then re-run automatically on the same per-run budget as every other recovery (`maxEvictionRetries`), and a Normal `MemoryLimitRaisedForRetry` Event on the `RunnerSet` names the job, the run and both limits.
+The job is then re-run automatically on the same per-run budget as every other recovery (`maxEvictionRetries`), and a Normal `MemoryLimitRaisedForRetry` Event on the `RunnerSet` names the job, the run and both limits.
 The re-run waits until GitHub concludes the run, because GitHub refuses one while any other job of the run is still going, so a long matrix is re-run only after its last job finishes.
 It waits up to 24 hours, then gives up with an `EvictionRerunFailed` Warning Event and `actions_gateway_eviction_rerun_failures_total{cause="oom",reason="run_never_concluded"}`; re-run it by hand then.
 An AGC restart does not lose the wait (Q1244).
+
+Only the killed job is re-run, found by the name of the runner that died, and a sibling that failed on its own stays failed (Q1319).
+Four things follow:
+
+- **Jobs that need it run again**, even ones that passed: GitHub re-runs a job's `needs:` dependents with it.
+- **The run stays red** while a sibling's failure is not re-run, so read the job's own result.
+  GitHub concludes it `failure`, or `cancelled` where the sibling reports on a matrix whose cancelled legs are left, and a run it concludes `cancelled` is not re-run again.
+- **Several killed jobs of one run** are re-run together, on one slot, where every failed job of the run was killed for memory.
+  Where another job failed on its own, they are re-run one after another, each once the attempt before it concludes and each on its own slot, until `maxEvictionRetries` is spent and the rest get `EvictionRetriesExhausted`.
+  A job that reports on the others (`if: always()`, red when one it needs is) is another failed job here, because GitHub's job list does not say what needs what; raise `maxEvictionRetries` where such a workflow loses several jobs at once.
+- **A cancelled job is re-run with the killed one where no other job failed**, such as the unfinished legs that GitHub's default `fail-fast: true` cancels with a killed leg.
+  GitHub's job list spells a job past its `timeout-minutes` the same way, and one a concurrency group cancelled, so those are re-run too.
+  A run GitHub itself concludes `cancelled`, as it can one holding a failure and a timeout, is not re-run at all (`run_cancelled`).
+  Where another job failed, a job that reports on the matrix included, the cancelled legs are not re-run: re-run the run's failed jobs by hand, or set `fail-fast: false` on a matrix whose legs outgrow their memory.
+
+Every failed job is re-run, as a disruption's recovery does, where the AGC cannot tell which jobs were killed: GitHub's job list cannot be read, the worker's pod names no runner and its job name is not unique, a disruption recovery is re-running the same attempt, or 16 or more workers of one attempt were killed.
+
 A run whose budget is already spent gets `EvictionRetriesExhausted` instead, with no `MemoryLimitRaisedForRetry`; the raised limit still applies if you re-run it by hand.
 The raised limit stays with that job of that run for 7 days, so a manual re-run gets it too; no other job is affected, and the next run of the workflow starts from the history again.
 
-**When it does not.** Each of these is withheld with a Normal `EvictionRerunWithheld` Event and counted in `actions_gateway_eviction_rerun_withheld_total{cause="oom"}`, with no budget slot spent:
+**When it does not.** Each of these is withheld with a Normal `EvictionRerunWithheld` Event and counted in `actions_gateway_eviction_rerun_withheld_total{cause="oom"}`, with no budget slot spent unless the row says so:
 
 | `reason` | Why | What to do |
 |---|---|---|
 | `own_limit` | The set's profile is `Static` or `NodeShare`, the profile was still `AwaitingSamples` when the pod was built, or the killed limit is already at `maxRequests.memory` | Raise the runner's memory limit, or `maxRequests.memory`, and re-run by hand |
 | `same_class_again` | The job was killed again after a retry raised its limit: one raise per job | The job needs more than the headroom gives it; look at what grew |
+| `job_not_found` | No failed job of the run ran on the killed worker's runner: the runner took no job, or its job ended before the kill. Decided after the run concludes, so this one has spent its slot | Nothing, unless a job was lost; find it in the run's other attempts and re-run it by hand |
 | `breaker_open` | More than 10 runs were re-run for memory within 10 minutes, so retries are paused for 30, with one Warning `AutoRetryPaused` Event | Look for a shared cause first: a dependency that grew every job, or nodes packed past their memory |
 
 A sidecar killed for memory, such as `dind`, is not retried: the runner survives it and reports the job's own result.

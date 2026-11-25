@@ -385,14 +385,15 @@ func TestRecoverEvictedScaleSetWorkers_NoEvictedPodsIsCheap(t *testing.T) {
 
 // TestDisruptionOf_NamesTheJobForTheAlreadyRerunCheck: the runner is named only where a
 // start was recorded for it, since a pre-registered runner that took no job is on none.
+// A parked re-run is given it either way.
 func TestDisruptionOf_NamesTheJobForTheAlreadyRerunCheck(t *testing.T) {
 	created := metav1.NewTime(time.Now().Add(-time.Hour).Truncate(time.Second))
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod-a", CreationTimestamp: created,
 		Annotations: map[string]string{annotationJobName: "build", AnnotationRunnerName: "gpu-1"}}}
-	assert.Equal(t, rerunDisruption{key: "pod-a", job: "build", assignedAt: created.Time}, disruptionOf(pod))
+	assert.Equal(t, rerunDisruption{key: "pod-a", job: "build", workerRunner: "gpu-1", assignedAt: created.Time}, disruptionOf(pod))
 
 	pod.Annotations[AnnotationStartedJobID] = "job-1"
-	assert.Equal(t, rerunDisruption{key: "pod-a", job: "build", runner: "gpu-1", assignedAt: created.Time}, disruptionOf(pod))
+	assert.Equal(t, rerunDisruption{key: "pod-a", job: "build", runner: "gpu-1", workerRunner: "gpu-1", assignedAt: created.Time}, disruptionOf(pod))
 }
 
 // TestRecoverEvictedScaleSetWorkers_AHumansReRunIsLeftAlone is the late scan: the evicted

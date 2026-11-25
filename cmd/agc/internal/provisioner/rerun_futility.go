@@ -204,6 +204,11 @@ func (p *Provisioner) jobRerunSince(ctx context.Context, owner, repo, runID stri
 	if err != nil {
 		return jobRerunUnknown, err
 	}
+	return jobRerunIn(jobs, run, d)
+}
+
+// jobRerunIn is jobRerunSince's verdict on the listed jobs of run's latest attempt.
+func jobRerunIn(jobs []workflowJobSummary, run runState, d rerunDisruption) (jobRerunVerdict, error) {
 	var carriedFailure, carriedByName, rerunByName bool
 	for _, j := range jobs {
 		if d.runner != "" && j.RunnerName == d.runner {

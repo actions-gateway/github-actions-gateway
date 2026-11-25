@@ -108,6 +108,8 @@ func TestOOMKilledAwaitingRecovery(t *testing.T) {
 func TestRecoverOOMKilled_RaisesTheLimitAndReruns(t *testing.T) {
 	ctx := context.Background()
 	pod := oomKilled(scaleSetWorkerPod("runner-gpu-job1", rightSizedAnnotations("4242")), "2Gi")
+	pod.Annotations[AnnotationRunnerName] = "gpu-1"
+	require.Empty(t, pod.Annotations[AnnotationStartedJobID])
 	require.True(t, podEverStarted(pod), "the fixture must model a runner that ran, not the never-started arm's shape")
 	p, target, m, rerunCount, paths := recoveryFixture(t, pod)
 	target.spec.MemoryRetry = throughputRetry()
@@ -118,6 +120,10 @@ func TestRecoverOOMKilled_RaisesTheLimitAndReruns(t *testing.T) {
 		<-done
 	}
 	require.Zero(t, rerunCount.Load(), "the re-run waits in the ledger for the pending sweep")
+	parked := readLedger(t, p, target).Pending[failureKey("4242", "build")]
+	require.NotNil(t, parked)
+	assert.Equal(t, []killedWorker{{Job: "build", Runner: "gpu-1", Disruption: pod.Name}}, parked.Workers,
+		"the re-run is found by the worker's runner, whether or not its start was recorded")
 	sweepPendingAndWait(t, p, ctx, 1)
 
 	require.Equal(t, int64(1), rerunCount.Load(), "the killed run must be re-run exactly once")
@@ -437,9 +443,9 @@ func TestApplyMemoryFloor_NeverLowersALimit(t *testing.T) {
 func TestProvisionScaleSetWorker_StampsTheRerunCause(t *testing.T) {
 	ctx := context.Background()
 	writer, target, _, _, _ := recoveryFixture(t)
-	_, _, err := writer.reserveScaleSetRerun(ctx, target, "4242", rerunDisruption{key: "w1", job: "build", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
+	_, _, err := writer.reserveScaleSetRerun(ctx, target, "4242", &rerunDisruption{key: "w1", job: "build", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
-	_, _, err = writer.reserveScaleSetRerun(ctx, target, "4242", rerunDisruption{key: "w2", job: "build", failedAttempt: 2}, recoveryCauseOOM, 2, nil)
+	_, _, err = writer.reserveScaleSetRerun(ctx, target, "4242", &rerunDisruption{key: "w2", job: "build", failedAttempt: 2}, recoveryCauseOOM, 2, nil)
 	require.NoError(t, err)
 
 	target.spec.PodTemplate = corev1.PodTemplateSpec{

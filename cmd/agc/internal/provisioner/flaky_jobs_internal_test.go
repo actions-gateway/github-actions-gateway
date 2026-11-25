@@ -121,9 +121,9 @@ func TestFlakyJobs_PairingTable(t *testing.T) {
 		{name: "GAG's failed-jobs re-run for another job carried it",
 			attempt:     &rerunAttempt{Scope: rerunScopeFailedJobs, Cause: recoveryCauseDeletion, Jobs: []string{"lint"}},
 			wantTrigger: rerunTriggerGAGCollateral, wantFlaky: true},
-		{name: "GAG's single-job re-run of another job did not carry it",
+		{name: "GAG's single-job re-run of a job it needs took it along",
 			attempt:     &rerunAttempt{Scope: rerunScopeJob, Cause: recoveryCauseDeletion, Jobs: []string{"lint"}},
-			wantTrigger: rerunTriggerOther, wantFlaky: true},
+			wantTrigger: rerunTriggerGAGCollateral, wantFlaky: true},
 		{name: "GAG re-ran another attempt of the run",
 			attempt:     &rerunAttempt{Scope: rerunScopeFailedJobs, Cause: recoveryCauseDeletion, Jobs: []string{"build"}},
 			ofAttempt:   "4",
@@ -831,7 +831,7 @@ func TestRerunLedger_CapEvictsFailuresBeforeBudgets(t *testing.T) {
 	require.NoError(t, err)
 	writeLedger(t, c, target, string(b))
 
-	outcome, _, err := p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
+	outcome, _, err := p.reserveScaleSetRerun(ctx, target, "78", &rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
 	assert.Equal(t, rerunReserved, outcome)
 	got, _, err := p.readRerunLedger(ctx, target)

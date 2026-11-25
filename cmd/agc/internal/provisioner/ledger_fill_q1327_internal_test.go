@@ -29,8 +29,9 @@ func oomKillJob(ctx context.Context, p *Provisioner, target Target, repo, runID 
 		return err
 	}
 	_, _, err := p.reserveScaleSetRerun(ctx, target, runID,
-		rerunDisruption{key: pod, job: job, failedAttempt: 1}, recoveryCauseOOM, 2,
-		&pendingRerun{Cause: recoveryCauseOOM, Repository: repo, RunID: runID, Job: job, Disruption: pod, FailedAttempt: 1})
+		&rerunDisruption{key: pod, job: job, failedAttempt: 1}, recoveryCauseOOM, 2,
+		&pendingRerun{Cause: recoveryCauseOOM, Repository: repo, RunID: runID, Job: job, Disruption: pod, FailedAttempt: 1,
+			Workers: []killedWorker{{Job: job, Runner: "gag-" + pod, Disruption: pod}}})
 	return err
 }
 
@@ -51,6 +52,9 @@ func TestRerunLedger_KilledJobsOfOneAttemptAddNoBudgetState(t *testing.T) {
 	l, _, err := p.readRerunLedger(ctx, target)
 	require.NoError(t, err)
 	assert.Len(t, l.Pending, 1, "one parked re-run per run attempt")
+	for _, e := range l.Pending {
+		assert.Len(t, e.Workers, maxMergedPerAttempt, "the parked re-run lists a bounded number of workers")
+	}
 	assert.Len(t, l.MemoryFloors, jobs, "every killed job keeps its floor")
 	a := l.Reruns[runID].Attempts["1"]
 	require.NotNil(t, a)
@@ -81,7 +85,7 @@ func TestRerunLedger_FloorsAreEvictedBeforeABudgetIsRefused(t *testing.T) {
 	writeLedger(t, c, target, string(data))
 
 	_, _, err = p.reserveScaleSetRerun(ctx, target, "40000000000",
-		rerunDisruption{key: "other-pod", job: "test", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
+		&rerunDisruption{key: "other-pod", job: "test", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err, "a floor-filled ledger refuses another repository's re-run")
 
 	got, _, err := p.readRerunLedger(ctx, target)

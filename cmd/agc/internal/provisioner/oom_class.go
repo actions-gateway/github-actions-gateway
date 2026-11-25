@@ -172,7 +172,7 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 		log.Info("raising the job's memory limit for its re-run", "runID", runID, "job", job,
 			"container", runnerContainer, "killedLimit", killed.String(), "limit", next.String())
 		target.RecordEvent(corev1.EventTypeNormal, "MemoryLimitRaisedForRetry", "RetryEvictedJob",
-			fmt.Sprintf("job %q of run %s was killed at its memory limit of %s; its next attempt gets %s, and the run is re-run automatically once it concludes", job, runID, killed.String(), next.String()))
+			fmt.Sprintf("job %q of run %s was killed at its memory limit of %s; its next attempt gets %s, and it is re-run automatically once the run concludes", job, runID, killed.String(), next.String()))
 	}
 	// Parked rather than re-run now: a job that outgrows its memory is often one of a long
 	// matrix, and GitHub refuses the re-run until every sibling has concluded.

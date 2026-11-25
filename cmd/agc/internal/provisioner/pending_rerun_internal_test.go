@@ -425,7 +425,7 @@ func TestPendingRerun_PollCadenceBoundsTheReads(t *testing.T) {
 	t0 := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	reads := 0
 	for age := time.Duration(0); age < pendingRerunMaxWait; age += 30 * time.Second {
-		if s.due("e", age, t0.Add(age), time.Time{}) {
+		if s.due("e", "r", age, t0.Add(age), time.Time{}) {
 			reads++
 		}
 	}

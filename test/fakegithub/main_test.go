@@ -822,6 +822,14 @@ func TestRerunFailedJobsIsRecordedAndScoped(t *testing.T) {
 	if n, paths := reruns(""); n != 2 {
 		t.Fatalf("server recorded %d reruns (%v), want both routes", n, paths)
 	}
+	for i, path := range []string{"/repos/o/r/actions/jobs/7/rerun", "/api/v3/repos/o/r/actions/jobs/8/rerun"} {
+		if code := rerun(path); code != http.StatusCreated {
+			t.Fatalf("%s returned %d, want 201", path, code)
+		}
+		if n, paths := reruns(""); n != 3+i || paths[n-1] != path {
+			t.Fatalf("a single-job re-run was not recorded beside the others: %v", paths)
+		}
+	}
 	n, paths := reruns("/runs/4210/")
 	if n != 1 {
 		t.Fatalf("run-scoped filter matched %d reruns (%v), want exactly the 4210 call", n, paths)

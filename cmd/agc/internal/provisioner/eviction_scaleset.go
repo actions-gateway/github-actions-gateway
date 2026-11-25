@@ -317,7 +317,8 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 
 // disruptionOf names one disrupted worker's job to the re-run path.
 func disruptionOf(pod *corev1.Pod) rerunDisruption {
-	d := rerunDisruption{key: pod.Name, job: pod.Annotations[annotationJobName], assignedAt: pod.CreationTimestamp.Time}
+	d := rerunDisruption{key: pod.Name, job: pod.Annotations[annotationJobName], assignedAt: pod.CreationTimestamp.Time,
+		workerRunner: pod.Annotations[AnnotationRunnerName]}
 	if pod.Annotations[AnnotationStartedJobID] != "" {
 		d.runner = pod.Annotations[AnnotationRunnerName]
 	}
