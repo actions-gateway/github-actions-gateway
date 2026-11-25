@@ -3230,7 +3230,7 @@ It also gives the person who has to act a reason, where today an exhausted budge
 <tr>
 <td>The job exceeded its own limit</td>
 <td><code>OOMKilled</code> at its limit under <code>Static</code> sizing, an <code>ephemeral-storage</code> limit eviction, <code>timeout-minutes</code></td>
-<td>The eviction arm withholds the storage case as <code>own_limit</code> (Q1177); the out-of-memory class withholds a runner killed at a limit no profile can raise as <code>own_limit</code> on the scale-set tier (Q1183); <code>timeout-minutes</code> reaches no arm</td>
+<td>The eviction arm withholds the storage case as <code>own_limit</code> (Q1177); the out-of-memory class withholds a runner killed for memory whose re-run would get the same limit as <code>own_limit</code> on the scale-set tier (Q1183), without knowing that it reached that limit (Q1400); <code>timeout-minutes</code> reaches no arm</td>
 </tr>
 <tr>
 <td>A newer commit superseded the run</td>
@@ -3279,7 +3279,7 @@ The out-of-memory class was built without one, so that requirement is open for i
 <tbody>
 <tr>
 <td>Out of memory under a <a href="../runner-sizing-profiles/">right-sizing</a> profile</td>
-<td>Container <code>OOMKilled</code> at its limit, on a set whose profile derives limits from history</td>
+<td>Container <code>OOMKilled</code>, on a set whose profile derives limits from history</td>
 <td>Observable: GAG computes the next limit</td>
 <td>Qualifies under R11 only when the retry's pod gets a strictly higher memory limit; see <a href="#oomkilled-under-right-sizing">below</a>. Built under Q1183 for the runner container, without R12's dogfood reproduction (<a href="../../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">§4.2</a>)</td>
 </tr>
@@ -3309,7 +3309,7 @@ The out-of-memory class was built without one, so that requirement is open for i
 </tr>
 <tr>
 <td>Node-level out-of-memory kill</td>
-<td>Container killed below its own limit, with a <code>SystemOOM</code> node event, which the kubelet raises for a node-wide kill and not for one at <code>kubepods</code>' limit (<a href="../../queue/Q1400/">Q1400</a>)</td>
+<td>Container killed below its own limit, with a <code>SystemOOM</code> node event, which the kubelet raises for a node-wide kill and not for one at <code>kubepods</code>' limit (<a href="../../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">what each fact says</a>, Q1400)</td>
 <td>Fresh pod, not guaranteed: it can land on the same packed node</td>
 <td>Overcommitted packing is the platform's doing; a kill at the container's own limit is not</td>
 </tr>

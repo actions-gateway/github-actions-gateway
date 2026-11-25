@@ -3272,12 +3272,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Under <code>Binpack</code> the out-of-memory class raises the memory request with the limit, and nothing asks whether any node can hold the raised …</td>
 </tr>
 <tr>
-<td><a href="Q1400/">Q1400</a></td>
-<td><a href="../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">A runner killed for the node's memory is read as its own-limit kill</a></td>
-<td><code>bug</code> <code>2.1-gate</code></td>
+<td><a href="Q1402/">Q1402</a></td>
+<td><a href="../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">An out-of-memory raise past a pod-level limit builds a refused pod</a></td>
+<td><code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>The out-of-memory class, shipped in <code>v2.0.0</code> (Q1183) and unchanged for this by 2.1, acts on a runner the kernel killed because its <strong>node</strong> …</td>
+<td>A template may set a pod-level memory limit (<code>spec.podTemplate.spec.resources</code>, which the CRD carries), and the out-of-memory class raises …</td>
 </tr>
 <tr>
 <td><a href="Q1255/">Q1255</a></td>
@@ -4622,6 +4622,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>A pull request removed from the merge queue and not queued again has no newer group, which is the only thing the <code>superseded</code> check can see …</td>
+</tr>
+<tr>
+<td><a href="Q1405/">Q1405</a></td>
+<td><a href="../design/04-operational-flows/">A percent sign in a job name garbles, or loses, the Event naming it</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>XS</td>
+<td>An Event whose text holds a <code>%</code> reads wrong, because the text is passed where a format string goes: a job named <code>cover 80% d (50%)</code> reads …</td>
 </tr>
 <tr>
 <td><a href="Q1340/">Q1340</a></td>

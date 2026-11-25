@@ -2258,6 +2258,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-an-out-of-memory-retrys-events-no-longer-name-the-limit-as-the-cause" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: an out-of-memory retry's Events no longer name the limit as the cause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4661,6 +4672,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-an-out-of-memory-retrys-events-no-longer-name-the-limit-as-the-cause" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: an out-of-memory retry's Events no longer name the limit as the cause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5512,6 +5534,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#a-timed-out-job-whose-re-run-passes-counts-as-flaky">A timed-out job whose re-run passes counts as flaky</a></li>
 <li><a href="#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run">Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run</a></li>
 <li><a href="#non-breaking-an-out-of-memory-retry-waits-for-its-jobs-start">Non-breaking: an out-of-memory retry waits for its job's start</a></li>
+<li><a href="#non-breaking-an-out-of-memory-retrys-events-no-longer-name-the-limit-as-the-cause">Non-breaking: an out-of-memory retry's Events no longer name the limit as the cause</a></li>
 <li><a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image">A disrupted job is not re-run while its set's workers cannot pull their image</a></li>
 <li><a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run</a></li>
 <li><a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once">Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once</a></li>
@@ -6515,6 +6538,14 @@ The AGC now <a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">waits
 <p><strong>What you will see.</strong> A worker killed that early stays <code>Failed</code> past <code>completedPodTTL</code> until the AGC has acted.
 Where the message never comes, <code>actions_gateway_eviction_recovery_identity_unknown_total{cause="oom"}</code> increments and nothing is re-run.</p>
 <p><strong>Rolling back</strong> acts at once again, on the job the pod names.</p>
+<h3 id="non-breaking-an-out-of-memory-retrys-events-no-longer-name-the-limit-as-the-cause">Non-breaking: an out-of-memory retry's Events no longer name the limit as the cause<a class="headerlink" href="#non-breaking-an-out-of-memory-retrys-events-no-longer-name-the-limit-as-the-cause" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> anyone who alerts on or parses the text of the out-of-memory Events on a <code>RunnerSet</code>.
+Nothing to do otherwise: what is re-run, raised and withheld is unchanged, and so are the Events' reasons and the metrics' labels.</p>
+<p><strong>What changed.</strong> <code>MemoryLimitRaisedForRetry</code>, <code>AutoRetryPaused</code>, <code>EvictionRecoveryIdentityUnknown</code> and the <code>EvictionRerunWithheld</code> of most out-of-memory kills said the runner was killed at its memory limit.
+A node that ran out of memory is expected to leave the same status, so they now say it was killed for memory.
+All but <code>AutoRetryPaused</code>, which is about a set, also name the worker, its node, its memory request and its limit, and leave <a href="../worker-rightsizing/#which-limit-ran-out">which limit ran out</a> to you (Q1400).</p>
+<p><strong>What you will see.</strong> Longer Event text, which starts with the worker's name, except for <code>AutoRetryPaused</code>.</p>
+<p><strong>Rolling back</strong> returns the old text.</p>
 <h3 id="a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image">A disrupted job is not re-run while its set's workers cannot pull their image<a class="headerlink" href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> a tenant whose scale-set workers are stuck in <code>ImagePullBackOff</code> when another of the set's jobs loses its worker.</p>
 <p><strong>What changed.</strong> The re-run of a disrupted job used to fire anyway, and its worker would fail to start too, spending a slot of <code>maxEvictionRetries</code>.

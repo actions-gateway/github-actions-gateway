@@ -3861,10 +3861,10 @@ Four of them re-run at once; the fifth, an abandoned never-started worker, re-ru
 <td>The job never ran to a reportable end, so nothing is reported for the assignment; the run is force-cancelled instead, concluding run and job <code>cancelled</code> in ~1s (GitHub's ~15-minute unstarted-job timeout is the backstop). The cancelled run then <strong>does</strong> accept <code>rerun-failed-jobs</code>, so it is re-run automatically once the owner places a worker pod again, on the shared retry budget. This row is the one cause that does <strong>not</strong> enter <code>disruptionAwaitingRecovery</code>, on either tier: a job that never ran has no failed job for <code>rerun-failed-jobs</code> to act on, so the run has to be concluded first. See <a href="#stuck-pending-worker-pod">Stuck-Pending Worker Pod</a> (Q628/Q676/Q683/Q691/Q766)</td>
 </tr>
 <tr>
-<td>Runner killed at its own memory limit</td>
+<td>Runner killed for memory</td>
 <td><code>PodFailed</code>, the runner container terminated <code>OOMKilled</code></td>
 <td>Only under a right-sizing profile (Q1183)</td>
-<td>Not a disruption: the job outgrew its limit. A retry class re-runs it where the next attempt can get a strictly higher limit, and withholds it everywhere else; see <a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">below</a></td>
+<td>Not read as a disruption: its termination reason does not say whether the runner reached its own limit or memory ran out above it (Q1400). A retry class re-runs it where the next attempt can get a strictly higher limit, and withholds it everywhere else; see <a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">below</a></td>
 </tr>
 <tr>
 <td>Job failed on its own</td>
@@ -4061,7 +4061,7 @@ Preemption detection matches the full type/status/reason triple; drain detection
 <p>The kubelet writes <code>PodFailed</code> + <code>Evicted</code> for two causes, and only one is a disruption.
 Node pressure evicts whichever pod the kubelet ranks worst, so a fresh pod on a fresh node clears it.
 A pod that outgrows its own storage limit is evicted by the same code path for a cause its job and template own, and a re-run gets the same limit.
-That is the storage analogue of <code>OOMKilled</code>, which is withheld as <code>own_limit</code> too unless a sizing profile can give the re-run more memory (<a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">below</a>).
+A runner terminated <code>OOMKilled</code> is withheld as <code>own_limit</code> too, unless a sizing profile can give the re-run more memory, but its termination reason does not say which limit ran out (<a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">below</a>).
 Until Q1177 the eviction arm keyed on the reason alone and re-ran these up to <code>maxEvictionRetries</code> times.</p>
 <p>Two kubelet signals separate them, measured on kind v1.35.5 (2026-10-23) and matching the kubelet source at that version (<code>pkg/kubelet/eviction/eviction_manager.go</code>, <code>helpers.go</code>):</p>
 <table>
@@ -4108,7 +4108,7 @@ Each class declares how its cause clears (<a href="../../plan/q555-flaky-job-ret
 This one clears by a value GAG computes: the next attempt's memory limit.</p>
 <p>A runner killed at its own memory limit is the tenant's job outgrowing its pod, which a re-run at the same limit repeats.
 Under the <code>Binpack</code> and <code>Throughput</code> <a href="../../operations/worker-rightsizing/">sizing profiles</a> GAG chose that limit from history, so it can choose a higher one.
-The history cannot be counted on to move by itself: the sampler records an out-of-memory job's peak at or below the limit that killed it.
+The history cannot be counted on to move by itself: the sampler records an out-of-memory job's peak at or below the limit the runner had.
 So the class raises the limit from the killed pod's own:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>next = min(roundUp64Mi(killed × headroom), ceiling)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>headroom = 1.4 (Binpack) | limitHeadroomPercent / 100 (Throughput, default 1.5)
@@ -4117,6 +4117,50 @@ So the class raises the limit from the killed pod's own:</p>
 <p>It fires on a worker whose pod reached <code>PodFailed</code> with the <strong>runner</strong> container terminated <code>OOMKilled</code>, and which carries the <code>actions-gateway.com/sizing-profile</code> annotation, meaning the profile derived its limits when it was built.
 That is the shape a memory kill leaves on cgroup v2, which kills the whole container: reproduced on dogfood under <code>Throughput</code> on 2026-11-22 and under <code>Binpack</code> on 2026-11-24 (R12), GitHub concluded the job <code>failure</code> 9 min 43 s to 9 min 48 s after the kill, and the re-run at the raised limit succeeded (<a href="../../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">the first readings</a>, <a href="../../plan/q555-automatic-recovery-design/#readings-from-the-binpack-turn-up-2026-11-24">the second</a>).
 A sidecar killed for memory is not covered: the runner survives it to report the job's own result, so the pod's terminal transition says nothing about whether the job failed.</p>
+<p><strong>It does not know which limit ran out</strong> (Q1400).
+A kill made above the container is expected to leave the same status: by the node running out, by <code>kubepods</code>' limit, or by a limit on the pod (read from source; no such kill of a runner is on record).
+Nothing the AGC reads tells them apart:</p>
+<table>
+<thead>
+<tr>
+<th>Fact</th>
+<th>What it points at</th>
+<th>Where it misleads</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The runner's memory request equals its limit, as <code>Binpack</code> sets them</td>
+<td>Its own limit: for a node-wide kill the kubelet scores a Burstable container lower the more it requests (<code>pkg/kubelet/qos/policy.go</code>, v1.35.5)</td>
+<td>No proof: the kernel picks a process and not a container (from recall), and where the pod has a limit of its own it picks inside the pod</td>
+</tr>
+<tr>
+<td>The pod is <code>Guaranteed</code></td>
+<td>Its own limit: scored -997, among the last to go (the same file)</td>
+<td>Says nothing of a Burstable pod, and a pod with <code>spec.resources</code> set takes its class from those alone (<code>pkg/apis/core/v1/helper/qos/qos.go</code>, v1.35.5)</td>
+</tr>
+<tr>
+<td>The sampled peak is near the limit</td>
+<td>Its own limit</td>
+<td>A low or missing peak says nothing: dogfood's three kills came in the job's first 17 seconds, against a 15-second sample</td>
+</tr>
+<tr>
+<td>Another worker on the node was evicted or killed for memory</td>
+<td>The node</td>
+<td>Own namespace only, and two jobs can each reach their own limit</td>
+</tr>
+<tr>
+<td>A <code>SystemOOM</code> Event on the node</td>
+<td>The node</td>
+<td>The AGC has no grant on Node Events; the Event names a process and not a pod, and the kubelet raises none for a kill at <code>kubepods</code>' limit (<code>pkg/kubelet/oom/oom_watcher_linux.go</code>, v1.35.5)</td>
+</tr>
+</tbody>
+</table>
+<p>So the class acts on the limit the next attempt would get, and its Events give the worker, its node, its request and its limit, and name no cause.
+For a runner killed because its node ran out, that has a cost.
+Withheld as <code>own_limit</code>, it is not re-run where a fresh node might have passed it.
+Raised, it gets memory it did not need: under <code>Binpack</code> a request no node may hold, under <code>Throughput</code> a limit that overcommits nodes further.
+A raised run also counts toward the breaker, which can then withhold kills that more memory would fix.</p>
 <table>
 <thead>
 <tr>
@@ -4133,7 +4177,7 @@ A sidecar killed for memory is not covered: the runner survives it to report the
 </tr>
 <tr>
 <td>No right-sizing profile now, or the pod was built before one applied (<code>Static</code>, <code>NodeShare</code>, <code>AwaitingSamples</code>)</td>
-<td>Withheld: a re-run gets the same limit</td>
+<td>Withheld: a re-run may get the same limit; a set that was <code>AwaitingSamples</code> gives it a derived one where it has samples by then</td>
 <td><code>own_limit</code></td>
 </tr>
 <tr>
@@ -4153,12 +4197,12 @@ A sidecar killed for memory is not covered: the runner survives it to report the
 </tr>
 <tr>
 <td>The runner had no memory limit</td>
-<td>Not this class: the kernel killed it for the node's memory. No re-run, as before</td>
+<td>Not this class: there is no limit to raise. No re-run, and no Event of its own; the job's failure still raises <code>PlatformFaultOnFailedJob</code></td>
 <td>none: not recognised</td>
 </tr>
 </tbody>
 </table>
-<p>Every withhold spends no slot and emits the <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event naming the fix.</p>
+<p>Every withhold spends no slot and emits the <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event saying what to do.</p>
 <p><strong>It waits for the killed worker's start</strong> (Q1389).
 Until its <code>JobStarted</code> is handled, a worker's pod names the job it was created for, which is often not the job its runner took, and acting on it raised that other job's limit and spent a slot of that other job's run.
 So the class leaves a kill unclaimed while its pod carries no <code>started-job-id</code>, and the start stamps the <code>Failed</code> pod, which no other terminal pod takes.

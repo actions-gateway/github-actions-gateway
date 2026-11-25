@@ -7279,7 +7279,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>MemoryLimitRaisedForRetry</code></td>
 <td>Normal</td>
-<td>A scale-set worker's runner was killed at its own memory limit, and the <code>Binpack</code> or <code>Throughput</code> profile gives the job's next attempt a higher one, so the job is re-run as <code>cause="oom"</code> once GitHub concludes its run, waiting up to 24 hours (Q1183, Q1244). Names the job, the run and both limits. One per job: a second kill is withheld. A rising rate is jobs outgrowing their history, or a change that grew one.</td>
+<td>A scale-set worker's runner was killed for memory, and the <code>Binpack</code> or <code>Throughput</code> profile gives the job's next attempt a higher limit, so the job is re-run as <code>cause="oom"</code> once GitHub concludes its run, waiting up to 24 hours (Q1183, Q1244). Names the worker, its node, the job, the run, the memory request and both limits. One per job: a second kill is withheld. A rising rate is jobs outgrowing their history, a change that grew one, or nodes running out of memory.</td>
 <td><a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">When a job runs out of memory</a></td>
 </tr>
 <tr>
@@ -8013,7 +8013,7 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <td>same mark as a drain — indistinguishable, by design</td>
 </tr>
 <tr>
-<td>A runner killed at its own memory limit on a <code>Binpack</code> or <code>Throughput</code> set. The killed job alone is re-run, with a higher limit (Q1319)</td>
+<td>A runner killed for memory on a <code>Binpack</code> or <code>Throughput</code> set. The killed job alone is re-run, with a higher limit (Q1319)</td>
 <td><code class="gag-nowrap">oom</code></td>
 <td>pod <code>Failed</code> with the runner container terminated <code>OOMKilled</code>, on a worker the sizing profile built, once GitHub has named the job its runner took; see <a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">When a job runs out of memory</a></td>
 </tr>
@@ -8031,8 +8031,9 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
   The job outgrew a limit its template sets, so a re-run gets the same limit and fails the same way.
   No slot is spent: <code>eviction_rerun_withheld_total{cause="eviction", reason="own_limit"}</code> increments, and a Normal <code>EvictionRerunWithheld</code> Event quotes the kubelet's message.
   Raise the limit, or reduce what the job writes, then re-run it by hand (Q1177).</li>
-<li><strong>A runner killed for memory that a re-run would repeat.</strong> Without a <code>Binpack</code> or <code>Throughput</code> profile, at the profile's memory ceiling, or a second kill after a retry already raised the job's limit, a re-run gets the memory that killed it.
-  No slot is spent: <code>eviction_rerun_withheld_total{cause="oom"}</code> increments with <code>reason="own_limit"</code> or <code>"same_class_again"</code>, and a Normal <code>EvictionRerunWithheld</code> Event names the fix (Q1183).</li>
+<li><strong>A runner killed for memory that a re-run would repeat.</strong> Without a <code>Binpack</code> or <code>Throughput</code> profile, at the profile's memory ceiling, or a second kill after a retry already raised the job's limit, a re-run may get the limit the killed runner had.
+  No slot is spent: <code>eviction_rerun_withheld_total{cause="oom"}</code> increments with <code>reason="own_limit"</code> or <code>"same_class_again"</code>, and a Normal <code>EvictionRerunWithheld</code> Event says what to do (Q1183).
+  Where the node ran out rather than the job, re-running it by hand may be all it needs; <a href="../worker-rightsizing/#which-limit-ran-out">which limit ran out</a> says how to tell.</li>
 <li><strong>A cancelled run.</strong> A cancel is the intended stop — it is the supported way to end a job without triggering recovery (delete the worker pod instead and the job <em>is</em> re-run; see <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>).</li>
 <li><strong>A node that goes <code>NotReady</code> and keeps its Node object, untainted.</strong> The taint manager stamps <code>DeletionByTaintManager</code> and deletes the worker gracefully without failing it, and the kubelet cannot finish that delete while the node stays unreachable, so the pod stays <code>Running</code> and no arm fires.
   GAG does not force it, because a node that is only partitioned may still be running the job.
@@ -8155,6 +8156,7 @@ A job recorded while its worker still ran is logged twice: at its completion, an
 <p><strong>A <code>PlatformFaultOnFailedJob</code> Warning</strong> names the fault.
 <code>OOMKilled</code> on the runner means it was killed for memory, at its own limit or because memory ran out above it, such as on its node (Q1400).
 At its own limit, the job needs more memory than the worker template gives it.
+Nothing GAG reads separates the two yet (<a href="../worker-rightsizing/#which-limit-ran-out">how to tell</a>).
 On a sidecar it means the sidecar was killed with that reason, usually for its own memory limit.
 A sidecar that runs the job's containers in its own cgroup, as <code>kata-dind</code>'s does, is also marked <code>OOMKilled</code> when one of them passes its own <code>docker run -m</code> limit (measured with runc, not under Kata), so one killed later for another reason, such as the SIGKILL that ends its grace period, reads the same; check the job's log for a container that exited 137 before raising the sidecar's limit.
 A sidecar marked that way which then exits with any code but 137 is taken to have survived the kill, so it raises no Warning, and the record's <code>context</code> still shows the reason beside the exit code (Q1395).
@@ -8538,7 +8540,7 @@ The pod holds no CPU or memory, and does hold its generic ephemeral volumes' Per
 No limit was raised and no budget slot was spent.</p>
 <ul>
 <li><strong>Find the job by its runner's name</strong>, which the Event gives: GitHub's jobs API lists it as <code>runner_name</code>.
-  Re-run that job by hand; it gets the limit that killed it, so raise the runner's memory first where it needs more.
+  Re-run that job by hand; it may get the limit the killed runner had, so raise the runner's memory first where it <a href="../worker-rightsizing/#which-limit-ran-out">reached that limit</a>.
   If it passes, a <code>FlakyJobDetected</code> Event can name it, because its failure was recorded with no cause.</li>
 <li><strong>No job shows that runner:</strong> the runner was killed before it took one, so nothing was lost.</li>
 <li><strong>Several in a short time</strong> point at an AGC that is not reading its message queue.

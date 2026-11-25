@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1400/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1402/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A runner killed for the node's memory is read as its own-limit kill - GitHub Actions Gateway</title>
+        <title>An out-of-memory raise past a pod-level limit builds a refused pod - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-runner-killed-for-the-nodes-memory-is-read-as-its-own-limit-kill" class="md-skip">
+        <a href="#an-out-of-memory-raise-past-a-pod-level-limit-builds-a-refused-pod" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A runner killed for the node's memory is read as its own-limit kill
+              An out-of-memory raise past a pod-level limit builds a refused pod
             
           </span>
         </div>
@@ -2703,38 +2703,21 @@
   
 
 
-<h1 id="a-runner-killed-for-the-nodes-memory-is-read-as-its-own-limit-kill">A runner killed for the node's memory is read as its own-limit kill<a class="headerlink" href="#a-runner-killed-for-the-nodes-memory-is-read-as-its-own-limit-kill" title="Permanent link">&para;</a></h1>
-<p>The out-of-memory class, shipped in <code>v2.0.0</code> (Q1183) and unchanged for this by 2.1, acts on a runner the kernel killed because its <strong>node</strong> ran out of memory as if the runner had reached its own limit.
-Read from source and not run: no node-level kill of a runner has been made or found on record.
-It gates 2.1 because that release's headline is telling a platform's failure from a job's own, and here the class states the job's limit as the cause of a kill the platform made.</p>
-<p><code>oomKilledAwaitingRecovery</code> (<code>cmd/agc/internal/provisioner/oom_class.go</code>) takes any <code>PodFailed</code> worker whose runner terminated <code>OOMKilled</code>, and <code>recoverOOMKilled</code> compares nothing with the limit.
-The reason is expected for a node kill too: containerd sets it from the cgroup's <code>oom_kill</code>, which counts "any kind of OOM killer" (kernel <code>cgroup-v2</code> documentation), and that counter rose for a kill made by a limit above the pod on one local kernel (<a href="../../plan/q555-automatic-recovery-design/#what-is-left-open-q1316">the counters</a>).</p>
-<p>What an operator would see, by the runner's shape, beside the <code>PlatformFaultOnFailedJob</code> Event that a killed runner's completion raises about ten minutes later (<a href="../../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">M4</a>, whose runner had a limit; read from <code>flaky_jobs.go</code> for one without):</p>
+<h1 id="an-out-of-memory-raise-past-a-pod-level-limit-builds-a-refused-pod">An out-of-memory raise past a pod-level limit builds a refused pod<a class="headerlink" href="#an-out-of-memory-raise-past-a-pod-level-limit-builds-a-refused-pod" title="Permanent link">&para;</a></h1>
+<p>A template may set a pod-level memory limit (<code>spec.podTemplate.spec.resources</code>, which the CRD carries), and the out-of-memory class raises the runner's limit without reading it.
+A raise past it builds a pod the API server refuses: each container's limit must be at or below the pod's (<code>validatePodResourceConsistency</code>, Kubernetes v1.35.5, read).
+The raise is recorded for 7 days and the re-run spends a slot of the run's budget, for a job that cannot then be provisioned.
+Read from source and not run: no non-test code in <code>cmd/agc</code> reads a pod-level <code>spec.resources</code> (<code>git grep</code>, 2026-11-24).</p>
+<p>What the operator sees is a <code>WorkerPodCreateFailed</code> Event carrying the API server's message (<code>createPodWithQuotaRetry</code>, <code>cmd/agc/internal/provisioner/capacity.go</code>), which does not say that the raise is the reason.
+What the listener does next with the job it was offered has not been read.</p>
 <ul>
-<li><strong><code>Binpack</code> or <code>Throughput</code>, with its limits derived:</strong> where the run still has a slot, a Normal <code>MemoryLimitRaisedForRetry</code> Event says the runner was killed at its memory limit, the job's limit is raised for its next attempts (under <code>Binpack</code> its request too), and the run is re-run on a slot of its budget.
-  The re-run may well pass, on a fresh node.
-  A second kill of the job is withheld as <code>same_class_again</code>, and the class's breaker counts the run, so a node short of memory can pause the class for the set.</li>
-<li><strong><code>Static</code> or <code>NodeShare</code> with a limit, or <code>Binpack</code> or <code>Throughput</code> still <code>AwaitingSamples</code> when the pod was built:</strong> the re-run is withheld as <code>own_limit</code>, and the Event tells the operator to raise the runner's limit or pick another profile, neither of which is the cause.
-  A derived limit already at its ceiling is withheld the same way, with <code>spec.sizing.maxRequests</code> named instead.
-  A fresh pod on another node would have been a fair retry.</li>
-<li><strong>No memory limit:</strong> no re-run and no Event from the class, and an Info log line that says the runner had no limit of its own.</li>
+<li>The class could cap the raise at the pod's limit, and withhold as <code>own_limit</code> where that is no raise.</li>
+<li>The sizing profile is expected to have the same gap: a limit it derives can pass a pod-level limit with no kill at all.</li>
+<li>Under <code>Binpack</code> the request rises too, and the containers' requests together must be at or below a pod-level request (the same function).</li>
+<li>A <code>LimitRange</code> maximum is expected to refuse the raise the same way (from recall, not read).</li>
 </ul>
-<p>The exposure is widest for a BestEffort worker, scored 1000: one whose regular containers each declare some resource and where no container, init containers included, declares CPU or memory.
-A <code>Static</code> runner that declares only a <code>nvidia.com/gpu</code> limit, or only ephemeral storage, is one, and so is the same template under <code>Binpack</code> or <code>Throughput</code> while it is <code>AwaitingSamples</code>; a namespace <code>LimitRange</code> default would end it.
-It has no memory limit, so it takes the last shape above.
-<code>gapFilledResources</code> (<code>defaults.go</code>, read) gives a regular container 500m and 1Gi of both only where it declares no resource at all, and the QoS class counts CPU and memory alone (<code>pkg/apis/core/v1/helper/qos/qos.go</code>, v1.35.5, read).
-Next is a Burstable worker: <code>Throughput</code>, <code>Static</code> or <code>NodeShare</code> without equal limits, and <code>Binpack</code> beside a container that keeps its pod Burstable, as <code>privileged-dind</code>'s sidecar does, or the wrapper's init container where image volumes are off.
-There the kubelet scores a container by its memory request, so a runner that sets a CPU request alone is scored 999.
-Inside a Burstable pod a Docker-in-Docker sidecar never scores above the runner (<a href="../../plan/q555-automatic-recovery-design/#what-is-left-open-q1316">why</a>).
-A Guaranteed pod, which <code>Binpack</code> is meant to give, is scored -997 whatever it requests and is among the last to go (<code>pkg/kubelet/qos/policy.go</code>, v1.35.5, read).</p>
-<ul>
-<li>What separates the two is open, and is the <a href="../../plan/q555-flaky-job-retry/#candidate-classes">node-level out-of-memory kill</a> candidate's question: a kill below the container's own limit, with a <code>SystemOOM</code> Node Event or the pod's <code>oom</code> counter at 0.
-  The Event names a process and not a pod, and is raised for a node-wide kill and not for one at <code>kubepods</code>' limit: the kubelet records it where the kernel's line names no memory cgroup (kubelet 1.35.5 <code>oom_watcher_linux.go</code> and its cAdvisor <code>oomparser.go</code>, kernel 6.12 <code>memcontrol.c</code>, read).
-  The AGC reads neither Node Events nor cgroups today; the usage sampler's peak beside the limit is the one fact it has, and a spike between samples defeats it.</li>
-<li>Reproduce it first, since every step above is read: <a href="../Q1316/">Q1316</a>'s dogfood reproduction fills a node and expects exactly this kill.
-  That set is <code>NodeShare</code>, so it reads the withheld branch; a raise under <code>Binpack</code> or <code>Throughput</code> starts from the same two facts (<code>PodFailed</code>, the runner <code>OOMKilled</code>) and is not run by it.</li>
-<li>Failing a discriminator, the Event and the withheld reason's text can stop asserting a cause the class did not check.</li>
-</ul>
+<p><a href="../Q1388/">Q1388</a> has the same shape, a raise nothing can hold, with no refusal: the pod is created and stays <code>Pending</code>.
+The duplicate search flags Q1389, which was a raise for the wrong job, and Q1400, which was what the raise's Event says of the cause.</p>
 
 
 

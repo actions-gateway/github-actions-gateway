@@ -2763,8 +2763,8 @@ The readings' three refutations, Q1374 to Q1376, gated it from 2026-11-22 becaus
 Q1381 gated it too, settled 2026-11-22, because its re-runs landed in merge-queue runs nothing reads and each spent a <code>maxEvictionRetries</code> slot, which is the opposite of what this release is for; it and Q1320 are built, and the case it leaves is Q1391.
 Q1389 gated it too: the out-of-memory class <code>v2.0.0</code> shipped could act on the wrong job where a worker died before its pod named the job it ran, reproduced in a unit-test probe and fixed on 2026-11-24.
 Q1395 gates it too, settled 2026-11-24: detection could name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
-Q1400 gates it too, settled 2026-11-24, for the same reason in the out-of-memory class <code>v2.0.0</code> shipped: it reads a runner killed for its node's memory as one killed at its own limit, so the Event and the raised limit name a cause it did not check.
-That is read from source, so its first step is reproducing it.
+Q1400 gated it too, settled 2026-11-24, for the same reason in the out-of-memory class <code>v2.0.0</code> shipped: its Events named the runner's own limit as the cause of a kill the node could have made.
+They name no cause now, and what the class re-runs, raises and withholds is unchanged; no node kill of a runner has been reproduced.
 Q1401 gated it too: job-granular re-run (Q1319) recovered less than <code>v2.0.0</code> on a fail-fast matrix behind an aggregate job, and recovering less is the opposite of what this release is for.
 What it still recovers less of is <a href="../../operations/upgrade/#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run">in the upgrade notes</a>.
 Nothing here is a commitment to a date.</p>
@@ -2881,10 +2881,10 @@ One known limit stays from <code>v2.0.0</code>: beside a memory kill, a job past
 <td>✅ landed: a sidecar's <code>OOMKilled</code> is a fault only with exit code 137; not run on Kata</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1400/">Q1400</a></td>
+<td>Q1400</td>
 <td>Keep a runner killed for its node's memory from being read as killed at its own limit</td>
 <td><code>2.1-gate</code></td>
-<td>🔲 open: read from source; Q1316's dogfood reproduction would produce the kill</td>
+<td>✅ landed as text: the Events name the worker, its node, its memory request and its limit, and no cause; nothing the AGC reads separates the two (<a href="../../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">what each fact says</a>)</td>
 </tr>
 <tr>
 <td>-</td>
