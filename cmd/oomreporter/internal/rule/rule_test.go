@@ -205,6 +205,7 @@ func TestDecide_AKillLongAfterTheAllocation(t *testing.T) {
 }
 
 func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
+	podGoes := func(n *node) { delete(n.pods, pod) }
 	nested, wait := []event{nestedOOM(pod), nestedKill(pod)}, []event{func(*node) {}}
 	for name, tc := range map[string]struct {
 		events []event
@@ -259,6 +260,9 @@ func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
 		"another's kill at the pod's, one more there, then this at the node's": {
 			then(death(pod, sidecar, podOOM(pod)), wait, []event{podOOM(pod)}, death(pod, runner)), 100 * time.Millisecond, 0,
 			map[string]Reason{sidecar: PodLimit, runner: AbovePods}},
+		"its own waiting, another's kill at the pod's, one more there, and the pod goes": {
+			then([]event{containerOOM(pod, runner)}, death(pod, sidecar, podOOM(pod)), wait, death(pod, runner, podOOM(pod)), []event{podGoes}), 50 * time.Millisecond, 0b10000000,
+			map[string]Reason{runner: ContainerLimit, sidecar: PodLimit}},
 		"one process at its own container's, gone, then this at the node's, and it goes": {
 			then([]event{containerOOM(pod, old), killed(pod, old), goes(pod, old)}, death(pod, runner), []event{goes(pod, runner)}), 10 * time.Millisecond, 0,
 			map[string]Reason{runner: AbovePods}},

@@ -90,7 +90,7 @@ type tracked struct {
 // completes. again asks for another sample at once: a kill is returned on the sample
 // after the one that shows it, which holds every allocation that led to it.
 func (t *Tracker) Observe(s Sample, at time.Time) (rises map[string]Rise, again bool) {
-	rises = t.forget(s)
+	rises = t.forget(s, at)
 	if t.pods == nil {
 		t.pods = map[string]*tracked{}
 	}
@@ -143,14 +143,14 @@ func carry(was, now Pod) (Pod, map[string]bool) {
 }
 
 // forget drops the pods s does not continue, and returns the rises it leaves unconfirmed.
-func (t *Tracker) forget(s Sample) map[string]Rise {
+func (t *Tracker) forget(s Sample, at time.Time) map[string]Rise {
 	left := map[string]Rise{}
 	for uid, p := range t.pods {
 		if now, ok := s.Pods[uid]; ok && !restarted(p.last.pod, now) {
 			continue
 		}
 		if p.shown > 0 {
-			left[uid] = p.rise()
+			left[uid] = p.rise(at)
 		}
 		delete(t.pods, uid)
 	}
@@ -168,7 +168,7 @@ func killsOf(was, now Pod) uint64 {
 
 // step returns the rise p's newest mark completes, if it does, and moves base.
 func (p *tracked) step(at time.Time) (r Rise, done, again bool) {
-	r = p.rise()
+	r = p.rise(at)
 	if r.GroupKills+r.Singles == 0 {
 		if p.settled(r, at) {
 			p.advance(r, at)
@@ -182,7 +182,6 @@ func (p *tracked) step(at time.Time) (r Rise, done, again bool) {
 		return Rise{}, false, true
 	}
 	r.Confirmed = true
-	r.Recent, r.RecentOwn = at.Sub(p.absorbed) < recent, at.Sub(p.absorbedOwn) < recent
 	p.advance(r, at)
 	return r, true, false
 }
@@ -222,9 +221,9 @@ func (p *tracked) advance(r Rise, at time.Time) {
 	p.pending, p.killed = time.Time{}, time.Time{}
 }
 
-// rise is what p's newest mark has over its base. What stands above the pod is taken from
+// rise is what p's newest mark has over its base at at. What stands above the pod is taken from
 // the first sample that shows the kill, read after it: any more is a neighbour's.
-func (p *tracked) rise() Rise {
+func (p *tracked) rise(at time.Time) Rise {
 	was, now, above := p.base.pod, p.last.pod, p.last.above
 	if p.shown > 0 {
 		above = p.above
@@ -233,6 +232,8 @@ func (p *tracked) rise() Rise {
 		Torn:       now.Torn || was.Torn,
 		GroupKills: now.Subtree.OOMGroupKill - was.Subtree.OOMGroupKill,
 		Pods:       above - p.base.above,
+		Recent:     at.Sub(p.absorbed) < recent,
+		RecentOwn:  at.Sub(p.absorbedOwn) < recent,
 	}
 	r.Peers = p.last.kills - p.base.kills - (p.last.mine - p.base.mine)
 	r.count(was, now)
