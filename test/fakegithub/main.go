@@ -17,7 +17,6 @@
 //	DELETE /api/v3/.../actions/runners/{id}      — deregister runner
 //	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}  — run status/conclusion (Q811)
 //	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}/attempts/{n} — one attempt's conclusion (Q1401)
-//	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}/attempts/{n} — one attempt's conclusion (Q1401)
 //	GET  /api/v3/repos/{o}/{r}/actions/workflows/{id}/runs — newer runs, always none (Q1181)
 //	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}/jobs — a run's jobs, always none (Q1375)
 //	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}/attempts/{n}/jobs — an attempt's jobs, always none (Q1320)
