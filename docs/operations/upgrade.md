@@ -1302,7 +1302,7 @@ They now stay cancelled mainly in the four cases below ([the rest](../design/04-
   Raise it to 2, the default.
 - **Behind such a job, where another killed job of the run went first**, since each takes a slot of its own until the matrix's own killed leg is re-run.
   Raise `maxEvictionRetries` where one run loses several jobs.
-- **In a run with two such matrices and a job reporting on each**, where each lost a leg.
+- **In a run with two such matrices and a job reporting on each**, where each lost a leg (Q1404).
   Re-run them by hand.
 
 **What changed.** The retry called `rerun-failed-jobs`, so a sibling job that failed on its own was re-run with the killed one and could turn green.

@@ -797,7 +797,7 @@ What loses that turn, where a killed job still parked goes one at a time instead
 - A restart between GitHub accepting the call and the record of it, or a call whose response is lost.
   The ledger holds what GAG meant to call, not that the attempt was its own, and after a person's `rerun-failed-jobs` every red job would read as a dependent.
 - A red job that reports on another matrix.
-  Of two fail-fast matrices with a killed leg and an aggregate each, the second leg's attempt carries the first aggregate, which is then another failure, so the siblings of both stay cancelled.
+  Of two fail-fast matrices with a killed leg and an aggregate each, the second leg's attempt carries the first aggregate, which is then another failure, so the siblings of both stay cancelled (Q1404).
 - A killed job no red job needs, handled before the leg whose aggregate is red.
   It takes a slot and shows no dependent, so the leg and the siblings then need two more; the other order recovers all three on two.
 - A list GitHub refuses, or two jobs of the called job's name, since the dependents are then unknown.
