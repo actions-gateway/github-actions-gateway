@@ -14,6 +14,7 @@ See [go-workspaces.md](go-workspaces.md) for why.
 (cd cmd/probe  && go test ./...)    # probe module
 (cd cmd/proxy  && go test ./...)    # proxy module
 (cd cmd/worker && go test ./...)    # worker module
+(cd cmd/oomreporter && go test ./...)    # out-of-memory reporter module
 ```
 
 Run tests locally before pushing to a PR to avoid burning CI.

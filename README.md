@@ -329,6 +329,7 @@ cmd/gmc/         Gateway Manager Controller binary (kubebuilder-generated)
 cmd/proxy/       Egress proxy binary
 cmd/worker/      Worker pod entrypoint
 cmd/probe/       Diagnostic probe for live investigations
+cmd/oomreporter/ Out-of-memory kill reporter (being built, no binary yet)
 docs/            Documentation hub — see docs/README.md
 docs/design/     Full system design documentation
 docs/development/ Developer workflow guides

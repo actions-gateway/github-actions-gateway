@@ -69,6 +69,7 @@ COPY api/go.mod api/
 COPY broker/go.mod broker/
 COPY cmd/agc/go.mod cmd/agc/
 COPY cmd/gmc/go.mod cmd/gmc/
+COPY cmd/oomreporter/go.mod cmd/oomreporter/
 COPY cmd/probe/go.mod cmd/probe/
 COPY cmd/proxy/go.mod cmd/proxy/
 COPY cmd/worker/go.mod cmd/worker/
