@@ -330,7 +330,7 @@ type ResolvedSpec struct {
 
 	// MemoryRetry is how an out-of-memory retry raises the killed container's memory
 	// limit (Q1183), or nil where the sizing profile derives no limit from history, so
-	// a re-run would get the limit that killed the job.
+	// a re-run would get the limit the killed pod had.
 	MemoryRetry *MemoryRetryPolicy
 
 	// ScaleUp is the opt-in worker-pod creation-rate limit (Q223), or nil for no
