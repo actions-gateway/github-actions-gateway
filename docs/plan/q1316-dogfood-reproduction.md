@@ -13,6 +13,7 @@ The local readings leave four questions only the dogfood cluster answers:
 2. Where the sidecar is killed, do the kernel's counters separate a neighbour from the job?
 3. Do the API server's statuses match the kubelet's, under `privileged-dind` and under Kata?
 4. Does the out-of-memory class read a node-killed runner as an own-limit kill ([Q1400](../queue/Q1400.md))?
+5. Can an unprivileged reader on the node say which limit ran out before the cgroups that say so are removed (Q1403, the node reporter)?
 
 One platform cause is already out: locally, restarting containerd or the kubelet and killing containerd left the sidecar and the runner running, and killing the pod's shim ended both.
 Those readings are one run each, and nothing here repeats them.
@@ -21,7 +22,9 @@ Those readings are one run each, and nothing here repeats them.
 
 Every node fact this needs is readable from inside a `privileged-dind` job: its daemon sees the host's cgroup tree, so `docker run --privileged -v /sys/fs/cgroup:/h:ro` reads any pod's `memory.events` (measured on a kind node, not on GKE).
 Statuses, Node Events and the AGC's log come from read-only `kubectl`.
-A debug pod would add the node's process list and its kernel log, which name the killed process; the container statuses and each container's own counters name the container, which is the question asked.
+The same job container opens `/dev/kmsg` (measured on Docker's `--privileged`, not on GKE), and prints from it only the `oom-kill:constraint=` line of each kill, which names the cgroup whose limit was hit, the victim's cgroup and the process.
+That is what the counters are checked against, and no other line of the node's log is printed.
+A debug pod would add the node's process list; the container statuses, the line and each container's own counters name the container, which is the question asked.
 The trade is that the privilege stays the one this tenant already has.
 Where the statuses and the counters do not name the victim, the reading is reported as unresolved rather than widened to a debug pod.
 The kubelet's `SystemOOM` Event is read beside them and not relied on: it is raised where the kernel's line names no memory cgroup, which a node-wide kill's does not and a kill at `kubepods`' limit does (kernel 6.12 `memcontrol.c`, kubelet 1.35.5 and its cAdvisor `oomparser.go`, read; the pattern run over both lines in their source format).
@@ -55,7 +58,8 @@ The scripts are at [the end](#the-probe).
 
 One e2e node, two workers on it at once, on a throwaway branch `claude/q1316-probe-run` whose workflow runs only on a push of that branch with `[q1316-probe]` in the commit message, has `permissions: {}` and checks nothing out.
 
-Both jobs sample the host's cgroup tree every second to their logs: each pod's `memory.current`, `memory.events` and `memory.events.local`, the same and `memory.max` for `kubepods.slice`, `/sys/fs/cgroup/docker`'s `memory.current`, and `/proc/vmstat`'s `oom_kill`.
+Both jobs sample the host's cgroup tree every second to their logs: each pod's `memory.current`, `memory.events` and `memory.events.local`, the same and `memory.max` for `kubepods.slice`, `/sys/fs/cgroup/docker`'s `memory.current`, and `/proc/vmstat`'s `oom_kill`, with the kernel's line for each kill.
+Each also runs [a second reader](#what-it-decides-for-q1403) beside it, shaped as a node reporter would be: uid 65534, every capability dropped, and the cgroup tree read-only.
 The two pods are scored alike, so a kill can take either; the survivor's log holds both pods' counters, and is the record: the fill's own summary line is lost where its worker is the one killed.
 Both do the same actions, except the fill, which one of them starts.
 Each job ends in failure once its sampler ends, after 2.5 minutes for R0, R1, R6 and R7 and 8 for a fill, so its end is observable.
@@ -69,7 +73,7 @@ If the two land on different nodes, the reading is void and repeated once.
 
 "Predicted" is from source or the local readings.
 R0 is a gate: where a job cannot read `memory.events` of `kubepods` and of another pod, does not find exactly two workers by their sidecar's 4Gi `memory.max`, or reads the `oom_score_adj` of a runner's `Runner.Listener` or `Runner.Worker`, or of dockerd, more than 10 from the table above (a step may be at 500, which the runner asks for), the run stops and the plan is recomputed.
-R0 also reads, by read-only `kubectl`, the QoS class, requests and priority class of every pod on the node, and lists the ones whose computed score is above a runner's.
+R0 also reads, by read-only `kubectl`, the UID, QoS class, requests and priority class of every pod on the node, and lists the ones whose computed score is above a runner's.
 
 | ID | Runs | What is done | Platform or tenant | Predicted |
 |---|---|---|---|---|
@@ -89,7 +93,7 @@ They run in the order listed.
 
 `kubepods.slice`'s counters are the node's since it started, so every reading is the rise across its own window, and the first sample of each is its baseline.
 
-Read for every one: the victim pod's statuses as the API server serves them (`kubectl get pod -w -o json`, started first), Events in the tenant's namespace and on the Node, both jobs' samples, the AGC's `scale-set job failed` lines and the `scaleset-failures-ci-e2e` ledger, the job's conclusion, and the time of each.
+Read for every one: the victim pod's statuses as the API server serves them (`kubectl get pod -w -o json`, started first, each line stamped with its arrival to the millisecond), Events in the tenant's namespace and on the Node, where `OOMKilling` from node-problem-detector is looked for as well as `SystemOOM`, both jobs' samples, the AGC's `scale-set job failed` lines and the `scaleset-failures-ci-e2e` ledger, the job's conclusion, and the time of each.
 
 ## What each outcome means
 
@@ -129,6 +133,34 @@ None of those reaches the AGC today, so the readings say what honest wording can
 The set is `NodeShare`, so what is read is the withheld `own_limit` branch.
 Not read: a raise under `Binpack` or `Throughput`, which starts from the same two facts, and a runner with no limit.
 
+## What it decides for Q1403
+
+The node reporter's design rests on five facts, and R8, R2 and R3 read them with no further change to the cluster.
+
+- **Whether it may read.** The second reader opens every pod's and container's `memory.events`, `memory.events.local` and `memory.peak`, and prints each refusal's errno, one file's owner and mode, and each cgroup that appears after it started.
+  It is an unprivileged container of the job's own Docker, so it is under Docker's default seccomp profile; the plain pod of R3, R3t and R4, which is a pod as a reporter would be, makes the same opens once before it fills.
+  Each also tries `/dev/kmsg` and prints `kernel.dmesg_restrict`; the pod has no such device, so only the job's reader tests that.
+- **How long the facts last.** It prints, to the millisecond, the first rise of `oom` or `oom_kill` in a cgroup and the cgroup's removal, once from inotify and once from a 50 ms poll.
+  Locally (kernel 6.12, nine kills in three runs, three each by the container's own limit, its pod's and `kubepods`') inotify saw each rise 6 to 50 ms before the poll.
+  It gave no delete event for any of six removed cgroups, and a file held open across the removal read `ENODEV`; so only the poll times a removal, and the last values are whatever was read before it.
+- **Whether `Failed` arrives first.** That is the stamped watch against the removals of the container's and the pod's cgroups.
+  The two clocks are the node's and the client's; in R3 the plain pod's log is followed and stamped too, and its first line's arrival less the time it prints bounds how far the client's clock is ahead.
+- **Which counter names the limit.** Expected `oom` in `memory.events.local`, for the container, its pod, its QoS slice and `kubepods.slice`: 1, 0, 0, 0 for R8; 0, 0, 0 and a rise for R3; and no rise in any for R2.
+  A pod's own limit (`spec.resources`) is the fourth shape and is not run: locally it read 0 for the container and 1 for the pod.
+  The kernel's line is the answer each is checked against.
+- **Who was over its request.** Every pod's `memory.current` in the sample before the kill, beside its requested memory from R0 by UID, and the plain pod's 12Gi.
+
+| Outcome | Conclusion |
+|---|---|
+| The reader and the plain pod open every file | A reporter of the counters needs no privileged container, and its `hostPath` alone decides its namespace's level |
+| Either is refused | The errno says by what; a reporter needs more than the row's cost names |
+| The pod's cgroup outlives the arrival of `Failed` in every run, and by how much | The shortest is the bound a reporter has, from these few kills on one node image |
+| It is gone first in any run | A reporter has to read as the kill happens, not after the pod fails |
+| The counters and the kernel's line name the same limit in R8, R2 and R3 | The counters are enough for those three |
+| They differ in any | The counters are not, and the kernel's log is the reporter's source |
+
+Not read, since each needs a pod or a mount this run does not make: the host's counters beside a kill in a Kata guest, and whether a non-root pod could read `/dev/kmsg` or the node's journal through a `hostPath`.
+
 ## Mutations
 
 Environment, every command: `PROJECT=actions-gateway-dogfood CLUSTER=gag-dogfood ZONE=us-east1-b REPO=actions-gateway/github-actions-gateway`, `CTX=gke_actions-gateway-dogfood_us-east1-b_gag-dogfood`, and `KUBECONFIG` set to a file of this run's own.
@@ -141,7 +173,7 @@ The values are the runbook's ([gke-dogfood.md](gke-dogfood.md#variables)) and ar
 | 0b | [Take the release gate's lease](#the-lease) | Creates one Lease, `default/actions-gateway-release-gate` |
 | 1 | `E2E_VARIANT=dind E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | System pool to its running size, which brings up the always-on gateways; the `dind` overlay (namespace labels, template, open egress policy, gateway); registry mirrors up |
 | 2 | `git push origin HEAD:claude/q1316-probe-run`, one push per reading | One workflow run of the file below; the e2e pool scales 0 to 1 |
-| 3 | `kubectl --context $CTX -n gag-dogfood-e2e create configmap q1316-fill --from-file=fill.py`, once, then `apply -f hog.yaml` with `NODE` set, per R3, R3t and R4 | One ConfigMap, and one non-root, unprivileged pod with the host's `/sys/fs/cgroup` mounted read-only, which is how it sees a worker die |
+| 3 | `kubectl --context $CTX -n gag-dogfood-e2e create configmap q1316-fill --from-file=fill.py --from-file=reader.py`, once, then `apply -f hog.yaml` with `NODE` set, per R3, R3t and R4 | One ConfigMap, and one non-root, unprivileged pod with the host's `/sys/fs/cgroup` mounted read-only, which is how it sees a worker die |
 | 4 | `kubectl --context $CTX -n gag-dogfood-e2e delete pod/q1316-hog` after each, `configmap/q1316-fill` after the last | Removes them |
 | 5 | `E2E_VARIANT=kata E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | Back to the `kata` overlay, and deletes the open egress policy |
 | 6 | `GAG_ROUTE_VARS=0 scripts/dogfood/e2e-stop.sh` | Drains, deletes the gateway, scales mirrors to 0, system pool to its running size |
@@ -261,7 +293,8 @@ The cluster's own fee is paid either way.
 
 The commit pushed to `claude/q1316-probe-run` adds one file, `.github/workflows/q1316-probe.yml`, and its message is `[q1316-probe] <ID>`, with ` solo` after the ID for R1, R6 and R7.
 R6 is `R6a` and `R6b`, and R7 is `R7a` and `R7b`.
-`bash -n`, `shellcheck -S warning` and `actionlint` pass on it but for the runner label it does not know and an info note that single quotes do not expand, which is meant.
+`bash -n`, `shellcheck -S warning` and `actionlint` pass on it but for the runner label it does not know and info notes that single quotes do not expand, which is meant.
+`sample.py` and `reader.py` ran locally over a `kubepods.slice` made in one container, three times.
 It has not run on GitHub.
 
 ```yaml
@@ -298,11 +331,17 @@ jobs:
           cat > fill.py <<'PY'
           @FILL@
           PY
+          cat > reader.py <<'PY'
+          @READER@
+          PY
           until docker info >/dev/null 2>&1; do sleep 1; done
           docker pull "$I"
           host() { docker run --rm -i --privileged --pid=host -v /sys/fs/cgroup:/h:ro "$I" "$@"; }
           case $R in R0|R1|R6*|R7*) secs=150 ;; *) secs=480 ;; esac
           host python3 - "$secs" < sample.py &
+          log=()
+          if host test -c /dev/kmsg; then log=(--device /dev/kmsg:/dev/kmsg:r); fi
+          docker run --rm -i --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --read-only "${log[@]}" -v /sys/fs/cgroup:/h:ro "$I" python3 - "$secs" < reader.py &
           own=$(cat /proc/1/oom_score_adj)
           case $R in
             R3t) host sh -c "echo $own > /proc/\$(pidof dockerd)/oom_score_adj" ;;
@@ -330,7 +369,7 @@ jobs:
 `@SAMPLE@` is `sample.py`:
 
 ```python
-import glob, sys, time
+import glob, os, sys, time
 
 def rd(path):
     try:
@@ -339,8 +378,28 @@ def rd(path):
     except OSError as e:
         return type(e).__name__
 
+log = None
+try:
+    log = os.open("/dev/kmsg", os.O_RDONLY | os.O_NONBLOCK)
+    os.lseek(log, 0, os.SEEK_END)
+except OSError as e:
+    print("kmsg", e)
+
+def kernel():
+    """The kernel's one line for each out-of-memory kill, and no other line of its log."""
+    while log is not None:
+        try:
+            line = os.read(log, 8192).decode(errors="replace").split("\n")[0]
+        except BrokenPipeError:
+            continue
+        except OSError:
+            return
+        if "oom-kill:constraint=" in line:
+            print("K", time.strftime("%T"), line)
+
 end = time.time() + int(sys.argv[1])
 while time.time() < end:
+    kernel()
     node = rd("/proc/vmstat").split()
     print("T", time.strftime("%T"), "oom_kill", node[node.index("oom_kill") + 1])
     for d in ["/h", "/h/kubepods.slice", "/h/docker"] + sorted(glob.glob("/h/kubepods.slice/**/*pod*.slice", recursive=True)):
@@ -397,6 +456,102 @@ print("workers", base, "->", kills(), "node kills", field("/proc/vmstat", "oom_k
       "fillers killed", len(died), flush=True)
 ```
 
+`@READER@`, and the ConfigMap's `reader.py`, is the second reader:
+
+```python
+import collections, ctypes, errno, glob, os, select, stat, struct, sys, time
+
+FILES = ("memory.events", "memory.events.local", "memory.peak")
+
+def say(*a):
+    print("N", f"{time.time():.3f}", *a, flush=True)
+
+def err(e):
+    return errno.errorcode.get(e.errno, e.errno)
+
+def read(fd):
+    try:
+        return " ".join(os.pread(fd, 4096, 0).decode().split())
+    except OSError as e:
+        return err(e)
+
+def dirs():
+    pods = glob.glob("/h/kubepods.slice/**/*pod*.slice", recursive=True)
+    return ["/h/kubepods.slice"] + pods + [c for p in pods for c in glob.glob(p + "/*.scope")]
+
+def attempt(path):
+    try:
+        return os.open(path, os.O_RDONLY)
+    except OSError as e:
+        return err(e)
+
+def loop(tag, tick):
+    """Report each change of a cgroup's events, as seen by tick, until the end."""
+    held, scan = {}, 0
+    while time.time() < end:
+        if time.time() > scan:
+            scan = time.time() + 1
+            for d in dirs():
+                fd = attempt(d + "/memory.events") if d not in held else -1
+                if fd != -1:
+                    held[d] = [fd, attempt(d + "/memory.events.local"), read(fd) if isinstance(fd, int) else fd]
+                    say(tag, "new", d[3:], fd if isinstance(fd, str) else "")
+                    if watch and isinstance(fd, int):
+                        watch(d)
+        tick()
+        for d, (fd, local, was) in list(held.items()):
+            if not isinstance(fd, int):
+                continue
+            now = read(fd)
+            if not os.path.isdir(d):
+                say(tag, "gone", d[3:], "held open:", now)
+                os.close(fd)
+                held[d][0] = "gone"
+            elif now.partition(" oom ")[2] != was.partition(" oom ")[2]:
+                say(tag, "rise", d[3:], now, "| local", read(local) if isinstance(local, int) else local)
+            held[d][2] = now
+
+if not os.path.isdir("/h/kubepods.slice"):
+    sys.exit("no kubepods.slice: a Kata guest")
+end = time.time() + int(sys.argv[1])
+seen = collections.Counter()
+for d in dirs():
+    for f in FILES:
+        fd = attempt(d + "/" + f)
+        seen[f, fd if isinstance(fd, str) else "opened"] += 1
+        if isinstance(fd, int):
+            os.close(fd)
+s = os.stat("/h/kubepods.slice/memory.events")
+say("uid", os.getuid(), "owner", s.st_uid, "mode", stat.filemode(s.st_mode), dict(seen))
+k = attempt("/dev/kmsg")
+say("kmsg", k if isinstance(k, str) else "opened", "dmesg_restrict", open("/proc/sys/kernel/dmesg_restrict").read().strip())
+
+if len(sys.argv) > 2:
+    sys.exit()
+watch = None
+if os.fork() == 0:
+    loop("poll", lambda: time.sleep(0.05))
+    os._exit(0)
+libc = ctypes.CDLL(None, use_errno=True)
+ino, names = libc.inotify_init1(os.O_NONBLOCK), {}
+
+def watch(d):
+    wd = libc.inotify_add_watch(ino, (d + "/memory.events").encode(), 0x402)  # IN_MODIFY | IN_DELETE_SELF
+    names[wd] = d[3:] if wd >= 0 else errno.errorcode[ctypes.get_errno()]
+
+def notified():
+    if select.select([ino], [], [], 1)[0]:
+        data, at = os.read(ino, 65536), 0
+        while at < len(data):
+            wd, mask, _, n = struct.unpack_from("iIII", data, at)
+            at += 16 + n
+            if mask != 0x2:
+                say("inotify", names.get(wd), hex(mask))
+
+loop("inotify", notified)
+os.wait()
+```
+
 `hog.yaml`, whose image has `python3` (checked locally):
 
 ```yaml
@@ -417,7 +572,7 @@ spec:
   containers:
     - name: fill
       image: ghcr.io/actions-gateway/dogfood-e2e-runner:2.338.2-1
-      command: [python3, /f/fill.py, "7", "4096", "5"]
+      command: [sh, -c, "python3 /f/reader.py 0 once; exec python3 /f/fill.py 7 4096 5"]
       resources: { requests: { memory: 12Gi } }
       securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
       volumeMounts:
