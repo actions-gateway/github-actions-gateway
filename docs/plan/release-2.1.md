@@ -52,7 +52,7 @@ The ledger takes a row for each item that merges onto the released surface befor
 
 ## Why the rows added since gate
 
-One heading per row or set, in ID order, so that two PRs adding a reason edit different places.
+One heading per row or set, in ID order.
 
 ### Q1374 to Q1376
 
@@ -76,7 +76,8 @@ Detection could name a platform fault that did not happen, in the release whose 
 
 ### Q1400
 
-Settled 2026-11-24, for the same reason in the out-of-memory class `v2.0.0` shipped: its Events named the runner's own limit as the cause of a kill the node could have made.
+Settled 2026-11-24.
+The out-of-memory class `v2.0.0` shipped could name a cause it did not check, in the release whose headline is telling platform failures from a job's own: its Events named the runner's own limit for a kill the node could have made.
 They name no cause now, and what the class re-runs, raises and withholds is unchanged; no node kill of a runner has been reproduced.
 
 ### Q1401

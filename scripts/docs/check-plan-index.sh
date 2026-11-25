@@ -114,7 +114,8 @@
 #
 #      Invariant 5 leaves an untagged release plan to this rule, since 5b would
 #      demand the link this one refuses. Once the tag resolves, 5 applies again
-#      and this rule stops.
+#      and this rule stops. Like invariant 4 it is skipped when no stable tag
+#      resolves, because a shipped plan then looks untagged.
 #
 set -euo pipefail
 shopt -s inherit_errexit
@@ -497,6 +498,7 @@ release_checked=0
 if (( ${#release_rows[@]} > 0 )) && [[ -z "${release_tag:-}" ]]; then
     printf 'check-plan-index: release-row check SKIPPED — no stable vX.Y.Z tag locally or on\n'
     printf '                  origin, so no published release can contradict a cell (fresh fork).\n'
+    printf '                  The shared-line check is skipped with it.\n'
 elif (( ${#release_rows[@]} > 0 )); then
     stale_release=()
     for rec in "${release_rows[@]}"; do
@@ -524,12 +526,18 @@ elif (( ${#release_rows[@]} > 0 )); then
     fi
 fi
 
-# Invariant 7: an untagged release plan's shared lines name no item. A link's target
-# is dropped before either scan, so a linked item counts once and an anchor that
-# spells an ID counts for nothing.
+# Invariant 7: an untagged release plan's shared lines name no item. A link into the
+# store counts by its target, whatever its label says, since the target is what dies
+# when the row closes. Every other link keeps its label and loses its target, so an
+# anchor that spells an ID counts for nothing.
+#
+# untagged_release_plan <plan> — unreleased_release_plan, where a tag resolves.
+untagged_release_plan() {
+    [[ -n "${release_tag:-}" ]] && unreleased_release_plan "$1"
+}
 shared=()
 while IFS=$'\t' read -r lineno plan ids; do
-    unreleased_release_plan "$plan" || continue
+    untagged_release_plan "$plan" || continue
     for id in $ids; do shared+=("README.md:$lineno"$'\t'"$id"); done
 done < <(awk '
     /^## Archive/ { exit }
@@ -540,6 +548,7 @@ done < <(awk '
         if (!match(col[2], "\\]\\(release-[0-9]+\\.[0-9]+\\.md\\)")) next
         plan = substr(col[2], RSTART + 2, RLENGTH - 3)
         ids = ""
+        gsub(/\[[^]]*\]\(\.\.\/queue\//, "(", col[4])
         gsub(/\]\([^)]*\)/, "]", col[4])
         while (match(col[4], "Q[0-9]+")) {
             ids = ids " " substr(col[4], RSTART, RLENGTH)
@@ -549,13 +558,14 @@ done < <(awk '
     }
 ' "$readme")
 for f in ${disk_active+"${disk_active[@]}"}; do
-    unreleased_release_plan "$f" || continue
+    untagged_release_plan "$f" || continue
     while IFS=$'\t' read -r lineno id; do
         shared+=("$f:$lineno"$'\t'"$id")
     done < <(awk '
         /^## / { exit }
         {
             line = $0
+            gsub(/\[[^]]*\]\(\.\.\/queue\//, "(", line)
             gsub(/\]\([^)]*\)/, "]", line)
             while (match(line, "Q[0-9]+")) {
                 print FNR "\t" substr(line, RSTART, RLENGTH)

@@ -868,8 +868,10 @@ Link each ID to its item page while it is open; a shipped or punted item's link 
 
 **Everything per-item lives in the ledger or under its own heading, and the lines every PR shares name no item.** Until the tag, a release plan's index cell and the text above its first heading point at the ledger, and why a row was added after scoping goes under a heading with its ID.
 `make plan-index-check` refuses a Q-ID on those two shared lines (invariant 7).
-They were the collision: in the 2.1 plan 12 of 15 commits rewrote the index cell and 12 edited the banner, each merge left the next PR conflicted, and one finished PR waited 68 minutes on those two lines alone while its code and ledger rows merged cleanly (Q1185).
-Two PRs that edit neighbouring ledger rows can still conflict; how often they do was not measured.
+They were the collision: in the 2.1 plan 12 of 15 commits rewrote the index cell and 12 edited the banner, so each merge left the next PR conflicted (Q1185).
+What still conflicts is two PRs ticking neighbouring ledger rows, or each adding a row or a reason at the end; ticks on rows apart from each other merge.
+
+**The ledger row is held to the store instead.** `make release-ladder-check` fails a live item written bare, a closed one still linked, and a closed one whose row reads as open, which is what the index cell's links used to force.
 
 **Delivered is a tick, not a narrative.** A row flips to ✅ in the same change that deletes its Queue row — the plan-docs-stay-current discipline already owns that edit, so the ledger costs nothing extra to keep true.
 

@@ -40,8 +40,8 @@
 # Assertion 1 alone would pass a tree where every punted row is correctly
 # deferred and the revived paragraph still named one of them.
 #
-# Two more bind each rung's plan to the `X.Y-gate` labels (Q1087), again each
-# the other's direction:
+# Three more bind each rung's plan to the store (Q1087, Q1185); 4 and 5 are each the
+# other's direction:
 #   4. An item labelled `X.Y-gate` is marked `X.Y-gate` in the scope ledger of
 #      the plan the ladder's X.Y rung links. A label with no rung, a rung with no
 #      plan, and a plan with no ledger all fail rather than pass unread.
@@ -50,6 +50,10 @@
 #      skipped, since the ledger keeps its Q-ID once it ships. A cell naming a
 #      gate with anything else in it fails, since read loosely it would drop a
 #      gating row out of this check.
+#   6. A ledger row links its Q-ID while the item is live and writes it bare once it
+#      is closed, and a closed item's row does not read as open (🔲 ❌ 🚧). The
+#      ledger is the one place that says what a release waits for (Q1185), so its
+#      Status column is held to the store the way a plan's Status cell is.
 # "Names as gating" is the ledger's `Gates?` column, which every release plan
 # already carries by convention; the rest of a plan mentions many rows.
 #
@@ -324,9 +328,10 @@ item_gate_labels() {
 	' "$1"
 }
 
-# "ID<TAB>gates-cell" for each Q-ID row of a plan's scope ledger. The Gates?
-# column is found by its header rather than by position, so a ledger that grows a
-# column still reads. Exits 3 when the section exists but no header names it.
+# "ID<TAB>linked<TAB>open<TAB>gates-cell" for each Q-ID row of a plan's scope ledger,
+# where linked and open are 0 or 1. Both columns are found by header rather than by
+# position, so a ledger that grows a column still reads. Exits 3 when the section
+# exists but no header names `Gates?`.
 ledger_rows() {
 	awk '
 		/^## Scope ledger/ { in_section = 1; next }
@@ -334,14 +339,19 @@ ledger_rows() {
 		in_section && /^\|/ {
 			n = split($0, cell, "|")
 			if (!col) {
-				for (i = 2; i < n; i++) if (cell[i] ~ /Gates\?/) col = i
+				for (i = 2; i < n; i++) {
+					if (cell[i] ~ /Gates\?/) col = i
+					if (cell[i] ~ /^[ \t]*Status[ \t]*$/) status = i
+				}
 				next
 			}
 			if (!match(cell[2], /Q[0-9]+/)) next
 			id = substr(cell[2], RSTART, RLENGTH)
 			g = cell[col]
 			gsub(/[`* \t]/, "", g)
-			printf "%s\t%s\n", id, g
+			linked = index(cell[2], "[" id "](") > 0
+			open = status && cell[status] ~ /^[ \t]*(🔲|❌|🚧)/
+			printf "%s\t%d\t%d\t%s\n", id, linked, open, g
 		}
 		END { if (in_section && !col) exit 3 }
 	' "$1"
@@ -367,9 +377,22 @@ for version in "${!rung_plan[@]}"; do
 		printf 'release-ladder: %s has a scope ledger with no "Gates?" column, so nothing in it can be read as gating\n' "$plan" >&2
 		exit 2
 	fi
-	while IFS=$'\t' read -r id cell; do
+	while IFS=$'\t' read -r id linked open cell; do
 		[[ -n "$id" ]] || continue
 		ledger_cell["$version/$id"]="$cell"
+		# 6. The row's link and status agree with the store.
+		if [[ -f "$STORE/$id.md" ]]; then
+			if ((!linked)); then
+				fail "$plan's scope ledger writes $id bare, the closed form, but it is still an item in $STORE
+       write [$id](../queue/$id.md), so closing the item breaks the link and the row gets re-read"
+			fi
+		elif ((linked)); then
+			fail "$plan's scope ledger links $id, which is no longer an item in $STORE
+       re-read the row's status, then write the ID bare"
+		elif ((open)); then
+			fail "$plan's scope ledger reads as open for $id, which is no longer an item in $STORE
+       the item closed, so say in the row what happened to it"
+		fi
 		if [[ "$cell" == *-gate* && ! "$cell" =~ ^[0-9]+\.[0-9]+-gate$ ]]; then
 			fail "$plan's scope ledger marks $id as '$cell', which names a gate but is not one label
        a Gates? cell holds exactly one X.Y-gate label, 'rides' or 'gates'; put any qualifier in the Status cell"

@@ -361,6 +361,19 @@ new_repo 'Q10' '' 'release-2.1.md'
 index '| [release-2.1.md](release-2.1.md) | The 2.1 release | ❌ Scoped; [Q10](../queue/Q10.md) still gates |'
 expect 'a linked row is reported once' 1 '1 item(s) named on the shared lines'
 
+# A link into the store dies with the row whatever its label says. Invariant 3 names
+# it too, so the substring is this rule's own.
+new_repo 'Q10' '' 'release-2.1.md'
+index '| [release-2.1.md](release-2.1.md) | The 2.1 release | ❌ Scoped; [the sidecar row](../queue/Q10.md) gates |'
+expect 'a live row linked under another label in the cell is rejected' 1 '1 item(s) named on the shared lines'
+
+# The escaped pipe belongs to the Scope cell; split naively, the row has a fourth
+# column and is skipped.
+new_repo 'Q10' '' 'release-2.1.md'
+# shellcheck disable=SC2016 # the backticks are Markdown inline code, not substitution
+index '| [release-2.1.md](release-2.1.md) | The `a \| b` release | ❌ Scoped; Q99 landed |'
+expect 'an escaped pipe in the Scope cell does not hide a release cell' 1 'README.md:7 names Q99'
+
 # The banner is the text above the first heading, quoted or not.
 new_repo 'Q10' '' 'release-2.1.md'
 index "$CLEAN_2_1"
@@ -372,6 +385,11 @@ index "$CLEAN_2_1"
 body_of release-2.1.md '**Status:** scoped; the ledger says what landed.' '' '[Q10](../queue/Q10.md) came later.'
 expect 'a second paragraph above the first heading is read too' 1 'release-2.1.md:5 names Q10'
 
+new_repo 'Q10' '' 'release-2.1.md'
+index "$CLEAN_2_1"
+body_of release-2.1.md '> **Status:** scoped; [the sidecar row](../queue/Q10.md) gates.'
+expect 'a live row linked under another label in the banner is rejected' 1 'release-2.1.md:3 names Q10'
+
 # The Scope cell, an anchor that spells an ID, and everything under a heading are
 # where an item may be named. Q10 is live and targets the plan, so this is also the
 # assertion that invariant 5 left the paragraph to this rule.
@@ -380,6 +398,11 @@ index "$CLEAN_2_1"
 body_of release-2.1.md '**Status:** scoped; [the ledger](release-2.1.md#scope-ledger-Q10) says what landed.' '' \
     '## Scope ledger' '' '| [Q10](../queue/Q10.md) | Thing | open |'
 expect 'an untagged release naming its rows in the ledger alone is accepted' 0
+
+# Q99 is closed, so invariant 3 reads its bare form in the target as legal.
+new_repo 'Q10' '' 'release-2.1.md'
+index '| [release-2.1.md](release-2.1.md) | The 2.1 release | ❌ Scoped; [why](release-2.1.md#why-Q99) it gates |'
+expect 'an untagged release cell whose anchor spells an ID is accepted' 0
 
 # After the tag the rule stops, and invariants 3 and 5 hold the lines as any other.
 TAG=v2.1.0
@@ -392,6 +415,13 @@ new_repo 'Q10' '' 'release-2.1.md'
 index '| [release-2.1.md](release-2.1.md) | The 2.1 release | ⚠️ Shipped; one residual |'
 body_of release-2.1.md '**Status:** shipped; one residual.'
 expect 'a tagged release is held to the Status-paragraph rule again' 1 'pin their claim to no live Queue row'
+
+# With no tag a shipped plan looks untagged, so the rule is skipped and says so.
+TAG=
+new_repo 'Q10' '' 'release-2.1.md'
+index '| [release-2.1.md](release-2.1.md) | The 2.1 release | ⚠️ Shipped; [Q10](../queue/Q10.md) remains |'
+body_of release-2.1.md '**Status:** shipped; [Q10](../queue/Q10.md) remains.'
+expect 'a tagless tree skips the shared-line check' 0 'shared-line check is skipped'
 
 # The rule is for release plans only.
 TAG=v2.0.0
