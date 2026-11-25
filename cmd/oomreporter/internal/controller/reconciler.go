@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -32,6 +34,9 @@ const (
 	// clock.
 	eventWithin = 10 * time.Minute
 	skew        = time.Minute
+	// writeEvery is how far apart two writes of one condition are, and two Events of one pod that
+	// are of no container.
+	writeEvery = time.Minute
 
 	uidIndex = "metadata.uid"
 )
@@ -49,6 +54,8 @@ type Reconciler struct {
 
 	idle   map[string]time.Time // by node
 	events map[string]time.Time // made, by namespace and name
+	// written is the conditions, by pod UID and type, and the Events of no container, by pod UID.
+	written map[string]time.Time
 }
 
 // SetupWithManager registers r, and the index it finds pods by.
@@ -130,7 +137,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		log.FromContext(ctx).Info("skipped a report", "node", node, "reason", err.Error())
 		return reconcile.Result{RequeueAfter: left}, nil
 	}
-	return reconcile.Result{RequeueAfter: left}, r.apply(ctx, node, kills)
+	wait, err := r.apply(ctx, node, kills)
+	return reconcile.Result{RequeueAfter: sooner(left, wait)}, err
+}
+
+// sooner is the shorter of a and b, where 0 is none.
+func sooner(a, b time.Duration) time.Duration {
+	if a == 0 || b != 0 && b < a {
+		return b
+	}
+	return a
 }
 
 func (r *Reconciler) hasAgent(ctx context.Context, node string) (bool, error) {
@@ -171,8 +187,9 @@ func (r *Reconciler) expire(ctx context.Context, node string, cm *corev1.ConfigM
 	return 0, nil
 }
 
-// apply says what node's kills say of its pods.
-func (r *Reconciler) apply(ctx context.Context, node string, kills []report.Kill) error {
+// apply says what node's kills say of its pods, and returns how long it waits to say the rest.
+func (r *Reconciler) apply(ctx context.Context, node string, kills []report.Kill) (time.Duration, error) {
+	maps.DeleteFunc(r.written, func(_ string, at time.Time) bool { return r.Now().Sub(at) >= writeEvery })
 	var uids []string
 	by := map[string][]report.Kill{}
 	for _, k := range kills {
@@ -181,11 +198,12 @@ func (r *Reconciler) apply(ctx context.Context, node string, kills []report.Kill
 		}
 		by[k.Pod] = append(by[k.Pod], k)
 	}
+	var wait time.Duration
 	var errs []error
 	for _, uid := range uids {
 		pod, err := r.pod(ctx, uid)
 		if err != nil {
-			return err
+			return wait, err
 		}
 		if pod == nil {
 			continue
@@ -196,9 +214,11 @@ func (r *Reconciler) apply(ctx context.Context, node string, kills []report.Kill
 			continue
 		}
 		verdicts, processes := judge(pod, by[uid])
-		errs = append(errs, r.writeConditions(ctx, pod, verdicts), r.writeEvents(ctx, pod, verdicts, processes))
+		left, err := r.writeConditions(ctx, pod, verdicts)
+		wait = sooner(wait, left)
+		errs = append(errs, err, r.writeEvents(ctx, pod, verdicts, processes))
 	}
-	return errors.Join(errs...)
+	return wait, errors.Join(errs...)
 }
 
 // pod returns the pod of that UID, nil where there is none in the namespaces r writes to.
@@ -215,15 +235,23 @@ func (r *Reconciler) pod(ctx context.Context, uid string) (*corev1.Pod, error) {
 	return nil, nil
 }
 
-func (r *Reconciler) writeConditions(ctx context.Context, pod *corev1.Pod, verdicts []verdict) error {
+// writeConditions returns how long it waits to write the rest.
+func (r *Reconciler) writeConditions(ctx context.Context, pod *corev1.Pod, verdicts []verdict) (time.Duration, error) {
+	var wait time.Duration
 	var changed []corev1.PodCondition
 	for _, v := range verdicts {
-		if c, is := v.condition(pod, r.Now()); is {
-			changed = append(changed, c)
+		c, is := v.condition(pod, r.Now())
+		if !is {
+			continue
 		}
+		if last, ok := r.written[conditionKey(pod, c)]; ok {
+			wait = sooner(wait, writeEvery-r.Now().Sub(last))
+			continue
+		}
+		changed = append(changed, c)
 	}
 	if len(changed) == 0 {
-		return nil
+		return wait, nil
 	}
 	// The UID is a precondition: a pod made again under the name is another.
 	body, err := json.Marshal(map[string]any{
@@ -231,26 +259,42 @@ func (r *Reconciler) writeConditions(ctx context.Context, pod *corev1.Pod, verdi
 		"status":   map[string]any{"conditions": changed},
 	})
 	if err != nil {
-		return err
+		return wait, err
 	}
 	err = r.Status().Patch(ctx, pod.DeepCopy(), client.RawPatch(types.StrategicMergePatchType, body))
-	return ignore(err, apierrors.IsNotFound, otherUID)
+	if err = ignore(err, apierrors.IsNotFound, otherUID); err != nil {
+		return wait, err
+	}
+	for _, c := range changed {
+		r.wrote(conditionKey(pod, c))
+	}
+	return wait, nil
 }
 
-// writeEvents makes at most one Event a minute for a container, and one for no container.
+func conditionKey(pod *corev1.Pod, c corev1.PodCondition) string {
+	return string(pod.UID) + "/" + string(c.Type)
+}
+
+func (r *Reconciler) wrote(key string) {
+	if r.written == nil {
+		r.written = map[string]time.Time{}
+	}
+	r.written[key] = r.Now()
+}
+
+// writeEvents makes at most one Event for each minute a container ended in, and one a minute for
+// the newest kill that ended none, whose time is the report's.
 func (r *Reconciler) writeEvents(ctx context.Context, pod *corev1.Pod, verdicts []verdict, processes []time.Time) error {
 	for _, v := range verdicts {
 		text := fmt.Sprintf("Container %s: %s", v.ended.name, v.text())
-		if err := r.writeEvent(ctx, pod, v.ended.field, v.at, eventPrefix+string(v.reason), text); err != nil {
+		if err := r.writeEvent(ctx, pod, v.ended.field, v.ended.at, eventPrefix+string(v.reason), text); err != nil {
 			return err
 		}
 	}
-	for _, at := range processes {
-		if err := r.writeEvent(ctx, pod, "", at, reasonProcess, wordsProcess); err != nil {
-			return err
-		}
+	if _, ok := r.written[string(pod.UID)]; ok || len(processes) == 0 {
+		return nil
 	}
-	return nil
+	return r.writeEvent(ctx, pod, "", slices.MaxFunc(processes, time.Time.Compare), reasonProcess, wordsProcess)
 }
 
 func (r *Reconciler) writeEvent(ctx context.Context, pod *corev1.Pod, field string, at time.Time, reason, text string) error {
@@ -282,6 +326,9 @@ func (r *Reconciler) writeEvent(ctx context.Context, pod *corev1.Pod, field stri
 		r.events = map[string]time.Time{}
 	}
 	r.events[pod.Namespace+"/"+name] = now
+	if field == "" {
+		r.wrote(string(pod.UID))
+	}
 	return nil
 }
 

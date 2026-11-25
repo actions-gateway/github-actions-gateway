@@ -46,17 +46,25 @@ func (o controllerOptions) manager(ctx context.Context, cfg *rest.Config) (ctrl.
 	if err != nil {
 		return nil, err
 	}
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Cache: o.cache(r.Namespaces),
-		// Two of it write the same.
-		LeaderElection: false,
-		Metrics:        metricsserver.Options{BindAddress: "0"},
-	})
+	cfg = rest.CopyConfig(cfg)
+	// client-go's own limit is 5 requests a second, which is for every node's pods. The API
+	// server's stands.
+	cfg.QPS = -1
+	mgr, err := ctrl.NewManager(cfg, o.options(r.Namespaces))
 	if err != nil {
 		return nil, err
 	}
 	r.Client = mgr.GetClient()
 	return mgr, r.SetupWithManager(ctx, mgr)
+}
+
+func (o controllerOptions) options(names map[string]bool) ctrl.Options {
+	return ctrl.Options{
+		Cache: o.cache(names),
+		// Two of it write the same.
+		LeaderElection: false,
+		Metrics:        metricsserver.Options{BindAddress: "0"},
+	}
 }
 
 func (o controllerOptions) reconciler() (*controller.Reconciler, error) {

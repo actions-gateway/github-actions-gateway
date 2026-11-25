@@ -55,6 +55,11 @@ func TestController_ReadsNoMoreNamespacesThanItIsTold(t *testing.T) {
 	assert.Equal(t, map[string]cache.Config{"oom": {}}, reports)
 }
 
+func TestController_ServesNothing(t *testing.T) {
+	assert.Equal(t, "0", controllerOptions{}.options(nil).Metrics.BindAddress)
+	assert.Empty(t, controllerOptions{}.options(nil).HealthProbeBindAddress)
+}
+
 func TestSlim_KeepsWhatTheControllerReads(t *testing.T) {
 	limits := &corev1.ResourceRequirements{Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("1Gi")}}
 	got, err := slim(&corev1.Pod{

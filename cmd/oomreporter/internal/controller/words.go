@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -39,12 +40,14 @@ func (v verdict) text() string {
 	return words[v.reason]
 }
 
+func (e ended) ref() string { return "container ID " + e.id }
+
 // condition is v's. One that is there, and holds the same status, gives it its transition time.
 func (v verdict) condition(pod *corev1.Pod, now time.Time) (c corev1.PodCondition, changed bool) {
 	c = corev1.PodCondition{
 		Type:   corev1.PodConditionType(Domain + "/" + v.ended.name),
 		Status: corev1.ConditionTrue, Reason: string(v.reason),
-		Message: fmt.Sprintf("%s Killed at %s, container ID %s.", v.text(), v.at.UTC().Format(time.RFC3339), v.ended.id),
+		Message: fmt.Sprintf("%s It ended at %s, %s.", v.text(), v.ended.at.UTC().Format(time.RFC3339), v.ended.ref()),
 	}
 	if v.reason == rule.Unknown {
 		c.Status = corev1.ConditionUnknown
@@ -53,6 +56,9 @@ func (v verdict) condition(pod *corev1.Pod, now time.Time) (c corev1.PodConditio
 	for _, was := range pod.Status.Conditions {
 		if was.Type != c.Type {
 			continue
+		}
+		if v.weak && was.Status == corev1.ConditionTrue && strings.Contains(was.Message, v.ended.ref()) {
+			return was, false
 		}
 		if was.Status == c.Status {
 			c.LastTransitionTime = was.LastTransitionTime

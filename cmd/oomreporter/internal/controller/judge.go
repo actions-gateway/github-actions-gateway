@@ -30,6 +30,8 @@ type verdict struct {
 	at     time.Time
 	// none: no limit of the pod or inside it ran out with the kill.
 	none bool
+	// weak: it takes back nothing that another kill says of the container.
+	weak bool
 }
 
 // ended is a container whose last end was as OOMKilled.
@@ -52,7 +54,19 @@ func judge(pod *corev1.Pod, kills []report.Kill) (verdicts []verdict, processes 
 			}
 		}
 	}
-	by := map[string]verdict{}
+	by, weak := map[string]verdict{}, map[string]verdict{}
+	add := func(v verdict, e ended, late bool) {
+		v.ended = e
+		if late || !near(v.at, e.at) {
+			v.reason, v.weak = rule.Unknown, true
+			weak[e.name] = v
+			return
+		}
+		if was, ok := by[e.name]; ok && was.reason != v.reason {
+			v.reason = rule.Unknown
+		}
+		by[e.name] = v
+	}
 	for _, k := range kills {
 		if k.Rise == nil {
 			processes = append(processes, k.Time())
@@ -77,9 +91,7 @@ func judge(pod *corev1.Pod, kills []report.Kill) (verdicts []verdict, processes 
 			}
 		}
 		for _, e := range of {
-			v := v
-			v.ended = e
-			by[e.name] = v
+			add(v, e, k.Rise.Late)
 		}
 		// Those of single processes are among Containers too.
 		whole := uint64(len(k.Rise.Containers))
@@ -93,12 +105,7 @@ func judge(pod *corev1.Pod, kills []report.Kill) (verdicts []verdict, processes 
 			v.reason = rule.Unknown
 		}
 		for _, e := range maybe {
-			v := v
-			v.ended = e
-			if was, ok := by[e.name]; ok && was.reason != v.reason {
-				v.reason = rule.Unknown
-			}
-			by[e.name] = v
+			add(v, e, k.Rise.Late)
 		}
 		// One seen as the agent started may be of any time.
 		if k.Rise.GroupKills == 0 && len(of) == 0 && !k.Rise.Late {
@@ -107,6 +114,8 @@ func judge(pod *corev1.Pod, kills []report.Kill) (verdicts []verdict, processes 
 	}
 	for _, e := range all {
 		if v, ok := by[e.name]; ok {
+			verdicts = append(verdicts, v)
+		} else if v, ok := weak[e.name]; ok {
 			verdicts = append(verdicts, v)
 		}
 	}

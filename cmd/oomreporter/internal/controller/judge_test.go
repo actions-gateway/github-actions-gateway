@@ -138,6 +138,16 @@ func TestJudge_NamesTheContainer(t *testing.T) {
 		"beside one whose one process was killed": {
 			pod(dead("runner", 1, killedAt), alive("dind", 2)),
 			[]report.Kill{kill(killedAt, cgroup.Rise{Confirmed: true, GroupKills: 1, Singles: 1, Containers: []string{id(2)}})}, []string{"runner Unknown"}},
+		"whose file showed it long before its end": {pod(dead("runner", 1, killedAt)), []report.Kill{own(killedAt.Add(-endedWithin-time.Second), 1)}, []string{"runner Unknown"}},
+		"whose file showed it long after, beside its own kill": {
+			pod(dead("runner", 1, killedAt)), []report.Kill{own(killedAt, 1), kill(killedAt.Add(time.Hour), cgroup.Rise{Confirmed: true, GroupKills: 1, Pod: 1, Containers: []string{id(1)}})},
+			[]string{"runner ContainerLimit"}},
+		"of two kills its file showed, for neither": {
+			pod(dead("runner", 1, killedAt)), []report.Kill{own(killedAt, 1), kill(killedAt, cgroup.Rise{Confirmed: true, GroupKills: 1, Containers: []string{id(1)}})},
+			[]string{"runner Unknown"}},
+		"beside a kill the agent was late for": {
+			pod(dead("runner", 1, killedAt)), []report.Kill{own(killedAt, 1), kill(killedAt, cgroup.Rise{Late: true, GroupKills: 1}), kill(killedAt, cgroup.Rise{Late: true, GroupKills: 1, Containers: []string{id(1)}})},
+			[]string{"runner ContainerLimit"}},
 		"and nothing of another pod's kinds": {pod(dead("runner", 1, killedAt)), nil, nil},
 	} {
 		t.Run(name, func(t *testing.T) {

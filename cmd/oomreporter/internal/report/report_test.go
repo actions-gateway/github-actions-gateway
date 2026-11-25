@@ -64,6 +64,8 @@ func TestDecode_RefusesWhatNoAgentWrites(t *testing.T) {
 		"a name for a UID":            {kill(`"pod":"runner",` + rise), "no pod's UID"},
 		"neither":                     {kill(`"pod":"` + uid(1) + `"`), "not one of"},
 		"both":                        {kill(`"pod":"` + uid(1) + `","processes":1,` + rise), "not one of"},
+		"more than a UID":             {kill(`"pod":"` + uid(1) + `-and-more",` + rise), "no pod's UID"},
+		"more than a container's ID":  {kill(`"pod":"` + uid(1) + `","rise":{"containers":["` + id(1) + `.scope"]}`), "no container's ID"},
 		"a name for a container's ID": {kill(`"pod":"` + uid(1) + `","rise":{"containers":["runner"]}`), "no container's ID"},
 		"too many containers": {
 			kill(`"pod":"` + uid(1) + `","rise":{"containers":[` + strings.Repeat(`"`+id(1)+`",`, maxContainers) + `"` + id(1) + `"]}`), "17 containers"},

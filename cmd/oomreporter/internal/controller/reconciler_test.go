@@ -131,7 +131,7 @@ func TestReconcile_SaysOnThePodWhichLimitRanOut(t *testing.T) {
 	assert.Equal(t, corev1.ConditionTrue, c.Status)
 	assert.Equal(t, "ContainerLimit", c.Reason)
 	assert.Equal(t, "The container's own memory limit ran out, or those of the pod's containers together. "+
-		"Killed at 2027-01-15T08:00:00Z, container ID "+id(1)+".", c.Message)
+		"It ended at 2027-01-15T08:00:00Z, container ID "+id(1)+".", c.Message)
 	assert.True(t, c.LastTransitionTime.Time.Equal(w.now))
 
 	events := w.eventsNow(t)
@@ -208,6 +208,7 @@ func TestReconcile_AConditionOfOursThatAnotherChangedIsWrittenAgain(t *testing.T
 			want := p.Status.Conditions[0]
 			change(&p.Status.Conditions[0])
 			require.NoError(t, w.Status().Update(t.Context(), p))
+			w.now = w.now.Add(writeEvery)
 			w.reconcile(t, "node-a")
 			got := w.podNow(t).Status.Conditions
 			require.Len(t, got, 1)
@@ -328,7 +329,7 @@ func TestReconcile_LeavesAReportThatIsMadeAgain(t *testing.T) {
 func TestWriteEvent_OneAMinuteForAContainerAndOneForNone(t *testing.T) {
 	stray := func(at time.Time) report.Kill { return report.Kill{Pod: podUID, At: at.UnixMilli(), Processes: 1} }
 	w := newWorld(t, agentOn("node-a"),
-		reportOf(t, "node-a", own(killedAt, 1), own(killedAt, 2), stray(killedAt), stray(killedAt.Add(59*time.Second)), stray(killedAt.Add(time.Minute))),
+		reportOf(t, "node-a", own(killedAt, 1), own(killedAt, 2), stray(killedAt), stray(killedAt.Add(time.Second)), stray(killedAt.Add(-5*time.Minute))),
 		pod(dead("runner", 1, killedAt), dead("dind", 2, killedAt)))
 	w.reconcile(t, "node-a")
 	count := map[string]int{}
@@ -336,8 +337,96 @@ func TestWriteEvent_OneAMinuteForAContainerAndOneForNone(t *testing.T) {
 		count[e.Reason+" "+e.InvolvedObject.FieldPath]++
 	}
 	assert.Equal(t, map[string]int{
-		"OOMContainerLimit spec.containers{runner}": 1, "OOMContainerLimit spec.containers{dind}": 1, "OOMProcessKilled ": 2,
+		"OOMContainerLimit spec.containers{runner}": 1, "OOMContainerLimit spec.containers{dind}": 1, "OOMProcessKilled ": 1,
 	}, count)
+	for _, e := range w.eventsNow(t) {
+		if e.Reason == reasonProcess {
+			assert.True(t, e.LastTimestamp.Time.Equal(killedAt.Add(time.Second)), "the newest")
+		}
+	}
+}
+
+// The time of a kill that ended no container is the report's, and that of another its status's.
+func TestWriteEvent_AReportsTimesMakeNoMoreEvents(t *testing.T) {
+	w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a"), pod(dead("runner", 1, killedAt)))
+	say := func(minutes int) {
+		at := w.now.Add(time.Duration(minutes) * time.Minute)
+		was := reportOf(t, "node-a")
+		require.NoError(t, w.Delete(t.Context(), was))
+		next := reportOf(t, "node-a", own(killedAt.Add(time.Duration(minutes)*time.Second), 1), report.Kill{Pod: podUID, At: at.UnixMilli(), Processes: 1})
+		require.NoError(t, w.Create(t.Context(), next))
+		w.reconcile(t, "node-a")
+	}
+	for i := range 5 {
+		say(-i)
+	}
+	assert.Len(t, w.eventsNow(t), 2)
+	w.now = w.now.Add(writeEvery)
+	say(0)
+	assert.Len(t, w.eventsNow(t), 3)
+}
+
+func TestWriteConditions_OneAMinute(t *testing.T) {
+	w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a", own(killedAt, 1)), pod(dead("runner", 1, killedAt), dead("dind", 2, killedAt)))
+	patches := func() (n int) {
+		for _, write := range w.writes {
+			if write == "patch pod/status" {
+				n++
+			}
+		}
+		return n
+	}
+	say := func(kills ...report.Kill) time.Duration {
+		cm := reportOf(t, "node-a", kills...)
+		require.NoError(t, w.Update(t.Context(), cm))
+		return w.reconcile(t, "node-a").RequeueAfter
+	}
+	assert.Zero(t, say(own(killedAt, 1)))
+	assert.Equal(t, 1, patches())
+	w.now = w.now.Add(20 * time.Second)
+	assert.Zero(t, say(own(killedAt.Add(time.Second), 1)), "the time alone is no change")
+	assert.Equal(t, 40*time.Second, say(kill(killedAt, cgroup.Rise{Confirmed: true, GroupKills: 1, Containers: []string{id(1)}})))
+	assert.Equal(t, 1, patches())
+	assert.Equal(t, 40*time.Second, say(kill(killedAt, cgroup.Rise{Confirmed: true, GroupKills: 1, Containers: []string{id(1)}}), own(killedAt, 2)), "another container's is not held up")
+	assert.Equal(t, 2, patches())
+	w.now = w.now.Add(40 * time.Second)
+	assert.Zero(t, w.reconcile(t, "node-a").RequeueAfter)
+	assert.Equal(t, 3, patches())
+	w.now = w.now.Add(writeEvery)
+	w.reconcile(t, "node-a")
+	assert.Empty(t, w.written)
+}
+
+func TestSooner(t *testing.T) {
+	for _, tc := range [][3]time.Duration{{0, 0, 0}, {0, 2, 2}, {2, 0, 2}, {1, 2, 1}, {2, 1, 1}} {
+		assert.Equal(t, tc[2], sooner(tc[0], tc[1]))
+	}
+}
+
+func TestReconcile_AnAnswerStandsAgainstAKillThatSaysNothing(t *testing.T) {
+	late := kill(killedAt, cgroup.Rise{Late: true, GroupKills: 1})
+	known := func(id string) corev1.PodCondition {
+		return corev1.PodCondition{Type: "oom.actions-gateway.com/runner", Status: corev1.ConditionTrue, Reason: "ContainerLimit", Message: "It ended, container ID " + id + "."}
+	}
+	for name, tc := range map[string]struct {
+		was  corev1.PodCondition
+		kill report.Kill
+		want string
+	}{
+		"one the agent was late for":           {known(id(1)), late, "ContainerLimit"},
+		"one that may be of any time":          {known(id(1)), own(killedAt.Add(time.Hour), 1), "ContainerLimit"},
+		"but not that of a container before":   {known(id(2)), late, "Unknown"},
+		"nor against one that may be it":       {known(id(1)), above(killedAt, 2), "Unknown"},
+		"nor where there is no answer to keep": {corev1.PodCondition{Type: "oom.actions-gateway.com/runner", Status: corev1.ConditionFalse, Reason: "x", Message: "container ID " + id(1)}, late, "Unknown"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := pod(dead("runner", 1, killedAt))
+			p.Status.Conditions = []corev1.PodCondition{tc.was}
+			w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a", tc.kill), p)
+			w.reconcile(t, "node-a")
+			assert.Equal(t, tc.want, w.podNow(t).Status.Conditions[0].Reason)
+		})
+	}
 }
 
 func TestWriteEvent_NotAgainAfterARestart(t *testing.T) {
@@ -525,7 +614,7 @@ func TestPatch_IsOfThePodOfThatUIDAndNoMoreThanItsConditions(t *testing.T) {
 	assert.JSONEq(t, `{"metadata":{"uid":"`+podUID+`"},"status":{"conditions":[{
 		"type":"oom.actions-gateway.com/runner","status":"True","reason":"ContainerLimit","lastProbeTime":null,
 		"lastTransitionTime":"2027-01-15T08:00:01Z",
-		"message":"The container's own memory limit ran out, or those of the pod's containers together. Killed at 2027-01-15T08:00:00Z, container ID `+id(1)+`."}]}}`, body)
+		"message":"The container's own memory limit ran out, or those of the pod's containers together. It ended at 2027-01-15T08:00:00Z, container ID `+id(1)+`."}]}}`, body)
 }
 
 func TestWatches(t *testing.T) {
@@ -564,5 +653,5 @@ func TestReconcile_ALateKillSaysThatNoLimitInsideRanOut(t *testing.T) {
 	c := w.podNow(t).Status.Conditions
 	require.Len(t, c, 1)
 	assert.Equal(t, corev1.ConditionUnknown, c[0].Status)
-	assert.Contains(t, c[0].Message, "Which limit ran out is not known. No limit of the pod's, or of a container's, ran out with it. Killed at")
+	assert.Contains(t, c[0].Message, "Which limit ran out is not known. No limit of the pod's, or of a container's, ran out with it. It ended at")
 }
