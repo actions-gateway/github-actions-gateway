@@ -305,6 +305,51 @@ func TestFlakyJobs_ASnapshotNamesThePlatformFault(t *testing.T) {
 	assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, target.events, "a red test on a healthy worker is not a fault")
 }
 
+// TestFlakyJobs_ASidecarThatSurvivedANestedKillIsNotAFault (Q1395): a nested container's
+// kill leaves OOMKilled on a sidecar that was never killed, so a sidecar's reason is a
+// fault only with a SIGKILL's exit code.
+func TestFlakyJobs_ASidecarThatSurvivedANestedKillIsNotAFault(t *testing.T) {
+	at := time.Now().Truncate(time.Second)
+	oomKilled := func(name string, code int32) corev1.ContainerStatus { return terminated(name, "OOMKilled", code, at) }
+	restarted := func(code int32) corev1.ContainerStatus {
+		cs := terminated("dind", "Error", 143, at)
+		cs.RestartCount, cs.LastTerminationState = 1, oomKilled("dind", code).State
+		return cs
+	}
+	for _, tc := range []struct {
+		name          string
+		init, regular []corev1.ContainerStatus
+		wantFaults    []string
+	}{
+		{name: "a sidecar that stopped normally", init: []corev1.ContainerStatus{oomKilled("dind", 0)}},
+		{name: "a sidecar that stopped on SIGTERM", init: []corev1.ContainerStatus{oomKilled("dind", 143)}},
+		{name: "a sidecar that was killed", init: []corev1.ContainerStatus{oomKilled("dind", 137)},
+			wantFaults: []string{"container dind OOMKilled"}},
+		{name: "an earlier run that exited by itself", init: []corev1.ContainerStatus{restarted(1)}},
+		{name: "an earlier run that was killed", init: []corev1.ContainerStatus{restarted(137)},
+			wantFaults: []string{"container dind OOMKilled"}},
+		{name: "a regular container that stopped normally", regular: []corev1.ContainerStatus{oomKilled("dind", 0)}},
+		{name: "the runner, whatever it exited", regular: []corev1.ContainerStatus{oomKilled(runnerContainer, 0)},
+			wantFaults: []string{"container runner OOMKilled"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			_, p, target := flakyFixture(t)
+			pod := scaleSetWorker("runner-1", corev1.PodSucceeded, "")
+			pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses = tc.init, tc.regular
+			assert.Equal(t, tc.wantFaults, snapshotOf(pod, at).faults())
+
+			<-p.SnapshotScaleSetWorker(ctx, nil, pod, false)
+			completeJob(ctx, t, p, target, buildJob(1), "failed")
+			wantEvents := 0
+			if tc.wantFaults != nil {
+				wantEvents = 1
+			}
+			assert.Len(t, target.events, wantEvents)
+		})
+	}
+}
+
 // staticProxy is an EgressProxyReader returning one readiness.
 type staticProxy struct{ snap *ProxySnapshot }
 
