@@ -44,12 +44,12 @@ type ended struct {
 	oom bool
 }
 
-// life is when a container's cgroup was there. Its ends are zero where they are not known.
+// life is when a container's cgroup was there, zero where it is not known or has no end.
 type life struct{ start, end time.Time }
 
 // at reports whether it may have been there at t. A status has whole seconds.
 func (l life) at(t time.Time) bool {
-	return (l.start.IsZero() || l.start.Before(t.Truncate(time.Second))) && (l.end.IsZero() || t.Sub(l.end) <= endedWithin+time.Second)
+	return l.start.Before(t.Truncate(time.Second)) && (l.end.IsZero() || t.Sub(l.end) <= endedWithin+time.Second)
 }
 
 // judge returns pod's verdicts by container, and when kills ended no container.

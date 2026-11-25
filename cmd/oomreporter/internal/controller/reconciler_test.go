@@ -378,6 +378,21 @@ func TestWriteEvent_OneForEachReason(t *testing.T) {
 	assert.ElementsMatch(t, []string{"OOMAbovePods", "OOMContainerLimit"}, reasons)
 }
 
+func TestWriteEvent_OneForEachEndOfAContainer(t *testing.T) {
+	w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a", own(killedAt, 1)), pod(dead("runner", 1, killedAt)))
+	w.reconcile(t, "node-a")
+	p := w.podNow(t)
+	p.Status.ContainerStatuses = []corev1.ContainerStatus{dead("runner", 2, killedAt.Add(time.Second))}
+	require.NoError(t, w.Status().Update(t.Context(), p))
+	require.NoError(t, w.Update(t.Context(), reportOf(t, "node-a", own(killedAt, 1), own(killedAt.Add(3*time.Second), 2))))
+	w.reconcile(t, "node-a")
+	var at []time.Time
+	for _, e := range w.eventsNow(t) {
+		at = append(at, e.LastTimestamp.UTC())
+	}
+	assert.ElementsMatch(t, []time.Time{killedAt, killedAt.Add(time.Second)}, at)
+}
+
 func TestWriteConditions_ThreeAMinute(t *testing.T) {
 	w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a"), pod(dead("runner", 1, killedAt), dead("dind", 2, killedAt)))
 	say := func(kills ...report.Kill) (patches int, wait time.Duration) {

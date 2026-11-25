@@ -195,12 +195,18 @@ func TestJudge_CountsTheContainersThereAtTheKill(t *testing.T) {
 		"one that runs from the second before": {started(alive("dind", 2), killedAt.Add(-time.Second)), 3},
 		"not one from its second on":           {started(alive("dind", 2), killedAt), 2},
 		"one that ended as it did":             {started(dead("dind", 2, killedAt), hour), 3},
-		"one that ended just before":           {started(dead("dind", 2, killedAt.Add(-endedWithin-time.Second)), hour), 3},
-		"not one that ended long before":       {started(dead("dind", 2, killedAt.Add(-endedWithin-2*time.Second)), hour), 2},
+		"one that ended just before":           {started(dead("dind", 2, killedAt.Add(-endedWithin)), hour), 3},
+		"not one that ended long before":       {started(dead("dind", 2, killedAt.Add(-endedWithin-time.Second)), hour), 2},
 		"one before it was made again":         {again(killedAt, killedAt.Add(time.Second)), 3},
 		"or after":                             {again(killedAt.Add(-time.Minute), killedAt.Add(-30*time.Second)), 3},
 		"not both, long before":                {again(killedAt.Add(-time.Minute), killedAt.Add(time.Second)), 2},
-		"not one that is not made":             {corev1.ContainerStatus{Name: "dind"}, 2},
+		"not one that started and ended after": {started(dead("dind", 2, killedAt.Add(3*time.Second)), killedAt.Add(time.Second)), 2},
+		"nor one made again since": {func() corev1.ContainerStatus {
+			s := again(killedAt.Add(2*time.Second), killedAt.Add(3*time.Second))
+			s.LastTerminationState.Terminated.StartedAt = metav1.NewTime(killedAt.Add(time.Second))
+			return s
+		}(), 2},
+		"not one that is not made": {corev1.ContainerStatus{Name: "dind"}, 2},
 	} {
 		t.Run(name, func(t *testing.T) {
 			for _, kind := range []string{"a container", "an init container", "an ephemeral container"} {
@@ -214,7 +220,7 @@ func TestJudge_CountsTheContainersThereAtTheKill(t *testing.T) {
 					p.Status.EphemeralContainerStatuses = []corev1.ContainerStatus{tc.other}
 				}
 				for seen, want := range map[int]string{tc.there: "runner ContainerLimit", tc.there + 1: "runner Unknown"} {
-					k := kill(killedAt, cgroup.Rise{Confirmed: true, GroupKills: 1, Inside: 1, Own: 1, Inferred: seen, Containers: []string{id(1)}})
+					k := kill(killedAt.Add(900*time.Millisecond), cgroup.Rise{Confirmed: true, GroupKills: 1, Inside: 1, Own: 1, Inferred: seen, Containers: []string{id(1)}})
 					got, _ := judged(p, k)
 					assert.Contains(t, got, want, "%s, %d", kind, seen)
 				}

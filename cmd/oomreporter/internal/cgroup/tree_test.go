@@ -457,6 +457,7 @@ func TestPodEvents_ReadsAPodOfTheLastSampleAgain(t *testing.T) {
 	got, err := tree.PodEvents(burstableUID)
 	require.NoError(t, err)
 	assert.Equal(t, Events{7, 8, 9}, got)
+	m[subtreeFile] = eventsFile(Events{})
 	_, err = tree.PodEvents(staticUID)
 	require.ErrorIs(t, err, fs.ErrNotExist)
 }
