@@ -25,36 +25,40 @@ const (
 type Rise struct {
 	// Late: the pod was first sampled after the kill, so the counts are since it began, or it
 	// might not be read at the sample before. Pods and Peers are then not known.
-	Late bool
+	Late bool `json:"late,omitempty"`
 	// Confirmed: a sample taken after the one that showed the kill is in the counts.
-	Confirmed bool
+	Confirmed bool `json:"confirmed,omitempty"`
 	// Torn: the pod's two files were not read at one moment.
-	Torn bool
+	Torn bool `json:"torn,omitempty"`
 	// Recent: the counts leave out an allocation that met a limit within the last minute, and
 	// RecentOwn: one that may have met the pod's or a container's.
-	Recent, RecentOwn bool
+	Recent    bool `json:"recent,omitempty"`
+	RecentOwn bool `json:"recentOwn,omitempty"`
 
 	// GroupKills is how many of the pod's cgroups were killed whole, and Singles how many
 	// processes of containers that are not.
-	GroupKills, Singles uint64
+	GroupKills uint64 `json:"groupKills,omitempty"`
+	Singles    uint64 `json:"singles,omitempty"`
 	// Inside, Pod and Pods count the allocations that met a limit inside the pod, the pod's
 	// own, and that of its QoS cgroup or the pods' root.
-	Inside, Pod, Pods uint64
+	Inside uint64 `json:"inside,omitempty"`
+	Pod    uint64 `json:"pod,omitempty"`
+	Pods   uint64 `json:"pods,omitempty"`
 	// Own is how many of the whole kills a container's own limit accounts for. A container's
 	// cgroup is often gone milliseconds after its kill (kubelet v1.35.5, containerd 2.3.1):
 	// for a pod with one whole kill, one container gone, and no limit inside it but its
 	// containers', one is also told by an allocation that met no container's still there.
-	Own uint64
+	Own uint64 `json:"own,omitempty"`
 	// Inferred, where Own is told by a container having gone, is how many containers the pod
 	// had cgroups of, the sandbox's and the one that went included.
-	Inferred int
+	Inferred int `json:"inferred,omitempty"`
 	// Read: every whole kill is of a container whose own file was read at the last sample.
-	Read bool
+	Read bool `json:"read,omitempty"`
 	// Peers is the kills of either kind in other pods over the same time.
-	Peers uint64
+	Peers uint64 `json:"peers,omitempty"`
 	// Containers is the containers with a kill of either kind, by ID. One whose cgroup went
 	// before its kill was read is not among them.
-	Containers []string
+	Containers []string `json:"containers,omitempty"`
 }
 
 // Tracker turns successive samples of a Tree into rises.
