@@ -39,6 +39,9 @@ const (
 	// to be corrected by the node's next reports, and a pod has one Event that is of no container.
 	writeEvery      = time.Minute
 	conditionWrites = 3
+	// retryEvery is the most a node whose pod was not written to waits while others have more to be
+	// said of them. An error alone waits longer each time.
+	retryEvery = 5 * time.Second
 
 	uidIndex = "metadata.uid"
 )
@@ -147,6 +150,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{RequeueAfter: left}, nil
 	}
 	wait, err := r.apply(ctx, node, kills)
+	if err != nil && wait > 0 {
+		log.FromContext(ctx).Error(err, "failed to write to a pod", "node", node)
+		return reconcile.Result{RequeueAfter: min(wait, retryEvery)}, nil
+	}
 	return reconcile.Result{RequeueAfter: sooner(left, wait)}, err
 }
 
