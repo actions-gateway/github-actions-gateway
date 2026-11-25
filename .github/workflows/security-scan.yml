@@ -198,6 +198,10 @@ jobs:
             # Runner.Worker.dll, so it adds no packages and inherits that leg's
             # findings.
             exit-code: '0'
+          - name: oomreporter
+            # blocking: distroless static plus one Go binary, no OS base CVEs
+            # (unlike the runner-based legs above).
+            exit-code: '1'
           - name: docker-tools
             # blocking: exactly the Docker CLI, buildx and compose binaries that
             # build-runner ships, which this project pins. A fix no Docker

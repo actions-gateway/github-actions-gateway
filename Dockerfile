@@ -7,7 +7,8 @@
 # selected with `--target` (docker-bake.hcl for the e2e bake; the publish.yml
 # and security-scan.yml matrices for release and scanning):
 #
-#   gmc  agc  proxy  worker  wrapper  build-runner  cache-runner  fakegithub
+#   gmc  agc  proxy  worker  wrapper  build-runner  cache-runner  oomreporter
+#   fakegithub
 #
 # Why one file rather than six (the layout before this change): all six images
 # compile Go against the same workspace vendor/ tree, and BuildKit can only
@@ -22,7 +23,7 @@
 #
 #   deps   golang + workspace manifests + vendor/ → warm Go build cache
 #     └─ src    + the first-party source
-#          ├─ build-gmc / build-agc / build-proxy / build-wrapper / build-fakegithub
+#          ├─ build-gmc / build-agc / build-proxy / build-oomreporter / build-wrapper / build-fakegithub
 #          └─ final stages COPY just the binary onto a runtime base
 #
 # build-runner sits outside that graph: it is `worker` plus a Docker client
@@ -131,6 +132,11 @@ RUN go build -C cmd/agc -trimpath -ldflags="-buildid= -X main.version=${VERSION}
 FROM src AS build-proxy
 ARG VERSION="dev"
 RUN go build -trimpath -ldflags="-buildid= -X main.version=${VERSION}" -o /bin/proxy ./cmd/proxy
+
+# The binary stamps no version, so no VERSION arg reaches this build: a -X on a
+# symbol the binary lacks is accepted silently and would only pretend to stamp one.
+FROM src AS build-oomreporter
+RUN go build -C cmd/oomreporter -trimpath -ldflags=-buildid= -o /bin/oomreporter .
 
 # ONE wrapper build feeding TWO images: the full runner image (`worker`) and the
 # scratch injection image (`wrapper`). These were separate Dockerfiles running
@@ -391,6 +397,25 @@ RUN perl -e ' \
   open my $h, ">:raw", $f or die "$f: $!\n"; print $h $b; close $h or die "$f: $!\n"; \
   print "patched $f\n"; \
   '
+
+########################  oomreporter  ########################################
+# One image, two modes (`agent` on every node, `controller` once): the chart picks
+# the mode by args. It reads cgroup counters through a hostPath and writes through
+# the API, and needs no shell, so it runs on the same distroless base as the
+# gateway's own binaries.
+FROM gcr.io/distroless/static:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931 AS oomreporter
+ARG REVISION="unknown"
+ARG VERSION="dev"
+LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.title="oomreporter" \
+      org.opencontainers.image.description="Reports which limit ran out when a container is killed for memory: a per-node agent and a controller that says it on the pod" \
+      org.opencontainers.image.licenses="Apache-2.0"
+COPY LICENSE NOTICE THIRD-PARTY-NOTICES /licenses/
+COPY --from=build-oomreporter /bin/oomreporter /oomreporter
+USER 65532:65532
+ENTRYPOINT ["/oomreporter"]
 
 ########################  fakegithub  #########################################
 # TEST-ONLY image: a fake GitHub API server used by the e2e suite, never
