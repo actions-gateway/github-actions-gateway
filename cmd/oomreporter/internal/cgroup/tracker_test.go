@@ -339,19 +339,41 @@ func TestObserve_APodMadeAgainDoesNotReplaceWhatWasLeft(t *testing.T) {
 }
 
 func TestObserve_GivesUpAnAllocationThatLedToNoKill(t *testing.T) {
-	met := Pod{Subtree: Events{OOM: 1}, Local: Events{OOM: 1}}
-	var tr Tracker
-	tr.Observe(one(Pod{}), start)
-	tr.Observe(one(met), start)
-	tr.Observe(one(met), start.Add(settle))
+	none := map[string]Events{runnerID: {}}
+	for name, tc := range map[string]struct {
+		met         Pod
+		above       uint64
+		recent, own bool
+	}{
+		"at the pod's limit":          {Pod{Subtree: Events{OOM: 1}, Local: Events{OOM: 1}, Containers: none}, 0, true, true},
+		"at the container's":          {Pod{Subtree: Events{OOM: 1}, Containers: map[string]Events{runnerID: {OOM: 1}}}, 0, true, true},
+		"inside, a container gone":    {Pod{Subtree: Events{OOM: 1}}, 0, true, true},
+		"inside the container":        {Pod{Subtree: Events{OOM: 1}, Containers: none}, 0, true, false},
+		"above the pod":               {Pod{Containers: none}, 1, true, false},
+		"above it, a container gone":  {Pod{}, 1, true, false},
+		"none, and no container gone": {Pod{Containers: none}, 0, false, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sample := func(p Pod, above uint64) Sample {
+				s := one(p)
+				s.Root.OOM = above
+				return s
+			}
+			var tr Tracker
+			tr.Observe(one(Pod{Containers: none}), start)
+			tr.Observe(sample(tc.met, tc.above), start)
+			tr.Observe(sample(tc.met, tc.above), start.Add(settle))
 
-	after := met
-	after.Subtree.OOMGroupKill = 1
-	for at, want := range map[time.Duration]bool{settle + time.Second: true, settle + recent: false} {
-		again := tr
-		again.pods = map[string]*tracked{burstableUID: new(*tr.pods[burstableUID])}
-		again.Observe(one(after), start.Add(at))
-		rises, _ := again.Observe(one(after), start.Add(at))
-		assert.Equal(t, Rise{Confirmed: true, Recent: want, GroupKills: 1}, rises[burstableUID])
+			after := tc.met
+			after.Subtree.OOMGroupKill = 1
+			for at, recently := range map[time.Duration]bool{settle + time.Second: true, settle + recent: false} {
+				again := tr
+				again.pods = map[string]*tracked{burstableUID: new(*tr.pods[burstableUID])}
+				again.Observe(sample(after, tc.above), start.Add(at))
+				rises, _ := again.Observe(sample(after, tc.above), start.Add(at))
+				want := Rise{Confirmed: true, Recent: recently && tc.recent, RecentOwn: recently && tc.own, GroupKills: 1}
+				assert.Equal(t, want, rises[burstableUID])
+			}
+		})
 	}
 }

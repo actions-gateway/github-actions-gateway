@@ -205,7 +205,7 @@ func TestDecide_AKillLongAfterTheAllocation(t *testing.T) {
 }
 
 func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
-	nested := []event{nestedOOM(pod), nestedKill(pod)}
+	nested, wait := []event{nestedOOM(pod), nestedKill(pod)}, []event{func(*node) {}}
 	for name, tc := range map[string]struct {
 		events []event
 		gap    time.Duration
@@ -233,7 +233,7 @@ func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
 			then(nested, death(pod, runner)), 100 * time.Millisecond, 0,
 			map[string]Reason{runner: AbovePods}},
 		"a nested kill a little before": {
-			then(nested, []event{func(*node) {}}, death(pod, runner)), 130 * time.Millisecond, 0,
+			then(nested, wait, death(pod, runner)), 130 * time.Millisecond, 0,
 			map[string]Reason{runner: AbovePods}},
 		"a nested kill, then this at the node's, and it goes": {
 			then(nested, death(pod, runner), []event{goes(pod, runner)}), 100 * time.Millisecond, 0,
@@ -244,6 +244,24 @@ func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
 		"two at their own limits, and one goes": {
 			then(death(pod, runner, containerOOM(pod, runner)), []event{goes(pod, runner)}, death(pod, sidecar, containerOOM(pod, sidecar))), time.Millisecond, 0,
 			map[string]Reason{runner: ContainerLimit, sidecar: ContainerLimit}},
+		"its own given up on, then the shared limit's": {
+			then([]event{containerOOM(pod, runner)}, wait, wait, death(pod, runner, podsOOM)), 2500 * time.Millisecond, 0,
+			map[string]Reason{runner: ContainerLimit}},
+		"its own waiting, another's kill at the shared limit, and a neighbour's allocation there": {
+			then([]event{containerOOM(pod, runner)}, death(pod, sidecar, podsOOM), wait, death(pod, runner, podsOOM)), 50 * time.Millisecond, 0,
+			map[string]Reason{runner: ContainerLimit, sidecar: PodsLimit}},
+		"its own waiting, another's kill at the pod's, and one more there": {
+			then([]event{containerOOM(pod, runner)}, death(pod, sidecar, podOOM(pod)), wait, death(pod, runner, podOOM(pod))), 50 * time.Millisecond, 0,
+			map[string]Reason{runner: ContainerLimit, sidecar: PodLimit}},
+		"its own waiting, a nested group of two, and the shared limit's": {
+			then([]event{containerOOM(pod, runner)}, nested, nested[1:], wait, wait, death(pod, runner, podsOOM)), 300 * time.Millisecond, 0,
+			map[string]Reason{runner: ContainerLimit}},
+		"another's kill at the pod's, one more there, then this at the node's": {
+			then(death(pod, sidecar, podOOM(pod)), wait, []event{podOOM(pod)}, death(pod, runner)), 100 * time.Millisecond, 0,
+			map[string]Reason{sidecar: PodLimit, runner: AbovePods}},
+		"one process at its own container's, gone, then this at the node's, and it goes": {
+			then([]event{containerOOM(pod, old), killed(pod, old), goes(pod, old)}, death(pod, runner), []event{goes(pod, runner)}), 10 * time.Millisecond, 0,
+			map[string]Reason{runner: AbovePods}},
 		"two nested kills before": {
 			then(nested, nested, death(pod, runner)), 100 * time.Millisecond, 0,
 			map[string]Reason{runner: AbovePods}},
@@ -251,7 +269,7 @@ func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
 			then(nested[:1], death(pod, runner)), 100 * time.Millisecond, 0,
 			map[string]Reason{runner: AbovePods}},
 		"one that has waited seconds": {
-			then(nested[:1], []event{func(*node) {}}, death(pod, runner)), 1500 * time.Millisecond, 0,
+			then(nested[:1], wait, death(pod, runner)), 1500 * time.Millisecond, 0,
 			map[string]Reason{runner: AbovePods}},
 		"a nested kill, then this at the pod's": {
 			then(nested, death(pod, runner, podOOM(pod))), 100 * time.Millisecond, 0,
@@ -272,7 +290,7 @@ func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
 			then(nested, death(pod, runner, podsOOM)), 100 * time.Millisecond, 0,
 			map[string]Reason{runner: PodsLimit}},
 		"a nested kill well before this at the node's": {
-			then(nested, []event{func(*node) {}}, death(pod, runner)), 3 * time.Second, 0b110,
+			then(nested, wait, death(pod, runner)), 3 * time.Second, 0b110,
 			map[string]Reason{runner: AbovePods}},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -323,13 +341,11 @@ func TestDecide_CannotTellAnotherLimitsAllocation(t *testing.T) {
 		"a neighbour's before its kill":      {[]event{podsOOM, killed(pod, runner), whole(pod, runner), killed(peer, runner), whole(peer, runner)}, 0, 0b11111, PodsLimit},
 		"a neighbour's two for its one kill": {then(death(peer, runner, podsOOM, podsOOM), death(pod, runner)), 0, 0b111111, PodsLimit},
 		"of a neighbour gone unread":         {then(death(peer, runner, podsOOM), gone, death(pod, runner)), 0, 0b110001, PodsLimit},
-		"the pod's, after another kill there": {
-			then(death(pod, sidecar, podOOM(pod)), wait, []event{podOOM(pod)}, death(pod, runner)), 0, 0b1111111, PodLimit},
-		"its own, waiting": {then([]event{containerOOM(pod, runner)}, death(pod, runner)), 0, 0b111, ContainerLimit},
+		"its own, waiting":                   {then([]event{containerOOM(pod, runner)}, death(pod, runner)), 0, 0b111, ContainerLimit},
 		"of a cgroup in the pod never sampled, and it goes": {
 			then(unseen, death(pod, runner), []event{goes(pod, runner)}), 0, 0b0001, ContainerLimit},
-		"the shared limit's, its own given up on": {
-			then([]event{containerOOM(pod, runner)}, wait, wait, death(pod, runner, podsOOM)), 2500 * time.Millisecond, 0b111111, PodsLimit},
+		"the shared limit's, a minute after its own": {
+			then([]event{containerOOM(pod, runner)}, wait, wait, wait, death(pod, runner, podsOOM)), 30 * time.Second, 0b1001111, PodsLimit},
 	} {
 		t.Run(name, func(t *testing.T) {
 			r := observe(tc.events, every(cmp.Or(tc.gap, 100*time.Millisecond)), tc.mask, 0)[pod]

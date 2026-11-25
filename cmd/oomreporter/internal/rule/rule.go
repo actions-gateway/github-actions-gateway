@@ -28,7 +28,8 @@ const (
 // smaller than the kills leaves one that met some other limit. A larger one proves nothing:
 // several allocations can wait for one kill, and each is counted. A limit below a container
 // kills no container whole, so what was counted there says nothing once the containers'
-// own files have.
+// own files have. A limit of the pod's or a container's met within the last minute may be
+// what this kill waited for.
 func Decide(r cgroup.Rise, podLimit bool) Reason {
 	inside := r.Inside
 	if r.Confirmed && r.Read {
@@ -39,14 +40,14 @@ func Decide(r cgroup.Rise, podLimit bool) Reason {
 		return Unknown
 	case r.Pod+r.Pods == 0 && r.Own > 0 && r.Own == r.GroupKills:
 		return ContainerLimit
-	case inside+r.Pods == 0 && r.Pod > 0 && r.GroupKills == 1:
+	case inside+r.Pods == 0 && r.Pod > 0 && r.GroupKills == 1 && !r.RecentOwn:
 		if podLimit {
 			return PodLimit
 		}
 		return ContainerLimit
 	case !r.Confirmed:
 		return Unknown
-	case inside+r.Pod == 0 && r.Pods > 0 && r.Pods >= r.GroupKills+r.Peers:
+	case inside+r.Pod == 0 && r.Pods > 0 && r.Pods >= r.GroupKills+r.Peers && !r.RecentOwn:
 		return PodsLimit
 	case inside+r.Pod+r.Pods == 0 && !r.Recent:
 		return AbovePods

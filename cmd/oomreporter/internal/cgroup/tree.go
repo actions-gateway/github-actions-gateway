@@ -225,13 +225,6 @@ func (t *Tree) samplePod(dir string) (Pod, error) {
 			pod.Nested = pod.Nested || !monitorName.MatchString(name)
 			continue
 		}
-		e, err := readEvents(t.fsys, path.Join(dir, name, localFile))
-		if gone(err) {
-			continue
-		}
-		if err != nil {
-			return Pod{}, err
-		}
 		group, err := fs.ReadFile(t.fsys, path.Join(dir, name, groupFile))
 		if gone(err) {
 			continue
@@ -240,6 +233,13 @@ func (t *Tree) samplePod(dir string) (Pod, error) {
 			return Pod{}, err
 		}
 		stat, err := fs.ReadFile(t.fsys, path.Join(dir, name, statFile))
+		if gone(err) {
+			continue
+		}
+		if err != nil {
+			return Pod{}, err
+		}
+		e, err := readEvents(t.fsys, path.Join(dir, name, localFile))
 		if gone(err) {
 			continue
 		}

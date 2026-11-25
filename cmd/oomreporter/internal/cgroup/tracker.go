@@ -30,8 +30,9 @@ type Rise struct {
 	Confirmed bool
 	// Torn: the pod's two files were not read at one moment.
 	Torn bool
-	// Recent: the counts leave out an allocation that met a limit within the last minute.
-	Recent bool
+	// Recent: the counts leave out an allocation that met a limit within the last minute, and
+	// RecentOwn: one that may have met the pod's or a container's.
+	Recent, RecentOwn bool
 
 	// GroupKills is how many of the pod's cgroups were killed whole, and Singles how many
 	// processes of containers that are not.
@@ -72,8 +73,9 @@ type mark struct {
 type tracked struct {
 	base, last mark
 	// pending is when such an allocation was first seen, killed when a process's kill was
-	// first seen after it, and absorbed when base last moved past one.
-	pending, killed, absorbed time.Time
+	// first seen after it, and absorbed when base last moved past one. absorbedOwn is that of
+	// one that may have met the pod's or a container's limit.
+	pending, killed, absorbed, absorbedOwn time.Time
 	// shown is how many samples have shown a kill not yet returned, and above what
 	// stood above the pod at the first.
 	shown int
@@ -180,7 +182,7 @@ func (p *tracked) step(at time.Time) (r Rise, done, again bool) {
 		return Rise{}, false, true
 	}
 	r.Confirmed = true
-	r.Recent = at.Sub(p.absorbed) < recent
+	r.Recent, r.RecentOwn = at.Sub(p.absorbed) < recent, at.Sub(p.absorbedOwn) < recent
 	p.advance(r, at)
 	return r, true, false
 }
@@ -208,6 +210,9 @@ func (p *tracked) settled(r Rise, at time.Time) bool {
 func (p *tracked) advance(r Rise, at time.Time) {
 	if r.Inside+r.Pod+r.Pods > 0 {
 		p.absorbed = at
+	}
+	if r.Pod+p.known() > 0 || r.Inside > 0 && len(p.gone) > 0 {
+		p.absorbedOwn = at
 	}
 	for id := range p.gone {
 		delete(p.last.pod.Containers, id)
