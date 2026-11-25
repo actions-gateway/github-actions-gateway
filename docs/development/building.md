@@ -4,9 +4,10 @@ All binaries are built into `.build/` at the repo root (gitignored).
 Use the root `Makefile`:
 
 ```bash
-make build        # build all binaries → .build/agc, .build/gmc, .build/probe, .build/proxy
+make build        # build all binaries → .build/agc, .build/gmc, .build/oomreporter, .build/probe, .build/proxy
 make build-agc    # build only the AGC (Actions Gateway Controller)
 make build-gmc    # build only the GMC (Gateway Manager Controller)
+make build-oomreporter  # build only the out-of-memory kill reporter
 make build-probe  # build only the probe
 make build-proxy  # build only the egress proxy
 ```
