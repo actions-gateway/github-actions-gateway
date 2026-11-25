@@ -2889,12 +2889,12 @@ The <strong>Internal deps</strong> column lists the other workspace modules each
 <tr>
 <td><code>api/</code></td>
 <td><code>github.com/actions-gateway/github-actions-gateway/api</code></td>
-<td>—</td>
+<td>none</td>
 </tr>
 <tr>
 <td><code>githubapp/</code></td>
 <td><code>github.com/actions-gateway/github-actions-gateway/githubapp</code></td>
-<td>—</td>
+<td>none</td>
 </tr>
 <tr>
 <td><code>broker/</code></td>
@@ -2924,12 +2924,17 @@ The <strong>Internal deps</strong> column lists the other workspace modules each
 <tr>
 <td><code>cmd/proxy/</code></td>
 <td><code>github.com/actions-gateway/github-actions-gateway/proxy</code></td>
-<td>—</td>
+<td>none</td>
 </tr>
 <tr>
 <td><code>cmd/worker/</code></td>
 <td><code>github.com/actions-gateway/github-actions-gateway/worker</code></td>
-<td>—</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>cmd/oomreporter/</code></td>
+<td><code>github.com/actions-gateway/github-actions-gateway/oomreporter</code></td>
+<td>none</td>
 </tr>
 <tr>
 <td><code>test/fakegithub/</code></td>
@@ -2951,7 +2956,7 @@ It exists to break a would-be module cycle: the AGC's <code>RunnerSet</code> rec
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>agc, gmc ─► api
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>scaleset ─► githubapp
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>proxy, worker   (standalone — no internal deps)
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>proxy, worker, oomreporter   (standalone — no internal deps)
 </code></pre></div>
 <p><code>scaleset</code> (the GAG-owned runner-scale-set protocol client, Q264 Option E) is a <code>broker</code>-style leaf that depends only on <code>githubapp</code>; it has no importer yet — the AGC will import it in Q264 P3 when the scale-set acquisition tier lands.</p>
 <p><code>githubapp</code> (GitHub App auth/JWT) and <code>broker</code> (the GitHub broker client) are the shared libraries; the <code>cmd/*</code> binaries depend <em>on</em> them, never the reverse.
