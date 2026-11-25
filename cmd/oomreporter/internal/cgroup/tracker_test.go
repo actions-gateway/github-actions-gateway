@@ -179,6 +179,40 @@ func TestObserve_AKillOfAContainerThatHasGoneIsItsOwnLimits(t *testing.T) {
 	}
 }
 
+func TestObserve_AContainerMadeAgainStartsFromNothing(t *testing.T) {
+	many := Events{OOM: 9, OOMKill: 9, OOMGroupKill: 9}
+	once := Events{OOM: 1, OOMKill: 1, OOMGroupKill: 1}
+	pod := func(subtree, own Events, single bool) Pod {
+		p := Pod{Subtree: subtree, Containers: map[string]Events{runnerID: own}}
+		if single {
+			p.Single = map[string]bool{runnerID: true}
+		}
+		return p
+	}
+	for name, single := range map[string]bool{"killed whole": false, "one process": true} {
+		t.Run(name, func(t *testing.T) {
+			var tr Tracker
+			s := one(pod(many, many, single))
+			s.Pods[guaranteedUID] = Pod{}
+			tr.Observe(s, start)
+			s.Pods[burstableUID] = pod(Events{10, 10, 10}, once, single)
+			s.Pods[guaranteedUID] = Pod{Subtree: once}
+			tr.Observe(s, start)
+			rises, _ := tr.Observe(s, start)
+			want := Rise{Confirmed: true, GroupKills: 1, Inside: 1, Own: 1, Read: true, Containers: []string{runnerID}, Peers: 1}
+			if single {
+				want.Singles = 1
+			}
+			assert.Equal(t, want, rises[burstableUID])
+			peers := uint64(1)
+			if single {
+				peers = 2
+			}
+			assert.Equal(t, peers, rises[guaranteedUID].Peers)
+		})
+	}
+}
+
 func TestObserve_AProcessKilledElsewhereIsAPeers(t *testing.T) {
 	var tr Tracker
 	s := one(Pod{})

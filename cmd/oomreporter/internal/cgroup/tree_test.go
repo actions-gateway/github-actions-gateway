@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"path"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -255,26 +257,65 @@ func TestSample_MarksAPodWithACgroupThatIsNoContainers(t *testing.T) {
 	}
 }
 
-func TestSample_FailsWhereItMayNotRead(t *testing.T) {
-	dirs := systemd("")
-	files := []string{path.Join(dirs[4], groupFile), path.Join(dirs[4], statFile)}
-	for _, dir := range dirs {
-		files = append(files, path.Join(dir, localFile))
+// mayNotRead samples the tree of dirs with one file forbidden.
+func mayNotRead(t *testing.T, dirs []string, file string) (Sample, error) {
+	h := &hookFS{FS: mount(dirs...), open: func(string) error { return nil }}
+	tree, err := Open(h, "")
+	require.NoError(t, err)
+	h.open = func(n string) error {
+		if n == file {
+			return fs.ErrPermission
+		}
+		return nil
 	}
-	for _, file := range files {
+	return tree.Sample()
+}
+
+func TestSample_FailsWhereItMayNotReadAboveThePods(t *testing.T) {
+	dirs := systemd("")
+	for _, dir := range dirs[:3] {
+		for _, file := range []string{dir, path.Join(dir, localFile)} {
+			t.Run(file, func(t *testing.T) {
+				_, err := mayNotRead(t, dirs, file)
+				assert.ErrorIs(t, err, fs.ErrPermission)
+			})
+		}
+	}
+}
+
+func TestSample_LeavesOutAPodItMayNotRead(t *testing.T) {
+	dirs := systemd("")
+	for _, file := range []string{dirs[3], path.Join(dirs[3], localFile), path.Join(dirs[3], subtreeFile)} {
 		t.Run(file, func(t *testing.T) {
-			h := &hookFS{FS: mount(dirs...), open: func(string) error { return nil }}
-			tree, err := Open(h, "")
+			got, err := mayNotRead(t, dirs, file)
 			require.NoError(t, err)
-			h.open = func(n string) error {
-				if n == file {
-					return fs.ErrPermission
-				}
-				return nil
-			}
-			_, err = tree.Sample()
-			assert.ErrorIs(t, err, fs.ErrPermission)
+			assert.Equal(t, []string{guaranteedUID}, slices.Collect(maps.Keys(got.Pods)))
 		})
+	}
+}
+
+func TestSample_LeavesOutAContainerItMayNotRead(t *testing.T) {
+	dirs := systemd("")
+	for _, file := range []string{localFile, groupFile, statFile} {
+		t.Run(file, func(t *testing.T) {
+			got, err := mayNotRead(t, dirs, path.Join(dirs[4], file))
+			require.NoError(t, err)
+			assert.Equal(t, []string{sandboxID}, slices.Collect(maps.Keys(got.Pods[burstableUID].Containers)))
+			assert.True(t, got.Pods[burstableUID].Nested)
+			assert.False(t, got.Pods[guaranteedUID].Nested)
+		})
+	}
+}
+
+func TestSample_FailsOnAFileItCannotParse(t *testing.T) {
+	dirs := systemd("")
+	for _, dir := range dirs[3:5] {
+		m := mount(dirs...)
+		tree, err := Open(m, "")
+		require.NoError(t, err)
+		m[path.Join(dir, localFile)] = &fstest.MapFile{Data: []byte("oom x\n")}
+		_, err = tree.Sample()
+		assert.ErrorContains(t, err, "field oom")
 	}
 }
 

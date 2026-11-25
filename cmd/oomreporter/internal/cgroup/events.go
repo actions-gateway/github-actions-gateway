@@ -20,6 +20,15 @@ type Events struct {
 	OOMKill, OOMGroupKill uint64
 }
 
+// since is what e has over old, or all of it where e is of a cgroup made again under old's
+// name, whose counts start over.
+func (e Events) since(old Events) Events {
+	if e.OOM < old.OOM || e.OOMKill < old.OOMKill || e.OOMGroupKill < old.OOMGroupKill {
+		return e
+	}
+	return Events{e.OOM - old.OOM, e.OOMKill - old.OOMKill, e.OOMGroupKill - old.OOMGroupKill}
+}
+
 const (
 	subtreeFile = "memory.events"
 	localFile   = "memory.events.local"

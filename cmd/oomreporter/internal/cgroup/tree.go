@@ -164,7 +164,8 @@ type Sample struct {
 	Root Events
 }
 
-// Sample reads the tree. A pod or container removed while it is read is left out.
+// Sample reads the tree. A pod or container is left out where it is removed while it is
+// read, or may not be read.
 func (t *Tree) Sample() (Sample, error) {
 	s := Sample{Pods: map[string]Pod{}, QoS: map[string]Events{}}
 	if err := t.samplePods(s.Pods, "", t.root); err != nil {
@@ -197,7 +198,7 @@ func (t *Tree) samplePods(pods map[string]Pod, class, dir string) error {
 			continue
 		}
 		pod, err := t.samplePod(path.Join(dir, name))
-		if gone(err) {
+		if gone(err) || errors.Is(err, fs.ErrPermission) {
 			continue
 		}
 		if err != nil {
@@ -225,33 +226,23 @@ func (t *Tree) samplePod(dir string) (Pod, error) {
 			pod.Nested = pod.Nested || !monitorName.MatchString(name)
 			continue
 		}
-		group, err := fs.ReadFile(t.fsys, path.Join(dir, name, groupFile))
+		e, single, nested, err := t.sampleContainer(path.Join(dir, name))
 		if gone(err) {
 			continue
 		}
-		if err != nil {
-			return Pod{}, err
-		}
-		stat, err := fs.ReadFile(t.fsys, path.Join(dir, name, statFile))
-		if gone(err) {
-			continue
-		}
-		if err != nil {
-			return Pod{}, err
-		}
-		e, err := readEvents(t.fsys, path.Join(dir, name, localFile))
-		if gone(err) {
+		if errors.Is(err, fs.ErrPermission) {
+			// Its own root can make it so, where its cgroup is writable (recall).
+			pod.Nested = true
 			continue
 		}
 		if err != nil {
 			return Pod{}, err
 		}
 		pod.Containers[id[1]] = e
-		if strings.TrimSpace(string(group)) != "1" {
+		if single {
 			pod.Single[id[1]] = true
 		}
-		// nr_dying_descendants counts those removed and still charged.
-		pod.Nested = pod.Nested || descendants.Match(stat)
+		pod.Nested = pod.Nested || nested
 	}
 	if pod.Subtree, err = readEvents(t.fsys, path.Join(dir, subtreeFile)); err != nil {
 		return Pod{}, err
@@ -262,6 +253,21 @@ func (t *Tree) samplePod(dir string) (Pod, error) {
 	again, err := readEvents(t.fsys, path.Join(dir, subtreeFile))
 	pod.Torn = again != pod.Subtree
 	return pod, err
+}
+
+// sampleContainer reads the counts last: they are kept where the rest could be read.
+func (t *Tree) sampleContainer(dir string) (e Events, single, nested bool, err error) {
+	group, err := fs.ReadFile(t.fsys, path.Join(dir, groupFile))
+	if err != nil {
+		return Events{}, false, false, err
+	}
+	stat, err := fs.ReadFile(t.fsys, path.Join(dir, statFile))
+	if err != nil {
+		return Events{}, false, false, err
+	}
+	e, err = readEvents(t.fsys, path.Join(dir, localFile))
+	// nr_dying_descendants counts cgroups removed and still charged.
+	return e, strings.TrimSpace(string(group)) != "1", descendants.Match(stat), err
 }
 
 // gone reports whether err is a cgroup's removal: ENOENT for its path, and ENODEV for a

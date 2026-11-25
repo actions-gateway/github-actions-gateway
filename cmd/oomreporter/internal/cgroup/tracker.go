@@ -161,7 +161,7 @@ func (t *Tracker) forget(s Sample, at time.Time) map[string]Rise {
 func killsOf(was, now Pod) uint64 {
 	n := now.Subtree.OOMGroupKill - was.Subtree.OOMGroupKill
 	for id := range now.Single {
-		n += now.Containers[id].OOMKill - was.Containers[id].OOMKill
+		n += now.Containers[id].since(was.Containers[id]).OOMKill
 	}
 	return n
 }
@@ -248,7 +248,7 @@ func (p *tracked) rise(at time.Time) Rise {
 func (p *tracked) known() (n uint64) {
 	for id, e := range p.last.pod.Containers {
 		if !p.gone[id] {
-			n += e.OOM - p.base.pod.Containers[id].OOM
+			n += e.since(p.base.pod.Containers[id]).OOM
 		}
 	}
 	return n
@@ -267,15 +267,15 @@ func (r *Rise) count(was, now Pod) {
 	r.Inside = all - min(all, r.Pod)
 	var kills uint64
 	for _, id := range slices.Sorted(maps.Keys(now.Containers)) {
-		old, e := was.Containers[id], now.Containers[id]
-		whole, single := e.OOMGroupKill-old.OOMGroupKill, uint64(0)
+		e := now.Containers[id].since(was.Containers[id])
+		whole, single := e.OOMGroupKill, uint64(0)
 		if now.Single[id] {
-			single = e.OOMKill - old.OOMKill
+			single = e.OOMKill
 		}
 		if whole+single > 0 {
 			r.Containers = append(r.Containers, id)
 		}
-		r.Own += min(whole, e.OOM-old.OOM)
+		r.Own += min(whole, e.OOM)
 		r.Singles += single
 		kills += whole
 	}

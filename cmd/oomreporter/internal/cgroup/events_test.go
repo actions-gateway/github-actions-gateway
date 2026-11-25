@@ -48,3 +48,15 @@ func TestLocalEvents(t *testing.T) {
 		})
 	}
 }
+
+func TestEventsSince(t *testing.T) {
+	for now, want := range map[Events]Events{
+		{5, 6, 7}: {1, 1, 1},
+		{4, 5, 6}: {},
+		{3, 9, 9}: {3, 9, 9},
+		{9, 4, 9}: {9, 4, 9},
+		{9, 9, 5}: {9, 9, 5},
+	} {
+		assert.Equal(t, want, now.since(Events{4, 5, 6}), "%+v", now)
+	}
+}
