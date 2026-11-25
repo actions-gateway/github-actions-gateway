@@ -1367,7 +1367,7 @@ Three assertions, cheapest first, each over both halves:
    The one exemption today is the GMC-bundled `RunnerGroup` CRD, which is not GMC controller-gen output at all — [`make chart-crds-check`](#install-artifact-validation) holds it byte-identical to the AGC copy (Q73).
 
 It regenerates into a scratch tree, never into the working tree, so it detects drift in the *committed* output (and any uncommitted hand-edit), not merely whether a regen-in-place produced a git diff.
-Cost is six controller-gen runs over already-parsed packages plus one ~30 MB copy of the working tree, ~4 s, plus the one-time `.build/controller-gen` build.
+Cost is six controller-gen runs over already-parsed packages plus one ~60 MB copy of the working tree, ~4 s, plus the one-time `.build/controller-gen` build.
 
 **When it fails**, the remedy is `make generate` from the repo root — that regenerates both halves for the same three modules the gate checks, so running it is exactly what makes the gate pass.
 Then `make chart-crds` to carry a CRD change into the Helm chart, and commit both.
@@ -1381,7 +1381,7 @@ Nothing failed to compile and nothing failed CI; it was found incidentally, by s
 
 **The DeepCopy half regenerates into a copy of the working tree**, not into a redirected output dir like the manifests half.
 The `object` generator writes `zz_generated.deepcopy.go` beside its source, and controller-gen's output rule for it joins every package onto one path, so two API version packages in one module would land on the same file and the second would win.
-So the gate copies the tree (skipping `.git`, `.build`, `.claude`, `tmp/`, and the two vendored trees, which no module's DeepCopy run reads: each module's `go.work.gen` is a single-module workspace, so the repo-root workspace `vendor/` never applies) and regenerates there.
+So the gate copies the tree (skipping the top-level entries git ignores, `.git`, `.claude`, `tmp/`, and the two vendored trees, which no module's DeepCopy run reads: each module's `go.work.gen` is a single-module workspace, so the repo-root workspace `vendor/` never applies) and regenerates there.
 It has to be the whole tree, not one module: `cmd/agc` and `cmd/gmc` reach their first-party dependencies through relative `replace … => ../../api` directives.
 Inside the copy each module's committed DeepCopy is deleted before its own run, so a file that survives is one controller-gen no longer produces — and `DEEPCOPY_MODULES` is therefore in dependency order, `api` first.
 

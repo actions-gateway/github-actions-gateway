@@ -38,7 +38,7 @@
 # the shared informer cache. Nothing failed to compile, and nothing failed CI.
 #
 # Costs about four seconds (six controller-gen runs over already-parsed packages,
-# plus one ~30 MB copy of the working tree) and the one-time .build/controller-gen
+# plus one ~60 MB copy of the working tree) and the one-time .build/controller-gen
 # build. Backs `make codegen-check` (part of `make check`) and the `lint` job in
 # .github/workflows/unit-test.yml.
 #
@@ -91,13 +91,13 @@ DEEPCOPY_GENERATOR='object:headerFile="hack/boilerplate.go.txt",year=$(YEAR)'
 # The file the `object` generator writes into each API package.
 DEEPCOPY_FILE='zz_generated.deepcopy.go'
 
-# Working-tree entries copy_tree leaves out: git's own state, build output, the
-# gitignored scratch dir, and two trees no module's DeepCopy run reads. The
-# vendored trees are safe to drop because each module's go.work.gen is a
-# single-module workspace ('use .'), so the repo-root workspace vendor/ never
-# applies, and tools/ is built with GOWORK=off against its own vendor/. Dropping
-# them takes the copy from ~330 MB to ~30 MB.
-COPY_SKIP=(.git .build .claude tmp vendor tools)
+# Working-tree entries copy_tree leaves out beside the gitignored ones: git's own
+# state, two directories that are ignored but for a few tracked files, and two
+# trees no module's DeepCopy run reads. The vendored trees are safe to drop because
+# each module's go.work.gen is a single-module workspace ('use .'), so the repo-root
+# workspace vendor/ never applies, and tools/ is built with GOWORK=off against its
+# own vendor/.
+COPY_SKIP=(.git .claude tmp vendor tools)
 
 # Committed files that live under a generated output dir but are NOT produced by
 # that module's controller-gen run. Each entry needs a reason: an unexplained one
@@ -354,16 +354,18 @@ assert_no_drift() {
 	done
 }
 
-# is_skipped NAME — true when NAME is a top-level entry copy_tree leaves out.
+# is_skipped NAME — true when NAME is a top-level entry copy_tree leaves out. A
+# gitignored one with no tracked file in it holds no committed input, and another
+# target may be writing it while the copy runs, which makes cp fail.
 is_skipped() {
 	local name="$1" entry
 	for entry in "${COPY_SKIP[@]}"; do
 		[[ "$entry" == "$name" ]] && return 0
 	done
-	return 1
+	git -C "$REPO_ROOT" check-ignore -q -- "$name"
 }
 
-# copy_tree — populate $TREE_TMP with the working tree, minus COPY_SKIP.
+# copy_tree — populate $TREE_TMP with the working tree, minus what is_skipped names.
 #
 # The DeepCopy half cannot borrow the manifests half's trick of redirecting
 # controller-gen's output away from the tree: the `object` generator's output rule
