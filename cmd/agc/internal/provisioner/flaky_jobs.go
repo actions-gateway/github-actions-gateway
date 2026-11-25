@@ -146,12 +146,16 @@ type snapshotCondition struct {
 // status it writes as the pod finishes, so it comes from an earlier event
 // (testdata/sidecar_restart_statuses.json, kubelet v1.35.5).
 type containerSnapshot struct {
-	Name                   string `json:"name"`
-	Reason                 string `json:"reason,omitempty"`
-	ExitCode               int32  `json:"exitCode"`
-	RestartCount           int32  `json:"restartCount,omitempty"`
-	PreviousReason         string `json:"previousReason,omitempty"`
-	PreviousExitCode       int32  `json:"previousExitCode,omitempty"`
+	Name             string `json:"name"`
+	Reason           string `json:"reason,omitempty"`
+	ExitCode         int32  `json:"exitCode"`
+	RestartCount     int32  `json:"restartCount,omitempty"`
+	PreviousReason   string `json:"previousReason,omitempty"`
+	PreviousExitCode int32  `json:"previousExitCode,omitempty"`
+	// OOMReason is the limit a pod condition says ran out (oom_reason.go), only ever one of
+	// the reasons oomReasonWords holds.
+	OOMReason              string `json:"oomReason,omitempty"`
+	id                     string
 	sidecar                bool
 	finishedAt, previousAt time.Time
 }
@@ -166,6 +170,9 @@ func (c containerSnapshot) oomKilled(reason string, exitCode int32) bool {
 	}
 	return exitCode == exitCodeSIGKILL || c.Name == runnerContainer && !c.sidecar
 }
+
+// oomFault is the fault of c's kill for memory.
+func (c containerSnapshot) oomFault() string { return "container " + c.Name + " OOMKilled" }
 
 // snapshotOf reads pod into a snapshot.
 func snapshotOf(pod *corev1.Pod, now time.Time) *workerSnapshot {
@@ -197,7 +204,7 @@ func snapshotOf(pod *corev1.Pod, now time.Time) *workerSnapshot {
 				term, prev = prev, nil
 			}
 			if term != nil {
-				c.Reason, c.ExitCode, c.finishedAt = term.Reason, term.ExitCode, term.FinishedAt.Time
+				c.Reason, c.ExitCode, c.finishedAt, c.id = term.Reason, term.ExitCode, term.FinishedAt.Time, term.ContainerID
 			}
 			if prev != nil {
 				c.PreviousReason, c.PreviousExitCode, c.previousAt = prev.Reason, prev.ExitCode, prev.FinishedAt.Time
@@ -207,6 +214,11 @@ func snapshotOf(pod *corev1.Pod, now time.Time) *workerSnapshot {
 	}
 	add(pod.Status.InitContainerStatuses, true)
 	add(pod.Status.ContainerStatuses, false)
+	for _, c := range pod.Status.Conditions {
+		if container, reason, ok := oomReason(c); ok {
+			s.noteOOMReason(container, reason)
+		}
+	}
 	return s
 }
 
@@ -227,7 +239,8 @@ func truncate(s string, n int) string {
 	return s[:n]
 }
 
-// carryTerminations adds the terminations earlier read that s's own status has dropped.
+// carryTerminations adds the terminations earlier read that s's own status has dropped,
+// and keeps the reasons it read of the ones that stay.
 func (s *workerSnapshot) carryTerminations(earlier *workerSnapshot) {
 	for i := range s.Containers {
 		c := &s.Containers[i]
@@ -235,7 +248,7 @@ func (s *workerSnapshot) carryTerminations(earlier *workerSnapshot) {
 			switch {
 			case e.Name != c.Name || e.finishedAt.IsZero():
 			case c.finishedAt.IsZero():
-				c.Reason, c.ExitCode, c.finishedAt = e.Reason, e.ExitCode, e.finishedAt
+				c.Reason, c.ExitCode, c.finishedAt, c.id = e.Reason, e.ExitCode, e.finishedAt, e.id
 				c.PreviousReason, c.PreviousExitCode, c.previousAt = e.PreviousReason, e.PreviousExitCode, e.previousAt
 			case !c.previousAt.IsZero():
 			case e.finishedAt.Equal(c.finishedAt):
@@ -245,6 +258,7 @@ func (s *workerSnapshot) carryTerminations(earlier *workerSnapshot) {
 			}
 		}
 	}
+	s.carryOOMReasons(earlier)
 }
 
 // faults lists what in the snapshot points at the platform rather than the job: a
@@ -275,7 +289,7 @@ func (s *workerSnapshot) faultsBy(end time.Time) []string {
 	for _, c := range s.Containers {
 		switch {
 		case c.oomKilled(c.Reason, c.ExitCode) && by(c.finishedAt), c.oomKilled(c.PreviousReason, c.PreviousExitCode) && by(c.previousAt):
-			out = append(out, "container "+c.Name+" OOMKilled")
+			out = append(out, c.oomFault())
 		case c.Name == runnerContainer && !c.sidecar && c.ExitCode != 0 && by(c.finishedAt):
 			out = append(out, fmt.Sprintf("container %s exited %d", c.Name, c.ExitCode))
 		}
@@ -346,6 +360,9 @@ func (w *workerSnapshots) put(key string, s *workerSnapshot, jobCompleted bool) 
 	}
 	if w.byID == nil {
 		w.byID = map[string]*workerSnapshot{}
+	}
+	if held := w.byID[key]; held != nil && held.Pod == s.Pod {
+		s.carryOOMReasons(held)
 	}
 	putBounded(w.byID, key, s, maxWorkerSnapshots, func(s *workerSnapshot) time.Time { return s.takenAt })
 	return nil
@@ -542,14 +559,10 @@ type completionPairing struct {
 // a job that failed first on its own goroutine, whose end closes the returned channel.
 // proxy, which may be nil, supplies the set's egress proxy readiness.
 func (p *Provisioner) SnapshotScaleSetWorker(ctx context.Context, proxy EgressProxyReader, pod *corev1.Pod, gone bool) <-chan struct{} {
-	if pod.Labels[LabelAcquisitionProtocol] != AcquisitionProtocolScaleSet {
+	key, ok := snapshotKey(pod)
+	if !ok {
 		return closedChan()
 	}
-	runner := pod.Annotations[AnnotationRunnerName]
-	if runner == "" {
-		return closedChan()
-	}
-	key := pod.Namespace + "/" + runner
 	s := snapshotOf(pod, p.nowFn())
 	s.gone = gone
 	if !s.ended() && !p.workerSnapshots.awaits(key) {
@@ -571,6 +584,15 @@ func (p *Provisioner) SnapshotScaleSetWorker(ctx context.Context, proxy EgressPr
 		p.amendFailedJob(ctx, r, s)
 	}()
 	return done
+}
+
+// snapshotKey is the key of pod's snapshot, ok only for a scale-set worker.
+func snapshotKey(pod *corev1.Pod) (key string, ok bool) {
+	runner := pod.Annotations[AnnotationRunnerName]
+	if pod.Labels[LabelAcquisitionProtocol] != AcquisitionProtocolScaleSet || runner == "" {
+		return "", false
+	}
+	return pod.Namespace + "/" + runner, true
 }
 
 // ownJobCompleted reports whether pod carries the completion stamp of a job its runner
@@ -723,10 +745,16 @@ func (p *Provisioner) reportFailedJob(target Target, runID, jobName, cause strin
 		log.Info("scale-set job failed", "cause", cause, "context", snapJSON)
 		return
 	}
-	log.Warn("scale-set job failed with a platform fault", "cause", cause, "faults", faults, "context", snapJSON)
-	target.RecordEvent(corev1.EventTypeWarning, "PlatformFaultOnFailedJob", "DetectFlakyJob",
-		fmt.Sprintf("Job %q of run %s failed on worker %s with a platform fault: %s.",
-			jobName, runID, snap.Pod, strings.Join(faults, "; ")))
+	said := snap.withOOMReasons(faults)
+	log.Warn("scale-set job failed with a platform fault", "cause", cause, "faults", said, "context", snapJSON)
+	note := func(faults []string) string {
+		return fmt.Sprintf("Job %q of run %s failed on worker %s, which shows: %s.", jobName, runID, snap.Pod, strings.Join(faults, "; "))
+	}
+	text := note(said)
+	if len(text) > maxEventNote {
+		text = note(faults)
+	}
+	target.RecordEvent(corev1.EventTypeWarning, "PlatformFaultOnFailedJob", "DetectFlakyJob", text)
 }
 
 // reportRerunJob counts a later attempt of a recorded failure, and reports the flaky
