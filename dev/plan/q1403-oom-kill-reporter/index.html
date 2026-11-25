@@ -3047,7 +3047,7 @@
 The AGC therefore names no cause (Q1400), and neither does anything else in the Kubernetes API that a tenant's operator can read on the pod.
 This is the design of a small tool that says which limit ran out, on the pod, for anyone debugging such a kill, and of what the Actions Gateway Controller (AGC) would do with the answer.</p>
 <p><strong>How claims are marked.</strong> <em>(read)</em> is source at a pinned version: Kubernetes <code>v1.35.5</code>, Linux <code>v6.12</code>, or this repository at <code>274ca688f</code>, where the functions cited were compared with an earlier reading.
-<em>(measured)</em> names where; <em>(reported)</em> is a reading another session took for this design, none of it re-run here and none on GKE, all on kernel 6.12.76: eighteen kills in six runs in one local container with its own <code>kubepods.slice</code> and no kubelet, recorded in Q1316's plan (on its branch, not on <code>main</code>).
+<em>(measured)</em> names where; <em>(reported)</em> is a reading another session took for this design, none of it re-run here and none on GKE, all on kernel 6.12.76: eighteen kills in six runs in one local container with its own <code>kubepods.slice</code> and no kubelet, recorded in <a href="../q1316-dogfood-reproduction/">Q1316's plan</a>.
 <em>(recall)</em> is neither.
 A GKE node of Q1316's run is on <code>6.8.0-1064-gke</code> (reported).
 Of the kernel functions cited here for the counters, the kill and its line, each is the same at <code>v6.8</code>, but for the cgroup v1 half of <code>mem_cgroup_oom</code> and an argument in <code>memory_max_write</code>; <code>check_syslog_permissions</code> also takes <code>CAP_SYS_ADMIN</code> there (read, compared function by function, without <code>___ratelimit</code>, <code>cgroup_mkdir</code> and what else prints to the log, and not in Ubuntu's own tree).
@@ -3426,8 +3426,7 @@ So the pod's <code>.local</code> alone does not mean a pod-level limit, and only
 </tbody>
 </table>
 <p>The last is one reading, of a limit put on the slice above the pods' root for a few seconds.
-Nothing has filled a node.
-Q1316's R2 would.
+Nothing has filled a node: Q1316's R2 lost it, and <a href="../q1316-dogfood-reproduction/#the-second-run">its second run</a> drops that fill and reads a kill at <code>kubepods</code>' limit.
 Its R8 cannot show the second row, because <code>privileged-dind</code>'s pod cap has room above the runner's limit (computed, not run).</p>
 <p><strong>Which container.</strong> A pod-level rise does not say, and containerd marks a container <code>OOMKilled</code> for an earlier nested kill too (measured on local nodes, Q1395), so a status alone would give a later SIGKILL the nested kill's answer.
 Two things narrow it:</p>

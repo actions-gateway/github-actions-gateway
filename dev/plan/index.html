@@ -2830,7 +2830,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 </tr>
 <tr>
 <td><a href="release-2.1/">release-2.1.md</a></td>
-<td>The <code>v2.1.0</code> release: automatic recovery finished, from the dogfood readings detection and the out-of-memory class rest on to one more retry class and job-granular re-run</td>
+<td>The <code>v2.1.0</code> release: automatic recovery finished, from the dogfood readings detection and the out-of-memory class rest on to job-granular re-run, with no further retry class</td>
 <td>❌ Scoped 2026-11-09; the <a href="release-2.1/#scope-ledger">scope ledger</a> says what still gates the tag</td>
 </tr>
 <tr>
@@ -3046,6 +3046,11 @@ Each has inline ✓ markers per item.</p>
 <td><a href="q555-automatic-recovery-design/">q555-automatic-recovery-design.md</a></td>
 <td>The design for the Q555 draft: a per-set failure ledger that pairs failed jobs with later attempts, one run read that enforces a restart-proof budget of GAG's own re-runs and the futility checks, retry classes that wait on how their cause clears behind a breaker, a per-job memory floor for out-of-memory under right-sizing, and labelled proxy outcome metrics</td>
 <td>ⓘ Proposed, 2026-10-10, decisions recorded 2026-10-12. Q1182 built the ledger store and moved the scale-set budget onto it; four protocol and kill-shape facts the rest rests on are unmeasured</td>
+</tr>
+<tr>
+<td><a href="q1316-dogfood-reproduction/">q1316-dogfood-reproduction.md</a></td>
+<td>The dogfood reproduction Q1316's retry class needs: which fact could separate a platform's crash of the Docker-in-Docker sidecar from the job's own, with every mutation, abort and restore step</td>
+<td>✅ Complete (2026-11-25): run twice; the runner dies before the sidecar at <code>kubepods</code>' limit, so the class is not buildable as designed at the shipped requests, and <a href="../queue/Q1316/">Q1316</a> is deferred</td>
 </tr>
 <tr>
 <td><a href="q1403-oom-kill-reporter/">q1403-oom-kill-reporter.md</a></td>

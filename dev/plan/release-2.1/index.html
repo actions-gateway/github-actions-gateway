@@ -2858,7 +2858,9 @@ Nothing here is a commitment to a date.</p>
 <h2 id="why-this-release-exists">Why this release exists<a class="headerlink" href="#why-this-release-exists" title="Permanent link">&para;</a></h2>
 <p><code>v2.0.0</code> ships the first half of automatic recovery: flaky-job detection (Q555), the futility checks on the disruption arms (Q1181), and the first retry class, an out-of-memory kill under right-sizing (Q1183).
 Each of those landed ahead of the dogfood readings its design put first, and the classes after the first are designed but not built (<a href="../q555-automatic-recovery-design/">q555-automatic-recovery-design.md</a>).
-This release finishes it: it measures what the shipped half rests on, then adds a class where something GAG owns separates it from a tenant's own failure, so that fewer platform failures need someone to click re-run.</p>
+This release finishes it: it measures what the shipped half rests on, and was to add a class where something GAG owns separates it from a tenant's own failure, so that fewer platform failures need someone to click re-run.
+Neither of the two classes it named is buildable on what has been read, each for the reason <a href="#explicitly-out-of-scope">below</a>, so both are punted and it ships no new retry class.
+What it ships is <a href="#scope-ledger">in the ledger</a>, among it job-granular re-run (Q1319), the fix that keeps the out-of-memory class off a job whose pod has not named it (Q1389), the detection readings and their corrections, and the reporter that says which memory limit ran out (Q1403).</p>
 <p>The order inside the release is the design's: the measurements first, because each class and the job-granular re-run are built on their answers.</p>
 <h2 id="what-this-release-must-not-do">What this release must NOT do<a class="headerlink" href="#what-this-release-must-not-do" title="Permanent link">&para;</a></h2>
 <p><strong>It must not re-run a genuine failure.</strong> The boundary in <a href="../../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">troubleshooting.md</a> stands: every class retries only a cause GAG can observe on facts it owns (R9), arrives with a dogfood reproduction (R12), and is punted rather than shipped when no discriminator separates it from a tenant-caused shape.
@@ -2957,14 +2959,14 @@ One known limit stays from <code>v2.0.0</code>: beside a memory kill, a job past
 <tr>
 <td><a href="../../queue/Q1316/">Q1316</a></td>
 <td>Retry a job whose Docker-in-Docker sidecar crashed under it</td>
-<td><code>2.1-gate</code></td>
-<td>🔲 open: readings taken 2026-11-24 on a local node, no discriminator found in what GAG reads; dogfood reproduction not run</td>
+<td>rides</td>
+<td>⤴ punted: <a href="#explicitly-out-of-scope">explicitly out of scope</a></td>
 </tr>
 <tr>
 <td>Q1395</td>
 <td>Keep a nested container's out-of-memory kill from reading as a platform fault on the sidecar</td>
 <td><code>2.1-gate</code></td>
-<td>✅ landed: a sidecar's <code>OOMKilled</code> is a fault only with exit code 137; not run on Kata</td>
+<td>✅ landed: a sidecar's <code>OOMKilled</code> is a fault only with exit code 137; the status it is keyed on was read under Kata on 2026-11-25, <code>OOMKilled</code>, 143, after each of two nested kills, and the rule is unit-tested and not run on a cluster</td>
 </tr>
 <tr>
 <td>Q1400</td>
@@ -2999,7 +3001,7 @@ One known limit stays from <code>v2.0.0</code>: beside a memory kill, a job past
 </tbody>
 </table>
 <p><strong>Scoped 2026-11-09.
-Q1406 and Q1407 ride; the <code>rides</code> cell on Q1315 marks a punted row.</strong> <code>v2.1.0</code> follows <code>v2.0.0</code>, so nothing here waits on anything but its own row and the 2.0 tag.
+Q1406 and Q1407 ride; the <code>rides</code> cells on Q1315 and Q1316 mark punted rows.</strong> <code>v2.1.0</code> follows <code>v2.0.0</code>, so nothing here waits on anything but its own row and the 2.0 tag.
 The ledger takes a row for each item that merges onto the released surface before the tag.</p>
 <h2 id="why-the-rows-added-since-gate">Why the rows added since gate<a class="headerlink" href="#why-the-rows-added-since-gate" title="Permanent link">&para;</a></h2>
 <p>One heading per row or set, in ID order.</p>
@@ -3018,7 +3020,7 @@ Detection could name a platform fault that did not happen, in the release whose 
 <h3 id="q1400">Q1400<a class="headerlink" href="#q1400" title="Permanent link">&para;</a></h3>
 <p>Settled 2026-11-24.
 The out-of-memory class <code>v2.0.0</code> shipped could name a cause it did not check, in the release whose headline is telling platform failures from a job's own: its Events named the runner's own limit for a kill the node could have made.
-They name no cause now, and what the class re-runs, raises and withholds is unchanged; no node kill of a runner has been reproduced.</p>
+They name no cause now, and what the class re-runs, raises and withholds is unchanged; a kill at <code>kubepods</code>' limit leaves the same status, reproduced on GKE on 2026-11-25, and a node-wide kill has not been reproduced.</p>
 <h3 id="q1401">Q1401<a class="headerlink" href="#q1401" title="Permanent link">&para;</a></h3>
 <p>Job-granular re-run (Q1319) recovered less than <code>v2.0.0</code> on a fail-fast matrix behind an aggregate job, and recovering less is the opposite of what this release is for.
 What it still recovers less of is <a href="../../operations/upgrade/#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run">in the upgrade notes</a>.</p>
@@ -3038,6 +3040,11 @@ What it still recovers less of is <a href="../../operations/upgrade/#non-breakin
 <td><a href="../../queue/Q1315/">Q1315</a></td>
 <td>Retry a job failed while its colocated egress proxy pool was unavailable</td>
 <td>Nothing read so far tells a job the outage failed from one that failed for its own reason during it (reasoned), so the class could re-run genuine failures, which this release must not do. The designed reading also misses an outage the worker outlives and that is over when the completion arrives (<a href="../q555-automatic-recovery-design/#readings-for-the-egress-proxy-class-q1315">the readings</a>, 2026-11-24, kind), and how often a pool loses every replica is unmeasured. The row keeps its place in the queue.</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1316/">Q1316</a></td>
+<td>Retry a job whose Docker-in-Docker sidecar crashed under it</td>
+<td>A class needs a platform cause that kills the sidecar and leaves the runner alive to fail the job, and none was found: <a href="../q1316-dogfood-reproduction/#what-the-second-run-settles">the second of two dogfood runs</a>, on 2026-11-25, filled a node to <code>kubepods</code>' limit and killed the runner, in four kills of four, and a class without it would retry jobs that failed for their own reason, which this release must not do. A node-wide kill's order is computed and not read, and how often a sidecar crashes first is unmeasured. The row is deferred, with the trigger that would revive it.</td>
 </tr>
 </tbody>
 </table>

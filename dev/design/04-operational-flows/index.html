@@ -4118,7 +4118,7 @@ So the class raises the limit from the killed pod's own:</p>
 That is the shape a memory kill leaves on cgroup v2, which kills the whole container: reproduced on dogfood under <code>Throughput</code> on 2026-11-22 and under <code>Binpack</code> on 2026-11-24 (R12), GitHub concluded the job <code>failure</code> 9 min 43 s to 9 min 48 s after the kill, and the re-run at the raised limit succeeded (<a href="../../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">the first readings</a>, <a href="../../plan/q555-automatic-recovery-design/#readings-from-the-binpack-turn-up-2026-11-24">the second</a>).
 A sidecar killed for memory is not covered: the runner survives it to report the job's own result, so the pod's terminal transition says nothing about whether the job failed.</p>
 <p><strong>It does not know which limit ran out</strong> (Q1400).
-A kill made above the container is expected to leave the same status: by the node running out, by <code>kubepods</code>' limit, or by a limit on the pod (read from source; no such kill of a runner is on record).
+A kill made above the container leaves the same status: at <code>kubepods</code>' limit that is measured, four kills of a runner on GKE (kubelet v1.35.8-gke.1796000, kernel 6.8.0-1064-gke, 2026-11-25, <a href="../../plan/q1316-dogfood-reproduction/#the-second-run">the readings</a>); by the node running out, or by a limit on the pod, it is read from source.
 Nothing the AGC reads tells them apart:</p>
 <table>
 <thead>
