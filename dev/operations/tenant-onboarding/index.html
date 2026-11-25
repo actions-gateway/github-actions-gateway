@@ -3537,8 +3537,10 @@ See <a href="../../design/05-security/">security §5</a> for the full credential
      For an organization URL that is <strong>Organization permissions → Self-hosted runners</strong>; for a repository URL it is <strong>Repository permissions → Administration</strong>.
      GitHub has no read-only way to register a runner: <code>generate-jitconfig</code> and <code>registration-token</code> both require write.</li>
 <li><strong>Repository permissions → Metadata: Read-only</strong> is added by GitHub automatically.</li>
-<li><strong>Optional: Repository permissions → Checks: Read and write.</strong> Used only to write a failed check run on a pull request whose fork job a <code>RunnerSet</code> refused, naming the set and <code>spec.forkPullRequests</code>, because the cancelled run shows no reason (<a href="../security-operations/#fork-pull-requests-choose-their-own-runner-label">what a refusal does</a>).
-     Without it the refusal still happens.</li>
+<li><strong>Optional: Repository permissions → Checks: Read and write.</strong> Write is used only to write a failed check run on a pull request whose fork job a <code>RunnerSet</code> refused, naming the set and <code>spec.forkPullRequests</code>, because the cancelled run shows no reason (<a href="../security-operations/#fork-pull-requests-choose-their-own-runner-label">what a refusal does</a>).
+     Without it the refusal still happens.
+     Read is used only to tell a cancelled job that <a href="../troubleshooting/#timed-out-jobs">timed out</a> from a user's cancel once its re-run has passed.
+     Without it such a job in a private repository is not counted.</li>
 <li>Leave <strong>Contents</strong>, <strong>Pull requests</strong>, and the rest at <strong>No access</strong>: the gateway never reads tenant code or writes to repositories.</li>
 <li><strong>Where can this GitHub App be installed?</strong> — <strong>Only on this account</strong> is the typical choice for a single-org deployment.</li>
 <li>Click <strong>Create GitHub App</strong>.</li>

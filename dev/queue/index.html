@@ -3224,14 +3224,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>A job killed by its <code>timeout-minutes</code> completes <code>canceled</code> on the scale-set message queue, the same spelling as a user's cancel, and …</td>
 </tr>
 <tr>
-<td><a href="Q1320/">Q1320</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">Build the already_rerun, run_succeeded and worker_unstartable checks</a></td>
-<td><code>feature</code> <code>2.1-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Three of the design's futility checks, which withhold a re-run that cannot help, were left unbuilt when Q1181 shipped the other four, so a …</td>
-</tr>
-<tr>
 <td><a href="Q1319/">Q1319</a></td>
 <td><a href="../plan/q555-automatic-recovery-design/#what-the-readings-recommend">Re-run only the classified job, found by its runner's name</a></td>
 <td><code>feature</code> <code>2.1-gate</code></td>
@@ -3257,19 +3249,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q1316/">Q1316</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#classes-after-the-first">Retry a job whose Docker-in-Docker sidecar crashed under it</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#readings-for-the-dockerd-sidecar-class-q1316">Retry a job whose Docker-in-Docker sidecar crashed under it</a></td>
 <td><code>feature</code> <code>2.1-gate</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>A job that fails because its Docker-in-Docker sidecar crashed is a platform failure, and today it needs a manual re-run.</td>
-</tr>
-<tr>
-<td><a href="Q1381/">Q1381</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">A displaced merge-group run is re-run: GitHub never cancels it</a></td>
-<td><code>bug</code> <code>2.1-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The futility checks assume a merge-group run that loses its place in the queue is cancelled by GitHub and so withheld as <code>run_cancelled</code> …</td>
 </tr>
 <tr>
 <td><a href="Q1388/">Q1388</a></td>
@@ -3278,6 +3262,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Under <code>Binpack</code> the out-of-memory class raises the memory request with the limit, and nothing asks whether any node can hold the raised …</td>
+</tr>
+<tr>
+<td><a href="Q1400/">Q1400</a></td>
+<td><a href="../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">A runner killed for the node's memory is read as its own-limit kill</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The out-of-memory class, shipped in <code>v2.0.0</code> (Q1183) and unchanged for this by 2.1, acts on a runner the kernel killed because its <strong>node</strong> …</td>
 </tr>
 <tr>
 <td><a href="Q1255/">Q1255</a></td>
@@ -3294,6 +3286,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>pr-mergeability-watch.py</code> emits <code>head_change</code>, <code>conflict</code>, <code>closed</code> and <code>timeout</code>, and nothing when the merge queue evicts a PR.</td>
+</tr>
+<tr>
+<td><a href="Q1395/">Q1395</a></td>
+<td><a href="../operations/troubleshooting/#flaky-jobs-and-platform-faults-on-failed-jobs">A sidecar reads OOMKilled for a nested container's kill it survived</a></td>
+<td><code>bug</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The shipped <code>privileged-dind</code> template does not reach this as measured, because dockerd puts a job's containers outside the sidecar's …</td>
 </tr>
 <tr>
 <td><a href="Q1185/">Q1185</a></td>
@@ -3318,6 +3318,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td><strong>The placement policy samples co-schedule a tenant's AGC and egress proxy with its workers.</strong> Both <code>kyverno/restrict-gag-placement.yaml</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1396/">Q1396</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/privileged-dind/template.yaml">privileged-dind's memory limit does not bound a job's containers</a></td>
+<td><code>bug</code> <code>security</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>On the one node image read, the <code>privileged-dind</code> sidecar's 4Gi memory limit does not cap a job's containers, so a job that outgrows it is …</td>
+</tr>
+<tr>
+<td><a href="Q1397/">Q1397</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/privileged-dind/template.yaml">privileged-dind starts the runner before its Docker daemon is ready</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A job on <code>privileged-dind</code> can start before dockerd listens, and then fails with <code>Cannot connect to the Docker daemon</code>.</td>
 </tr>
 <tr>
 <td><a href="Q1341/">Q1341</a></td>

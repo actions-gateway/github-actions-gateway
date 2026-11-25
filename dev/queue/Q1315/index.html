@@ -2711,7 +2711,7 @@ The design's second retry class recognises it from the worker snapshot: the colo
 <li><strong>The <code>observable</code> release is not built.</strong> Q1244 built only the <code>freshPod</code> release the out-of-memory class needs; this class needs the deferred path to wait on <code>ready</code> (<a href="../../plan/q555-automatic-recovery-design/#how-it-waits">How it waits</a>).</li>
 <li><strong>A shared pool in another namespace is out of scope</strong>: the AGC watches EgressProxies in its own namespace only, so the class cannot see one.</li>
 </ul>
-<p>It counts under its own <code>cause</code>, goes through the breaker (a pool outage is exactly a stampede) and the futility checks (<a href="../Q1320/">Q1320</a>), and needs nothing from the proxy outcome metrics.
+<p>It counts under its own <code>cause</code>, goes through the breaker (a pool outage is exactly a stampede) and the futility checks (Q1320, built), and needs nothing from the proxy outcome metrics.
 Gated on 2.1 as part of its headline (<a href="../../plan/release-2.1/">release-2.1.md</a>).</p>
 
 

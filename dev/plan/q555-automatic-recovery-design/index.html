@@ -2831,6 +2831,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#timed-out-jobs-q1374" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timed-out jobs (Q1374)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#what-the-operator-sees-r3-r4-r8" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2960,6 +2971,34 @@
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#readings-for-the-dockerd-sidecar-class-q1316" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Readings for the dockerd sidecar class (Q1316)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Readings for the dockerd sidecar class (Q1316)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-left-open-q1316" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is left open (Q1316)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -3253,7 +3292,8 @@ The readings are the AGC's <code>scaleset: job assigned</code>, <code>job comple
 <code>scaleset_jobs_completed_total</code> itself was not queried: the listener increments it with the same <code>result</code> it logs, in the same once-per-job block.</p>
 <ul>
 <li><strong>M1.</strong> A red step completes <code>failed</code> (jobs <code>82a2530d…</code>, <code>abe6cad3…</code>, <code>ee99fae0…</code>).
-  A job killed by <code>timeout-minutes</code> completes <code>canceled</code> (<code>b31558d4…</code>, <code>486169c1…</code>; the jobs API says <code>cancelled</code>), exactly as a user's cancel does (<code>3762586f…</code>), so detection records no timed-out job and never counts its later success as flaky (<a href="../../queue/Q1374/">Q1374</a>).
+  A job killed by <code>timeout-minutes</code> completes <code>canceled</code> (<code>b31558d4…</code>, <code>486169c1…</code>; the jobs API says <code>cancelled</code>), exactly as a user's cancel does (<code>3762586f…</code>), so detection recorded no timed-out job and never counted its later success as flaky.
+  Q1374 counts one whose re-run passes since (<a href="#timed-out-jobs-q1374">Timed-out jobs</a>).
   A job whose runner an out-of-memory kill ended completes <code>failed</code>, 9 min 48 s after the kill, when the job lock lapses (<code>ff028f4b…</code>, run 45052020040).</li>
 <li><strong>M2.</strong> A re-run of the failed job arrives with a new job UUID (<code>abe6cad3…</code>, then <code>4349fbb7…</code>) under the same run ID and <code>jobDisplayName</code>, and pairs as <code>trigger=other</code>, flaky, as designed.
   GitHub accepts two jobs sharing one <code>name:</code>, and they share one failure key: the green twin's success paired with the red twin's failure and emitted a false <code>FlakyJobDetected</code> (18:05:32 UTC), and the red twin's re-run at 18:07:02 logged as a fresh failure rather than a pairing, so its record was gone.
@@ -3537,6 +3577,49 @@ A job in the workflow file is listed in every finished attempt, skipped or not, 
 <p>Attribution happens when the later attempt completes, so the order of a disruption arm and a failed <code>JobCompleted</code> does not matter: an evicted job's failure arrives about 10 minutes after the eviction, a deleted one's 15 to 26 seconds after.
 A succeeded pairing deletes the failure entry.
 A disruption whose pod belongs to another <code>RunnerSet</code> marks that set's ledger, not this one's, so a run spread across sets reads its collateral re-runs here as <code>other</code>: an R5 blind spot, overcounting the manual rate for multi-set runs.</p>
+<h3 id="timed-out-jobs-q1374">Timed-out jobs (Q1374)<a class="headerlink" href="#timed-out-jobs-q1374" title="Permanent link">&para;</a></h3>
+<p>A job killed by <code>timeout-minutes</code> completes <code>canceled</code>, as a user's cancel does, and is not recorded.
+It is held in memory and counted once a later attempt of it <strong>passes</strong> and GitHub's annotation says it exceeded its limit (<a href="../../design/04-operational-flows/#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555">what ships</a>).</p>
+<p>What detection missed without it, over every run of this repository created 2026-11-08 to 2026-11-21 (5,343 runs, jobs of all attempts; the 275 re-run, cancelled or failed ones read):</p>
+<ul>
+<li>8 jobs timed out, in 8 runs between 16 November 21:01 and 18 November 00:03 UTC; 7 were hung in <code>actions/checkout</code>.
+  4 of them were re-run, and all 4 passed.</li>
+<li>4 failed jobs passed on a re-run, and they are the same 4 runs: each is the required gate over the others, red because <code>a gating job concluded 'cancelled'</code>.
+  So every red job a re-run turned green there followed a timeout, and recording failures alone would have counted 4 re-runs of 8, under the gate's name.</li>
+<li>All of it ran on <code>ubuntu-latest</code> within 27 hours, so nothing here says how often a scale set's job times out, or any job.</li>
+</ul>
+<p>The facts weighed:</p>
+<ul>
+<li><strong>The run's conclusion, on the next attempt's completion.</strong> It does not separate them: attempt 1 of run 45052015868, which timed out, and run 45053166409, which a user cancelled, both conclude <code>cancelled</code>, and so do their jobs and the steps that were running.</li>
+<li><strong>The check run's annotation, read per cancelled job.</strong> It does, and it is a read for every cancelled job, which R6 rules out: 325 in that window for 8 timeouts, or 91 for the ones a runner started.</li>
+<li><strong>Recording every <code>canceled</code> completion in the ledger</strong>, and reading the annotation only if a later attempt completes.
+  A ledger write for each cancel, on the listener, and cancels would evict real failures from a capped map; a superseded run's jobs are the bulk of them and are never re-run.</li>
+<li><strong>The job's own limit, against how long it ran.</strong> <code>timeout-minutes</code> is in no message the AGC receives (Q438).</li>
+<li><strong>Built: the annotation, read only for a held cancel whose re-run passed.</strong> 4 reads in that window, and none for a superseded run's jobs.
+  A fail-fast matrix or a whole run that a user cancelled and re-ran costs a read per leg that passes, with nothing to count at the end.</li>
+</ul>
+<p>What the annotation looks like, read 2026-11-24 on the 8 timeouts above and the 2 of scale-set run 45052015868: all 10 carry <code>The job has exceeded the maximum execution time of &lt;limit&gt;</code>, first in the list, at path <code>.github</code> and level <code>failure</code>, where run 45053166409's carries <code>The run was canceled by @…</code>.
+A job's own <code>::error::</code> has that path and level too, so the match is the message's start.
+Public issues quote an older form, <code>The job running on runner &lt;name&gt; has exceeded …</code>, which is matched as well since GitHub Enterprise Server may still write it; no such server was read.
+The job's ID was its check run's on all 11.
+A <code>canceled</code> completion names the job's runner, the one the jobs list has: the AGC's log did for both timeouts and the user's cancel of those two runs (2026-11-22).
+A later attempt that did not re-run a job lists it again under another ID, so the row read is the one where it ran.</p>
+<p>What was left out, each an undercount (R5):</p>
+<ul>
+<li>A timed-out job whose re-run fails: reading the annotation on every later completion would count it, at a read per re-run instead of per re-run that passed.</li>
+<li>A hold that GitHub's redelivery of an older attempt's cancel replaces, since no completion the AGC decodes carries an attempt number.</li>
+<li>Holds lost to a restart, which is why <a href="#where-the-ledger-lives-open-question-1">failures are not kept in memory</a>.
+  A ledger write per cancel was the cost of keeping them.</li>
+<li>A private repository where the App lacks <code>Checks: Read</code>, which is <a href="../../operations/tenant-onboarding/#0a-create-the-app-web-ui">optional</a>: GitHub documents the permission, and a public repository's annotations answered HTTP 200 with no credential (2026-11-24).
+  The refusal's status and words are from recall, not read.</li>
+<li>A change in GitHub's wording, which reads as a cancel and leaves no sign.</li>
+</ul>
+<p>Nothing here has met GitHub from an AGC: the tests answer from a fake that replays the two captured annotation lists.</p>
+<p>A step-level <code>timeout-minutes</code> fails its step (the runner sets <code>TaskResult.Failed</code>, <code>StepsRunner.cs</code> at v2.338.2), and the job concludes <code>failure</code>, so it counts whatever its re-run does.
+Measured from the API: in <code>home-assistant/core</code> run 45247954762 the step <code>Run pytest</code> timed out after 60 minutes, <code>failure</code>, and its job concluded <code>failure</code> with no other failed step.
+A job that concludes <code>failure</code> on a step completes <code>failed</code> on the wire (M1); one that did so on a step's timeout was not seen there.
+A job with no <code>timeout-minutes</code> has a limit of 360 minutes by GitHub's documentation; that it ends the same way is not measured.
+Look again if GitHub's completion ever carries a reason.</p>
 <h3 id="what-the-operator-sees-r3-r4-r8">What the operator sees (R3, R4, R8)<a class="headerlink" href="#what-the-operator-sees-r3-r4-r8" title="Permanent link">&para;</a></h3>
 <p>Detection is on for every scale-set <code>RunnerSet</code> with no field (R4); it changes no behaviour.</p>
 <table>
@@ -3556,7 +3639,7 @@ A disruption whose pod belongs to another <code>RunnerSet</code> marks that set'
 <tr>
 <td><code>actions_gateway_scaleset_flaky_jobs_total</code></td>
 <td><code>namespace</code>, <code>runner_set</code>, <code>trigger</code></td>
-<td>A failed job later succeeded with no disruption or class attributed</td>
+<td>A failed or timed-out job later succeeded with no disruption or class attributed</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_rerun_outcomes_total</code></td>
@@ -3719,7 +3802,7 @@ Either way it reads the same snapshot detection records, which is why Q1183 wait
 <ul>
 <li><strong>The proxy class</strong> fires from <code>Completed</code>, which holds the result and the proxy readiness together.
   The amendment never replaces that reading, so it changes nothing for the class, and a restart after the record is written costs it nothing.</li>
-<li><strong>The sidecar class</strong> fires from <code>Completed</code> where the running pod already shows the crash, as a restarted container's last termination.
+<li><strong>The sidecar class</strong> (not built yet, <a href="#readings-for-the-dockerd-sidecar-class-q1316">its readings</a>) would fire from <code>Completed</code> where the running pod already shows the crash, as a restarted container's last termination.
   A crash the pod reports later, which the near-simultaneous end of a sidecar and the step that used it makes likely, is first known to the amendment, so the class also judges the record there, and the crash's time tells one before the job's end from one after.
   It cannot read the crash from the finished pod alone: the kubelet drops a restarted container's earlier termination from the status it writes as the pod finishes (measured on kubelet v1.35.5, 2026-11-23), so the AGC carries it from the events before.</li>
 <li><strong>A restart between the two</strong> loses only what the completion had not seen: a sidecar crash reported after it does not fire the class.
@@ -3785,9 +3868,153 @@ In the order the CI history and existing machinery make cheapest:</p>
 <li><strong>Egress proxy pool unavailable</strong> (<code>observable</code>), for a colocated pool: the snapshot's proxy <code>Ready</code> was <code>False</code> or <code>readyReplicas</code> was 0 while the job ran, and <code>ready</code> is the EgressProxy's <code>Ready</code> condition.
    The AGC already watches EgressProxies in its own namespace, so this needs nothing from Q1178.
    A shared pool in another namespace is invisible to it, so the class does not cover one.</li>
-<li><strong><code>dockerd</code> sidecar crash</strong> (<code>freshPod</code>): the Docker-in-Docker sidecar's restart count rose, with a discriminator against tenant disk use still to find.</li>
+<li><strong><code>dockerd</code> sidecar crash</strong> (<code>freshPod</code>): the Docker-in-Docker sidecar's restart count rose.
+   Open: the status and the usage sampler do not separate a platform's crash from the job's own, and R12's dogfood reproduction has not been run (<a href="#readings-for-the-dockerd-sidecar-class-q1316">the readings</a>).</li>
 </ol>
 <p><strong>Decide (open question 3):</strong> measure in that order, and ship only the out-of-memory class under Q1183; each later class is a row of its own once reproduced.</p>
+<h3 id="readings-for-the-dockerd-sidecar-class-q1316">Readings for the <code>dockerd</code> sidecar class (Q1316)<a class="headerlink" href="#readings-for-the-dockerd-sidecar-class-q1316" title="Permanent link">&para;</a></h3>
+<p>The class is open: nothing GAG reads today separates a platform's crash of the Docker-in-Docker sidecar from the job's own, a kernel counter that separates part of it has no path to the AGC, and no dogfood reproduction has been run.
+R10 wants a cause outside the tenant's code and R12 a discriminator shown to separate it.
+The crash with an ordinary cause, running out of memory, is the job's own under <code>kata-dind</code> and reads the same whether the job or the node caused it under <code>privileged-dind</code>; the shapes no job causes by accident have no known platform cause, on the shipped templates, that leaves a serving runner alive.
+The exception is a daemon that fails its first start, which is on record once and which a startup probe keeps from reaching a job (<a href="#what-is-left-open-q1316">below</a>).
+<a href="#what-is-left-open-q1316">What is left open</a> is below the readings.</p>
+<p><strong>What the status shows</strong>, read on 2026-11-24 with <code>docker:28-dind</code> (dockerd 28.5.2) on one container of the <code>kindest/node:v1.35.5</code> image (containerd 2.3.1, kubelet 1.35.5, cgroup v2), a static pod shaped like <code>privileged-dind</code> with a 256Mi limit on the sidecar, and no control plane.
+The statuses are the kubelet's own; the API server's copy, which the AGC watches, was not read, nor were Kata and GKE.</p>
+<table>
+<thead>
+<tr>
+<th>What happened to dockerd</th>
+<th>Sidecar status</th>
+<th>Honest tenant cause</th>
+<th>Platform cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Its cgroup reached its memory limit</td>
+<td><code>OOMKilled</code>, 137</td>
+<td>The job's own containers, where they are charged to the sidecar (<code>kata-dind</code>'s layout); the ordinary one</td>
+<td>A node out of memory raises the same kernel counter, so it reads the same (kernel docs, not run)</td>
+</tr>
+<tr>
+<td>A container inside it was killed at its own limit (the sidecar's cgroup holding it), then dockerd got SIGKILL from the node</td>
+<td><code>OOMKilled</code>, 137</td>
+<td>A job's <code>docker run -m</code> limit, which is why the reason is wrong</td>
+<td>The SIGKILL, which the status no longer shows</td>
+</tr>
+<tr>
+<td>SIGKILL that is not out of memory, from the node or from a job container with <code>--pid=host</code></td>
+<td><code>Error</code>, 137, both the same</td>
+<td>None that is not deliberate</td>
+<td>None known on the shipped templates to leave the runner alive: a pod kill, a node shutdown and an eviction take the pod, which the existing arms see. A liveness probe's kill would leave it, and no shipped template has one (<code>kata-dind</code> has a <code>startupProbe</code> only)</td>
+</tr>
+<tr>
+<td>Aborts by itself (SIGABRT, as a Go fatal error does)</td>
+<td><code>Error</code>, 2</td>
+<td>Exhausting threads or processes, which aborts Go the same way (Go source; not run)</td>
+<td>A daemon bug</td>
+</tr>
+<tr>
+<td>Cannot start on a full disk</td>
+<td><code>Error</code>, 1, then a crash loop</td>
+<td>A full disk, once something restarts dockerd</td>
+<td>A bad volume</td>
+</tr>
+<tr>
+<td>Its disk fills while it runs</td>
+<td>No crash</td>
+<td>The job's own writes</td>
+<td>None</td>
+</tr>
+<tr>
+<td>The kubelet loses the container</td>
+<td><code>ContainerStatusUnknown</code>, 137 (kubelet source)</td>
+<td>None</td>
+<td>Needs the runtime to lose one container of a running pod; no natural path found: a restart of containerd or of the kubelet and a SIGKILL of containerd left both containers running, and a SIGKILL of the pod's shim ended both, <code>Error</code> 255 with the pod <code>Failed</code> (one run each)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>A full disk does not crash dockerd.</strong> Q1316's row assumed it did.
+With a 1 GiB data disk filled by a container the job ran, dockerd stayed up and the job's next <code>docker run</code> and <code>docker import</code> failed with <code>no space left on device</code>.
+Only dockerd's restart on the full disk failed, with <code>failed to start daemon: error initializing graphdriver</code>, so a job that fills its disk fails with the daemon still up and GAG sees nothing.</p>
+<p><strong>Memory is the case that decides it.</strong> Under <code>kata-dind</code>'s layout (its entrypoint's, run here on runc rather than in a Kata guest) a job's containers sit under the sidecar's cgroup, so a job that outgrows its sidecar produces the sidecar's <code>OOMKilled</code> and nothing in the status says which container grew.
+Under Kata itself the cause is not in doubt either way: an out-of-memory kill inside the guest is this pod's own memory, and the host running out takes the whole VM and the runner with it (reasoned, not run), so there is no platform cause for a class to recognise.
+A job that outgrows its sidecar is ordinary behaviour and needs a bigger limit, which a re-run does not bring: a sizing profile derives the limits of <code>spec.containers</code>, and the sidecar is an init container, so neither <code>Binpack</code> nor <code>Throughput</code> raises it.
+Under <code>privileged-dind</code> the job's containers are charged to the node instead (containers were under <code>/sys/fs/cgroup/docker</code>, outside the sidecar's limit), so dockerd and its own processes are what reach the sidecar's limit, and a job that exhausts the node's memory, or a neighbour's that does, could get the daemon killed by the node's out-of-memory killer with one and the same status (not run; <a href="#what-is-left-open-q1316">whether it would</a> is open).</p>
+<p><strong>The usage sampler does not separate them.</strong> It polls <code>metrics.k8s.io</code> every 15 s and keeps each container's peak, the sidecar's included, so GAG can hold a sampled peak beside the sidecar's limit (<code>cmd/agc/internal/usage/sampler.go</code>; detection does not read it).
+A peak near the limit says the limit was reached, which is the job's side.
+A peak far below it fits a spike between two samples, a nested container killed at its own limit (<a href="../../queue/Q1395/">Q1395</a>) and a node out of memory, and under <code>privileged-dind</code> the sampled figure leaves out the job's containers altogether (<a href="../../queue/Q1396/">Q1396</a>).
+So it can rule a limit in and cannot rule the platform in (reasoned from the source, not run).</p>
+<p>A nested kill also marks the sidecar <code>OOMKilled</code> without killing it (<a href="../../queue/Q1395/">Q1395</a>), and Q1395's second row shows the status then indistinguishable from a real one.</p>
+<p><strong>Two shapes have no honest tenant twin.</strong> A SIGKILL that is not out of memory has no known platform cause on the shipped templates that leaves the runner running.
+A template with a liveness probe on its daemon, the operator's or the tenant's own, is the exception, and what it kills is a daemon the job may have hung.
+A daemon that aborts by itself is nearly one: its twin is thread or process exhaustion by the job, a rare thing to do by accident.
+A class for either would cost, where wrong, a wasted budget slot or a masked daemon bug, and what it would recover is unmeasured: a deterministic bug repeats on the re-run, and nothing measured says how often one is not.</p>
+<p><strong>How often it happens is unmeasured.</strong> The CI survey found 2 jobs that failed with dockerd unreachable among the 127 failed jobs on GAG's runners; their logs have expired and no annotation names them.
+Re-read on 2026-11-24, the 740 runs of the five workflows that can use the e2e runners and that ended failed, cancelled or timed out from 2026-05-18 to 2026-10-11 hold 17 failed jobs on GAG's runners: 11 lost the runner, and the other six failed a Helm download, an image build, the Calico suite (three, 2026-07-16 and 17) and an egress assertion, the only one after 2026-07-17.
+That reading misses a job that failed and passed on a re-run, which is what a class would be for.
+<a href="../archive/kata-on-gke/#what-the-live-session-found-2026-07-16">The Kata rollout</a> records one sidecar crash loop, on 2026-07-16, when a <code>blkid</code> defect failed every fresh volume and the runner took the job before the daemon was up; a startup probe, which landed on 2026-07-17 and ships in <code>kata-dind</code> alone, closes that shape for it and leaves it open for <code>privileged-dind</code> (<a href="../../queue/Q1397/">Q1397</a>).</p>
+<p><strong>A deliberate kill does not decide it.</strong> A job has its daemon's API, and <code>docker run --pid=host</code> then <code>kill -9</code> crashes dockerd from inside the job, with the same status as a kill from the node (measured).
+That a job can fake the status shows it cannot be trusted, but a job that does so spends its own run's retry budget and masks nobody's breakage.</p>
+<h4 id="what-is-left-open-q1316">What is left open (Q1316)<a class="headerlink" href="#what-is-left-open-q1316" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong>A platform-caused crash, reproduced on dogfood (R12).</strong> The one on record is a daemon that failed its first start (2026-07-16, above).
+  No job can cause that, but the fault was the template's entrypoint on every fresh volume, so a re-run would have failed too, and <code>privileged-dind</code> has no block volume to have it with.
+  A startup probe keeps the runner from starting, so for a first start <a href="../../queue/Q1397/">Q1397</a> prevents the failure where a class would re-run it.
+  None is recorded for a daemon that had served, and the readings are from one local node image on runc, so GKE's nodes, Kata and the API server's copy of the status are unread.</li>
+<li><strong>What separates part of the memory case.</strong> The kernel keeps a fact that neither the status nor the sampler carries: a cgroup's <code>oom</code> counts its limit being reached, and its <code>oom_kill</code> counts its processes killed by any out-of-memory killer (kernel <code>cgroup-v2</code> documentation).
+  Measured on 2026-11-24 in one container's cgroup tree (kernel 6.12.76, <code>memory.oom.group</code> set on the sidecar's as the kubelet sets it, each case twice with the same zeros), read from the pod's cgroup, the sidecar's and one standing in for <code>kubepods</code>:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>What killed the sidecar</th>
+<th>Pod <code>oom</code></th>
+<th>Sidecar's own (<code>.local</code>) <code>oom_kill</code></th>
+<th><code>kubepods</code>' own (<code>.local</code>) <code>oom</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Its own limit</td>
+<td>1</td>
+<td>2</td>
+<td>not read</td>
+</tr>
+<tr>
+<td>The <code>kubepods</code> limit, filled by another pod</td>
+<td>0</td>
+<td>2</td>
+<td>2 or 3</td>
+</tr>
+<tr>
+<td>A limit above <code>kubepods</code>, filled by the job's containers outside it</td>
+<td>0</td>
+<td>2 or 3</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Nothing: a nested container hit its own limit</td>
+<td>1</td>
+<td>0</td>
+<td>not read</td>
+</tr>
+</tbody>
+</table>
+<p>The pod's counters were unchanged after the sidecar's cgroup was removed, as a restart removes it, in the first and third cases, so a restarted sidecar could read them where it sees the host's cgroup tree; its own are gone.
+  They are cumulative, so a pod <code>oom</code> of 0 says the kill came from above the pod, and 1 does not say it came from inside: an earlier nested kill leaves it at 1.
+- <strong>Who filled the node</strong>, which <code>kubepods</code>' own counter says in part and nothing reads today.
+  The kubelet caps <code>kubepods</code> at the node's allocatable memory by default (<code>DefaultNodeAllocatableEnforcement</code>, v1.35.5), and <code>privileged-dind</code>'s job containers are outside it (<a href="../../queue/Q1396/">Q1396</a>), so reaching that limit is a fill by pods, this one's runner and sidecar among them.
+  It counts the whole node's kills since the node started, so only a rise across the crash says anything.
+  A job's containers, or another worker's, push the node itself to its out-of-memory killer, which raises no <code>oom</code> on <code>kubepods</code>.
+  The limit above <code>kubepods</code> stands in for that killer, which was not run, and no node's <code>kubepods</code> was read.
+- <strong>Whether a node kill reaches the sidecar at all.</strong> It takes one process by its score, and one of the job's containers has to hold about nine tenths of the node to outscore the daemon: with the sidecar at an <code>oom_score_adj</code> of 900, dockerd ran at 900 and a container it started at 0 (dockerd 28.5.2, measured).
+  The kubelet never scores a native sidecar above the least-requesting regular container (<code>pkg/kubelet/qos/policy.go</code>, v1.35.5).
+  At <code>privileged-dind</code>'s shipped requests that puts the runner above the daemon by their 2Gi difference on any node (969 and 907 on 32 GiB), so the runner is expected to go first unless the daemon's largest process holds about 2Gi more than the runner's; at a runner request of 3Gi or more, which <code>Binpack</code> and <code>Throughput</code> can reach, the scores tie and the larger process goes (computed, not run).
+  A runner killed that way is <a href="../../queue/Q1400/">Q1400</a>'s: the out-of-memory class reads it as a kill at the runner's own limit.
+- <strong>A path from a counter to the AGC</strong> (R9): nothing GAG reads carries one today.
+- <strong>Evidence from ordinary runs.</strong> Detection already records a failed job's sidecar reason, exit code and restart count, so a job whose record shows dockerd restarted with <code>Error</code>, and which passed when somebody re-ran it, would be the first on record.
+- <strong>What a build needs beyond a discriminator.</strong> The record does not hold the crash's time past an AGC restart, when the runner started, or any crash before the last.</p>
 <h2 id="component-4-the-proxy-as-a-sensor-q1178-q1184">Component 4: the proxy as a sensor (Q1178, Q1184)<a class="headerlink" href="#component-4-the-proxy-as-a-sensor-q1178-q1184" title="Permanent link">&para;</a></h2>
 <h3 id="outcome-metrics-q1178">Outcome metrics (Q1178)<a class="headerlink" href="#outcome-metrics-q1178" title="Permanent link">&para;</a></h3>
 <p>Built.

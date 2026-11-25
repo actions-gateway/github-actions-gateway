@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1320/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1400/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Build the already_rerun, run_succeeded and worker_unstartable checks - GitHub Actions Gateway</title>
+        <title>A runner killed for the node's memory is read as its own-limit kill - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#build-the-already_rerun-run_succeeded-and-worker_unstartable-checks" class="md-skip">
+        <a href="#a-runner-killed-for-the-nodes-memory-is-read-as-its-own-limit-kill" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Build the already_rerun, run_succeeded and worker_unstartable checks
+              A runner killed for the node's memory is read as its own-limit kill
             
           </span>
         </div>
@@ -2703,18 +2703,30 @@
   
 
 
-<h1 id="build-the-already_rerun-run_succeeded-and-worker_unstartable-checks">Build the already_rerun, run_succeeded and worker_unstartable checks<a class="headerlink" href="#build-the-already_rerun-run_succeeded-and-worker_unstartable-checks" title="Permanent link">&para;</a></h1>
-<p>Three of the design's futility checks, which withhold a re-run that cannot help, were left unbuilt when Q1181 shipped the other four, so a re-run can still fire where the design says it should not.</p>
+<h1 id="a-runner-killed-for-the-nodes-memory-is-read-as-its-own-limit-kill">A runner killed for the node's memory is read as its own-limit kill<a class="headerlink" href="#a-runner-killed-for-the-nodes-memory-is-read-as-its-own-limit-kill" title="Permanent link">&para;</a></h1>
+<p>The out-of-memory class, shipped in <code>v2.0.0</code> (Q1183) and unchanged for this by 2.1, acts on a runner the kernel killed because its <strong>node</strong> ran out of memory as if the runner had reached its own limit.
+Read from source and not run: no node-level kill of a runner has been made or found on record.</p>
+<p><code>oomKilledAwaitingRecovery</code> (<code>cmd/agc/internal/provisioner/oom_class.go</code>) takes any <code>PodFailed</code> worker whose runner terminated <code>OOMKilled</code>, and <code>recoverOOMKilled</code> compares nothing with the limit.
+The reason is expected for a node kill too: containerd sets it from the cgroup's <code>oom_kill</code>, which counts "any kind of OOM killer" (kernel <code>cgroup-v2</code> documentation), and that counter rose for a kill made by a limit above the pod on one local kernel (<a href="../../plan/q555-automatic-recovery-design/#what-is-left-open-q1316">the counters</a>).</p>
+<p>What an operator would see, by the runner's shape, beside the <code>PlatformFaultOnFailedJob</code> Event that a killed runner's completion raises about ten minutes later (<a href="../../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">M4</a>, whose runner had a limit; read from <code>flaky_jobs.go</code> for one without):</p>
 <ul>
-<li><strong><code>already_rerun</code></strong>: a disruption detected late (the vanished arm, or a scan after a restart) can read an attempt another re-run already started and reserve against it (<a href="../../design/04-operational-flows/">04-operational-flows.md</a>, the paragraph naming <code>already_rerun</code>; <code>cmd/agc/internal/provisioner/eviction.go</code> says the same at the reservation).
-  The check asks about the job, not the run: an unchanged <code>run_attempt</code> rules it out with no extra call, and a moved one is settled by the latest attempt's jobs list.
-  The deferred path already records <code>failedAttempt</code> for this purpose (Q1244).</li>
-<li><strong><code>run_succeeded</code></strong>: <code>conclusion: success</code>, which GitHub refuses with a 403; today the refusal is the only thing stopping it.</li>
-<li><strong><code>worker_unstartable</code></strong>: the set's capacity gate holds a startup or placeability verdict (Q714) that every next pod fails.
-  New wiring, since no re-run path consults <code>worker_startup_verdict.go</code>; it matters most on the abandoned arm, which releases on any pod of the set being bound, including one stuck pulling an image every next pod will fail to pull too.</li>
+<li><strong><code>Binpack</code> or <code>Throughput</code>, with its limits derived:</strong> where the run still has a slot, a Normal <code>MemoryLimitRaisedForRetry</code> Event says the runner was killed at its memory limit, the job's limit is raised for its next attempts (under <code>Binpack</code> its request too), and the run is re-run on a slot of its budget.
+  The re-run may well pass, on a fresh node.
+  A second kill of the job is withheld as <code>same_class_again</code>, and the class's breaker counts the run, so a node short of memory can pause the class for the set.</li>
+<li><strong><code>Static</code> or <code>NodeShare</code> with a limit, or <code>Binpack</code> or <code>Throughput</code> still <code>AwaitingSamples</code> when the pod was built:</strong> the re-run is withheld as <code>own_limit</code>, and the Event tells the operator to raise the runner's limit or pick another profile, neither of which is the cause.
+  A derived limit already at its ceiling is withheld the same way, with <code>spec.sizing.maxRequests</code> named instead.
+  A fresh pod on another node would have been a fair retry.</li>
+<li><strong>No memory limit:</strong> no re-run and no Event from the class, and an Info log line that says the runner had no limit of its own.</li>
 </ul>
-<p>Each counts on <code>actions_gateway_eviction_rerun_withheld_total</code> with its own <code>reason</code>, and the <code>EvictionRerunWithheld</code> Event names the fix the <a href="../../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">design table</a> gives.
-Gated on 2.1 with the rest of the retry work (<a href="../../plan/release-2.1/">release-2.1.md</a>): every new class re-runs through these same checks, so they bound what each class can cost.</p>
+<p>The exposure is a Burstable worker's, where the kubelet scores a container by its request: <code>Throughput</code>, <code>Static</code> or <code>NodeShare</code> without equal limits, and <code>Binpack</code> beside a container that keeps its pod Burstable, as <code>privileged-dind</code>'s sidecar does, or the wrapper's init container where image volumes are off.
+Inside such a pod a Docker-in-Docker sidecar never scores above the runner (<a href="../../plan/q555-automatic-recovery-design/#what-is-left-open-q1316">why</a>).
+A Guaranteed pod, which <code>Binpack</code> is meant to give, is scored -997 whatever it requests and is among the last to go (<code>pkg/kubelet/qos/policy.go</code>, v1.35.5, read).</p>
+<ul>
+<li>What separates the two is open, and is the <a href="../../plan/q555-flaky-job-retry/#candidate-classes">node-level out-of-memory kill</a> candidate's question: a kill below the container's own limit, with a <code>SystemOOM</code> Node Event (that name is from recall) or the pod's <code>oom</code> counter at 0.
+  The AGC reads neither Node Events nor cgroups today; the usage sampler's peak beside the limit is the one fact it has, and a spike between samples defeats it.</li>
+<li>Reproduce it first, since every step above is read: <a href="../Q1316/">Q1316</a>'s dogfood reproduction fills a node and expects exactly this kill.</li>
+<li>Failing a discriminator, the Event and the withheld reason's text can stop asserting a cause the class did not check.</li>
+</ul>
 
 
 

@@ -2706,13 +2706,22 @@
 <h1 id="retry-a-job-whose-docker-in-docker-sidecar-crashed-under-it">Retry a job whose Docker-in-Docker sidecar crashed under it<a class="headerlink" href="#retry-a-job-whose-docker-in-docker-sidecar-crashed-under-it" title="Permanent link">&para;</a></h1>
 <p>A job that fails because its Docker-in-Docker sidecar crashed is a platform failure, and today it needs a manual re-run.
 The design's third retry class recognises it from the worker snapshot, where the <code>dockerd</code> sidecar's restart count rose while the job ran, and it clears with a fresh pod.</p>
-<p>The discriminator is the open part, and it may not exist: a tenant job that fills the sidecar's disk or exhausts its memory also crashes <code>dockerd</code>, and re-running that masks real breakage.
-So the row is a reproduction before it is a build:</p>
+<p>The discriminator is the open part, and it may not exist.
+<a href="../../plan/q555-automatic-recovery-design/#readings-for-the-dockerd-sidecar-class-q1316">The readings</a>, taken on 2026-11-24 on one local node image, settle these points:</p>
 <ul>
-<li><strong>Reproduce (R12)</strong> a platform-caused crash on dogfood, and the nearest tenant-caused one (disk filled by the job's own images or layers), then find a fact GAG owns that separates them (R9 rules out reading job logs).</li>
-<li><strong>If none separates them</strong>, the class is not buildable as designed; say so in <a href="../../plan/q555-automatic-recovery-design/#classes-after-the-first">the design</a> and punt this row from 2.1 rather than shipping a class that retries tenant failures.</li>
+<li>A job that fills the sidecar's disk does not crash <code>dockerd</code>; the next <code>docker run</code> fails and GAG sees nothing.</li>
+<li>An out-of-memory crash is the job's own under <code>kata-dind</code>, and reads the same whether the job or the node caused it under <code>privileged-dind</code>.</li>
+<li>The shapes no job causes by accident have no known platform cause, on the shipped templates, that leaves a serving runner alive; a daemon that fails its first start is the exception, and <a href="../Q1397/">Q1397</a>'s startup probe prevents it.</li>
+<li>The usage sampler can show the sidecar reached its limit and cannot show that it did not.</li>
 </ul>
-<p>Gated on 2.1 as part of its headline (<a href="../../plan/release-2.1/">release-2.1.md</a>); of the 2.1 rows it is the one most likely to be punted.</p>
+<p>What is left:</p>
+<ul>
+<li><strong>Reproduce (R12)</strong> a platform-caused crash on dogfood, and the nearest tenant-caused one, then find a fact GAG owns that separates them (R9 rules out reading job logs).
+  The first candidate is the kernel's <code>oom</code> and <code>oom_kill</code> counters: on one local kernel the pod's <code>oom</code> is 0 for a kill from above it, and <code>kubepods</code>' own tells a fill by pods from one by a job's containers outside it (<a href="../../plan/q555-automatic-recovery-design/#what-is-left-open-q1316">what is left open</a>).
+  No path carries them to the AGC, and whether a node kill reaches the sidecar before the runner is unread.</li>
+<li><strong>If none separates them</strong>, the class is not buildable as designed; say so in <a href="../../plan/q555-automatic-recovery-design/#classes-after-the-first">the design</a> and punt this row rather than shipping a class that retries tenant failures.</li>
+</ul>
+<p>Gated on 2.1 as part of its headline (<a href="../../plan/release-2.1/">release-2.1.md</a>).</p>
 
 
 

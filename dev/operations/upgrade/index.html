@@ -2225,6 +2225,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-timed-out-job-whose-re-run-passes-counts-as-flaky" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A timed-out job whose re-run passes counts as flaky
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4595,6 +4606,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-timed-out-job-whose-re-run-passes-counts-as-flaky" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A timed-out job whose re-run passes counts as flaky
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5443,6 +5465,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner">Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner</a></li>
 <li><a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run</a></li>
 <li><a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically">Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically</a></li>
+<li><a href="#a-timed-out-job-whose-re-run-passes-counts-as-flaky">A timed-out job whose re-run passes counts as flaky</a></li>
 <li><a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image">A disrupted job is not re-run while its set's workers cannot pull their image</a></li>
 <li><a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run</a></li>
 <li><a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once">Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once</a></li>
@@ -6408,6 +6431,14 @@ A worker the AGC had already deleted itself (a reaper delete, or a reclaimed <co
 A <code>NotReady</code> node with no taint is unchanged: its worker stays <code>Running</code> until you taint the node or delete its Node object, because a node that is only partitioned may still be running the job.
 The command is in <a href="../troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a>.</p>
 <p><strong>Rolling back</strong> returns the job on such a node to staying failed.</p>
+<h3 id="a-timed-out-job-whose-re-run-passes-counts-as-flaky">A timed-out job whose re-run passes counts as flaky<a class="headerlink" href="#a-timed-out-job-whose-re-run-passes-counts-as-flaky" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> anyone who alerts on or charts flaky jobs or the manual re-run rate of a scale-set <code>RunnerSet</code>.</p>
+<p><strong>What changed.</strong> GitHub reports a job that its <code>timeout-minutes</code> killed as a cancel, so its re-run used to count nothing.
+When that re-run passes, the AGC now reads the cancelled job's annotations to tell a timeout from a cancel, and counts a timeout as it does a failure (Q1374).</p>
+<p><strong>What you will see.</strong> <code>actions_gateway_scaleset_job_reruns_total</code> and <code>actions_gateway_scaleset_flaky_jobs_total</code> can step up with no change in your jobs.
+In a private repository whose GitHub App lacks <code>Checks: Read</code>, a <strong>Normal</strong> <code>CancelledJobUnread</code> Event instead, and no change in the counts.</p>
+<p><strong>What to do.</strong> Nothing.
+To have timed-out jobs counted in a private repository, grant the App the optional <a href="../tenant-onboarding/#0a-create-the-app-web-ui"><code>Checks: Read</code></a>.</p>
 <h3 id="a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image">A disrupted job is not re-run while its set's workers cannot pull their image<a class="headerlink" href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> a tenant whose scale-set workers are stuck in <code>ImagePullBackOff</code> when another of the set's jobs loses its worker.</p>
 <p><strong>What changed.</strong> The re-run of a disrupted job used to fire anyway, and its worker would fail to start too, spending a slot of <code>maxEvictionRetries</code>.

@@ -3811,7 +3811,13 @@ Each <code>Reason</code> mirrors the corresponding metric name so the two correl
 <td><code>FlakyJobDetected</code></td>
 <td>Normal</td>
 <td><code>actions_gateway_scaleset_flaky_jobs_total</code></td>
-<td>A scale-set job failed with no disruption attributed and a later attempt succeeded; names the run, the job and who re-ran it (Q555)</td>
+<td>A scale-set job failed with no disruption attributed, or reached its time limit, and a later attempt succeeded; names the run, the job and who re-ran it (Q555, Q1374)</td>
+</tr>
+<tr>
+<td><code>CancelledJobUnread</code></td>
+<td>Normal</td>
+<td>none</td>
+<td>A cancelled scale-set job's re-run passed and GitHub refused to list the cancelled job's annotations, which say whether it had timed out, so the re-run is not counted (Q1374)</td>
 </tr>
 <tr>
 <td><code>PlatformFaultOnFailedJob</code></td>

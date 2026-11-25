@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1381/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1395/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A displaced merge-group run is re-run: GitHub never cancels it - GitHub Actions Gateway</title>
+        <title>A sidecar reads OOMKilled for a nested container's kill it survived - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-displaced-merge-group-run-is-re-run-github-never-cancels-it" class="md-skip">
+        <a href="#a-sidecar-reads-oomkilled-for-a-nested-containers-kill-it-survived" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A displaced merge-group run is re-run: GitHub never cancels it
+              A sidecar reads OOMKilled for a nested container's kill it survived
             
           </span>
         </div>
@@ -2703,15 +2703,68 @@
   
 
 
-<h1 id="a-displaced-merge-group-run-is-re-run-github-never-cancels-it">A displaced merge-group run is re-run: GitHub never cancels it<a class="headerlink" href="#a-displaced-merge-group-run-is-re-run-github-never-cancels-it" title="Permanent link">&para;</a></h1>
-<p>The futility checks assume a merge-group run that loses its place in the queue is cancelled by GitHub and so withheld as <code>run_cancelled</code>; measured on 2026-11-22 against this repo's queue of 2026-10-30, GitHub leaves it running.
-When #2190 failed at the head of the queue and was removed (<code>failed_checks</code>, 17:56:25 UTC), the groups behind it, <code>gh-readonly-queue/main/pr-2179-e90ed166…</code> and <code>pr-2180-1558b6ca…</code>, were rebuilt as new groups at 17:56:30, and the old groups' runs kept going: six concluded <code>success</code> after the removal, the last at 18:05:13 (run 41099950920, <code>doc-links</code>).
-Their eight <code>cancelled</code> runs were each cancelled by a job of their own that exceeded its <code>timeout-minutes</code>, every one before 17:56:25, read from the jobs' check-run annotations, so none of the 30 runs was cancelled by the displacement (<a href="../../plan/q555-automatic-recovery-design/#readings-from-githubs-api-2026-11-22">the readings</a>).
-Both old group refs now return 404.</p>
-<p>So a disruption in a displaced group's run passes every check that is built: <code>superseded</code> covers only <code>push</code> and <code>pull_request</code>, and nothing else reads the event, so the AGC re-runs a run whose result no queue entry is waiting for, and spends a slot of <code>maxEvictionRetries</code> on it.
-What that re-run does once its <code>gh-readonly-queue</code> ref is deleted was not measured.</p>
-<p>A candidate check is that the run's <code>head_branch</code> ref still exists, one <code>GET …/git/ref/heads/&lt;head_branch&gt;</code> for <code>merge_group</code> runs only, which a 404 answers; whether a displaced group's ref is deleted before its runs conclude, so that the check can see it in time, is the open part.
-Separate from <a href="../Q1230/">Q1230</a>, which is about preemption victims that never started.</p>
+<h1 id="a-sidecar-reads-oomkilled-for-a-nested-containers-kill-it-survived">A sidecar reads OOMKilled for a nested container's kill it survived<a class="headerlink" href="#a-sidecar-reads-oomkilled-for-a-nested-containers-kill-it-survived" title="Permanent link">&para;</a></h1>
+<p>The shipped <code>privileged-dind</code> template does not reach this as measured, because dockerd puts a job's containers outside the sidecar's cgroup (<a href="../Q1396/">Q1396</a>); <code>kata-dind</code> is the shipped template that has the layout (its entrypoint keeps nested containers under the sidecar's cgroup), run here on runc and read from source for Kata.
+There, a job that runs a container past its own <code>docker run -m</code> limit leaves the sidecar's status reading <code>OOMKilled</code> for a container that was never killed, and detection names that as a platform fault.
+A container runtime sets the reason while the container still runs, whenever anything in its cgroup subtree is killed for memory, and keeps it for a later exit of any kind.</p>
+<p>Measured on 2026-11-24, on a static pod of containerd 2.3.1 and kubelet 1.35.5 (the <code>kindest/node:v1.35.5</code> image, no control plane, so the API server's copy of a status was not read), with dockerd's containers in the sidecar's own cgroup:</p>
+<table>
+<thead>
+<tr>
+<th>What happened</th>
+<th>Sidecar status</th>
+<th><code>faults()</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A nested container is killed at a 32 MB limit; dockerd runs on; the job ends and the sidecar stops</td>
+<td><code>OOMKilled</code>, exit 0</td>
+<td><code>container dind OOMKilled</code></td>
+</tr>
+<tr>
+<td>The same, then dockerd is killed by SIGKILL from the node</td>
+<td><code>OOMKilled</code>, exit 137, restarted</td>
+<td><code>container dind OOMKilled</code></td>
+</tr>
+<tr>
+<td>The sidecar's own 256 MB limit is exceeded</td>
+<td><code>OOMKilled</code>, exit 137</td>
+<td><code>container dind OOMKilled</code></td>
+</tr>
+<tr>
+<td>A nested kill where the nested cgroup is not under the sidecar's (<code>privileged-dind</code> as shipped)</td>
+<td><code>Completed</code>, exit 0</td>
+<td>none</td>
+</tr>
+</tbody>
+</table>
+<p><code>faults()</code> run over the captured statuses, by a throwaway test that fed them to <code>snapshotOf</code>, reports each.
+With the limit the amendment applies (<code>faultsBy</code>, the completion's time), the first row reports nothing, because the sidecar stops after the job completes.</p>
+<p><strong>How wide a false <code>PlatformFaultOnFailedJob</code> is.</strong> It needs that layout, a nested memory kill during a job that then completes <code>failed</code>, and one of:</p>
+<ul>
+<li><strong>The completion handled after the sidecar stopped.</strong> The time-limited check covers only a completion handled before that; a later one reports the finished worker's snapshot with no limit.
+  The sidecar stopped 2 s after its runner in the reading, so a few seconds' delay in handling is enough, with no outage.
+  In the <a href="../../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">2026-11-22 readings</a> (M4, on the <code>ci</code> set) all four completions of a red step were handled while the pod still ran, one of them just after its runner had terminated, so the margin is real and thin, and no rate is measured.
+  A runner that died inverts the order, but its death raises its own fault, so that Event is true and only lists the sidecar beside the cause.
+  The status's <code>finishedAt</code> has whole seconds, so a sidecar that stops in the second the completion is handled also counts as before it.
+  The code path is read, not run; the M4 timings are measured.</li>
+<li><strong>A sidecar crash during the job.</strong> The sidecar did crash, so the Event is false only in saying it crashed for memory.
+  None was found on record (<a href="../../plan/q555-automatic-recovery-design/#readings-for-the-dockerd-sidecar-class-q1316">the survey</a>).</li>
+</ul>
+<p>The record's <code>context</code> carries the misleading <code>OOMKilled</code> whenever the amendment or the completion reads the finished worker, so anyone reading it meets this without an Event.</p>
+<p>The consequence is bounded: <code>faults()</code> and <code>faultsBy</code> feed only the <code>scale-set job failed with a platform fault</code> log line and the Event, and no retry, budget or flaky count reads them.</p>
+<p>On <code>kata-dind</code> this is read from source and not run.
+In Kata 3.32.0, the version <code>scripts/dogfood/lib/kata.sh</code> pins, the agent watches <code>oom_kill</code> in the container's <code>memory.events</code> (<code>rustjail/src/cgroups/notifier.rs</code>), which counts the subtree (kernel <code>cgroup-v2</code> documentation), reports the container once, and its shim publishes containerd's <code>TaskOOM</code> (<code>containerd-shim-v2/wait.go</code>), which CRI turns into <code>OOMKilled</code> as it does for runc.
+Its entrypoint traps <code>TERM</code> and waits, so a normal stop should exit 143 rather than 0 (POSIX <code>wait</code>, not run).
+A rootless or sysbox builder that nests cgroups is another shape that could.</p>
+<ul>
+<li>The exit code separates the first row (0, or 143 under <code>kata-dind</code>) from a real kill (137), and nothing separates the second from one.
+  A candidate is to name a sidecar's <code>OOMKilled</code> as a fault only with exit 137, and to say in <a href="../../operations/troubleshooting/#flaky-jobs-and-platform-faults-on-failed-jobs">troubleshooting</a> that a nested kill can cause one.</li>
+<li>That page says <code>OOMKilled</code> means the job needs more memory than the worker template gives it, which is wrong for a nested kill, where the job's own <code>-m</code> limit was too small.</li>
+<li>The runner container's <code>OOMKilled</code> is the out-of-memory class's fact, and a runner that nests cgroups has the same question.
+  Read whether one can before touching it.</li>
+</ul>
 
 
 

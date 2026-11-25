@@ -3317,7 +3317,7 @@ The out-of-memory class was built without one, so that requirement is open for i
 <td><code>dockerd</code> sidecar crash</td>
 <td>The Docker-in-Docker sidecar's restart count rose during the job</td>
 <td>Fresh pod</td>
-<td>Mixed: <code>dockerd</code> also dies of tenant disk use, so it needs a discriminator</td>
+<td>Open: a job's own memory use gives the same status, a full disk does not crash <code>dockerd</code>, and the discriminator is still to find (<a href="../q555-automatic-recovery-design/#readings-for-the-dockerd-sidecar-class-q1316">the readings</a>)</td>
 </tr>
 </tbody>
 </table>

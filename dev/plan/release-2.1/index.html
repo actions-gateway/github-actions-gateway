@@ -2749,9 +2749,10 @@
 <p><strong>Status: scoped 2026-11-09; the ledger below says what has landed.</strong> The maintainer made flaky-job detection and automatic retry for more platform failures the <code>v2.1.0</code> headline on 2026-11-09.
 Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22), and Q1382's dogfood reading (2026-11-24); the ledger's open rows still gate the tag and nothing rides yet.
 Three of them are the readings' refutations, Q1374 to Q1376, gated on 2026-11-22 because each breaks a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the <code>trigger="other"</code> rate this release measures success by, biased in opposite directions.
-Q1381 gates it too, settled 2026-11-22: its re-runs land in merge-queue runs nothing reads and each spends a <code>maxEvictionRetries</code> slot, which is the opposite of what this release is for.
+Q1381 gated it too, settled 2026-11-22, because its re-runs landed in merge-queue runs nothing reads and each spent a <code>maxEvictionRetries</code> slot, which is the opposite of what this release is for; it and Q1320 are built, and the case it leaves is Q1391.
 Q1389 gates it too: the out-of-memory class <code>v2.0.0</code> shipped can act on the wrong job where a worker dies before its pod names the job it ran, and Q1319 fixes only the re-run half of that, not the raised limit.
 The wrong-job half is read from source, so its first step is reproducing it.
+Q1395 gates it too, settled 2026-11-24: detection can name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
 Nothing here is a commitment to a date.</p>
 </blockquote>
 <h2 id="why-this-release-exists">Why this release exists<a class="headerlink" href="#why-this-release-exists" title="Permanent link">&para;</a></h2>
@@ -2817,10 +2818,10 @@ This release finishes it: it measures what the shipped half rests on, then adds 
 <td>🔲 open: reproduce first, since the wrong-job half is read from source</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1320/">Q1320</a></td>
+<td>Q1320</td>
 <td>Build the <code>already_rerun</code>, <code>run_succeeded</code> and <code>worker_unstartable</code> checks</td>
 <td><code>2.1-gate</code></td>
-<td>🔲 open</td>
+<td>✅ landed on the scale-set tier; <code>worker_unstartable</code> reads the startup verdict only, not placeability</td>
 </tr>
 <tr>
 <td>Q1318</td>
@@ -2829,10 +2830,10 @@ This release finishes it: it measures what the shipped half rests on, then adds 
 <td>✅ measured 2026-11-22 from the API: the <code>event</code> filter separates a fork's <code>main</code> from upstream's; a displaced merge-group run is not cancelled, filed as Q1381</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1381/">Q1381</a></td>
+<td>Q1381</td>
 <td>Withhold the re-run of a merge-group run displaced from the queue, which GitHub does not cancel</td>
 <td><code>2.1-gate</code></td>
-<td>🔲 open</td>
+<td>✅ landed: withheld once the pull request has a newer group, which 5 of 106 measured had as they concluded (the failed ones among 373 runs that never merged); a removed one not queued again is <a href="../../queue/Q1391/">Q1391</a>, not gated</td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1319/">Q1319</a></td>
@@ -2850,7 +2851,13 @@ This release finishes it: it measures what the shipped half rests on, then adds 
 <td><a href="../../queue/Q1316/">Q1316</a></td>
 <td>Retry a job whose Docker-in-Docker sidecar crashed under it</td>
 <td><code>2.1-gate</code></td>
-<td>🔲 open: the likeliest punt, since its discriminator may not exist</td>
+<td>🔲 open: readings taken 2026-11-24 on a local node, no discriminator found in what GAG reads; dogfood reproduction not run</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1395/">Q1395</a></td>
+<td>Keep a nested container's out-of-memory kill from reading as a platform fault on the sidecar</td>
+<td><code>2.1-gate</code></td>
+<td>🔲 open</td>
 </tr>
 <tr>
 <td>-</td>
