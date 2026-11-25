@@ -7291,7 +7291,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>PlatformFaultOnFailedJob</code></td>
 <td>Warning</td>
-<td>A scale-set job failed and its worker shows a platform fault: the pod <code>Failed</code>, a <code>DisruptionTarget</code> condition, a container killed for memory (the runner <code>OOMKilled</code>, or another container <code>OOMKilled</code> with exit code 137), the runner container exiting non-zero, or the set's colocated EgressProxy not <code>Ready</code> or with no ready replica (Q555, Q1237). Names the run, the job, the worker and the fault.</td>
+<td>A scale-set job failed and its worker shows a platform fault: the pod <code>Failed</code>, a <code>DisruptionTarget</code> condition, a container killed for memory (the runner <code>OOMKilled</code>, or another container <code>OOMKilled</code> with exit code 137), the runner container exiting non-zero, or the set's colocated EgressProxy not <code>Ready</code> or with no ready replica (Q555, Q1237). Names the run, the job, the worker and the fault, and beside a kill for memory the limit a pod condition says ran out (Q1403).</td>
 <td><a href="#flaky-jobs-and-platform-faults-on-failed-jobs">Flaky Jobs and Platform Faults on Failed Jobs</a></td>
 </tr>
 <tr>
@@ -8115,6 +8115,7 @@ A group dropped because of the lost job is usually that case, since the AGC asks
 </blockquote>
 <p>When a scale-set job completes <code>failed</code>, the AGC records it in the set's failure ledger, ConfigMap <code>scaleset-failures-&lt;runnerset&gt;</code>, key <code>failures.json</code>, under <code>failures["&lt;runID&gt;/&lt;job name&gt;"]</code>.
 The record holds the worker's state (<code>context</code>): pod phase, reason and a truncated message, its conditions, the node and pod IP, and each container's termination reason, exit code and restart count, with the termination before it (<code>previousReason</code>, <code>previousExitCode</code>) for a sidecar that crashed, restarted and then exited.
+A container killed for memory also has an <code>oomReason</code>, where a pod condition named the limit that ran out.
 The context is the worker as it finished.
 For a job that ends on a step's result, GitHub's completion arrives while the worker's pod still runs (measured 2026-11-22), so the record first holds the pod as <code>Running</code> and is rewritten when the pod finishes (Q1376).
 A <code>canceled</code> completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing, and neither does a job that reached its <code>timeout-minutes</code>, which GitHub also reports <code>canceled</code> (<a href="#timed-out-jobs">what is counted of one</a>).</p>
@@ -8156,8 +8157,11 @@ A job recorded while its worker still ran is logged twice: at its completion, an
 <p><strong>A <code>PlatformFaultOnFailedJob</code> Warning</strong> names the fault.
 <code>OOMKilled</code> on the runner means it was killed for memory, at its own limit or because memory ran out above it, such as on its node (Q1400).
 At its own limit, the job needs more memory than the worker template gives it.
-Nothing GAG reads separates the two yet (<a href="../worker-rightsizing/#which-limit-ran-out">how to tell</a>).
+Where the Warning goes on <code>(a pod condition says …)</code>, a condition of type <code>oom.actions-gateway.com/runner</code> on the pod named the limit.
+It is the out-of-memory reporter's (Q1403), which is not released yet, and the AGC repeats what it names and checks nothing: whoever can write <code>pods/status</code> in the namespace could have written it.
+Without one, nothing GAG reads separates the two (<a href="../worker-rightsizing/#which-limit-ran-out">how to tell</a>).
 On a sidecar it means the sidecar was killed with that reason, usually for its own memory limit.
+A sidecar killed while the runner works on is restarted, and a kill before a restart is recorded with no limit named.
 A sidecar that runs the job's containers in its own cgroup, as <code>kata-dind</code>'s does, is also marked <code>OOMKilled</code> when one of them passes its own <code>docker run -m</code> limit (measured with runc, and under Kata on GKE on 2026-11-25), so one killed later for another reason, such as the SIGKILL that ends its grace period, reads the same; check the job's log for a container that exited 137 before raising the sidecar's limit.
 A sidecar marked that way which then exits with any code but 137 is taken to have survived the kill, so it raises no Warning, and the record's <code>context</code> still shows the reason beside the exit code (Q1395).
 Under Kata that includes a kill at the sidecar's own limit that took one of the job's containers and left the daemon running (the status was read once on GKE, on 2026-11-25; the rule has not run there).

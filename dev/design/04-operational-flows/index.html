@@ -1293,6 +1293,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-limit-a-pod-condition-names-q1403" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The limit a pod condition names (Q1403)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3314,6 +3325,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-limit-a-pod-condition-names-q1403" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The limit a pod condition names (Q1403)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4157,6 +4179,7 @@ Nothing the AGC reads tells them apart:</p>
 </tbody>
 </table>
 <p>So the class acts on the limit the next attempt would get, and its Events give the worker, its node, its request and its limit, and name no cause.
+Where an out-of-memory reporter's condition is on the pod, the failed job's record and Event say what it names (<a href="#the-limit-a-pod-condition-names-q1403">below</a>), and the class does not act on it.
 For a runner killed because its node ran out, that has a cost.
 Withheld as <code>own_limit</code>, it is not re-run where a fresh node might have passed it.
 Raised, it gets memory it did not need: under <code>Binpack</code> a request no node may hold, under <code>Throughput</code> a limit that overcommits nodes further.
@@ -4413,6 +4436,7 @@ The record carries the worker's state at its terminal transition, which the pod 
 <p>A worker whose completion has already been handled is not snapshotted, since nothing would take it; a record with neither a snapshot nor a pod has no context.
 A restart loses the snapshots waiting for a completion and the failures waiting for a worker, and the latter keep the running pod's context.
 The snapshot also carries the set's egress proxy pool as <code>proxy</code>, read from the AGC's cache: a colocated pool's <code>Ready</code> condition and <code>readyReplicas</code>, or <code>mode: shared</code> alone for a pool in another namespace, which that cache cannot see (Q1237).
+It is read once: a <code>Failed</code> worker snapshotted again as its job's start is recorded keeps the readiness read as it failed.
 The cause a recovery claim names for the job is recorded with it, so a disrupted job is not read as flaky, with two exceptions: a runner killed for memory whose <a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">start never came</a>, and any other worker claimed before its start was recorded, where it ran a job other than the one it was created for (<a href="../../queue/Q1398/">Q1398</a>).</p>
 <p>A later completion of the same key with a new job ID is the job's next attempt or another job with its <code>name:</code>, which GitHub allows in one run, and the completion carries no attempt number to tell them apart.
 So the AGC reads the run's jobs in every attempt (<code>GET …/actions/runs/{id}/jobs?filter=all</code>) and finds the completed job by its runner's name (Q1375).
@@ -4463,6 +4487,23 @@ One read per re-run of a cancelled job, in a 30-second budget per batch: 100 leg
 The annotations are the job's own output too, so an answered body is never logged.
 Reading them needs the App's <code>Checks</code> permission on a private repository, which stays optional: a refusal raises a Normal <code>CancelledJobUnread</code> Event.</p>
 <p>Failure records are evicted oldest first once the ledger passes half its 512 KiB cap, and budget records never are: <code>v1.10.0</code> writes the same object, keeps failure records it does not know, cannot evict them, and refuses a write past the cap, so records allowed to fill it would withhold that version's every reservation during a rollout or after a rollback.</p>
+<h4 id="the-limit-a-pod-condition-names-q1403">The limit a pod condition names (Q1403)<a class="headerlink" href="#the-limit-a-pod-condition-names-q1403" title="Permanent link">&para;</a></h4>
+<p>An <a href="../../plan/q1403-oom-kill-reporter/">out-of-memory reporter</a> says which limit ran out in a pod condition of type <code>oom.actions-gateway.com/&lt;container&gt;</code>.
+The condition follows the worker's failure, and the pod is usually gone before its job is red, so the pod watch passes a condition that appears on a <code>Failed</code> worker and adds its reason to the snapshot that waits for the completion.
+That event starts no recovery and queues no reconcile, and the snapshot's other readings stay those of the failure.
+A condition the pod already has when it fails, or when a completion reads it, is in the snapshot.</p>
+<p>The reason is <code>oomReason</code> beside the container in the record, and words of the AGC's in the Event and the log line.
+Whoever can write <code>pods/status</code> can write such a condition, so it changes no action, and what it can change in a record is bounded:</p>
+<ul>
+<li>It adds words to a fault that is there: the container its type names, <code>OOMKilled</code> in the pod's status, and for any container but the runner with exit code 137.
+  Whoever can write <code>pods/status</code> can write that too, as they could before this.
+  It raises no Event of its own.</li>
+<li>The words are the AGC's, one set for each of <code>ContainerLimit</code>, <code>PodLimit</code>, <code>PodsLimit</code>, <code>AbovePods</code> and <code>Unknown</code>, and say that a pod condition reported it.
+  Any other reason is ignored, as is the condition's message.</li>
+<li>A container that restarted is recorded as without one, since its condition may be an earlier kill's.</li>
+<li>The first reason read for a container's ID stands, except that any other replaces <code>Unknown</code>.</li>
+<li>A condition that comes after the completion is not recorded, nor one whose update reaches the AGC in one event with the pod's deletion, and an AGC restart drops the snapshots that wait.</li>
+</ul>
 <h4 id="why-preemption-deletes-rather-than-evicts-and-what-that-costs-us">Why preemption <em>deletes</em> rather than <em>evicts</em>, and what that costs us<a class="headerlink" href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" title="Permanent link">&para;</a></h4>
 <p>A recurring question, because the answer decides three things we measured and could not change: why the worker's disruption-safety annotations did not deflect the preemption, why adding a <code>PodDisruptionBudget</code> would not either, and why scale-set preemption recovery cannot be made restart-safe.</p>
 <p><strong>"Evict" and "delete" are not a gracefulness distinction.</strong> The Eviction API (<code>pods/&lt;name&gt;/eviction</code>) is essentially <em>a DELETE that checks PodDisruptionBudgets first</em> and returns <code>429</code> if the budget would be violated.

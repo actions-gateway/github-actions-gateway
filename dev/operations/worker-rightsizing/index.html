@@ -3302,6 +3302,7 @@ The re-run's worker pods carry <code>actions-gateway.com/rerun-cause: oom</code>
 <p><code>OOMKilled</code> says the runner was killed for memory, and a runner is expected to read that way too when its node ran out, or the pod reached a limit of its own (Q1400).
 The AGC cannot tell them apart, so its Events name no cause and give you the node, the memory request and the limit.</p>
 <ul>
+<li><strong>A <code>PlatformFaultOnFailedJob</code> Event that says <code>(a pod condition says …)</code></strong> names the limit, as the pod's condition did (<a href="../troubleshooting/#flaky-jobs-and-platform-faults-on-failed-jobs">what that rests on</a>).</li>
 <li><strong>The runner's own limit is likely</strong> where the template sets no pod-level <code>spec.resources</code>, and either the request equals the limit, as <code>Binpack</code> sets them, or the pod's <code>status.qosClass</code> is <code>Guaranteed</code>.
   Such a runner is late in line when its node runs out, which makes this likely and not proven.</li>
 <li><strong>The pod's limit is possible</strong> where the template sets a memory limit in its pod-level <code>spec.resources</code>: the kernel then chooses inside the pod, so the runner's request says nothing.
