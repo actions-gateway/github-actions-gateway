@@ -6,8 +6,8 @@
 > Q1381 gated it too, settled 2026-11-22, because its re-runs landed in merge-queue runs nothing reads and each spent a `maxEvictionRetries` slot, which is the opposite of what this release is for; it and Q1320 are built, and the case it leaves is Q1391.
 > Q1389 gated it too: the out-of-memory class `v2.0.0` shipped could act on the wrong job where a worker died before its pod named the job it ran, reproduced in a unit-test probe and fixed on 2026-11-24.
 > Q1395 gates it too, settled 2026-11-24: detection could name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
-> Q1400 gates it too, settled 2026-11-24, for the same reason in the out-of-memory class `v2.0.0` shipped: it reads a runner killed for its node's memory as one killed at its own limit, so the Event and the raised limit name a cause it did not check.
-> That is read from source, so its first step is reproducing it.
+> Q1400 gated it too, settled 2026-11-24, for the same reason in the out-of-memory class `v2.0.0` shipped: its Events named the runner's own limit as the cause of a kill the node could have made.
+> They name no cause now, and what the class re-runs, raises and withholds is unchanged; no node kill of a runner has been reproduced.
 > Q1401 gated it too: job-granular re-run (Q1319) recovered less than `v2.0.0` on a fail-fast matrix behind an aggregate job, and recovering less is the opposite of what this release is for.
 > What it still recovers less of is [in the upgrade notes](../operations/upgrade.md#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run).
 > Nothing here is a commitment to a date.
@@ -48,7 +48,7 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | [Q1315](../queue/Q1315.md) | Retry a job failed while its colocated egress proxy pool was unavailable | rides | ⤴ punted: [explicitly out of scope](#explicitly-out-of-scope) |
 | [Q1316](../queue/Q1316.md) | Retry a job whose Docker-in-Docker sidecar crashed under it | `2.1-gate` | 🔲 open: readings taken 2026-11-24 on a local node, no discriminator found in what GAG reads; dogfood reproduction not run |
 | Q1395 | Keep a nested container's out-of-memory kill from reading as a platform fault on the sidecar | `2.1-gate` | ✅ landed: a sidecar's `OOMKilled` is a fault only with exit code 137; not run on Kata |
-| [Q1400](../queue/Q1400.md) | Keep a runner killed for its node's memory from being read as killed at its own limit | `2.1-gate` | 🔲 open: read from source; Q1316's dogfood reproduction would produce the kill |
+| Q1400 | Keep a runner killed for its node's memory from being read as killed at its own limit | `2.1-gate` | ✅ landed as text: the Events name the worker, its node, its memory request and its limit, and no cause; nothing the AGC reads separates the two ([what each fact says](../design/04-operational-flows.md#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183)) |
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
 
 **Scoped 2026-11-09, and nothing rides yet: the `rides` cell on Q1315 marks a punted row.** `v2.1.0` follows `v2.0.0`, so nothing here waits on anything but its own row and the 2.0 tag.
