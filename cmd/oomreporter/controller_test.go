@@ -162,7 +162,7 @@ func TestController_ListsNoMoreThanItIsGranted(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	assert.Equal(t, want, lists())
 	stop()
-	require.NoError(t, <-done)
+	require.NoError(t, first(t, done))
 }
 
 // soon are the options of a controller of namespaces that looks again soon.
@@ -173,11 +173,30 @@ func soon(namespaces string) controllerOptions {
 	}
 }
 
+// ended is what run returns, which is to be soon.
+func ended(t *testing.T, run func() error) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- run() }()
+	return first(t, done)
+}
+
+func first(t *testing.T, done <-chan error) error {
+	t.Helper()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(20 * time.Second):
+		t.Fatal("it runs still")
+		return nil
+	}
+}
+
 func TestController_DoesNothingWithoutThePolicies(t *testing.T) {
 	cfg, lists := api(t, func(r *http.Request) bool { return r.Method == http.MethodPost })
 	o := soon("team-a")
 	o.guardedWithin = 100 * time.Millisecond
-	require.ErrorContains(t, o.run(t.Context(), cfg, noLog), "policies are not in force")
+	require.ErrorContains(t, ended(t, func() error { return o.run(t.Context(), cfg, noLog) }), "policies are not in force")
 	assert.Empty(t, lists())
 }
 
@@ -190,7 +209,7 @@ func TestController_WaitsForThePolicies(t *testing.T) {
 	assert.Eventually(t, func() bool { return len(lists()) >= 3 }, 20*time.Second, 20*time.Millisecond)
 	assert.Equal(t, int32(4), tries.Load())
 	stop()
-	require.NoError(t, <-done)
+	require.NoError(t, first(t, done))
 }
 
 func TestController_StopsWhileItWaitsForThePolicies(t *testing.T) {
@@ -198,7 +217,7 @@ func TestController_StopsWhileItWaitsForThePolicies(t *testing.T) {
 	cfg, _ := api(t, func(r *http.Request) bool { stop(); return r.Method == http.MethodPost })
 	o := soon("team-a")
 	o.guardedWithin, o.guardedEvery = time.Hour, time.Hour
-	require.NoError(t, o.run(ctx, cfg, noLog))
+	require.NoError(t, ended(t, func() error { return o.run(ctx, cfg, noLog) }))
 }
 
 // Who may edit a namespace can take its RoleBinding away.
@@ -229,7 +248,7 @@ func TestController_RunsWithoutANamespaceItMayNotList(t *testing.T) {
 	default:
 	}
 	bound.Store(true)
-	require.ErrorContains(t, <-done, "starting over")
+	require.ErrorContains(t, first(t, done), "starting over")
 }
 
 func TestController_RunsWithNoNamespaceItMayList(t *testing.T) {
@@ -239,7 +258,7 @@ func TestController_RunsWithNoNamespaceItMayList(t *testing.T) {
 	go func() { done <- soon("team-a,team-b").run(ctx, cfg, noLog) }()
 	assert.Eventually(t, func() bool { return len(lists()) >= 2 }, 20*time.Second, 20*time.Millisecond)
 	stop()
-	require.NoError(t, <-done)
+	require.NoError(t, first(t, done))
 	assert.Equal(t, []string{"GET /api/v1/namespaces/oom/configmaps", "GET /api/v1/namespaces/oom/pods"}, lists())
 }
 
@@ -251,7 +270,7 @@ func TestController_EndsWhereItsCachesDoNotSync(t *testing.T) {
 	// The manager does not end with the test.
 	o := soon("team-a")
 	o.syncedWithin = 100 * time.Millisecond
-	require.ErrorContains(t, o.run(context.WithoutCancel(t.Context()), cfg, noLog), "have not synced")
+	require.ErrorContains(t, ended(t, func() error { return o.run(context.WithoutCancel(t.Context()), cfg, noLog) }), "have not synced")
 }
 
 func TestController_WaitsForWhatThePolicySays(t *testing.T) {
