@@ -90,14 +90,13 @@ func server(t *testing.T, failing int) (kubernetes.Interface, <-chan request) {
 
 func TestAgent_ReportsAKillAgainUntilTheReportIsThere(t *testing.T) {
 	dir, counts := mount(t)
+	counts("oom 1\noom_kill 1\noom_group_kill 1\n", "oom 1\noom_kill 1\noom_group_kill 1\n")
 	kube, got := server(t, 1)
 	o := agentOptions{node: "node-a", namespace: "oom", mount: dir, poll: 10 * time.Millisecond, mountinfo: info(t, "rw,nsdelegate")}
 	ctx, stop := context.WithCancel(t.Context())
 	done := make(chan error)
 	go func() { done <- o.run(ctx, kube, noLog) }()
-	time.Sleep(100 * time.Millisecond)
-	counts("oom 1\noom_kill 1\noom_group_kill 1\n", "oom 1\noom_kill 1\noom_group_kill 1\n")
-	for range 2 {
+	reported := func() []report.Kill {
 		select {
 		case req := <-got:
 			assert.Equal(t, http.MethodPut, req.method)
@@ -106,14 +105,26 @@ func TestAgent_ReportsAKillAgainUntilTheReportIsThere(t *testing.T) {
 			assert.Empty(t, req.body.ResourceVersion, "it may not read the one there")
 			kills, err := report.Decode(req.body.Data[report.Key])
 			require.NoError(t, err)
-			require.Len(t, kills, 1)
-			assert.Equal(t, podUID, kills[0].Pod)
-			require.NotNil(t, kills[0].Rise)
-			assert.Equal(t, []string{runnerID}, kills[0].Rise.Containers)
+			return kills
 		case <-time.After(20 * time.Second):
 			t.Fatal("no report")
 		}
+		return nil
 	}
+	first := reported()
+	require.Len(t, first, 1)
+	assert.Equal(t, podUID, first[0].Pod)
+	require.NotNil(t, first[0].Rise)
+	assert.True(t, first[0].Rise.Late)
+	assert.Equal(t, first, reported())
+
+	counts("oom 2\noom_kill 2\noom_group_kill 2\n", "oom 2\noom_kill 2\noom_group_kill 2\n")
+	second := reported()
+	require.Len(t, second, 2)
+	assert.Equal(t, first[0], second[0])
+	require.NotNil(t, second[1].Rise)
+	assert.False(t, second[1].Rise.Late)
+	assert.Equal(t, []string{runnerID}, second[1].Rise.Containers)
 	stop()
 	require.NoError(t, <-done)
 }
