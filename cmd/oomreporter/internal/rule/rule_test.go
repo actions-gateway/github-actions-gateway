@@ -3,6 +3,9 @@ package rule
 import (
 	"fmt"
 	"maps"
+	"os"
+	"path"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -277,65 +280,104 @@ func TestDecide_ClaimsNothing(t *testing.T) {
 	}
 }
 
-// The recorded local kills, six at each limit, on kernel 6.12.76 (Q1316): which of the
-// container's, the pod's, the QoS slice's and the pods' root's own oom rose. The files are
-// made here in that kernel's layout from those figures.
-func TestDecide_TheRecordedKills(t *testing.T) {
-	const (
-		root      = "kubepods.slice"
-		qos       = root + "/kubepods-burstable.slice"
-		podDir    = qos + "/kubepods-burstable-pod1b4e28ba_2fa1_11d2_883f_0016d3cca427.slice"
-		container = podDir + "/cri-containerd-" + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.scope"
-	)
-	dirs := []string{container, podDir, qos, root}
-	for name, tc := range map[string]struct {
-		local    [4]int
-		podLimit bool
-		want     Reason
-	}{
-		"the container's":   {[4]int{1, 0, 0, 0}, false, ContainerLimit},
-		"the pod's":         {[4]int{0, 1, 0, 0}, true, PodLimit},
-		"the pods' root's":  {[4]int{0, 0, 0, 1}, false, PodsLimit},
-		"none, the node's":  {[4]int{0, 0, 0, 0}, false, AbovePods},
-		"two at one moment": {[4]int{0, 1, 0, 1}, true, Unknown},
-	} {
-		t.Run(name, func(t *testing.T) {
-			m := fstest.MapFS{
-				"cgroup.controllers":                         {},
-				root + "/kubepods-besteffort.slice/" + local: events(0, 0),
-			}
-			write := func(kills int, rose [4]int) {
-				below := 0
-				for i, dir := range dirs {
-					below += rose[i]
-					m[dir+"/memory.events"] = events(below, kills)
-					own := 0
-					if i == 0 {
-						own = kills
-					}
-					m[dir+"/"+local] = events(rose[i], own)
-				}
-			}
-			write(0, [4]int{})
-			tree, err := cgroup.Open(m, "")
-			require.NoError(t, err)
-			var tr cgroup.Tracker
-			observe := func() map[string]cgroup.Rise {
-				s, err := tree.Sample()
-				require.NoError(t, err)
-				rises, _ := tr.Observe(s, time.Unix(1_800_000_000, 0))
-				return rises
-			}
-			observe()
-			write(1, tc.local)
-			observe()
-			rises := observe()
-			require.Len(t, rises, 1)
-			for _, r := range rises {
-				assert.Equal(t, tc.want, Decide(r, tc.podLimit))
-			}
-		})
+// One run of the local kills recorded on kernel 6.12.76 (Q1316): a sampler's readings of the
+// cgroups each kill moved, in cgroups named as a kubelet's, and the kernel's line for it,
+// which names the limit. The counts run on from one kill to the next.
+func TestDecide_AgreesWithTheKernelOnTheRecordedKills(t *testing.T) {
+	const qos = "kubepods.slice/kubepods-burstable.slice"
+	recorded, err := os.ReadFile("testdata/local-6.12.76.log")
+	require.NoError(t, err)
+	names := strings.NewReplacer(
+		"podown", "pod"+uid(1), "podlim", "pod"+uid(2), "podtop", "pod"+uid(3),
+		"containerd-own", "containerd-"+id(1), "containerd-lim", "containerd-"+id(2), "containerd-top", "containerd-"+id(3))
+
+	m := fstest.MapFS{"cgroup.controllers": {}}
+	dirs := []string{"kubepods.slice", qos, "kubepods.slice/kubepods-besteffort.slice"}
+	for i := 1; i <= 3; i++ {
+		podDir := fmt.Sprintf("%s/kubepods-burstable-pod%s.slice", qos, uid(i))
+		dirs = append(dirs, podDir, podDir+"/cri-containerd-"+id(i)+".scope")
 	}
+	for _, dir := range dirs {
+		m[dir+"/memory.events"], m[dir+"/"+local] = events(0, 0), events(0, 0)
+	}
+	tree, err := cgroup.Open(m, "")
+	require.NoError(t, err)
+	var tr cgroup.Tracker
+	at := time.Unix(1_795_574_810, 0)
+	observe := func() map[string]cgroup.Rise {
+		s, err := tree.Sample()
+		require.NoError(t, err)
+		at = at.Add(10 * time.Millisecond)
+		rises, _ := tr.Observe(s, at)
+		return rises
+	}
+	observe()
+
+	var want, got []Reason
+	var written [][3]string
+	for _, line := range strings.Split(strings.TrimSpace(names.Replace(string(recorded))), "\n") {
+		f := strings.Fields(line)
+		if f[0] == "N" {
+			counts, own, _ := strings.Cut(strings.Join(f[5:], " "), " | local ")
+			written = append(written, [3]string{f[4], counts, own})
+			continue
+		}
+		want = append(want, kernelsReason(line))
+		// The sampler also caught the first kill half counted: the allocation, no kill yet.
+		for _, w := range written {
+			for i, name := range []string{"memory.events", local} {
+				p := path.Join(w[0], name)
+				m[p] = file(halfCounted(string(m[p].Data), w[i+1]))
+			}
+		}
+		require.Empty(t, observe())
+		for _, w := range written {
+			m[path.Join(w[0], "memory.events")], m[path.Join(w[0], local)] = file(w[1]), file(w[2])
+		}
+		written = nil
+		require.Empty(t, observe())
+		for _, r := range observe() {
+			require.Len(t, r.Containers, 1)
+			got = append(got, Decide(r, strings.Contains(line, uid(2))))
+		}
+	}
+	assert.Equal(t, []Reason{ContainerLimit, PodLimit, PodsLimit}, want)
+	assert.Equal(t, want, got)
+}
+
+func uid(n int) string { return fmt.Sprintf("1b4e28ba_2fa1_11d2_883f_%012d", n) }
+func id(n int) string  { return fmt.Sprintf("%064d", n) }
+
+// kernelsReason is the limit a kernel's line names, where the pod's is its spec's.
+func kernelsReason(line string) Reason {
+	_, after, _ := strings.Cut(line, ",oom_memcg=")
+	limit, _, _ := strings.Cut(after, ",")
+	switch base := path.Base(limit); {
+	case strings.HasSuffix(base, ".scope"):
+		return ContainerLimit
+	case strings.Contains(base, "-pod"):
+		return PodLimit
+	case base == "kubepods.slice":
+		return PodsLimit
+	}
+	return Unknown
+}
+
+// file is an events file of counts, which the sampler printed on one line.
+func file(counts string) *fstest.MapFile {
+	var b strings.Builder
+	f := strings.Fields(counts)
+	for i := 0; i < len(f); i += 2 {
+		fmt.Fprintf(&b, "%s %s\n", f[i], f[i+1])
+	}
+	return &fstest.MapFile{Data: []byte(b.String())}
+}
+
+// halfCounted is now with the kills of was.
+func halfCounted(was, now string) string {
+	w, n := strings.Fields(was), strings.Fields(now)
+	n[len(n)-3], n[len(n)-1] = w[len(w)-3], w[len(w)-1]
+	return strings.Join(n, " ")
 }
 
 const local = "memory.events.local"
