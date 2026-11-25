@@ -3751,9 +3751,10 @@ Operators <em>consuming</em> a release pin the published digests at install time
 </blockquote>
 <p>A release is a <code>vX.Y.Z</code> git tag plus its outputs:</p>
 <ul>
-<li>The seven first-party images — <code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>, <code>cache-runner</code> — pushed to GHCR (<code>ghcr.io/actions-gateway/&lt;name&gt;</code>), each tagged <code>vX.Y.Z</code> and by long commit SHA.
+<li>The eight first-party images — <code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>, <code>cache-runner</code>, <code>oomreporter</code> — pushed to GHCR (<code>ghcr.io/actions-gateway/&lt;name&gt;</code>), each tagged <code>vX.Y.Z</code> and by long commit SHA.
   Each is <strong>multi-arch</strong> (<code>linux/amd64</code> + <code>linux/arm64</code>): the pushed artifact is an OCI image <strong>index</strong>, and the digest recorded everywhere (run summary, release notes, chart pins) is the index digest — the kubelet resolves the per-arch manifest from it at pull time, so one pinned digest schedules on both amd64 and arm64 (e.g.
-  Graviton) nodes.</li>
+  Graviton) nodes.
+  <code>oomreporter</code> is not part of the gateway: it is the out-of-memory kill reporter's single image, run in <code>agent</code> mode on each node and in <code>controller</code> mode once, as UID 65532 on a distroless base like <code>gmc</code>, and nothing in the gateway's chart pins or pulls it.</li>
 <li>A keyless <strong>cosign signature</strong> on every image (sigstore/Fulcio via GitHub Actions OIDC — no signing key, no stored secret), signed <strong>recursively</strong> — the index <em>and</em> each per-arch manifest — and an <strong>SPDX-JSON SBOM per architecture</strong> attached as a keyless cosign attestation to that architecture's manifest.</li>
 <li>A signed <strong>SLSA build-provenance attestation</strong> on every image (<code>actions/attest-build-provenance</code>), attached to the index digest as an OCI referrer.
   It is generated through the <em>same</em> keyless path as the signatures — the publish workflow's GitHub OIDC identity → a short-lived Fulcio cert → Rekor — so the provenance is <strong>authenticated</strong> (it records the workflow, repo, commit, and trigger that produced the image and cannot be forged by a pusher).
@@ -3772,7 +3773,7 @@ Operators <em>consuming</em> a release pin the published digests at install time
 <li>The <strong><code>gag-migrate</code> CLI binaries</strong> (Q306), cross-compiled by <code>chart-publish</code> for the operator platform matrix (<code>linux/amd64</code>, <code>linux/arm64</code>, <code>darwin/amd64</code>, <code>darwin/arm64</code>, <code>windows/amd64</code>) via <code>scripts/release/build-migrate-binaries.sh</code> and attached to the <strong>GitHub Release</strong> as <code>gag-migrate-&lt;tag&gt;-&lt;os&gt;-&lt;arch&gt;</code> assets.
   A single <code>SHA256SUMS</code> manifest is keyless <strong>cosign <code>sign-blob</code></strong>-signed (<code>SHA256SUMS.cosign.bundle</code>) — the same no-secret Fulcio/Rekor path as the v2 CRD manifest — so one signature covers the whole set (verify the manifest signature, then <code>sha256sum -c</code>).
   This is the one-shot v1→v2 migration tool, previously source-build-only.</li>
-<li>The <strong>GitHub Release</strong> itself (Q293), composed by <code>chart-publish</code>: the seven image index digests, the <code>make verify-release</code> command, a generated changelog, and a tag-derived <code>--prerelease</code> flag.
+<li>The <strong>GitHub Release</strong> itself (Q293), composed by <code>chart-publish</code>: the eight image index digests, the <code>make verify-release</code> command, a generated changelog, and a tag-derived <code>--prerelease</code> flag.
   It is created only if the tag has no Release yet, so a maintainer's pre-tag curated notes are never clobbered.</li>
 </ul>
 <p>Both the image and chart work are automated by the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow, which triggers on the <code>v*</code> tag push (the <code>chart-publish</code> job runs after every image leg succeeds).
@@ -3783,11 +3784,11 @@ The verification step below is therefore not optional on the first release — i
 </blockquote>
 <h2 id="one-time-setup-first-release-only">One-time setup (first release only)<a class="headerlink" href="#one-time-setup-first-release-only" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>GHCR package visibility.</strong> The first publish <em>creates</em> the <code>ghcr.io/actions-gateway/{gmc,agc,proxy,worker,wrapper}</code> image packages <strong>and the <code>ghcr.io/actions-gateway/charts/actions-gateway</code> chart package</strong>.
+<li><strong>GHCR package visibility.</strong> The first publish <em>creates</em> the <code>ghcr.io/actions-gateway/{gmc,agc,proxy,worker,wrapper,build-runner,cache-runner,oomreporter}</code> image packages <strong>and the <code>ghcr.io/actions-gateway/charts/actions-gateway</code> chart package</strong>.
    They inherit the repository's visibility and may start <strong>private</strong>.
    For third parties to run <code>cosign verify</code> / <code>helm pull</code> (and for an air-gapped operator to pull), set each package to <strong>public</strong> in the org's GHCR package settings, or keep them private and distribute pull credentials.
    Verification by <em>this project's</em> CI and by anyone with pull access works either way — but the <strong>released-chart upgrade gate</strong> (<code>make chart-released-upgrade-check</code>, run by every e2e CI pass) pulls the chart and the released <code>gmc</code> image <strong>anonymously</strong>, so those two packages must be public for PR CI to stay green.
-   An image added in a later release creates its package on that release's publish, so this step recurs then: <code>build-runner</code> is public already, and <code>cache-runner</code> needs it on the first release that publishes it.</li>
+   An image added in a later release creates its package on that release's publish, so this step recurs then: <code>build-runner</code> and <code>cache-runner</code> are public already, and <code>oomreporter</code> needs it on the first release that publishes it.</li>
 <li><strong>Workflow permissions</strong> are already declared in <code>publish.yml</code> (<code>packages: write</code> to push, <code>id-token: write</code> for keyless cosign and provenance, <code>attestations: write</code> for the build-provenance attestation).
    No repo secret is required — that is the point of keyless signing.</li>
 </ol>
@@ -4431,7 +4432,7 @@ Prerelease (<code>-rc</code>) tags are ignored by the gate.</p>
 </blockquote>
 <p>Each run checks every artifact against the publish workflow's keyless identity:</p>
 <ul>
-<li>the seven image signatures (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>, <code>cache-runner</code>);</li>
+<li>the eight image signatures (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>, <code>cache-runner</code>, <code>oomreporter</code>);</li>
 <li>the SPDX SBOM attestation on each image's <code>linux/amd64</code> and <code>linux/arm64</code> manifests, failing if either platform is missing from the index;</li>
 <li>both chart signatures (tag <code>X.Y.Z</code>, without the leading <code>v</code>);</li>
 <li>every <code>*.cosign.bundle</code> blob signature on the GitHub Release: the v2 CRD manifest (Q276), which must be present, and <code>SHA256SUMS</code> while <code>gag-migrate</code> ships.</li>
@@ -4475,7 +4476,7 @@ You can also resolve a digest directly:</p>
 <p>It asserts each digest matches the registry <strong>and</strong> is a multi-arch index, because a digest can be wrong in two ways: provenance binds to the index while SBOM attestations bind per-arch, so a per-arch digest pasted here pins operators to one architecture and still verifies cleanly against its own attestation.</p>
 <h3 id="5-cut-the-github-release">5. Cut the GitHub Release<a class="headerlink" href="#5-cut-the-github-release" title="Permanent link">&para;</a></h3>
 <p><strong><code>publish.yml</code> creates the GitHub Release itself</strong> (Q293) — no manual step.
-The <code>chart-publish</code> job's "Compose and create the GitHub Release" step writes the body with the six <code>name@sha256:…</code> <strong>index digests</strong>, the <code>make verify-release VERSION=vX.Y.Z</code> command, and a generated changelog (previous-tag compare link), and sets <code>--prerelease</code> from the tag (0.x or a <code>-rc</code>/<code>-alpha</code>/<code>-beta</code> suffix ⇒ prerelease; a stable <code>≥1.0.0</code> tag ⇒ latest).
+The <code>chart-publish</code> job's "Compose and create the GitHub Release" step writes the body with the eight <code>name@sha256:…</code> <strong>index digests</strong>, the <code>make verify-release VERSION=vX.Y.Z</code> command, and a generated changelog (previous-tag compare link), and sets <code>--prerelease</code> from the tag (0.x or a <code>-rc</code>/<code>-alpha</code>/<code>-beta</code> suffix ⇒ prerelease; a stable <code>≥1.0.0</code> tag ⇒ latest).
 So the default flow for this step is: <strong>nothing — verify the auto-created Release looks right.</strong></p>
 <p>The step only creates a Release when the tag has <strong>none yet</strong>, so it never clobbers curated notes.
 If you want richer notes (highlights, upgrade caveats), <strong>create the Release before pushing the tag</strong> — e.g. <code>gh release create vX.Y.Z --draft --notes-file …</code> — and the pipeline will leave your body untouched while still attaching the signed v2 CRD manifest asset.</p>
@@ -4746,11 +4747,11 @@ Navigation comes from section order and the danger banner, not from a ToC.
 (The in-repo copy under <code>docs/releases/</code> does get GitHub's auto-generated file outline for free, which is a second reason not to hand-roll one.)</p>
 <p><strong>Watch the chart-version form.</strong> Images are tagged <code>vX.Y.Z</code>, charts <code>X.Y.Z</code>.
 A copy-pasteable <code>helm</code> command with a <code>v</code> in it fails.</p>
-<p><strong>Curating the notes means adding the image digests by hand — after the tag.</strong> The compose step in <code>publish.yml</code> writes the six index digests, the verify command, and a changelog, but it runs <strong>only when the tag has no Release yet</strong>.
+<p><strong>Curating the notes means adding the image digests by hand — after the tag.</strong> The compose step in <code>publish.yml</code> writes the eight index digests, the verify command, and a changelog, but it runs <strong>only when the tag has no Release yet</strong>.
 A curated draft is exactly that condition, so the step logs <code>already exists; leaving its notes and flags untouched</code> and the digests never appear.
 They also cannot be written in advance: the images are built <em>from</em> the tag.</p>
 <p>So after <code>publish.yml</code> goes green, resolve them and amend the notes file:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a><span class="k">for</span><span class="w"> </span>img<span class="w"> </span><span class="k">in</span><span class="w"> </span>gmc<span class="w"> </span>agc<span class="w"> </span>proxy<span class="w"> </span>worker<span class="w"> </span>wrapper<span class="w"> </span>build-runner<span class="w"> </span>cache-runner<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a><span class="k">for</span><span class="w"> </span>img<span class="w"> </span><span class="k">in</span><span class="w"> </span>gmc<span class="w"> </span>agc<span class="w"> </span>proxy<span class="w"> </span>worker<span class="w"> </span>wrapper<span class="w"> </span>build-runner<span class="w"> </span>cache-runner<span class="w"> </span>oomreporter<span class="p">;</span><span class="w"> </span><span class="k">do</span>
 <a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a><span class="w">  </span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span><span class="s2">"ghcr.io/actions-gateway/</span><span class="si">${</span><span class="nv">img</span><span class="si">}</span><span class="s2">:vX.Y.Z"</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-50-3" name="__codelineno-50-3" href="#__codelineno-50-3"></a><span class="w">    </span>--format<span class="w"> </span><span class="s1">'{{json .Manifest.Digest}}'</span>
 <a id="__codelineno-50-4" name="__codelineno-50-4" href="#__codelineno-50-4"></a><span class="k">done</span>
@@ -4950,7 +4951,7 @@ Tag a patch from the released line instead:</p>
   Delete the branch afterward if you don't maintain the line.</li>
 <li><strong>Long-lived release branch.</strong> If you support multiple minor lines at once, keep a <code>release-X.Y</code> branch at the minor's tag and land backported fixes on it.</li>
 </ul>
-<p><strong>The candidate is not optional on a patch line, and this is the one place that surprises people.</strong> A patch is usually cut in a hurry, off a released tag, for a fix users cannot get any other way, and none of that changes what publishes: six signed images and a chart.
+<p><strong>The candidate is not optional on a patch line, and this is the one place that surprises people.</strong> A patch is usually cut in a hurry, off a released tag, for a fix users cannot get any other way, and none of that changes what publishes: eight signed images and a chart.
 <code>publish.yml</code>'s <code>validated-candidate</code> job asks the same question of <code>v1.2.1</code> that it asks of <code>v2.0.0</code>, so a patch tag with no <code>v1.2.1-rc.*</code> marker fails before anything is pushed.
 Budget the dogfood run into the patch, or the tag fails at the end instead of the start.</p>
 <p><strong>The e2e leg dispatches <code>e2e-test.yml</code> from <code>main</code> on every cut, patches included, and that is deliberate.</strong> <code>E2E_DISPATCH_REF</code> overrides it; leave it alone for a release.

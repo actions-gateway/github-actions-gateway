@@ -4688,6 +4688,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>A digest bump of the <code># syntax=</code> BuildKit directive stays under <em>Withheld</em>, because the Dockerfile parser drops it as a comment.</strong> Found …</td>
 </tr>
 <tr>
+<td><a href="Q1409/">Q1409</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml">No gate ties the published image lists to each other</a></td>
+<td><code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Dropping an image from <code>publish.yml</code>'s matrix and its release-notes loop leaves every suite green</strong>, so an image can stop being signed …</td>
+</tr>
+<tr>
 <td><a href="Q1386/">Q1386</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges_store.go">A seeded GMC that cannot fetch /meta never owns its IP-range ConfigMap</a></td>
 <td><code>flake</code> <code>ci</code></td>
