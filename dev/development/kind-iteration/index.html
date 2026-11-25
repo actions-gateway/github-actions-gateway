@@ -3181,7 +3181,7 @@ Useful one-shots:</p>
 <a id="__codelineno-16-21" name="__codelineno-16-21" href="#__codelineno-16-21"></a><span class="c1"># delivering session's runner record; scope with owner= to avoid affecting</span>
 <a id="__codelineno-16-22" name="__codelineno-16-22" href="#__codelineno-16-22"></a><span class="c1"># other suites on the shared instance</span>
 <a id="__codelineno-16-23" name="__codelineno-16-23" href="#__codelineno-16-23"></a>curl<span class="w"> </span>-s<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span><span class="s1">'http://localhost:9090/control/singleuse?enabled=true&amp;owner=my-ag-'</span>
-<a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a><span class="c1"># Eviction auto-retry calls the AGC has made (the rerun-failed-jobs POST is the</span>
+<a id="__codelineno-16-24" name="__codelineno-16-24" href="#__codelineno-16-24"></a><span class="c1"># Eviction auto-retry calls the AGC has made (the re-run POST is the</span>
 <a id="__codelineno-16-25" name="__codelineno-16-25" href="#__codelineno-16-25"></a><span class="c1"># only externally visible sign that eviction recovery fired). Filter by run so</span>
 <a id="__codelineno-16-26" name="__codelineno-16-26" href="#__codelineno-16-26"></a><span class="c1"># the count is one spec's own rather than the whole process's.</span>
 <a id="__codelineno-16-27" name="__codelineno-16-27" href="#__codelineno-16-27"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://localhost:9090/control/reruns

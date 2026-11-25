@@ -7227,7 +7227,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>EvictionRerunWithheld</code></td>
 <td>Normal</td>
-<td>Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded <code>cancelled</code> by someone other than GAG, so the cancel stands (Q811, Q1181); or the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> or <code>emptyDir</code> limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181) or a newer merge group for the same pull request (Q1381); or already re-run by a later attempt, of a run that concluded <code>success</code>, or for a set whose workers are placed and cannot pull their image, which needs the image fixed and a manual re-run (Q1320); or a runner killed for memory that a re-run would repeat, or while out-of-memory retries are paused (Q1183). Only a cancel, a success or a newer merge group seen after detection spends a slot.</td>
+<td>Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded <code>cancelled</code> by someone other than GAG, so the cancel stands (Q811, Q1181); or the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> or <code>emptyDir</code> limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181) or a newer merge group for the same pull request (Q1381); or already re-run by a later attempt, of a run that concluded <code>success</code>, or for a set whose workers are placed and cannot pull their image, which needs the image fixed and a manual re-run (Q1320); or a runner killed for memory that a re-run would repeat, or while out-of-memory retries are paused (Q1183); or no failed job of the run ran on the runner killed for memory (Q1319). Only that last one, and a cancel, a success or a newer merge group seen after detection, spend a slot.</td>
 <td><a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>; <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a></td>
 </tr>
 <tr>
@@ -7239,7 +7239,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>MemoryLimitRaisedForRetry</code></td>
 <td>Normal</td>
-<td>A scale-set worker's runner was killed at its own memory limit, and the <code>Binpack</code> or <code>Throughput</code> profile gives the job's next attempt a higher one, so the run is re-run as <code>cause="oom"</code> once GitHub concludes it, waiting up to 24 hours (Q1183, Q1244). Names the job, the run and both limits. One per job: a second kill is withheld. A rising rate is jobs outgrowing their history, or a change that grew one.</td>
+<td>A scale-set worker's runner was killed at its own memory limit, and the <code>Binpack</code> or <code>Throughput</code> profile gives the job's next attempt a higher one, so the job is re-run as <code>cause="oom"</code> once GitHub concludes its run, waiting up to 24 hours (Q1183, Q1244). Names the job, the run and both limits. One per job: a second kill is withheld. A rising rate is jobs outgrowing their history, or a change that grew one.</td>
 <td><a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">When a job runs out of memory</a></td>
 </tr>
 <tr>
@@ -7937,7 +7937,7 @@ UntrustedRoot means one of those steps did not happen.</p>
 Every firing case spends one slot of the run's shared <code>maxEvictionRetries</code> budget (default 2, max 10).
 One more cause, <code>abandoned</code>, sits outside this table because it does not re-run directly: the job never ran, so its run is force-cancelled first and re-run only once capacity returns.
 It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending">Worker Pod Reaped While Pending</a>.</p>
-<p><strong>Fires — the interrupted run is re-run via <code>rerun-failed-jobs</code>:</strong></p>
+<p><strong>Fires — the interrupted run is re-run via <code>rerun-failed-jobs</code>, except where the row says otherwise:</strong></p>
 <table>
 <thead>
 <tr>
@@ -7973,7 +7973,7 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <td>same mark as a drain — indistinguishable, by design</td>
 </tr>
 <tr>
-<td>A runner killed at its own memory limit on a <code>Binpack</code> or <code>Throughput</code> set, re-run with a higher limit</td>
+<td>A runner killed at its own memory limit on a <code>Binpack</code> or <code>Throughput</code> set. The killed job alone is re-run, with a higher limit (Q1319)</td>
 <td><code class="gag-nowrap">oom</code></td>
 <td>pod <code>Failed</code> with the runner container terminated <code>OOMKilled</code>, on a worker the sizing profile built; see <a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">When a job runs out of memory</a></td>
 </tr>
@@ -8094,7 +8094,7 @@ A <code>canceled</code> completion is recorded only when a disruption recovery c
 </tr>
 <tr>
 <td><code>gag_collateral</code></td>
-<td>GAG's <code>rerun-failed-jobs</code> re-ran it beside a disrupted job</td>
+<td>GAG's re-run of another job took it along: a disruption's <code>rerun-failed-jobs</code> takes every failed job, an out-of-memory single-job re-run the jobs that need it</td>
 <td>Yes, if it succeeded and no disruption was recorded for its failure</td>
 </tr>
 <tr>

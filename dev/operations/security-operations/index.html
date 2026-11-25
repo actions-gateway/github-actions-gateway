@@ -4323,7 +4323,7 @@ Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scop
 </thead>
 <tbody>
 <tr>
-<td><strong>Eviction-Retry API Misuse</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>) — compromised AGC looping <code>rerun-failed-jobs</code></td>
+<td><strong>Eviction-Retry API Misuse</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>) — compromised AGC looping <code>rerun-failed-jobs</code> or the single-job re-run</td>
 <td><code>eviction_retries_total{cause="eviction"}</code> rate climbs without matching node pressure; <code>eviction_retries_exhausted_total</code> increments. <strong>Scope the query to <code>cause="eviction"</code></strong> — the same counter records legitimate <code>preemption</code> recoveries, which are the expected steady state under a preempting <code>priorityTiers</code> floor and would otherwise read as abuse (Q497)</td>
 <td>Metric</td>
 <td>Ticket → Page on sustained climb</td>
@@ -4389,7 +4389,7 @@ The <a href="../observability-dashboards/#security-dashboard">security dashboard
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">rules</span><span class="p">:</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">      </span><span class="c1"># Page: eviction-retry loop — sustained re-queue rate without a</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span><span class="c1"># matching node-pressure event suggests rerun-failed-jobs abuse</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">      </span><span class="c1"># matching node-pressure event suggests re-run abuse</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span><span class="c1"># (compromised AGC) rather than genuine eviction churn.</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span><span class="c1">#</span>
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">      </span><span class="c1"># Scoped to cause="eviction" deliberately (Q497). The same counter also</span>

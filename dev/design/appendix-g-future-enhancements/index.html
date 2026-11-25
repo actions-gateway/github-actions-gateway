@@ -3779,7 +3779,7 @@ ARC has neither the re-run machinery nor the metrics plumbing, so this extends a
 </ol>
 <p><strong>Cost, including the parts that are easy to miss.</strong></p>
 <ol>
-<li><strong>Granularity is the run, not the job.</strong> <code>rerun-failed-jobs</code> re-runs <em>all</em> failed jobs of a concluded run.
+<li><strong>Granularity is the run, unless it borrows the single-job re-run.</strong> <code>rerun-failed-jobs</code> re-runs <em>all</em> failed jobs of a concluded run; the out-of-memory class re-runs the killed job alone (<a href="../04-operational-flows/#the-re-run-takes-only-the-killed-jobs-q1319">how</a>).
    Test-level retry (Datadog/VSTest style) is out of reach without entering the test framework — explicitly out of scope; this is job-level.</li>
 <li><strong>It argues with our own marketing.</strong> The re-run boundary is documented as "a genuine failure is never re-run, re-running would mask real breakage" — the <a href="../../why-gag/">why-gag box</a> says exactly this.
    The feature must be off by default, per-set opt-in, loudly metered, and framed as "retry <em>and</em> surface" — detection metrics keep the flake visible while retry buys throughput.
@@ -3831,7 +3831,7 @@ Four candidates, and only one is both expressive and safe:</p>
 <p>Two objections bound the value.
 First, the moment a tenant writes a signal into their workflow, the "nothing in your workflows changes" property this enhancement is sold on is gone, and a job that can emit "retry me" can equally wrap the step in a retry loop.
 What survives: an in-workflow wrapper retries steps <em>on the same worker</em>, while a platform signal re-runs the whole job on a fresh pod — new node, new network, clean runner — which is a flake class a step wrapper structurally cannot fix.
-Second, <code>rerun-failed-jobs</code> is run-granular and fires only after the run concludes, so a signal from one job re-runs its siblings too; the waiting machinery exists (<code>rerunUntilAccepted</code> already holds through <code>errRunNotConcluded</code>), the fan-out is the cost.</p>
+Second, a re-run fires only after the run concludes, and <code>rerun-failed-jobs</code> takes the siblings too; the waiting machinery and a single-job re-run exist (Q1183, Q1319), and where two jobs signal, they go one attempt at a time.</p>
 <p>Whichever channel wins, the writer is tenant-controlled code, often an untrusted PR's workflow.
 Gating is not optional: an operator-set <code>RunnerSet</code> opt-in (a workflow author's signal must never enable retry on its own), the existing per-run budget plus a per-window cap, and its own <code>cause</code> label so the spend is attributable.</p>
 <p><strong>What the isolation shapes do and do not change.</strong> Neither Docker-in-Docker nor Kata interposes on the exit code.

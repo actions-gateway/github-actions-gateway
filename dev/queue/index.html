@@ -3216,12 +3216,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Since Q1232, the scale-set abandoned arm reads the run before force-cancelling.</td>
 </tr>
 <tr>
-<td><a href="Q1319/">Q1319</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#what-the-readings-recommend">Re-run only the classified job, found by its runner's name</a></td>
-<td><code>feature</code> <code>2.1-gate</code></td>
+<td><a href="Q1394/">Q1394</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#m6-readings-from-the-job-granular-probe-2026-11-24">Re-run one job whose runner was killed, on dogfood</a></td>
+<td><code>tests</code> <code>dogfood</code></td>
 <td>🔲</td>
-<td>M</td>
-<td>Every automatic re-run today uses <code>rerun-failed-jobs</code>, so a class firing on one job also re-runs every other failed job of the run …</td>
+<td>S</td>
+<td>The out-of-memory retry re-runs the killed job alone where another job of its run also failed (<code>POST …/jobs/{id}/rerun</code>, Q1319).</td>
 </tr>
 <tr>
 <td><a href="Q1389/">Q1389</a></td>
@@ -3232,12 +3232,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>GitHub gives a scale-set job to whichever runner asks first, so a worker often runs a job other than the one it was provisioned for …</td>
 </tr>
 <tr>
+<td><a href="Q1399/">Q1399</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#readings-for-a-cancelled-sibling-2026-11-24">Tell a kill's fail-fast siblings from a timed-out job</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The jobs list spells <code>cancelled</code> a leg its fail-fast matrix cancelled, a job past its <code>timeout-minutes</code> and a job a concurrency group …</td>
+</tr>
+<tr>
 <td><a href="Q1315/">Q1315</a></td>
 <td><a href="../plan/q555-automatic-recovery-design/#classes-after-the-first">Retry a job failed while its colocated egress proxy pool was unavailable</a></td>
 <td><code>feature</code> <code>2.1-gate</code></td>
 <td>🔲</td>
 <td>M</td>
 <td>A job that fails because the tenant's egress proxy pool was down is a platform failure, and today it needs a manual re-run.</td>
+</tr>
+<tr>
+<td><a href="Q1401/">Q1401</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#readings-for-a-cancelled-sibling-2026-11-24">Recover a fail-fast matrix's siblings behind an aggregate job</a></td>
+<td><code>bug</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>On a matrix with fail-fast siblings and an aggregate job (<code>if: always()</code>, red when one it needs is), 2.1 leaves the siblings cancelled …</td>
 </tr>
 <tr>
 <td><a href="Q1316/">Q1316</a></td>

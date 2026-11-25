@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1319/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1394/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Re-run only the classified job, found by its runner's name - GitHub Actions Gateway</title>
+        <title>Re-run one job whose runner was killed, on dogfood - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#re-run-only-the-classified-job-found-by-its-runners-name" class="md-skip">
+        <a href="#re-run-one-job-whose-runner-was-killed-on-dogfood" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Re-run only the classified job, found by its runner's name
+              Re-run one job whose runner was killed, on dogfood
             
           </span>
         </div>
@@ -2703,25 +2703,16 @@
   
 
 
-<h1 id="re-run-only-the-classified-job-found-by-its-runners-name">Re-run only the classified job, found by its runner's name<a class="headerlink" href="#re-run-only-the-classified-job-found-by-its-runners-name" title="Permanent link">&para;</a></h1>
-<p>Every automatic re-run today uses <code>rerun-failed-jobs</code>, so a class firing on one job also re-runs every other failed job of the run, including genuine failures the boundary says must never be re-run.
-Detection's <code>gag_collateral</code> count measures that cost, and a single-job re-run (<code>POST …/jobs/{id}/rerun</code>) removes it.
-Whether one can find its job was the design's M6, measured on 2026-11-24 (<a href="../../plan/q555-automatic-recovery-design/#m6-readings-from-the-job-granular-probe-2026-11-24">the readings</a>): job names match the API exactly and can be ambiguous, while <code>runner_name</code> identifies the job, a killed one included.</p>
-<p>What is left is to build it, for the out-of-memory class first:</p>
-<ul>
-<li>Find the job in the <strong>latest</strong> attempt's jobs list, once the run has concluded, by <code>runner_name</code> equal to the dead worker's runner-name annotation.
-  Use the display name only where the pod carries no runner name, and fall back to <code>rerun-failed-jobs</code> where that does not name exactly one job.
-  A runner name no listed job carries re-runs nothing: the job has run again on another runner, or the worker never took one.</li>
-<li>Call with the latest attempt's job ID, since GitHub refuses an earlier attempt's, and only once the run has concluded, since it refuses one in progress.
-  The class already waits for that.</li>
-<li>Decide what a run with two classified jobs does: GitHub takes one single-job re-run at a time, each is an attempt and spends a slot of <code>maxEvictionRetries</code> (2 by default), and <code>rerun-failed-jobs</code> would take both in one.</li>
-<li>Say in the operator docs that <code>needs:</code> dependents run again even when they passed, and that a run stays <code>failure</code> while a failed sibling is not re-run.</li>
-<li>Keep the futility checks and the reservation's merge right when the attempt is a single-job re-run of another job, which the design's test plan names.</li>
-</ul>
-<p>The disruption arms stay run-granular.
-The design's <a href="../../plan/q555-automatic-recovery-design/#run--or-job-granular-re-run-open-question-2">granularity section</a> and the API shape's <code>retry.scope</code> (<code>FailedJobs</code> or <code>Job</code>) are where it lands.
-The <code>already_rerun</code> check reads the same list by the same key, so reuse its <code>attemptJobs</code> (<code>cmd/agc/internal/provisioner/rerun_futility.go</code>) rather than adding a second decode; what it decodes holds no job <code>id</code>, which this call needs.
-Gated on 2.1 (<a href="../../plan/release-2.1/">release-2.1.md</a>): more classes means more collateral re-runs, so this is what makes adding them cheap.</p>
+<h1 id="re-run-one-job-whose-runner-was-killed-on-dogfood">Re-run one job whose runner was killed, on dogfood<a class="headerlink" href="#re-run-one-job-whose-runner-was-killed-on-dogfood" title="Permanent link">&para;</a></h1>
+<p>The out-of-memory retry re-runs the killed job alone where another job of its run also failed (<code>POST …/jobs/{id}/rerun</code>, Q1319).
+No reading covers that call on a killed job: M6's single-job re-runs were all of jobs that ended on their own, and the one killed job it read was re-run by <code>rerun-failed-jobs</code>.</p>
+<p>If GitHub refuses the call, that retry never lands, which would read as <code>actions_gateway_eviction_rerun_failures_total{cause="oom"}</code> rising and the job needing a manual re-run, after its budget slot was spent.
+It accepts the call for a failed job and for a succeeded one, and lists a killed job as an ordinary <code>failure</code> with its runner's name, so a refusal is not expected.</p>
+<p>Take it on the 2.1 candidate's dogfood validation or sooner: one run with a job the class retries and a job that fails on its own, on a <code>Binpack</code> or <code>Throughput</code> set with samples.
+Record that the killed job alone ran again, that the failed sibling kept its first attempt's <code>started_at</code>, and that the run's conclusion stayed <code>failure</code>.
+The same run answers a second question M6 left: what a later attempt's list shows for a killed job it did not re-run, which two killed jobs beside the failure show.
+Every turn after the first rests on its keeping the runner's name; if it does not, the release reads the job as re-run and drops it with a log line and no Event.
+It needs a dogfood grant.</p>
 
 
 

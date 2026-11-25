@@ -3805,7 +3805,7 @@ Each <code>Reason</code> mirrors the corresponding metric name so the two correl
 <td><code>EvictionRerunWithheld</code></td>
 <td>Normal</td>
 <td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
-<td>No re-run was requested: an externally deleted worker's run had already concluded <code>cancelled</code>, so the cancel stands (Q811), or the kubelet evicted the worker for exceeding its own storage limit and the Event quotes its message (Q1177), or on the scale-set tier the re-run would be futile and the Event names the reason and its fix (Q1181, Q1320)</td>
+<td>No re-run was requested: an externally deleted worker's run had already concluded <code>cancelled</code>, so the cancel stands (Q811), or the kubelet evicted the worker for exceeding its own storage limit and the Event quotes its message (Q1177), or on the scale-set tier the re-run would be futile and the Event names the reason and its fix (Q1181, Q1320), or no failed job of the run ran on a killed worker's runner (Q1319)</td>
 </tr>
 <tr>
 <td><code>FlakyJobDetected</code></td>

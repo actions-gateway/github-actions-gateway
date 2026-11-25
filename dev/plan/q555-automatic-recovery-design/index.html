@@ -3164,6 +3164,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#readings-for-a-cancelled-sibling-2026-11-24" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Readings for a cancelled sibling, 2026-11-24
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#what-the-readings-recommend" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3236,7 +3247,7 @@
 <p><strong>Status:</strong> ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
 Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; so are Q1181's <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> and Q1320's <code>already_rerun</code>, <code>run_succeeded</code> and <code>worker_unstartable</code> on the scale-set tier (<code>rerun_futility.go</code>), <code>superseded</code> for merge groups included (Q1381); so is Q555's detection (<code>flaky_jobs.go</code>): the <code>failures</code> map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up whose <a href="#readings-from-the-dogfood-turn-up-2026-11-22">readings</a> (Q1236) refute three of its assumptions, one of them since corrected (Q1376), with the colocated proxy's readiness added by Q1237; the rest is not.
 It turns <a href="../q555-flaky-job-retry/">the requirements draft</a> into components against the code as it stands, one per backlog row, and answers the draft's <a href="../q555-flaky-job-retry/#open-questions-for-the-design-session">open questions</a>.
-Each answer is marked <strong>Decided</strong> (the maintainer chose it, 2026-10-12), <strong>Decide</strong> (a recommendation still awaiting sign-off) or <strong>Research</strong> (needs a measurement before anyone can choose).
+Each answer is marked <strong>Decided</strong> (the maintainer chose it, 2026-10-12), <strong>Decide</strong> (a recommendation still awaiting sign-off) or <strong>Research</strong> (needs a measurement before anyone can choose); one already built is marked <strong>Built</strong>, with its reasons.
 The draft says <em>what</em> and <em>why</em>; this says <em>how</em>.
 Code facts were read from source on 2026-10-10 and 2026-10-11 unless marked otherwise; the assumptions the design rests on that nobody has measured are listed <a href="#measure-before-building">first</a>.</p>
 <p><strong>Goal:</strong> a job that failed for a platform reason GAG can name is re-run without a human, a job that a re-run cannot fix is not, and the rate of re-runs a human still has to make is measured per set.</p>
@@ -3499,9 +3510,12 @@ Writes happen on a failed completion and its worker's finish, a GAG re-run (its 
 <a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">    </span><span class="p">}</span>
 <a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">  </span><span class="p">},</span>
 <a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">  </span><span class="nt">"pending"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">    </span><span class="nt">"&lt;runID&gt;/&lt;jobDisplayName&gt;"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"expiresAt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-10-11T12:00:00Z"</span><span class="p">,</span><span class="w"> </span><span class="nt">"cause"</span><span class="p">:</span><span class="w"> </span><span class="s2">"oom"</span><span class="p">,</span><span class="w"> </span><span class="nt">"failedAttempt"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">}</span>
-<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">  </span><span class="p">}</span>
-<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="p">}</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">    </span><span class="nt">"&lt;runID&gt;/&lt;jobDisplayName&gt;"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">      </span><span class="nt">"expiresAt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-10-11T12:00:00Z"</span><span class="p">,</span><span class="w"> </span><span class="nt">"cause"</span><span class="p">:</span><span class="w"> </span><span class="s2">"oom"</span><span class="p">,</span><span class="w"> </span><span class="nt">"failedAttempt"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">      </span><span class="nt">"workers"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nt">"job"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;jobDisplayName&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"runner"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;runner name&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"disruption"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;pod key&gt;"</span><span class="w"> </span><span class="p">}]</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="p">}</span>
 </code></pre></div>
 <p><code>reruns</code> is keyed by run, not by failure, because a disruption arm fires about 10 minutes before the failed completion that would create the failure entry (the job lock); a run-keyed record needs nothing to exist first.
 It is also <a href="#the-budget-is-gags-own-count-in-the-ledger-r15">the budget</a>: <code>count</code> is how many times GAG has re-run the run, and <code>attempts</code> records, per run attempt GAG re-ran from, what it re-ran and for which disruptions.
@@ -3865,7 +3879,7 @@ Either way it reads the same snapshot detection records, which is why Q1183 wait
 <h3 id="how-it-waits">How it waits<a class="headerlink" href="#how-it-waits" title="Permanent link">&para;</a></h3>
 <p>Classes go through one deferred path, built beside the abandoned arm's (Q691, <code>abandoned_rerun.go</code>) but persistent:</p>
 <ul>
-<li><strong>Pending re-runs live in the ledger</strong>, in its <code>pending</code> map, keyed by run and job.
+<li><strong>Pending re-runs live in the ledger</strong>, in its <code>pending</code> map, keyed by run and job, one entry per run attempt listing each worker it is for (Q1319).
   The abandoned arm's waiting set is in process memory, so a restart drops it, which costs that arm at most 30 minutes of waiting; a class can wait hours for a run to conclude, so its pending entries must survive.</li>
 <li><strong>A pending entry records the attempt the job failed in</strong>, read from the run when the class fires, as <code>failedAttempt</code>.
   Release judges <code>already_rerun</code> and the merge against that attempt, not against a fresh read: if a disruption arm has already re-run the run in the meantime, a fresh read would take the new attempt as the baseline and re-run it again.
@@ -4237,7 +4251,7 @@ The natural channel is the job's <code>runs-on</code> labels: a scale set routes
 So an opt-out label works only if the operator put it on the set first, and GAG would read it from <code>requestLabels</code>, which the job message carries and the client does not yet decode.
 None of these ships until someone asks for it; each then lands as one optional match field on a <code>spec.retry.rules</code> entry (<a href="#built-to-extend">Built to extend</a>), never as a field per axis.</p>
 <h2 id="run--or-job-granular-re-run-open-question-2">Run- or job-granular re-run (open question 2)<a class="headerlink" href="#run--or-job-granular-re-run-open-question-2" title="Permanent link">&para;</a></h2>
-<p><strong>Decide</strong>, with the maintainer's preference recorded: re-run only the job GAG classified, unless something rules it out (2026-10-12).
+<p><strong>Built</strong> for the out-of-memory class (Q1319): re-run only the job GAG classified, because a run-granular re-run takes a sibling's genuine failure too and hides it where it passes.
 M6's readings rule nothing out, and they change how the job is found: by its runner's name rather than its own (<a href="#what-the-readings-recommend">below</a>).
 GitHub re-runs no finer than a job, through three endpoints:</p>
 <ul>
@@ -4259,7 +4273,20 @@ Job-granular avoids that, and costs:</p>
   GitHub keeps the upstream jobs' outputs and artifacts for the re-run (<a href="#m6-readings-from-the-job-granular-probe-2026-11-24">measured</a>), so the case is state outside GitHub only.
   The fallback for this case is the same <code>rerun-failed-jobs</code>, and choosing it needs a signal GAG does not have, so the first version does not try; <code>same_class_again</code> stops the repeat.</li>
 </ul>
-<p>Until it is built, detection's <code>gag_collateral</code> count measures what run-granular costs on the existing arms.</p>
+<p>Detection's <code>gag_collateral</code> count measures what run-granular costs on the arms that stay so.
+What is built is in <a href="../../design/04-operational-flows/#the-re-run-takes-only-the-killed-jobs-q1319">04-operational-flows.md</a>, and four choices there are not in the M6 readings:</p>
+<ul>
+<li><strong>A run whose failed jobs were all killed takes one <code>rerun-failed-jobs</code></strong>, since it re-runs nothing else that ended <code>failure</code> and spends one slot.</li>
+<li><strong>Several killed jobs beside another failure go one attempt at a time</strong>, a slot each, so a run's budget bounds its attempts and no genuine failure is re-run.
+  Two killed jobs spend the default budget of 2, so a third kill is <code>budget_exhausted</code>.
+  The common cost is a job that aggregates the others (<code>if: always()</code>, red when one it needs is): it is another failure, since the jobs list carries no <code>needs:</code>, so three killed legs of a matrix behind one recover two where <code>rerun-failed-jobs</code> recovers three.
+  <a href="../../queue/Q1401/">Q1401</a> recovers them all from what the first single-job re-run takes along.
+  The alternatives: one <code>rerun-failed-jobs</code> for the set, which recovers them all on one slot and re-runs the genuine failure, as this release <a href="../release-2.1/#what-this-release-must-not-do">must not</a>; or one slot for the whole set, which lets one reservation start an attempt for each kill, up to 15.</li>
+<li><strong>A cancelled job is not another failure</strong>, so a killed leg of a fail-fast matrix and its cancelled siblings take one <code>rerun-failed-jobs</code> where no other job ended <code>failure</code>, as they did before Q1319.
+  A timeout or a concurrency cancel beside the kill is re-run with them, since the list spells the three the same (<a href="#readings-for-a-cancelled-sibling-2026-11-24">readings</a>); telling them apart is <a href="../../queue/Q1399/">Q1399</a>.
+  Counting a cancelled job as a failure would re-run neither, and would end red the default matrix with one killed leg.</li>
+<li><strong>A dependent the single-job re-run took along counts as <code>gag_collateral</code></strong>, since GAG's re-run took it and no person did.</li>
+</ul>
 <h3 id="m6-readings-from-the-job-granular-probe-2026-11-24">M6 readings from the job-granular probe, 2026-11-24<a class="headerlink" href="#m6-readings-from-the-job-granular-probe-2026-11-24" title="Permanent link">&para;</a></h3>
 <p>Taken for Q1319 on the <code>ci</code> set in <code>gag-dogfood</code>, AGC <code>v2.0.1-rc.2</code>, with the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q1319-rerun-probe.yml"><code>q1319-rerun-probe</code></a> fixture.
 The <code>names</code> runs are 45325262167 (attempts 1 to 4) and 45326925782 (attempt 1, a second set of shapes); the <code>chain</code> run is 45325687478 (attempts 1 to 4; attempt 5 re-ran <code>sibling-red</code> alone, to place a worker for another reading, and nothing here uses it).
@@ -4285,7 +4312,67 @@ The two were joined on the runner the AGC logs at start or completion against th
   So the ID to call with is the latest attempt's, and only a re-executed job gets a new <code>JobAssigned</code>.</li>
 <li><strong>A skipped matrix job shows its name unexpanded</strong> (<code>Named ${{ matrix.leg }} / ${{ matrix.n }}</code>), so a name read from a skipped job is not comparable.</li>
 </ul>
-<p>Not covered: nesting past two levels; an upload without <code>overwrite: true</code> on a re-run (the fixture sets it); state outside GitHub; a killed job carried into a later attempt, since the one killed job read here was itself re-run; and a single-job re-run of a job whose runner was lost, since each re-run here was of a job that ended on its own.</p>
+<p>Not covered: nesting past two levels; an upload without <code>overwrite: true</code> on a re-run (the fixture sets it); state outside GitHub; a killed job carried into a later attempt, since the one killed job read here was itself re-run; and a single-job re-run of a job whose runner was lost, since each re-run here was of a job that ended on its own (<a href="../../queue/Q1394/">Q1394</a>).</p>
+<h3 id="readings-for-a-cancelled-sibling-2026-11-24">Readings for a cancelled sibling, 2026-11-24<a class="headerlink" href="#readings-for-a-cancelled-sibling-2026-11-24" title="Permanent link">&para;</a></h3>
+<p>Which fact tells a job a fail-fast matrix cancelled from one that timed out, and how common each is.
+Read from the API: the newest 50 failed runs of each of 12 public repositories (600 runs, 594 read, the first 100 jobs of the 23 that have more), and the newest 1,000 of this repository's 1,546 failed runs, 2026-07-24 to 2026-11-24.
+The jobs list gives <code>conclusion: cancelled</code> for every shape below; the failure-level annotations of the job's check run name the cause, up to 12 jobs of a public run read.</p>
+<table>
+<thead>
+<tr>
+<th>Shape</th>
+<th>First annotation</th>
+<th>Public runs</th>
+<th>This repository's runs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fail-fast sibling</td>
+<td><code>The strategy configuration was canceled because "test.Windows_x86_64_gnu_nightl" failed</code></td>
+<td>63, of 4 repositories</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Past <code>timeout-minutes</code></td>
+<td><code>The job has exceeded the maximum execution time of 1m0s</code> (scale-set run 45052015868)</td>
+<td>1</td>
+<td>10</td>
+</tr>
+<tr>
+<td>A concurrency group</td>
+<td><code>Canceling since a higher priority waiting request for refs/pull/72292/merge-asv-benchmarks exists</code></td>
+<td>3</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Never started</td>
+<td><code>The job was not acquired by Runner of type hosted …</code>, or an internal error</td>
+<td>0</td>
+<td>4, one of them beside a timeout</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>The annotation separates them and the jobs list does not.</strong> In a private repository reading it takes <code>Checks: read</code>, which is optional for the App, and it is one call for each cancelled job.</li>
+<li><strong>The time does not.</strong> All 329 fail-fast siblings read ended at or after their run's first failure, but so did 12 of the 14 timeouts read and all 4 concurrency cancels.</li>
+<li><strong>Most fail-fast runs hold another failed job too, usually an aggregate.</strong> By each run's own workflow file at its head SHA, <code>needs:</code> followed transitively, 12 of the 63 hold nothing else, 30 only jobs that need the leg's matrix (all <code>rust-lang/cargo</code>'s <code>conclusion</code>), 15 such a job and an independent failure, and 6 an independent failure alone.
+  A rule that lets <code>cancelled</code> through recovers the 12; <code>rerun-failed-jobs</code> recovers the 42 where nothing independent failed, and re-runs the independent failure in the other 21.</li>
+<li><strong>"Started after the killed job completed" does not tell an aggregate from an independent failure.</strong> It separates all 102 other failures of those 51 runs, 45 aggregates (one inside a reusable workflow, read by eye) and 57 independent.
+  Over the runs with two or more failed jobs (195 of the 600 listed again with <code>created</code> at or before 2026-11-24 22:40 UTC), taking the first to complete as the killed one, all 98 dependents started after it and so did 73 of the 612 others, in 19 runs: jobs that waited for a runner, a later stage that needed something else, an aggregate of other jobs.
+  A killed job is listed as completed about 10 minutes after it died; a start 600 s later or more leaves 22 of the 73, in 3 runs.</li>
+<li><strong>What a single-job re-run takes along is the sound fact</strong>, by M6, and is <a href="../../queue/Q1401/">Q1401</a>.</li>
+<li><strong><code>rerun-failed-jobs</code> takes a cancelled job.</strong> In 21 public runs whose second attempt re-ran the failed jobs (18 of them <code>rust-lang/cargo</code>'s), it ran every job the first had cancelled, 1 to 12 a run, and of the successful ones a single job, of <code>rust-lang/rust-analyzer</code> 43474205606 (not read why).</li>
+<li><strong>A single-job re-run leaves a cancelled job cancelled</strong>, carried with its old <code>completed_at</code> and <code>runner_name</code>, in both public runs found with one (<code>rust-lang/cargo</code> 40960902618 and 38222465819, 11 cancelled legs each).
+  Each re-ran the failed leg and <code>conclusion</code>, which needs it and was red again; 40960902618's third attempt then took the 11 and <code>conclusion</code>, and succeeded.</li>
+<li><strong>GitHub concluded both of those second attempts <code>cancelled</code></strong>, though neither lists a job it ran as <code>cancelled</code>, so <code>run_cancelled</code> withholds whatever the AGC would do next.
+  In two more runs, a leg past its 6-hour limit beside a red <code>conclusion</code> was concluded <code>cancelled</code> too (43369863330 and 37671009459).
+  What decides between <code>failure</code> and <code>cancelled</code> for a run holding both is not established.</li>
+<li><strong>This repository's matrices mostly set <code>fail-fast: false</code></strong>, so its 0 is not a rate for a tenant that leaves the default.</li>
+<li><strong>Every count is of runs GitHub concluded <code>failure</code>.</strong> It can conclude a run holding a failure and a timeout <code>cancelled</code> (<code>rust-lang/cargo</code> 43369863330), and that run is not re-run at all, whatever a cancelled job counts as.</li>
+</ul>
+<p>None of these runs lost a runner.
+Not read: a matrix whose failed leg lost its runner, which is taken to cancel its siblings as any failed leg does; and how often a run the class acts on holds either shape, since every kill it has acted on was a probe's.</p>
 <h3 id="what-the-readings-recommend">What the readings recommend<a class="headerlink" href="#what-the-readings-recommend" title="Permanent link">&para;</a></h3>
 <p>Wait for the run to conclude, as the parked out-of-memory re-run already does, which is also when the jobs list is complete.
 Then re-run the classified job by its ID from the <strong>latest</strong> attempt's jobs list, found by <code>runner_name</code> equal to the dead worker's.
@@ -4371,7 +4458,7 @@ The disruption arms stay run-granular; nothing in the readings argues otherwise.
 <li>Q1181 (built): <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the widened run read, honouring <code>selfCancelledAttempt</code>, between the run read and the reservation in <code>handleScaleSetEviction</code>; Q1320 (built) added <code>already_rerun</code>, <code>run_succeeded</code> and <code>worker_unstartable</code> there, Q1381 (built) <code>superseded</code> for merge groups, and the classic tier takes none.</li>
 <li>Q555 (built) added the <code>failures</code> map, the snapshot, the pairing and the metrics on that store.
    Two departures from Component 1: event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.</li>
-<li>Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the <code>pending</code> map, Q1245 (built) added the alert, the gauge and the annotation, and job-granular re-run (Q1319) is unbuilt, with M6 measured.</li>
+<li>Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the <code>pending</code> map, Q1245 (built) added the alert, the gauge and the annotation, and Q1319 (built) re-runs the killed job alone.</li>
 <li>Q1178 and Q1184 (built).</li>
 </ol>
 

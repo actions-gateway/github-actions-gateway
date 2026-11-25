@@ -2236,6 +2236,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4617,6 +4628,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5466,6 +5488,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run</a></li>
 <li><a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically">Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically</a></li>
 <li><a href="#a-timed-out-job-whose-re-run-passes-counts-as-flaky">A timed-out job whose re-run passes counts as flaky</a></li>
+<li><a href="#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run">Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run</a></li>
 <li><a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image">A disrupted job is not re-run while its set's workers cannot pull their image</a></li>
 <li><a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run</a></li>
 <li><a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once">Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once</a></li>
@@ -6439,6 +6462,18 @@ When that re-run passes, the AGC now reads the cancelled job's annotations to te
 In a private repository whose GitHub App lacks <code>Checks: Read</code>, a <strong>Normal</strong> <code>CancelledJobUnread</code> Event instead, and no change in the counts.</p>
 <p><strong>What to do.</strong> Nothing.
 To have timed-out jobs counted in a private repository, grant the App the optional <a href="../tenant-onboarding/#0a-create-the-app-web-ui"><code>Checks: Read</code></a>.</p>
+<h3 id="non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run">Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run<a class="headerlink" href="#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> a tenant with a <code>Binpack</code> or <code>Throughput</code> <code>RunnerSet</code>, whose jobs killed at a memory limit the profile chose are re-run automatically.
+Nothing to do, unless a matrix of such jobs uses GitHub's default <code>fail-fast: true</code> beside a job that fails too, such as one that reports on the matrix: its cancelled legs are then no longer re-run with the killed one.
+Set <code>fail-fast: false</code> on it, or re-run those legs by hand.</p>
+<p><strong>What changed.</strong> The retry called <code>rerun-failed-jobs</code>, so a sibling job that failed on its own was re-run with the killed one and could turn green.
+The AGC now finds the killed job by its runner's name and re-runs it alone; <a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">when it still re-runs every failed job</a> is listed with the retry (Q1319).</p>
+<p><strong>What you will see.</strong> The sibling keeps its <code>failure</code>, and the run stays red.
+Where several jobs of one run were killed and another failed on its own, the killed ones are re-run one attempt at a time, a slot of <code>maxEvictionRetries</code> each.
+Where two sets each lost a job of one run, the sets go one after the other.
+Where such jobs are legs of one <code>fail-fast: true</code> matrix that a red job reports on, only the first may be re-run: GitHub can conclude its attempt <code>cancelled</code>, which ends the retry with <code>EvictionRerunWithheld</code> and <code>reason="run_cancelled"</code> (Q1401).
+<code>actions_gateway_eviction_rerun_withheld_total</code> can carry <code>reason="job_not_found"</code>.</p>
+<p><strong>Rolling back</strong> returns the retry to <code>rerun-failed-jobs</code>, for the re-runs still waiting too.</p>
 <h3 id="a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image">A disrupted job is not re-run while its set's workers cannot pull their image<a class="headerlink" href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> a tenant whose scale-set workers are stuck in <code>ImagePullBackOff</code> when another of the set's jobs loses its worker.</p>
 <p><strong>What changed.</strong> The re-run of a disrupted job used to fire anyway, and its worker would fail to start too, spending a slot of <code>maxEvictionRetries</code>.
