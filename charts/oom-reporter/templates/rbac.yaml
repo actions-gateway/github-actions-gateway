@@ -4,6 +4,9 @@
 {{- if not (or .Values.allNamespaces .Values.namespaces) }}
 {{- fail "set namespaces to those whose pods to write to, or allNamespaces=true" }}
 {{- end }}
+{{- if has .Release.Namespace .Values.namespaces }}
+{{- fail "namespaces holds the release's own: whoever has edit in a namespace can act as its service accounts, so it is none that tenants use" }}
+{{- end }}
 # The agent writes its node's report, which the report-writer policy holds it to:
 # a Role cannot name a ConfigMap for each node.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -71,7 +74,7 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "oom-reporter.fullname" . }}-pods
+  name: {{ include "oom-reporter.sharedName" . }}-pods
   labels:
     {{- include "oom-reporter.labels" . | nindent 4 }}
 rules:
@@ -80,13 +83,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: {{ include "oom-reporter.fullname" . }}-pods
+  name: {{ include "oom-reporter.sharedName" . }}-pods
   labels:
     {{- include "oom-reporter.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: {{ include "oom-reporter.fullname" . }}-pods
+  name: {{ include "oom-reporter.sharedName" . }}-pods
 subjects:
   - kind: ServiceAccount
     name: {{ include "oom-reporter.controllerName" . }}
@@ -97,7 +100,7 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ include "oom-reporter.fullname" $ }}-pods
+  name: {{ include "oom-reporter.sharedName" $ }}-pods
   namespace: {{ . }}
   labels:
     {{- include "oom-reporter.labels" $ | nindent 4 }}
@@ -107,14 +110,14 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ include "oom-reporter.fullname" $ }}-pods
+  name: {{ include "oom-reporter.sharedName" $ }}-pods
   namespace: {{ . }}
   labels:
     {{- include "oom-reporter.labels" $ | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ include "oom-reporter.fullname" $ }}-pods
+  name: {{ include "oom-reporter.sharedName" $ }}-pods
 subjects:
   - kind: ServiceAccount
     name: {{ include "oom-reporter.controllerName" $ }}

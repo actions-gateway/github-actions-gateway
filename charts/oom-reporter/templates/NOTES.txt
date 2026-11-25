@@ -15,3 +15,6 @@ pool that runs tenants' jobs.
 {{- end }}
 
 An agent that exits naming its pods' root has the wrong agent.podsRoot for its node.
+
+A controller that keeps exiting with "the admission policies are not in force" has its grants
+without them: uninstall the release.

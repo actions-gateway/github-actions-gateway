@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -58,6 +59,26 @@ func TestPolicies_NameEveryReasonOfAnEvent(t *testing.T) {
 		want = append(want, eventPrefix+string(r))
 	}
 	assert.ElementsMatch(t, want, slices.DeleteFunc(quoted(t, "object.?reason.orValue('') in ["), func(s string) bool { return !strings.HasPrefix(s, eventPrefix) }))
+}
+
+func TestPolicies_LeaveRoomForTheLongestConditionAndReport(t *testing.T) {
+	data, err := os.ReadFile(policies)
+	require.NoError(t, err)
+	most := func(of string) int {
+		m := regexp.MustCompile(regexp.QuoteMeta(of) + ` <= (\d+)`).FindSubmatch(data)
+		require.NotNil(t, m, of)
+		n, err := strconv.Atoi(string(m[1]))
+		require.NoError(t, err)
+		return n
+	}
+	assert.Equal(t, report.MaxSize, most("object.data[k].size()"))
+	v := verdict{ended: ended{name: strings.Repeat("a", 63), id: "containerd://" + strings.Repeat("a", 64), at: killedAt}, none: true}
+	for v.reason = range words {
+		c, _ := v.condition(pod(), killedAt)
+		assert.LessOrEqual(t, len(c.Reason), most("c.?reason.orValue('').size()"))
+		// Another runtime's IDs may be longer.
+		assert.LessOrEqual(t, len(c.Message)+100, most("c.?message.orValue('').size()"))
+	}
 }
 
 func TestPolicies_AreOfTheNamesTheCodeHas(t *testing.T) {

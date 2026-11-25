@@ -16,13 +16,13 @@ import (
 const (
 	// Key is the key of a report in its ConfigMap.
 	Key = "report"
-	// MaxKills is the most kills a report holds, and maxSize its most bytes.
+	// MaxKills is the most kills a report holds, and MaxSize its most bytes.
 	MaxKills = 128
-	maxSize  = 256 << 10
+	MaxSize  = 256 << 10
 
 	version = 1
 	prefix  = "oom-report-"
-	// maxContainers is the most containers of one kill. A full report of them is under maxSize.
+	// maxContainers is the most containers of one kill. A full report of them is under MaxSize.
 	maxContainers = 16
 )
 
@@ -70,8 +70,8 @@ func Decode(data string) ([]Kill, error) {
 	if data == "" {
 		return nil, nil
 	}
-	if len(data) > maxSize {
-		return nil, fmt.Errorf("%d bytes, over %d", len(data), maxSize)
+	if len(data) > MaxSize {
+		return nil, fmt.Errorf("%d bytes, over %d", len(data), MaxSize)
 	}
 	var w wire
 	if err := json.Unmarshal([]byte(data), &w); err != nil {

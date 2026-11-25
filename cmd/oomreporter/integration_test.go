@@ -3,15 +3,12 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"errors"
+	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -29,10 +26,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -100,40 +95,15 @@ func (c *cluster) install(ctx context.Context) error {
 			return err
 		}
 	}
-	// Read by this process, so that the test cache sees a change of it.
-	dir, err := os.MkdirTemp("", "chart-")
+	chart, err := render(ctx, values)
 	if err != nil {
 		return err
-	}
-	defer func() { _ = os.RemoveAll(dir) }()
-	if err := os.CopyFS(dir, os.DirFS("testdata/chart")); err != nil {
-		return err
-	}
-	helm := exec.CommandContext(ctx, "helm", "template", release, ".",
-		"--namespace", reporter, "--set", "namespaces={"+tenant+"}", "--set", "image.digest="+digest)
-	helm.Dir = dir
-	out, err := helm.Output()
-	if err != nil {
-		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
-			return fmt.Errorf("helm template: %w: %s", err, exit.Stderr)
-		}
-		return fmt.Errorf("helm template: %w", err)
 	}
 	objects, err := client.New(c.cfg, client.Options{})
 	if err != nil {
 		return err
 	}
-	dec := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader(out), 4096)
-	for {
-		var u unstructured.Unstructured
-		if err := dec.Decode(&u); errors.Is(err, io.EOF) {
-			return nil
-		} else if err != nil {
-			return err
-		}
-		if len(u.Object) == 0 {
-			continue
-		}
+	for _, u := range chart {
 		var err error
 		switch u.GetKind() {
 		case "DaemonSet":
@@ -148,6 +118,7 @@ func (c *cluster) install(ctx context.Context) error {
 			return fmt.Errorf("%s %s: %w", u.GetKind(), u.GetName(), err)
 		}
 	}
+	return nil
 }
 
 // as is a client of a service account of the reporter's namespace, with a token as a pod of it on
@@ -207,7 +178,7 @@ func reportsGuarded(t *testing.T) {
 
 // refusal is what a policy of the chart said, or empty where none refused.
 func refusal(err error) string {
-	if err != nil && apierrors.IsForbidden(err) && strings.Contains(err.Error(), "ValidatingAdmissionPolicy '"+release) {
+	if err != nil && apierrors.IsForbidden(err) && strings.Contains(err.Error(), "ValidatingAdmissionPolicy '"+reporter+"."+release+"-") {
 		return err.Error()
 	}
 	return ""
@@ -243,6 +214,7 @@ func TestPolicy_AReportIsWrittenOnlyByItsNodesAgent(t *testing.T) {
 	c.grant(t, reporter, "other", rbacv1.PolicyRule{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"*"}})
 	c.grant(t, reporter, agentAccount, rbacv1.PolicyRule{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"create", "patch"}})
 
+	c.grant(t, reporter, controllerAccount, rbacv1.PolicyRule{APIGroups: []string{""}, Resources: []string{"configmaps"}, Verbs: []string{"update"}})
 	_, agentA := c.as(t, agentAccount, "node-a")
 	_, unbound := c.as(t, agentAccount, "")
 	_, other := c.as(t, "other", "node-a")
@@ -255,7 +227,16 @@ func TestPolicy_AReportIsWrittenOnlyByItsNodesAgent(t *testing.T) {
 		return err
 	}
 	reportsGuarded(t)
-	const notItsNodes, notAReport, kept = "whose token names its node", "no ConfigMap but its node's report", "no immutable, finalizers or ownerReferences"
+	const (
+		notItsNodes, notAReport = "whose token names its node", "no ConfigMap but its reports"
+		kept, picked, held      = "no immutable, finalizers or ownerReferences", "no labels or annotations", "a report and nothing else"
+	)
+	label := func(cm *corev1.ConfigMap) { cm.Labels = map[string]string{"grafana_dashboard": "1"} }
+	annotation := func(cm *corev1.ConfigMap) { cm.Annotations = map[string]string{"a": "b"} }
+	of := func(size int) func(*corev1.ConfigMap) {
+		return func(cm *corev1.ConfigMap) { cm.Data[report.Key] = strings.Repeat("a", size) }
+	}
+	none := func(cm *corev1.ConfigMap) { cm.Data = nil }
 	for name, tc := range map[string]struct {
 		err  error
 		want string
@@ -270,11 +251,26 @@ func TestPolicy_AReportIsWrittenOnlyByItsNodesAgent(t *testing.T) {
 			cm.OwnerReferences = []metav1.OwnerReference{{APIVersion: "v1", Kind: "Node", Name: "node-a", UID: "x"}}
 		})), kept},
 		"with a finalizer":                {put(agentA, configMap(report.Name("node-a"), func(cm *corev1.ConfigMap) { cm.Finalizers = []string{"example.com/x"} })), kept},
+		"with a label":                    {put(agentA, configMap(report.Name("node-a"), label)), picked},
+		"with an annotation":              {put(agentA, configMap(report.Name("node-a"), annotation)), picked},
+		"with another key":                {put(agentA, configMap(report.Name("node-a"), func(cm *corev1.ConfigMap) { cm.Data["x"] = "" })), held},
+		"with another key alone":          {put(agentA, configMap(report.Name("node-a"), func(cm *corev1.ConfigMap) { cm.Data = map[string]string{"x": ""} })), held},
+		"with bytes":                      {put(agentA, configMap(report.Name("node-a"), func(cm *corev1.ConfigMap) { cm.BinaryData = map[string][]byte{"x": []byte("x")} })), held},
+		"that is too large":               {put(agentA, configMap(report.Name("node-a"), of(report.MaxSize+1))), held},
+		"as large as may be":              {put(agentA, configMap(report.Name("node-a"), of(report.MaxSize))), ""},
+		"with none":                       {put(agentA, configMap(report.Name("node-a"), none)), ""},
+		"made by the controller":          {create(controller, configMap(report.Name("node-d"), none)), ""},
+		"made by it, of no report":        {create(controller, configMap("new")), notAReport},
+		"made by it, with a label":        {create(controller, configMap(report.Name("node-e"), label)), picked},
+		"made by it, with an annotation":  {create(controller, configMap(report.Name("node-e"), annotation)), picked},
+		"made by it, with another key":    {create(controller, configMap(report.Name("node-e"), func(cm *corev1.ConfigMap) { cm.Data["x"] = "" })), held},
+		"made by it, for good":            {create(controller, configMap(report.Name("node-e"), func(cm *corev1.ConfigMap) { cm.Immutable = new(true) })), kept},
+		"another's, by the controller":    {put(controller, configMap("another")), notAReport},
 		"that may not change again":       {put(agentA, configMap(report.Name("node-a"), func(cm *corev1.ConfigMap) { cm.Immutable = new(true) })), kept},
 		"by another, on that node":        {put(other, configMap(report.Name("node-a"))), notItsNodes},
 		"made by another, on that node":   {create(other, configMap(report.Name("node-c"))), notItsNodes},
 		"by an administrator":             {put(c.admin, configMap(report.Name("node-a"))), notItsNodes},
-		"another's, by its own":           {put(other, configMap("another")), ""},
+		"another's, by its own":           {put(other, configMap("another", label, annotation)), ""},
 		"made by another, of no report":   {create(other, configMap("others")), ""},
 		"made by another, for good":       {create(other, configMap("kept", func(cm *corev1.ConfigMap) { cm.Immutable = new(true) })), ""},
 		"made by another, of near a name": {create(other, configMap("oom-reports")), ""},
@@ -399,6 +395,52 @@ func TestPolicy_TheControllerChangesNothingOfAPodButItsConditions(t *testing.T) 
 		to := map[corev1.ConditionStatus]string{corev1.ConditionTrue: "False", corev1.ConditionFalse: "True"}[was[1]]
 		assert.Contains(t, refusal(patch(controller, types.JSONPatchType, `[{"op":"replace","path":"/status/conditions/1/status","value":"`+to+`"}]`)), conditions)
 	}
+	// Nor may one become another between them, or come before it.
+	tripled, err := c.admin.CoreV1().Pods(tenant).Get(ctx, p.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	tripled.Status.Conditions = []corev1.PodCondition{
+		{Type: corev1.PodReady, Status: corev1.ConditionFalse}, {Type: corev1.PodReady, Status: corev1.ConditionFalse}, {Type: corev1.PodReady, Status: corev1.ConditionTrue},
+	}
+	_, err = c.admin.CoreV1().Pods(tenant).UpdateStatus(ctx, tripled, metav1.UpdateOptions{})
+	require.NoError(t, err)
+	for _, op := range []string{`{"op":"replace","path":"/status/conditions/1/status","value":"True"}`, `{"op":"move","from":"/status/conditions/2","path":"/status/conditions/0"}`} {
+		assert.Contains(t, refusal(patch(controller, types.JSONPatchType, "["+op+"]")), conditions, op)
+	}
+	// Nor may its own fill the pod.
+	const many = "too many or too long"
+	own := func(n int, condition corev1.PodCondition) string {
+		conditions := make([]corev1.PodCondition, n)
+		for i := range conditions {
+			conditions[i] = condition
+			if n > 1 {
+				conditions[i].Type = corev1.PodConditionType(fmt.Sprintf("oom.actions-gateway.com/c%d", i))
+			}
+		}
+		body, err := json.Marshal(map[string]any{"status": map[string]any{"conditions": conditions}})
+		require.NoError(t, err)
+		return string(body)
+	}
+	longest := corev1.PodCondition{
+		Type: corev1.PodConditionType("oom.actions-gateway.com/" + strings.Repeat("a", 63)), Status: corev1.ConditionTrue,
+		Reason: strings.Repeat("a", 64), Message: strings.Repeat("a", 512),
+	}
+	require.NoError(t, merge(own(1, longest)))
+	for field, change := range map[string]func(*corev1.PodCondition){
+		"reason":  func(c *corev1.PodCondition) { c.Reason += "a" },
+		"message": func(c *corev1.PodCondition) { c.Message += "a" },
+	} {
+		longer := longest
+		change(&longer)
+		assert.Contains(t, refusal(merge(own(1, longer))), many, field)
+	}
+	require.NoError(t, merge(`{"status":{"conditions":[{"$patch":"delete","type":"`+string(longest.Type)+`"}]}}`))
+	assert.Contains(t, refusal(merge(own(201, longest))), many)
+	require.NoError(t, merge(own(200, longest)))
+	before, err := c.admin.CoreV1().Pods(tenant).Get(ctx, p.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	before.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionFalse}}
+	_, err = c.admin.CoreV1().Pods(tenant).UpdateStatus(ctx, before, metav1.UpdateOptions{})
+	require.NoError(t, err)
 	// None is refused what it may do already.
 	require.NoError(t, patch(c.admin, types.StrategicMergePatchType, `{"metadata":{"labels":{"c":"d"}},"status":{"phase":"Failed","conditions":[{"type":"Ready","status":"False","reason":"Was"}]}}`))
 	require.NoError(t, merge(condition("oom.actions-gateway.com/dind", "True")), "of a pod that ended")

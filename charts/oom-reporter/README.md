@@ -31,8 +31,8 @@ A kill that ended no container, such as a build's child process, gets the Event 
 | Runs as | Not root, no capability, read-only root filesystem, a `hostPath` volume | The same, with no `hostPath` |
 
 Three ValidatingAdmissionPolicies hold each to less than its RBAC grants, and no value turns them off.
-An agent writes only the report of the node its token names.
-The controller changes nothing of a pod but conditions of its own domain, and its Events carry only its own reasons.
+An agent writes only the report of the node its token names, and that holds no label, no annotation and no other data.
+The controller makes nothing but reports, changes nothing of a pod but conditions of its own domain, and its Events carry only its own reasons.
 The policies on the controller are evaluated for every write of a pod's status and every Event in the cluster, by one comparison of the writer's name that refuses nobody else.
 
 ## Install
@@ -59,10 +59,20 @@ The agent exits and says so where it is not there.
 
 ```bash
 helm install oom-reporter oci://ghcr.io/actions-gateway/charts/oom-reporter --version <version> \
-  --namespace oom-reporter \
+  --namespace oom-reporter --rollback-on-failure \
   --set "namespaces={team-a,team-b}" \
   --set image.digest=sha256:<digest of the release's oomreporter image>
 ```
+
+**Keep `--rollback-on-failure`** (`--atomic` in Helm 3).
+Helm makes the admission policies last, after the grants and the pods, so an install that fails there leaves the grants without them.
+The controller does nothing until the policies refuse it, and no agent has a report to write until it does.
+One whose controller keeps exiting with `the admission policies are not in force` is such an install: uninstall it, since until then the grants are all that holds a token of either component.
+It looks once, as it starts, and does not see a policy deleted later.
+
+**A namespace it may not read is left out**, and the others are not.
+Whoever administers a tenant's namespace can delete its RoleBinding, and deleting the namespace does the same.
+The controller's log names it, and the controller starts over within a minute of being able to read it.
 
 The chart requires Kubernetes ≥ 1.35 and cgroup v2.
 `helm template` has no cluster to ask, so it checks the first against the version Helm was built for: pass `--kube-version <your cluster's version>` where that is older.
@@ -74,7 +84,7 @@ Delete the `oom-report-` ConfigMaps before it, and the controller makes them aga
 
 | Key | Default | Description |
 |---|---|---|
-| `namespaces` | `[]` | Namespaces whose pods are read and written to. Required, unless `allNamespaces` is set. |
+| `namespaces` | `[]` | Namespaces whose pods are read and written to. Required, unless `allNamespaces` is set, and none the release's own. |
 | `allNamespaces` | `false` | Every namespace instead, by a ClusterRole. Whoever takes over the controller can then read every pod spec in the cluster. |
 | `image.{repository,tag,digest}` | `ghcr.io/actions-gateway/oomreporter`, `""`, `""` | The one image both run. Rendering fails without the digest, unless `allowFloatingImageTags=true`. |
 | `imagePullPolicy` | `IfNotPresent` | Pull policy of both. |

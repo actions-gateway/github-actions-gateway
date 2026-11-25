@@ -11,6 +11,14 @@ the longest suffix in a name of 63 characters.
 {{- end -}}
 
 {{/*
+The name of what is not in the release's namespace, which another release of this name shares. A
+namespace's name has no dot in it, so no two of them make one.
+*/}}
+{{- define "oom-reporter.sharedName" -}}
+{{- printf "%s.%s" .Release.Namespace (include "oom-reporter.fullname" .) -}}
+{{- end -}}
+
+{{/*
 The service accounts. Grants and policies both take their names from here.
 */}}
 {{- define "oom-reporter.agentName" -}}{{ include "oom-reporter.fullname" . }}-agent{{- end -}}

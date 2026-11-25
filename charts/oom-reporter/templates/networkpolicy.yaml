@@ -2,7 +2,7 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "oom-reporter.fullname" . }}-api-server-only
+  name: {{ include "oom-reporter.fullname" . }}-api-server-ports
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "oom-reporter.labels" . | nindent 4 }}
