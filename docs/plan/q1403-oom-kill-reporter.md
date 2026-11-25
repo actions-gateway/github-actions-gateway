@@ -1,7 +1,7 @@
 # A node reporter for out-of-memory kills: Q1403
 
 > **Status (2026-11-25): decided, D1 to D6 each as recommended.
-> [PRs 1 to 3](#build-size) are built: the reader and the rule, the two programs, and the chart; they have run together against an API server alone, and not on a node.**
+> [PRs 1 to 4](#build-size) are built: the reader and the rule, the two programs, the chart, and the image; they have run together against an API server alone, and not on a node.**
 
 A container killed for memory reads `OOMKilled` with exit code 137 whichever limit ran out: its own, its pod's, the one all pods share, or the node's memory.
 The AGC therefore names no cause (Q1400), and neither does anything else in the Kubernetes API that a tenant's operator can read on the pod.
@@ -640,8 +640,8 @@ PRs 1 to 6 are [Q1403](../queue/Q1403.md), which gates 2.1; the three that do no
 |---|---|---|---|
 | 1 | The counter reader and the rule, tested on figures a local container gave, and on a kubelet's files once there are any; finding the pods' root | M | The tool |
 | 2 | Agent, report ConfigMap, controller; condition and Event | M | The tool |
-| 3 | Chart: RBAC, the admission policies and their envtest, the node affinity, NetworkPolicy; the no-import gate. From PR 2's review: policy 1 refuses the agent `immutable`, finalizers and owner references, the chart sets `-pods-root`, and a test holds a condition's writes and the Events to their limits against a real API server | M | The tool |
-| 4 | Image and publish: a `Dockerfile` stage, `docker-bake.hcl`, the `publish.yml` matrix (seven images become eight) and a third chart, SBOM, Trivy, `verify-release.sh` and the docs that count seven | M | The tool, outside a source build |
+| 3 | Chart, and its entry in `publish.yml` and `verify-release.sh`: RBAC, the admission policies and their envtest, the node affinity, NetworkPolicy; the no-import gate. From PR 2's review: policy 1 refuses the agent `immutable`, finalizers and owner references, the chart sets `-pods-root`, and a test holds a condition's writes and the Events to their limits against a real API server | M | The tool |
+| 4 | Image and publish: a `Dockerfile` stage, `docker-bake.hcl`, the `publish.yml` matrix (seven images become eight), SBOM, Trivy, `verify-release.sh` and the docs that count seven | M | The tool, outside a source build |
 | 5 | kind e2e: one kill per reason, the condition and the Event; the operator's page | M | The tool, trusted |
 | 6 | AGC, the record: the edge, and the reason in the failed job's record and Event, with a test for each of [its limits](#reading-it) | S | The answer outliving the worker |
 | 7 | ([Q1406](../queue/Q1406.md)) AGC, the action: the setting through the GMC, the wait, text by reason, no raise and no re-run above the container; its e2e and docs | M | D3 |
@@ -669,7 +669,7 @@ What it has to do is let somebody tell one root cause of an out-of-memory kill f
 Beside today, this set makes nothing worse in action where it is installed, and nothing at all where it is not.
 Reading 8 is Q1316's dogfood run, which is the only test of the rule on GKE: without it the tool says on its page that GKE has not been read.
 PR 4 cannot follow a release that claims the tool, since an unpublished image is a source build.
-PR 5 could, and then the rule ships with nothing that kills a container on purpose behind it.
+PR 5 could, and then the rule ships with nothing that kills a container on purpose behind it, and the image signed with nothing that has started it.
 D2's single DaemonSet would save the report ConfigMap, one policy and about a third of 2 and 3.
 
 **Where PR 9 sits**, for any of these sets:
