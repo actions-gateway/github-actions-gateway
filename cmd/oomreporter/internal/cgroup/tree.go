@@ -52,7 +52,11 @@ func Open(fsys fs.FS, root string) (*Tree, error) {
 		return nil, fmt.Errorf("%q is not named as a kubelet's pods' root", root)
 	}
 	t := &Tree{fsys: fsys, root: root}
-	if _, err := t.Sample(); err != nil {
+	s, err := t.Sample()
+	if err == nil && len(s.Pods) == 0 && len(s.Refused) > 0 {
+		err = fmt.Errorf("none of %d pods may be read: %w", len(s.Refused), fs.ErrPermission)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("pods' root %s: %w", root, err)
 	}
 	return t, nil
@@ -155,6 +159,8 @@ type Pod struct {
 	// a cgroup below it, or the pod has one that is none's. A container that has the host's
 	// view of the tree can make that in another's pod (Q1396).
 	Nested bool
+	// Refused is the containers whose files may not be read.
+	Refused map[string]bool
 }
 
 // Sample is every pod's counters, and the local events of the cgroups above them.
@@ -162,18 +168,20 @@ type Sample struct {
 	Pods map[string]Pod // by UID
 	QoS  map[string]Events
 	Root Events
+	// Refused is the pods whose files may not be read, by UID.
+	Refused map[string]bool
 }
 
 // Sample reads the tree. A pod or container is left out where it is removed while it is
 // read, or may not be read.
 func (t *Tree) Sample() (Sample, error) {
-	s := Sample{Pods: map[string]Pod{}, QoS: map[string]Events{}}
-	if err := t.samplePods(s.Pods, "", t.root); err != nil {
+	s := Sample{Pods: map[string]Pod{}, QoS: map[string]Events{}, Refused: map[string]bool{}}
+	if err := t.samplePods(s, "", t.root); err != nil {
 		return Sample{}, err
 	}
 	for _, class := range qosClasses {
 		dir := t.qosDir(class)
-		if err := t.samplePods(s.Pods, class, dir); err != nil {
+		if err := t.samplePods(s, class, dir); err != nil {
 			return Sample{}, err
 		}
 		e, err := readEvents(t.fsys, path.Join(dir, localFile))
@@ -187,7 +195,7 @@ func (t *Tree) Sample() (Sample, error) {
 	return s, err
 }
 
-func (t *Tree) samplePods(pods map[string]Pod, class, dir string) error {
+func (t *Tree) samplePods(s Sample, class, dir string) error {
 	names, err := subdirs(t.fsys, dir)
 	if err != nil {
 		return err
@@ -198,14 +206,18 @@ func (t *Tree) samplePods(pods map[string]Pod, class, dir string) error {
 			continue
 		}
 		pod, err := t.samplePod(path.Join(dir, name))
-		if gone(err) || errors.Is(err, fs.ErrPermission) {
+		if errors.Is(err, fs.ErrPermission) {
+			s.Refused[uid] = true
+			continue
+		}
+		if gone(err) {
 			continue
 		}
 		if err != nil {
 			return err
 		}
 		pod.QoS = class
-		pods[uid] = pod
+		s.Pods[uid] = pod
 	}
 	return nil
 }
@@ -215,7 +227,7 @@ func (t *Tree) samplePod(dir string) (Pod, error) {
 	if err != nil {
 		return Pod{}, err
 	}
-	pod := Pod{Containers: map[string]Events{}, Single: map[string]bool{}}
+	pod := Pod{Containers: map[string]Events{}, Single: map[string]bool{}, Refused: map[string]bool{}}
 	containerName := cgroupName
 	if t.systemdPrefix() != "" {
 		containerName = scopeName
@@ -231,8 +243,9 @@ func (t *Tree) samplePod(dir string) (Pod, error) {
 			continue
 		}
 		if errors.Is(err, fs.ErrPermission) {
-			// Its own root can make it so, where its cgroup is writable (recall).
-			pod.Nested = true
+			// Its own root can make it so, where its cgroup is writable to it: a file's mode can
+			// be changed (Linux v6.12, kernfs_iop_setattr, read).
+			pod.Nested, pod.Refused[id[1]] = true, true
 			continue
 		}
 		if err != nil {

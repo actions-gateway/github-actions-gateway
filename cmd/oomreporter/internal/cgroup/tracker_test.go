@@ -213,6 +213,63 @@ func TestObserve_AContainerMadeAgainStartsFromNothing(t *testing.T) {
 	}
 }
 
+func TestObserve_KeepsTheCountsOfWhatItMayNotReadForAWhile(t *testing.T) {
+	dead := Events{OOM: 3, OOMKill: 3}
+	open := Pod{Subtree: dead, Containers: map[string]Events{runnerID: dead}, Single: map[string]bool{runnerID: true}}
+	shut := Pod{Subtree: dead, Refused: map[string]bool{runnerID: true}, Nested: true}
+	for name, tc := range map[string]struct {
+		closed func(s *Sample)
+	}{
+		"a container": {func(s *Sample) { s.Pods[burstableUID] = shut }},
+		"a pod": {func(s *Sample) {
+			delete(s.Pods, burstableUID)
+			s.Refused = map[string]bool{burstableUID: true}
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var tr Tracker
+			at := start
+			observe := func(closed bool) map[string]Rise {
+				s := one(open)
+				s.Pods[guaranteedUID] = Pod{}
+				if closed {
+					tc.closed(&s)
+				}
+				at = at.Add(time.Minute)
+				rises, again := tr.Observe(s, at)
+				assert.False(t, again)
+				return rises
+			}
+			observe(false)
+			for range 3 {
+				assert.Empty(t, observe(true))
+				assert.Empty(t, observe(false))
+			}
+			s := one(open)
+			s.Pods[guaranteedUID] = Pod{Subtree: Events{OOMKill: 1, OOMGroupKill: 1}}
+			tr.Observe(s, at)
+			rises, _ := tr.Observe(s, at)
+			assert.Zero(t, rises[guaranteedUID].Peers)
+		})
+	}
+}
+
+func TestObserve_AKillOfAContainerItMayNotReadIsNotNamedItsOwn(t *testing.T) {
+	var tr Tracker
+	once := Events{OOM: 1, OOMKill: 1, OOMGroupKill: 1}
+	tr.Observe(one(Pod{Containers: map[string]Events{runnerID: {}}}), start)
+	tr.Observe(one(Pod{Subtree: once, Refused: map[string]bool{runnerID: true}, Nested: true}), start)
+	rises, _ := tr.Observe(one(Pod{Subtree: once, Refused: map[string]bool{runnerID: true}, Nested: true}), start)
+	want := Rise{Confirmed: true, GroupKills: 1, Inside: 1}
+	assert.Equal(t, want, rises[burstableUID])
+
+	tr.Observe(one(Pod{Subtree: once, Refused: map[string]bool{runnerID: true}, Nested: true}), start.Add(time.Second))
+	after := Pod{Subtree: Events{OOM: 1, OOMKill: 2, OOMGroupKill: 2}}
+	tr.Observe(one(after), start.Add(2*time.Second))
+	rises, _ = tr.Observe(one(after), start.Add(2*time.Second))
+	assert.True(t, rises[burstableUID].RecentOwn)
+}
+
 func TestObserve_AProcessKilledElsewhereIsAPeers(t *testing.T) {
 	var tr Tracker
 	s := one(Pod{})

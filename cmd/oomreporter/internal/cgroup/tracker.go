@@ -80,7 +80,8 @@ type tracked struct {
 	// stood above the pod at the first.
 	shown int
 	above uint64
-	// gone is the containers not in the newest sample, whose events are the last read.
+	// gone is the containers not in the newest sample, whose events are the last read. One
+	// that may not be read is there.
 	gone map[string]bool
 	// nested is set once a sample of the pod has been.
 	nested bool
@@ -132,7 +133,10 @@ func carry(was, now Pod) (Pod, map[string]bool) {
 	maps.Copy(single, now.Single)
 	for id, e := range was.Containers {
 		if _, ok := all[id]; !ok {
-			all[id], gone[id] = e, true
+			all[id] = e
+			if !now.Refused[id] {
+				gone[id] = true
+			}
 			if was.Single[id] {
 				single[id] = true
 			}
@@ -146,7 +150,7 @@ func carry(was, now Pod) (Pod, map[string]bool) {
 func (t *Tracker) forget(s Sample, at time.Time) map[string]Rise {
 	left := map[string]Rise{}
 	for uid, p := range t.pods {
-		if now, ok := s.Pods[uid]; ok && !restarted(p.last.pod, now) {
+		if now, ok := s.Pods[uid]; ok && !restarted(p.last.pod, now) || s.Refused[uid] {
 			continue
 		}
 		if p.shown > 0 {
@@ -210,7 +214,7 @@ func (p *tracked) advance(r Rise, at time.Time) {
 	if r.Inside+r.Pod+r.Pods > 0 {
 		p.absorbed = at
 	}
-	if r.Pod+p.known() > 0 || r.Inside > 0 && len(p.gone) > 0 {
+	if r.Pod+p.known() > 0 || r.Inside > 0 && len(p.gone)+len(p.last.pod.Refused) > 0 {
 		p.absorbedOwn = at
 	}
 	for id := range p.gone {

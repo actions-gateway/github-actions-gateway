@@ -77,12 +77,13 @@ func TestSample_ReadsTheKubeletsTree(t *testing.T) {
 		Pods: map[string]Pod{
 			burstableUID: {
 				QoS: "burstable", Subtree: n(4), Local: n(4),
-				Containers: map[string]Events{runnerID: n(5), sandboxID: n(6)}, Single: map[string]bool{},
+				Containers: map[string]Events{runnerID: n(5), sandboxID: n(6)}, Single: map[string]bool{}, Refused: map[string]bool{},
 			},
-			guaranteedUID: {Subtree: n(7), Local: n(7), Containers: map[string]Events{}, Single: map[string]bool{}},
+			guaranteedUID: {Subtree: n(7), Local: n(7), Containers: map[string]Events{}, Single: map[string]bool{}, Refused: map[string]bool{}},
 		},
-		QoS:  map[string]Events{"burstable": n(2), "besteffort": n(3)},
-		Root: n(1),
+		QoS:     map[string]Events{"burstable": n(2), "besteffort": n(3)},
+		Root:    n(1),
+		Refused: map[string]bool{},
 	}
 	for name, dirs := range map[string][]string{
 		"systemd":                       systemd(""),
@@ -292,6 +293,7 @@ func TestSample_LeavesOutAPodItMayNotRead(t *testing.T) {
 			got, err := mayNotRead(t, dirs, file)
 			require.NoError(t, err)
 			assert.Equal(t, []string{guaranteedUID}, slices.Collect(maps.Keys(got.Pods)))
+			assert.Equal(t, map[string]bool{burstableUID: true}, got.Refused)
 		})
 	}
 }
@@ -304,7 +306,33 @@ func TestSample_LeavesOutAContainerItMayNotRead(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, []string{sandboxID}, slices.Collect(maps.Keys(got.Pods[burstableUID].Containers)))
 			assert.True(t, got.Pods[burstableUID].Nested)
+			assert.Equal(t, map[string]bool{runnerID: true}, got.Pods[burstableUID].Refused)
 			assert.False(t, got.Pods[guaranteedUID].Nested)
+			assert.Empty(t, got.Refused)
+		})
+	}
+}
+
+func TestOpen_RefusesANodeWhosePodsItMayNotRead(t *testing.T) {
+	dirs := systemd("")
+	for name, tc := range map[string]struct {
+		dirs    []string
+		refused []string
+		wantErr bool
+	}{
+		"all of them":    {dirs, []string{dirs[3], dirs[6]}, true},
+		"one of them":    {dirs, dirs[3:4], false},
+		"there are none": {dirs[:3], nil, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := &hookFS{FS: mount(tc.dirs...), open: func(n string) error {
+				if slices.Contains(tc.refused, path.Dir(n)) {
+					return fs.ErrPermission
+				}
+				return nil
+			}}
+			_, err := Open(h, "")
+			assert.Equal(t, tc.wantErr, errors.Is(err, fs.ErrPermission), err)
 		})
 	}
 }
