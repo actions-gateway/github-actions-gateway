@@ -1294,8 +1294,16 @@ To have timed-out jobs counted in a private repository, grant the App the option
 ### Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run
 
 **Who is affected:** a tenant with a `Binpack` or `Throughput` `RunnerSet`, whose jobs killed at a memory limit the profile chose are re-run automatically.
-Nothing to do, unless a matrix of such jobs uses GitHub's default `fail-fast: true` beside a job that fails too, such as one that reports on the matrix: its cancelled legs are then no longer re-run with the killed one.
-Set `fail-fast: false` on it, or re-run those legs by hand.
+Nothing to do, unless a matrix of such jobs uses GitHub's default `fail-fast: true`, whose cancelled legs the old retry re-ran with the killed one.
+They now stay cancelled mainly in the four cases below ([the rest](../design/04-operational-flows.md#the-jobs-a-killed-job-took-with-it-q1401)), and `fail-fast: false` on the matrix leaves none to cancel:
+
+- **Beside a job that fails on its own.** Re-run them by hand.
+- **Behind a job that reports on the matrix** (`if: always()`), with `maxEvictionRetries: 1`, since they take a second attempt and a second slot.
+  Raise it to 2, the default.
+- **Behind such a job, where another killed job of the run went first**, since each takes a slot of its own until the matrix's own killed leg is re-run.
+  Raise `maxEvictionRetries` where one run loses several jobs.
+- **In a run with two such matrices and a job reporting on each**, where each lost a leg (Q1404).
+  Re-run them by hand.
 
 **What changed.** The retry called `rerun-failed-jobs`, so a sibling job that failed on its own was re-run with the killed one and could turn green.
 The AGC now finds the killed job by its runner's name and re-runs it alone; [when it still re-runs every failed job](worker-rightsizing.md#when-a-job-runs-out-of-memory) is listed with the retry (Q1319).
@@ -1303,7 +1311,8 @@ The AGC now finds the killed job by its runner's name and re-runs it alone; [whe
 **What you will see.** The sibling keeps its `failure`, and the run stays red.
 Where several jobs of one run were killed and another failed on its own, the killed ones are re-run one attempt at a time, a slot of `maxEvictionRetries` each.
 Where two sets each lost a job of one run, the sets go one after the other.
-Where such jobs are legs of one `fail-fast: true` matrix that a red job reports on, only the first may be re-run: GitHub can conclude its attempt `cancelled`, which ends the retry with `EvictionRerunWithheld` and `reason="run_cancelled"` (Q1401).
+Behind a job that reports on them, the first killed job is re-run with that job, and the rest together in the attempt after, with the legs a `fail-fast: true` matrix cancelled (Q1401).
+A run whose latest attempt GitHub concluded `cancelled` only because it carries an earlier attempt's cancelled jobs no longer ends a scale-set re-run with `reason="run_cancelled"`.
 `actions_gateway_eviction_rerun_withheld_total` can carry `reason="job_not_found"`.
 
 **Rolling back** returns the retry to `rerun-failed-jobs`, for the re-runs still waiting too.

@@ -961,8 +961,7 @@ What is built is in [04-operational-flows.md](../design/04-operational-flows.md#
 - **A run whose failed jobs were all killed takes one `rerun-failed-jobs`**, since it re-runs nothing else that ended `failure` and spends one slot.
 - **Several killed jobs beside another failure go one attempt at a time**, a slot each, so a run's budget bounds its attempts and no genuine failure is re-run.
   Two killed jobs spend the default budget of 2, so a third kill is `budget_exhausted`.
-  The common cost is a job that aggregates the others (`if: always()`, red when one it needs is): it is another failure, since the jobs list carries no `needs:`, so three killed legs of a matrix behind one recover two where `rerun-failed-jobs` recovers three.
-  [Q1401](../queue/Q1401.md) recovers them all from what the first single-job re-run takes along.
+  A job that aggregates the others (`if: always()`, red when one it needs is) is another failure in the first attempt only, since the jobs list carries no `needs:` and the first single-job re-run shows them (Q1401, [how](../design/04-operational-flows.md#the-jobs-a-killed-job-took-with-it-q1401)); so three killed legs behind one are recovered on two slots, and two matrices with an aggregate each are not ([Q1404](../queue/Q1404.md)).
   The alternatives: one `rerun-failed-jobs` for the set, which recovers them all on one slot and re-runs the genuine failure, as this release [must not](release-2.1.md#what-this-release-must-not-do); or one slot for the whole set, which lets one reservation start an attempt for each kill, up to 15.
 - **A cancelled job is not another failure**, so a killed leg of a fail-fast matrix and its cancelled siblings take one `rerun-failed-jobs` where no other job ended `failure`, as they did before Q1319.
   A timeout or a concurrency cancel beside the kill is re-run with them, since the list spells the three the same ([readings](#readings-for-a-cancelled-sibling-2026-11-24)); telling them apart is [Q1399](../queue/Q1399.md).
@@ -1017,11 +1016,11 @@ The jobs list gives `conclusion: cancelled` for every shape below; the failure-l
 - **"Started after the killed job completed" does not tell an aggregate from an independent failure.** It separates all 102 other failures of those 51 runs, 45 aggregates (one inside a reusable workflow, read by eye) and 57 independent.
   Over the runs with two or more failed jobs (195 of the 600 listed again with `created` at or before 2026-11-24 22:40 UTC), taking the first to complete as the killed one, all 98 dependents started after it and so did 73 of the 612 others, in 19 runs: jobs that waited for a runner, a later stage that needed something else, an aggregate of other jobs.
   A killed job is listed as completed about 10 minutes after it died; a start 600 s later or more leaves 22 of the 73, in 3 runs.
-- **What a single-job re-run takes along is the sound fact**, by M6, and is [Q1401](../queue/Q1401.md).
+- **What a single-job re-run takes along is the sound fact**, by M6, and is what Q1401 built on.
 - **`rerun-failed-jobs` takes a cancelled job.** In 21 public runs whose second attempt re-ran the failed jobs (18 of them `rust-lang/cargo`'s), it ran every job the first had cancelled, 1 to 12 a run, and of the successful ones a single job, of `rust-lang/rust-analyzer` 43474205606 (not read why).
 - **A single-job re-run leaves a cancelled job cancelled**, carried with its old `completed_at` and `runner_name`, in both public runs found with one (`rust-lang/cargo` 40960902618 and 38222465819, 11 cancelled legs each).
   Each re-ran the failed leg and `conclusion`, which needs it and was red again; 40960902618's third attempt then took the 11 and `conclusion`, and succeeded.
-- **GitHub concluded both of those second attempts `cancelled`**, though neither lists a job it ran as `cancelled`, so `run_cancelled` withholds whatever the AGC would do next.
+- **GitHub concluded both of those second attempts `cancelled`**, though neither lists a job it ran as `cancelled`, so `run_cancelled` asks who cancelled (Q1401, [how](../design/04-operational-flows.md#who-cancelled-an-attempt-q1401)).
   In two more runs, a leg past its 6-hour limit beside a red `conclusion` was concluded `cancelled` too (43369863330 and 37671009459).
   What decides between `failure` and `cancelled` for a run holding both is not established.
 - **This repository's matrices mostly set `fail-fast: false`**, so its 0 is not a rate for a tenant that leaves the default.

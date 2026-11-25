@@ -16,6 +16,7 @@
 //	GET  /api/v3/.../actions/runners?name=<n>    — list runners (name filter)
 //	DELETE /api/v3/.../actions/runners/{id}      — deregister runner
 //	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}  — run status/conclusion (Q811)
+//	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}/attempts/{n} — one attempt's conclusion (Q1401)
 //	GET  /api/v3/repos/{o}/{r}/actions/workflows/{id}/runs — newer runs, always none (Q1181)
 //	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}/jobs — a run's jobs, always none (Q1375)
 //	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}/attempts/{n}/jobs — an attempt's jobs, always none (Q1320)
@@ -512,8 +513,8 @@ func (s *server) handleRunnerAPI(w http.ResponseWriter, r *http.Request) {
 	// calls above are: the AGC addresses GITHUB_API_BASE_URL, which the e2e venue
 	// points at /api/v3, while the unprefixed form stays reachable for a caller
 	// configured without it.
-	if id, ok := runIDFromRunPath(path); ok && r.Method == http.MethodGet {
-		s.handleRunStatus(w, id)
+	if id, attempt, ok := runFromPath(path); ok && r.Method == http.MethodGet {
+		s.handleRunStatus(w, id, attempt)
 		return
 	}
 	if path == "/api/v3/actions/runner-registration" ||
@@ -1429,8 +1430,8 @@ func (s *server) handleJobStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleReposAPI routes the /repos/{owner}/{repo}/... REST endpoints the AGC
-// addresses directly off GITHUB_API_BASE_URL. Only the run read, the workflow-runs and
-// jobs lists, rerun-failed-jobs, a job's rerun, force-cancel and check-run creation are served;
+// addresses directly off GITHUB_API_BASE_URL. Only the run and attempt reads, the
+// workflow-runs and jobs lists, rerun-failed-jobs, a job's rerun, force-cancel and check-run creation are served;
 // anything else 404s, as an unimplemented endpoint should.
 func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.URL.Path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
@@ -1453,8 +1454,8 @@ func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 		handleAnnotations(w)
 		return
 	}
-	if id, ok := runIDFromRunPath(r.URL.Path); ok && r.Method == http.MethodGet {
-		s.handleRunStatus(w, id)
+	if id, attempt, ok := runFromPath(r.URL.Path); ok && r.Method == http.MethodGet {
+		s.handleRunStatus(w, id, attempt)
 		return
 	}
 	if isWorkflowRunsPath(r.URL.Path) && r.Method == http.MethodGet {
@@ -1523,25 +1524,29 @@ func handleJobs(w http.ResponseWriter) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"total_count": 0, "jobs": []any{}})
 }
 
-// runIDFromRunPath reports the run_id of a bare .../actions/runs/{run_id} path —
-// the run itself, not one of its sub-resources, which carry a further segment.
-func runIDFromRunPath(path string) (string, bool) {
+// runFromPath reports the run_id of a bare .../actions/runs/{run_id} path — the run
+// itself, not one of its sub-resources, which carry a further segment — with attempt 0,
+// or the run_id and attempt of its .../attempts/{n}.
+func runFromPath(path string) (id string, attempt int, ok bool) {
 	const marker = "/actions/runs/"
 	i := strings.Index(path, marker)
 	if i < 0 {
-		return "", false
+		return "", 0, false
 	}
-	id := path[i+len(marker):]
-	if id == "" || strings.Contains(id, "/") {
-		return "", false
+	id, rest, sub := strings.Cut(path[i+len(marker):], "/")
+	if id == "" || !sub {
+		return id, 0, id != ""
 	}
-	return id, true
+	n, found := strings.CutPrefix(rest, "attempts/")
+	attempt, err := strconv.Atoi(n)
+	return id, attempt, found && err == nil && attempt > 0
 }
 
 // handleRunStatus serves the run read the deletion arm's cancel check makes before
 // it asks for a re-run (Q811):
 //
 //	GET /api/v3/repos/{owner}/{repo}/actions/runs/{run_id}
+//	GET /api/v3/repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{n}
 //
 // It answers off the same /control/runstate the re-run refusal keys on, so the two
 // calls cannot disagree about one run: a run marked not-yet-concluded reads
@@ -1555,8 +1560,9 @@ func runIDFromRunPath(path string) (string, bool) {
 //
 // run_attempt is 1 plus the re-runs accepted for the run, as live GitHub starts a
 // new attempt for each: the scale-set tier keys its re-run budget on the attempt
-// and refuses a run that names none (Q1182).
-func (s *server) handleRunStatus(w http.ResponseWriter, runID string) {
+// and refuses a run that names none (Q1182). want is the attempt asked for, or 0 for the
+// latest. One before the latest (Q1401) reads completed/failure, and one past it is a 404.
+func (s *server) handleRunStatus(w http.ResponseWriter, runID string, want int) {
 	s.mu.Lock()
 	status, conclusion := "completed", "failure"
 	switch {
@@ -1572,6 +1578,13 @@ func (s *server) handleRunStatus(w http.ResponseWriter, runID string) {
 		}
 	}
 	s.mu.Unlock()
+	if want > attempt {
+		http.Error(w, "no such attempt", http.StatusNotFound)
+		return
+	}
+	if want != 0 && want < attempt {
+		attempt, status, conclusion = want, "completed", "failure"
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
