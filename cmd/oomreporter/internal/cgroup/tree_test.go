@@ -85,10 +85,11 @@ func TestSample_ReadsTheKubeletsTree(t *testing.T) {
 		Root: n(1),
 	}
 	for name, dirs := range map[string][]string{
-		"systemd":                   systemd(""),
-		"systemd under cgroupRoot":  systemd("kubelet-"),
-		"cgroupfs":                  cgroupfs(""),
-		"cgroupfs under cgroupRoot": cgroupfs("kubelet"),
+		"systemd":                       systemd(""),
+		"systemd under cgroupRoot":      systemd("kubelet-"),
+		"cgroupfs":                      cgroupfs(""),
+		"cgroupfs under cgroupRoot":     cgroupfs("kubelet"),
+		"cgroupfs as deep as it may be": cgroupfs("a/b"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			tree, err := Open(mount(dirs...), "")
@@ -142,6 +143,7 @@ func TestOpen(t *testing.T) {
 	}{
 		"cgroup v1":                        {fstest.MapFS{"memory/kubepods/memory.oom_control": {}}, "", "not a cgroup v2 mount"},
 		"no kubelet":                       {mount("system.slice"), "", "no pods' root found"},
+		"deeper than that":                 {mount(cgroupfs("a/b/c")...), "", "no pods' root found"},
 		"two at one depth":                 {mount(append(systemd(""), cgroupfs("")...)...), "", "more than one pods' root: kubepods, kubepods.slice"},
 		"two, and the operator named one":  {mount(append(systemd(""), cgroupfs("")...)...), "kubepods.slice", ""},
 		"a deeper one is not looked at":    {mount(append(systemd(""), cgroupfs("made")...)...), "", ""},

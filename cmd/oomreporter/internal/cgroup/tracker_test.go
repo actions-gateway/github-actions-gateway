@@ -235,14 +235,37 @@ func TestObserve_AKillBelowAContainerIsNoContainers(t *testing.T) {
 }
 
 func TestObserve_APodMadeAgainStartsFromNothing(t *testing.T) {
+	for name, was := range map[string]Pod{
+		"every count":    {Subtree: Events{OOM: 3, OOMKill: 3, OOMGroupKill: 3}, Local: Events{OOM: 3}},
+		"oom":            {Subtree: Events{OOM: 2}},
+		"oom_kill":       {Subtree: Events{OOMKill: 2}},
+		"oom_group_kill": {Subtree: Events{OOMGroupKill: 2}},
+		"its own oom":    {Local: Events{OOM: 2}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var tr Tracker
+			tr.Observe(one(was), start)
+			rises, again := tr.Observe(one(Pod{}), start)
+			assert.Empty(t, rises)
+			assert.False(t, again)
+			tr.Observe(one(dead()), start)
+			rises, _ = tr.Observe(one(dead()), start)
+			assert.Equal(t, Rise{Confirmed: true, GroupKills: 1, Pod: 1, Read: true, Containers: []string{runnerID}}, rises[burstableUID])
+		})
+	}
+}
+
+func TestObserve_APodMadeAgainHasLeftNothingOut(t *testing.T) {
+	met := Pod{Subtree: Events{OOM: 1}, Local: Events{OOM: 1}}
 	var tr Tracker
-	tr.Observe(one(Pod{Subtree: Events{OOM: 3, OOMKill: 3, OOMGroupKill: 3}}), start)
-	rises, again := tr.Observe(one(Pod{}), start)
-	assert.Empty(t, rises)
-	assert.False(t, again)
-	tr.Observe(one(dead()), start)
-	rises, _ = tr.Observe(one(dead()), start)
-	assert.Equal(t, uint64(1), rises[burstableUID].GroupKills)
+	tr.Observe(one(Pod{Subtree: Events{OOMKill: 2}}), start)
+	for i := range time.Duration(3) {
+		tr.Observe(one(met), start.Add(i*groupLag))
+	}
+	tr.Observe(one(dead()), start.Add(3*groupLag))
+	rises, _ := tr.Observe(one(dead()), start.Add(3*groupLag))
+	require.Contains(t, rises, burstableUID)
+	assert.False(t, rises[burstableUID].Recent)
 }
 
 func TestObserve_WaitsOutATornSample(t *testing.T) {
