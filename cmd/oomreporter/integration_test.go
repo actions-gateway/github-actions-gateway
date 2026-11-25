@@ -499,14 +499,20 @@ func (c *cluster) start(t *testing.T) (*rest.Config, *counted) {
 	n := &counted{}
 	cfg.WrapTransport = func(rt http.RoundTripper) http.RoundTripper { n.RoundTripper = rt; return n }
 	ctx, stop := context.WithCancel(t.Context())
-	done := make(chan error)
+	done := make(chan error, 1)
 	go func() {
 		done <- run(ctx, c.controller.Spec.Template.Spec.Containers[0].Args, env(map[string]string{"POD_NAMESPACE": reporter}),
 			func() (*rest.Config, error) { return cfg, nil }, noLog)
 	}()
 	t.Cleanup(func() {
 		stop()
-		assert.NoError(t, <-done)
+		// A manager whose caches never sync, for a grant it lacks, does not stop (v0.25.2).
+		select {
+		case err := <-done:
+			assert.NoError(t, err)
+		case <-time.After(apiTimeout):
+			t.Error("the controller has not stopped")
+		}
 	})
 	require.Eventually(t, func() bool {
 		_, err := c.admin.CoreV1().ConfigMaps(reporter).Get(t.Context(), report.Name("node-a"), metav1.GetOptions{})
