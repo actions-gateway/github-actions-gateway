@@ -176,6 +176,7 @@ Five things follow:
   GitHub's job list spells a job past its `timeout-minutes` the same way, and one a concurrency group cancelled, so those are re-run too.
   A run GitHub itself concludes `cancelled`, as it can one holding a failure and a timeout, is not re-run at all (`run_cancelled`), unless the attempt only carries cancelled jobs from an earlier one.
   Behind a job that reports on the matrix the cancelled legs are re-run in a second attempt, which needs `maxEvictionRetries` of at least 2, the default; at 1 they get `EvictionRetriesExhausted`.
+  It needs one more for each other killed job re-run before the matrix's leg, and two matrices that each lost a leg and have a reporting job each keep their cancelled legs.
   Where another job failed on its own they are not re-run: re-run the run's failed jobs by hand, or set `fail-fast: false` on a matrix whose legs outgrow their memory.
 
 Every failed job is re-run, as a disruption's recovery does, where the AGC cannot tell which jobs were killed: GitHub's job list cannot be read, the worker's pod names no runner and its job name is not unique, a disruption recovery is re-running the same attempt, or 16 or more workers of one attempt were killed.

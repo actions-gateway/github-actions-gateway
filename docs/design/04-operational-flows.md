@@ -788,15 +788,22 @@ It is not another failure, so a run whose only other failure is an aggregate is 
 One red in both, such as a cleanup job with a bug, is re-run once more; nothing in the list says why a job failed.
 
 **The siblings' turn** is the release with no killed job left, and the entry stays parked for it only where the list the last call was made from held a cancelled job that was not killed.
-It holds a slot of its own, under the last killed worker's key with `/siblings` appended, so it needs `maxEvictionRetries` of at least 2; on a spent budget it ends as `EvictionRetriesExhausted`, whose message names the siblings.
-It is dropped where the run succeeded, another job failed on its own, no cancelled job is left, or somebody re-ran the run since.
+It holds a slot of its own, under the last killed worker's key with `/siblings` appended, so it needs `maxEvictionRetries` of at least 2; on a spent budget it ends as `EvictionRetriesExhausted`, whose message names the siblings, as the Events that end its wait do.
+A killed job that needs the one the call named was re-run with it, so it is no longer waiting.
+The turn is dropped where the run succeeded, another job failed on its own, no cancelled job is left, or somebody re-ran the run since.
 
 What loses that turn, where a killed job still parked goes one at a time instead:
 
 - A restart between GitHub accepting the call and the record of it, or a call whose response is lost.
   The ledger holds what GAG meant to call, not that the attempt was its own, and after a person's `rerun-failed-jobs` every red job would read as a dependent.
+- A red job that reports on another matrix.
+  Of two fail-fast matrices with a killed leg and an aggregate each, the second leg's attempt carries the first aggregate, which is then another failure, so the siblings of both stay cancelled.
+- A killed job no red job needs, handled before the leg whose aggregate is red.
+  It takes a slot and shows no dependent, so the leg and the siblings then need two more; the other order recovers all three on two.
 - A list GitHub refuses, or two jobs of the called job's name, since the dependents are then unknown.
 - Another set's re-run of the same run in between, whose own last release takes the cancelled jobs where that set's ledger allows it.
+
+Only the spent budget and the end of the 24 hours are reported in an Event; a dropped turn is a log line.
 
 #### Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)
 

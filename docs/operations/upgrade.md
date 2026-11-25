@@ -1294,9 +1294,16 @@ To have timed-out jobs counted in a private repository, grant the App the option
 ### Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run
 
 **Who is affected:** a tenant with a `Binpack` or `Throughput` `RunnerSet`, whose jobs killed at a memory limit the profile chose are re-run automatically.
-Nothing to do, unless a matrix of such jobs uses GitHub's default `fail-fast: true`, where its cancelled legs can stay cancelled in two cases.
-Beside a job that fails on its own they are no longer re-run with the killed leg: set `fail-fast: false` on the matrix, or re-run them by hand.
-Behind a job that reports on the matrix (`if: always()`) they take a second attempt and a second slot, so a set with `maxEvictionRetries: 1` re-runs the killed leg and not its siblings: raise it to 2, the default.
+Nothing to do, unless a matrix of such jobs uses GitHub's default `fail-fast: true`, whose cancelled legs the old retry re-ran with the killed one.
+They now stay cancelled in four cases, and `fail-fast: false` on the matrix avoids them all:
+
+- **Beside a job that fails on its own.** Re-run them by hand.
+- **Behind a job that reports on the matrix** (`if: always()`), with `maxEvictionRetries: 1`, since they take a second attempt and a second slot.
+  Raise it to 2, the default.
+- **Behind such a job, where another killed job of the run went first**, since each takes a slot of its own until the matrix's own killed leg is re-run.
+  Raise `maxEvictionRetries` where one run loses several jobs.
+- **In a run with two such matrices and a job reporting on each**, where each lost a leg.
+  Re-run them by hand.
 
 **What changed.** The retry called `rerun-failed-jobs`, so a sibling job that failed on its own was re-run with the killed one and could turn green.
 The AGC now finds the killed job by its runner's name and re-runs it alone; [when it still re-runs every failed job](worker-rightsizing.md#when-a-job-runs-out-of-memory) is listed with the retry (Q1319).
