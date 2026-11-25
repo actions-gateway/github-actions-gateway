@@ -158,6 +158,10 @@ The re-run waits until GitHub concludes the run, because GitHub refuses one whil
 It waits up to 24 hours, then gives up with an `EvictionRerunFailed` Warning Event and `actions_gateway_eviction_rerun_failures_total{cause="oom",reason="run_never_concluded"}`; re-run it by hand then.
 An AGC restart does not lose the wait (Q1244).
 
+**A job killed in its first seconds** can die before GitHub's message saying which runner took it is handled.
+The AGC then waits for that message, up to 15 minutes, before it raises any limit, and keeps the `Failed` pod until it has acted (Q1389).
+Without one it raises nothing and re-runs nothing, and reports a Warning `EvictionRecoveryIdentityUnknown` Event and `actions_gateway_eviction_recovery_identity_unknown_total{cause="oom"}`; [find the job and re-run it by hand](troubleshooting.md#a-runner-killed-for-memory-whose-job-is-unknown).
+
 Only the killed job is re-run, found by the name of the runner that died, and a sibling that failed on its own stays failed (Q1319).
 Four things follow:
 

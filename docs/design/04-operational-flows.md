@@ -650,6 +650,34 @@ A sidecar killed for memory is not covered: the runner survives it to report the
 
 Every withhold spends no slot and emits the **Normal** `EvictionRerunWithheld` Event naming the fix.
 
+**It waits for the killed worker's start** (Q1389).
+Until its `JobStarted` is handled, a worker's pod names the job it was created for, which is often not the job its runner took, and acting on it raised that other job's limit and spent a slot of that other job's run.
+So the class leaves a kill unclaimed while its pod carries no `started-job-id`, and the start stamps the `Failed` pod, which no other terminal pod takes.
+The stamp reaches recovery through the worker-pod watch, whose predicate admits it on a `Failed`, unclaimed pod and nowhere else.
+
+The wait is 15 minutes from the pod's end, or from this process's first scan of the set where that is later, because a restarted AGC scans before its listener has polled the message queue.
+It is capped at an hour after the pod's end, so restarts cannot hold a pod for good.
+The price is an AGC down for longer than that: its first scan gives up before its listener's first poll, with the start unread in the queue, and one down for 45 to 60 minutes waits only what is left of the hour.
+GitHub concluded a killed job 10 minutes after it started ([measured](../plan/q555-automatic-recovery-design.md#readings-from-the-binpack-turn-up-2026-11-24) on three kills in the job's first 17 seconds), so 15 minutes outlasts the job.
+It delays no re-run, since the re-run waits for the run to conclude, which needs the killed job to.
+
+| After the wait | What happens |
+|---|---|
+| The start arrived | The class acts on the job it names |
+| The start carried no complete run identity | Reported as `EvictionRecoveryIdentityUnknown`, no raise and no re-run |
+| No start, or the pod was deleted before one | The same report, under a claim that covers no job, so the job the worker was created for keeps its own recovery and its own failure's cause |
+
+A start that the AGC could not record is redelivered and recorded later, except where one batch holds that start and the job's completion: the completion is handled after it and the start is then dropped, which ends in the last row.
+A listener that cannot open its session for those 15 minutes ends there too, and a start it reads later finds the pod claimed.
+Since that claim covers no job, detection records the killed job's failure with no cause, and a re-run by hand that passes counts as flaky.
+
+A killed worker whose pod is gone before a restarted AGC's first scan is left to the vanished arm, which re-runs every failed job of the run with no raise, as every disruption arm does.
+That arm re-runs nothing for a job whose own worker is still listed, with no start recorded or with an idle worker beside it, because such a job may still be queued.
+
+The reaper keeps an unclaimed kill past `completedPodTTL`, to 5 minutes after the wait ends.
+Only a kill the class could retry waits: a runner with its own memory limit and a name, on a pod a sizing profile built, that no disruption arm takes.
+The disruption arms do not wait, and read the created-for identity as before ([Q1398](../queue/Q1398.md)).
+
 **The raised limit is a per-job floor in the failure ledger**, under `memoryFloors["<runID>/<job name>"]` for 7 days.
 Provisioning a scale-set worker looks it up by the assignment's run ID and job display name and raises the runner's memory limit to it where the resolved limit is lower; under `Binpack` the memory request rises with it, since that profile sets the two equal.
 Nothing checks that a node can hold the raised request: one no node can hold leaves the re-run `Pending`, and `maxRequests.memory` is what caps it ([measured](../plan/q555-automatic-recovery-design.md#readings-from-the-binpack-turn-up-2026-11-24)).
@@ -742,7 +770,7 @@ The record carries the worker's state at its terminal transition, which the pod 
 A worker whose completion has already been handled is not snapshotted, since nothing would take it; a record with neither a snapshot nor a pod has no context.
 A restart loses the snapshots waiting for a completion and the failures waiting for a worker, and the latter keep the running pod's context.
 The snapshot also carries the set's egress proxy pool as `proxy`, read from the AGC's cache: a colocated pool's `Ready` condition and `readyReplicas`, or `mode: shared` alone for a pool in another namespace, which that cache cannot see (Q1237).
-The cause a recovery claim names for the job is recorded with it, so a disrupted job is never read as flaky.
+The cause a recovery claim names for the job is recorded with it, so a disrupted job is not read as flaky, with two exceptions: a runner killed for memory whose [start never came](#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183), and any other worker claimed before its start was recorded, where it ran a job other than the one it was created for ([Q1398](../queue/Q1398.md)).
 
 A later completion of the same key with a new job ID is the job's next attempt or another job with its `name:`, which GitHub allows in one run, and the completion carries no attempt number to tell them apart.
 So the AGC reads the run's jobs in every attempt (`GET …/actions/runs/{id}/jobs?filter=all`) and finds the completed job by its runner's name (Q1375).

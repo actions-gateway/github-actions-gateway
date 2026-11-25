@@ -80,6 +80,7 @@ const (
 func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target Target) (<-chan struct{}, error) {
 	key := target.Key()
 	log := p.logForKey(key)
+	p.startWaits.scanned(key.String(), p.nowFn())
 
 	selector := map[string]string{LabelAcquisitionProtocol: AcquisitionProtocolScaleSet}
 	for k, v := range target.PodOwnerLabels() {
@@ -203,6 +204,14 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 	pod, cause := d.pod, d.cause
 	podLog := log.With("podName", pod.Name)
 
+	// Ahead of the claim and of every read of the pod's identity, which names the job the
+	// worker was created for until its start is recorded.
+	if cause == recoveryCauseOOM && oomAwaitingStart(pod) {
+		if pod = p.awaitStart(ctx, target, pod, podLog); pod == nil {
+			return closedChan()
+		}
+	}
+
 	// Claim before calling GitHub, and off the pod: the claim outlives the pod the
 	// evidence was read from, so a drain that removes the object seconds after the
 	// container exits no longer costs the run its recovery (Q1108).
@@ -252,9 +261,9 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 	// created for. Where another worker started that job, or an idle one can still take
 	// it, its run lost nothing here (Q1169). Both halves of the never-started case need a
 	// container that never ran: the started-job-id stamp lands asynchronously and is
-	// never written on a terminal pod, so a runner that took its own job and was
-	// disrupted before the stamp also reads as having started nothing, and may itself
-	// have held the job a walk would name.
+	// written on no terminal pod but a waiting memory kill's, so a runner that took its
+	// own job and was disrupted before the stamp also reads as having started nothing,
+	// and may itself have held the job a walk would name.
 	//
 	// A never-started worker whose job another runner started, with no idle worker beside
 	// it, still leaves the set one runner short, so the job left without one is named and
