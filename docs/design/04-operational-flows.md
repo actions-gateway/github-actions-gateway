@@ -803,7 +803,7 @@ What loses that turn, where a killed job still parked goes one at a time instead
 - A list GitHub refuses, or two jobs of the called job's name, since the dependents are then unknown.
 - Another set's re-run of the same run in between, whose own last release takes the cancelled jobs where that set's ledger allows it.
 
-Only the spent budget and the end of the 24 hours are reported in an Event; a dropped turn is a log line.
+Only the spent budget, a run gone at GitHub and the end of the 24 hours are reported in an Event; a dropped turn is a log line.
 
 #### Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)
 

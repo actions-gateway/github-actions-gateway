@@ -1295,7 +1295,7 @@ To have timed-out jobs counted in a private repository, grant the App the option
 
 **Who is affected:** a tenant with a `Binpack` or `Throughput` `RunnerSet`, whose jobs killed at a memory limit the profile chose are re-run automatically.
 Nothing to do, unless a matrix of such jobs uses GitHub's default `fail-fast: true`, whose cancelled legs the old retry re-ran with the killed one.
-They now stay cancelled in four cases, and `fail-fast: false` on the matrix avoids them all:
+They now stay cancelled mainly in the four cases below ([the rest](../design/04-operational-flows.md#the-jobs-a-killed-job-took-with-it-q1401)), and `fail-fast: false` on the matrix leaves none to cancel:
 
 - **Beside a job that fails on its own.** Re-run them by hand.
 - **Behind a job that reports on the matrix** (`if: always()`), with `maxEvictionRetries: 1`, since they take a second attempt and a second slot.
