@@ -538,6 +538,22 @@ func TestReserveScaleSetRerun_WidensOnlyTheAttemptItReRunsFrom(t *testing.T) {
 	assert.Equal(t, []string{"a"}, a.Jobs)
 }
 
+// TestReserveScaleSetRerun_AMergeRecordsEveryJobItTakes: a release that merges into a
+// disruption arm's record of the attempt records its other jobs there too.
+func TestReserveScaleSetRerun_AMergeRecordsEveryJobItTakes(t *testing.T) {
+	p, _, target, _, _ := jobsFixture(t)
+	for _, d := range []rerunDisruption{
+		{key: "pod-x", job: "x", failedAttempt: 1},
+		{key: "pod-b", job: "b", failedAttempt: 1, with: []killedWorker{{Job: "c", Disruption: "pod-c"}}},
+	} {
+		_, _, err := p.reserveScaleSetRerun(context.Background(), target, "4242", &d, recoveryCauseOOM, 2, nil)
+		require.NoError(t, err)
+	}
+	r := readLedger(t, p, target).Reruns["4242"]
+	assert.Equal(t, []string{"x", "b", "c"}, r.Attempts["1"].Jobs)
+	assert.Equal(t, 1, r.Count)
+}
+
 // TestJobRerun_AReplayedParkDoesNotWiden: parking a kill again, as a restart does, leaves
 // the single-job re-run its release recorded.
 func TestJobRerun_AReplayedParkDoesNotWiden(t *testing.T) {

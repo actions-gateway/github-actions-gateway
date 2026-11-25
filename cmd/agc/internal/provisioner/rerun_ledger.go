@@ -441,6 +441,7 @@ func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, r
 			outcome = rerunMerged
 			if !a.narrow(l, runID, d) {
 				a.add(d)
+				a.cover(d)
 			}
 			r.ExpiresAt = now.Add(rerunRecordTTL)
 			return true
