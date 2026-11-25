@@ -1,16 +1,7 @@
 # Release 2.1 Milestone Definition
 
-> **Status: scoped 2026-11-09; the ledger below says what has landed.** The maintainer made flaky-job detection and automatic retry for more platform failures the `v2.1.0` headline on 2026-11-09.
-> Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22), and Q1382's dogfood reading (2026-11-24); the ledger's open rows still gate the tag, except Q1406 and Q1407, which ride.
-> The readings' three refutations, Q1374 to Q1376, gated it from 2026-11-22 because each broke a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the `trigger="other"` rate this release measures success by, biased in opposite directions; all three are built.
-> Q1381 gated it too, settled 2026-11-22, because its re-runs landed in merge-queue runs nothing reads and each spent a `maxEvictionRetries` slot, which is the opposite of what this release is for; it and Q1320 are built, and the case it leaves is Q1391.
-> Q1389 gated it too: the out-of-memory class `v2.0.0` shipped could act on the wrong job where a worker died before its pod named the job it ran, reproduced in a unit-test probe and fixed on 2026-11-24.
-> Q1395 gates it too, settled 2026-11-24: detection could name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
-> Q1400 gated it too, settled 2026-11-24, for the same reason in the out-of-memory class `v2.0.0` shipped: its Events named the runner's own limit as the cause of a kill the node could have made.
-> They name no cause now, and what the class re-runs, raises and withholds is unchanged; no node kill of a runner has been reproduced.
-> Q1403 gates it, because naming no cause leaves the operator without one; [its design](q1403-oom-kill-reporter.md) reads which limit ran out on the node.
-> Q1401 gated it too: job-granular re-run (Q1319) recovered less than `v2.0.0` on a fail-fast matrix behind an aggregate job, and recovering less is the opposite of what this release is for.
-> What it still recovers less of is [in the upgrade notes](../operations/upgrade.md#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run).
+> **Status: scoped 2026-11-09; the [scope ledger](#scope-ledger) says what has landed and what still gates the tag.** The maintainer made flaky-job detection and automatic retry for more platform failures the `v2.1.0` headline on 2026-11-09.
+> A row added since then gates for the reason [under its ID](#why-the-rows-added-since-gate).
 > Nothing here is a commitment to a date.
 
 ## Why this release exists
@@ -58,6 +49,44 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 **Scoped 2026-11-09.
 Q1406 and Q1407 ride; the `rides` cell on Q1315 marks a punted row.** `v2.1.0` follows `v2.0.0`, so nothing here waits on anything but its own row and the 2.0 tag.
 The ledger takes a row for each item that merges onto the released surface before the tag.
+
+## Why the rows added since gate
+
+One heading per row or set, in ID order, so that two PRs adding a reason edit different places.
+
+### Q1374 to Q1376
+
+Gated from 2026-11-22.
+They are the readings' three refutations, and each broke a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the `trigger="other"` rate this release measures success by, biased in opposite directions.
+
+### Q1381
+
+Settled 2026-11-22.
+Its re-runs landed in merge-queue runs nothing reads, and each spent a `maxEvictionRetries` slot, which is the opposite of what this release is for.
+The case it leaves is [Q1391](../queue/Q1391.md).
+
+### Q1389
+
+The out-of-memory class `v2.0.0` shipped could act on the wrong job where a worker died before its pod named the job it ran, reproduced in a unit-test probe and fixed on 2026-11-24.
+
+### Q1395
+
+Settled 2026-11-24.
+Detection could name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
+
+### Q1400
+
+Settled 2026-11-24, for the same reason in the out-of-memory class `v2.0.0` shipped: its Events named the runner's own limit as the cause of a kill the node could have made.
+They name no cause now, and what the class re-runs, raises and withholds is unchanged; no node kill of a runner has been reproduced.
+
+### Q1401
+
+Job-granular re-run (Q1319) recovered less than `v2.0.0` on a fail-fast matrix behind an aggregate job, and recovering less is the opposite of what this release is for.
+What it still recovers less of is [in the upgrade notes](../operations/upgrade.md#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run).
+
+### Q1403
+
+Naming no cause leaves the operator without one, and [its design](q1403-oom-kill-reporter.md) reads which limit ran out on the node.
 
 ## Explicitly out of scope
 

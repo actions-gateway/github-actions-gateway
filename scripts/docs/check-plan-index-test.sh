@@ -26,6 +26,10 @@
 # under the blank line, an ID inside a link to somewhere else — is where a rule
 # this shape goes noisy first, and every one of them is a real shape on `main`.
 #
+# The block before it covers invariant 7, the shared-line rule (Q1185). Each red
+# case has a green twin that differs in the tag or in where the ID sits, so a rule
+# that stopped reading either fails here.
+#
 # Runs under `make check` (via `make scripts-test`) and the CI shellcheck job.
 set -euo pipefail
 shopt -s inherit_errexit
@@ -109,10 +113,17 @@ index() {
 # writes a bare H1, which is what keeps every case above this block out of the
 # rule: no `**Status` line, no preamble, nothing charged.
 plan_body() {
+    body_of alpha.md "$@"
+}
+
+# body_of PLAN LINES... — plan_body for a plan of another name.
+body_of() {
+    local plan="$1"
+    shift
     {
         printf '# Alpha\n\n'
         printf '%s\n' "$@"
-    } >"$WORK/docs/plan/alpha.md"
+    } >"$WORK/docs/plan/$plan"
 }
 
 # expect NAME WANT [SUBSTRING] — run the gate inside WORK, compare its exit
@@ -329,6 +340,65 @@ new_repo 'Q10' ''
 unback
 index '| [alpha.md](alpha.md) | Alpha scope | ✅ Done — nothing left |'
 expect 'a done non-release plan is still archive-ready while a release is untagged' 1 'referenced by no live item'
+TAG=
+
+
+# --- invariant 7: an untagged release plan's shared lines name no item (Q1185)
+
+CLEAN_2_1='| [release-2.1.md](release-2.1.md) | The 2.1 release, Q20 | ❌ Scoped; the [scope ledger](release-2.1.md#scope-ledger) says what gates |'
+
+TAG=v2.0.0
+new_repo 'Q10' '' 'release-2.1.md'
+index '| [release-2.1.md](release-2.1.md) | The 2.1 release | ❌ Scoped; [Q10](../queue/Q10.md) still gates |'
+expect 'an untagged release cell linking a live row is rejected' 1 'README.md:7 names Q10'
+
+new_repo 'Q10' '' 'release-2.1.md'
+index '| [release-2.1.md](release-2.1.md) | The 2.1 release | ❌ Scoped; Q99 landed |'
+expect 'an untagged release cell naming a closed row is rejected' 1 'README.md:7 names Q99'
+
+# One linked item is one finding, not one for the label and one for the target.
+new_repo 'Q10' '' 'release-2.1.md'
+index '| [release-2.1.md](release-2.1.md) | The 2.1 release | ❌ Scoped; [Q10](../queue/Q10.md) still gates |'
+expect 'a linked row is reported once' 1 '1 item(s) named on the shared lines'
+
+# The banner is the text above the first heading, quoted or not.
+new_repo 'Q10' '' 'release-2.1.md'
+index "$CLEAN_2_1"
+body_of release-2.1.md '> **Status: scoped.** The ledger says what landed.' '> Q10 gates it too.'
+expect 'an untagged release banner naming a row is rejected' 1 'release-2.1.md:4 names Q10'
+
+new_repo 'Q10' '' 'release-2.1.md'
+index "$CLEAN_2_1"
+body_of release-2.1.md '**Status:** scoped; the ledger says what landed.' '' '[Q10](../queue/Q10.md) came later.'
+expect 'a second paragraph above the first heading is read too' 1 'release-2.1.md:5 names Q10'
+
+# The Scope cell, an anchor that spells an ID, and everything under a heading are
+# where an item may be named. Q10 is live and targets the plan, so this is also the
+# assertion that invariant 5 left the paragraph to this rule.
+new_repo 'Q10' '' 'release-2.1.md'
+index "$CLEAN_2_1"
+body_of release-2.1.md '**Status:** scoped; [the ledger](release-2.1.md#scope-ledger-Q10) says what landed.' '' \
+    '## Scope ledger' '' '| [Q10](../queue/Q10.md) | Thing | open |'
+expect 'an untagged release naming its rows in the ledger alone is accepted' 0
+
+# After the tag the rule stops, and invariants 3 and 5 hold the lines as any other.
+TAG=v2.1.0
+new_repo 'Q10' '' 'release-2.1.md'
+index '| [release-2.1.md](release-2.1.md) | The 2.1 release | ⚠️ Shipped; [Q10](../queue/Q10.md) remains |'
+body_of release-2.1.md '**Status:** shipped; [Q10](../queue/Q10.md) remains.'
+expect 'a tagged release naming its residual row is accepted' 0
+
+new_repo 'Q10' '' 'release-2.1.md'
+index '| [release-2.1.md](release-2.1.md) | The 2.1 release | ⚠️ Shipped; one residual |'
+body_of release-2.1.md '**Status:** shipped; one residual.'
+expect 'a tagged release is held to the Status-paragraph rule again' 1 'pin their claim to no live Queue row'
+
+# The rule is for release plans only.
+TAG=v2.0.0
+new_repo 'Q10' ''
+index '| [alpha.md](alpha.md) | Alpha scope | 🚧 Phase 1 is [Q10](../queue/Q10.md) |'
+plan_body '**Status:** phase 1 is [Q10](../queue/Q10.md).'
+expect 'a non-release plan naming a row is accepted while a release is untagged' 0
 TAG=
 
 

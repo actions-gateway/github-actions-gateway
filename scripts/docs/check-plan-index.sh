@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # check-plan-index.sh — keep docs/plan/README.md and the docs/plan/ tree in sync,
-# in both directions. Six invariants, all fail-fast so drift can't ship:
+# in both directions. Seven invariants, all fail-fast so drift can't ship:
 #
 #   1. An open plan has open work. An active (non-Archive) row in
 #      docs/plan/README.md whose Status cell carries an open marker (⚠️ ❌ 🚧 🔲)
@@ -103,6 +103,18 @@
 #
 #      ⓘ exempts a paragraph, as it does an index row: an informational plan
 #      claims no progress, so it has nothing that goes stale.
+#
+#   7. An untagged release plan's shared lines name no item. Its row's Status cell
+#      and the plan's text above its first `##` heading carry no QNNN, linked or
+#      bare: the scope ledger holds one row per item, and the shared lines point
+#      at it. Every PR that closes a gating item would otherwise rewrite the same
+#      two lines, so each merge leaves the next PR conflicted and a release batch
+#      merges one at a time. Measured on the 2.1 plan: 12 of the 15 commits that
+#      touched it rewrote its index row, and 12 edited its banner (Q1185).
+#
+#      Invariant 5 leaves an untagged release plan to this rule, since 5b would
+#      demand the link this one refuses. Once the tag resolves, 5 applies again
+#      and this rule stops.
 #
 set -euo pipefail
 shopt -s inherit_errexit
@@ -512,6 +524,61 @@ elif (( ${#release_rows[@]} > 0 )); then
     fi
 fi
 
+# Invariant 7: an untagged release plan's shared lines name no item. A link's target
+# is dropped before either scan, so a linked item counts once and an anchor that
+# spells an ID counts for nothing.
+shared=()
+while IFS=$'\t' read -r lineno plan ids; do
+    unreleased_release_plan "$plan" || continue
+    for id in $ids; do shared+=("README.md:$lineno"$'\t'"$id"); done
+done < <(awk '
+    /^## Archive/ { exit }
+    /^\| \[/ {
+        line = $0
+        gsub(/\\\|/, "\001", line)
+        if (split(line, col, "|") != 5) next
+        if (!match(col[2], "\\]\\(release-[0-9]+\\.[0-9]+\\.md\\)")) next
+        plan = substr(col[2], RSTART + 2, RLENGTH - 3)
+        ids = ""
+        gsub(/\]\([^)]*\)/, "]", col[4])
+        while (match(col[4], "Q[0-9]+")) {
+            ids = ids " " substr(col[4], RSTART, RLENGTH)
+            col[4] = substr(col[4], RSTART + RLENGTH)
+        }
+        print FNR "\t" plan "\t" ids
+    }
+' "$readme")
+for f in ${disk_active+"${disk_active[@]}"}; do
+    unreleased_release_plan "$f" || continue
+    while IFS=$'\t' read -r lineno id; do
+        shared+=("$f:$lineno"$'\t'"$id")
+    done < <(awk '
+        /^## / { exit }
+        {
+            line = $0
+            gsub(/\]\([^)]*\)/, "]", line)
+            while (match(line, "Q[0-9]+")) {
+                print FNR "\t" substr(line, RSTART, RLENGTH)
+                line = substr(line, RSTART + RLENGTH)
+            }
+        }
+    ' "$plan_dir/$f")
+done
+if (( ${#shared[@]} > 0 )); then
+    errors=1
+    {
+        printf 'check-plan-index: %d item(s) named on the shared lines of an untagged release plan.\n' "${#shared[@]}"
+        printf 'Every PR closing a gating item would rewrite the same line, so the batch merges one at a time.\n'
+        printf 'Point the Status cell and the text above the first heading at the scope ledger, and say what\n'
+        printf 'an item did in its own ledger row or under its own heading. See\n'
+        printf 'docs/development/maintaining-backlog.md#cutting-a-release-the-scope-ledger\n'
+        for c in "${shared[@]}"; do
+            IFS=$'\t' read -r l i <<<"$c"
+            printf '  - docs/plan/%s names %s\n' "$l" "$i"
+        done
+    } >&2
+fi
+
 # Invariant 5: a plan doc's own Status paragraph, bound the same way — the one
 # above the file's first `##` heading, from that line to the blank line under it. The paragraphs around it carry the
 # doc's scope, method and verdict, which describe the work rather than claim its
@@ -535,6 +602,8 @@ extract_preamble() {
 pre_dangling=() pre_unlinked=() pre_mismatch=() pre_unpinned=()
 preambles_checked=0
 for f in ${disk_active+"${disk_active[@]}"}; do
+    # Invariant 7 owns an untagged release plan's preamble.
+    unreleased_release_plan "$f" && continue
     preamble="$(extract_preamble "$plan_dir/$f")"
     [[ -n "$preamble" ]] || continue
     # ⓘ exempts a preamble as it does an index row: an informational plan claims
