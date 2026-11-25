@@ -4755,6 +4755,10 @@ Reads are unaffected.
 **This is not the rollout race documented above.** That one reports `context deadline exceeded`, has endpoints present but not yet serving, and clears in seconds on retry.
 This one has *no endpoints at all*, fails instantly, and does not clear on retry, because there is no GMC pod for the Service to select.
 
+**On GKE, a call that ends in `No agent available` is a third case, with the GMC healthy.** GKE carries the API server's calls to pods through its `konnectivity-agent` pods, and while none is connected every webhook call fails instantly, conversion and validating alike.
+The GMC reads `1/1 Running` and the Service has endpoints, so the agents are the reading that tells it apart (step 4 below).
+It was read twice on a cluster scaled up from zero nodes, on 2026-08-28 and 2026-11-24, with the agents listed as starting or just started, and the same apply passed when it was run again minutes later.
+
 **Likely causes.**
 
 - **The cluster has no schedulable node**, so the GMC is `Pending` rather than crashed.
@@ -4775,6 +4779,9 @@ kubectl get pods -n gmc-system -o wide
 # 3. If a pod is Pending, it is a scheduling problem, not a webhook problem.
 kubectl describe pod -n gmc-system -l control-plane=controller-manager | tail -20
 kubectl get nodes
+
+# 4. On GKE, with the message `No agent available`: are the agents up?
+kubectl get pods -n kube-system -l k8s-app=konnectivity-agent
 ```
 
 **Resolution.**
@@ -4787,9 +4794,14 @@ kubectl get nodes
 
 - **If the pod is `Pending`, add capacity** and let the rollout complete.
   The apply cannot succeed before it does.
+- **If the message is `No agent available`, wait for the agents, then re-apply:**
+
+  ```sh
+  kubectl rollout status deployment/konnectivity-agent -n kube-system --timeout=5m
+  ```
 
 **Ordering, so it does not recur.** Bring the GMC up before applying v2 objects, which is the rule [install.md § the v2 API CRDs](install.md#the-v2-api-crds) states as *create v2 objects only once the GMC is running*.
-The dogfood scripts encode it: `wait_for_gmc` in `scripts/dogfood/lib/gmc.sh` runs after the pool resize that gives the GMC a node and before the apply its webhook serves.
+The dogfood scripts encode it: `wait_for_gmc` in `scripts/dogfood/lib/gmc.sh` runs after the pool resize that gives the GMC a node and before the apply its webhook serves, and waits for the rollout and for one ready konnectivity agent.
 
 ---
 

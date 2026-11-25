@@ -182,7 +182,7 @@ R0's resident memory is what "the larger process goes" rests on for R3t: `Runner
 - **R7a's kill is outside the host's reader**, as planned for.
 - **R7 read the status and not Q1395's rule.** The AGC was `v2.0.1-rc.2`, which does not hold that rule: it counts any container's `OOMKilled`, and it recorded both jobs' failures from a pod that was still `Running`, its sidecar's exit read as 0 and with no reason, before the API served `OOMKilled`, 143.
   It has no later read either, so no AGC judged that status.
-- **Step 1 took two tries.** The first failed at the API server's webhook call, "No agent available", while GKE's `konnectivity` agents, which carry it to the nodes, were still starting, and the second passed after their rollout; `e2e-start.sh` waits for the controller and not for them.
+- **Step 1 took two tries.** The first failed at the API server's webhook call, "No agent available", while GKE's `konnectivity` agents, which carry it to the nodes, were still starting, and the second passed after their rollout; the `e2e-start.sh` that ran waited for the controller and not for them (Q1016).
 - **R3's second container went before the poll read a rise in it**, so its last value there is 0; inotify's and the pod's are what it rests on.
 - **The job that died holds a worker slot** until GitHub gives up on it, so each reading waited for the one before.
 

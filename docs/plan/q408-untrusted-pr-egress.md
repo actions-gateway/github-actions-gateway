@@ -587,9 +587,9 @@ The [§3.7](#37-the-phase-2-validation-battery) probe pod is `curlimages/curl:8.
 `mirror-gcr-io` is the one instance that moved, 17 to 34, which is the negatives' own `docker-mirror-pull` added to the bake's resolutions.
 No mirror restart was needed this time: the hit counter discounts the [§3.7](#37-the-phase-2-validation-battery) probe by its user agent, which is the fix [§3.11](#311-phase-3-validation-graded-2026-08-28) asked for, working.
 
-**One failure, and it was the bring-up rather than the posture.** The first `e2e-start.sh` failed its tenant apply with `No agent available` from the conversion webhook, a third variant of that error which [troubleshooting.md](../operations/troubleshooting.md#applying-any-v2-object-fails-with-no-endpoints-available-for-service-webhook-service) does not cover: the GMC was `1/1 Running` and the `webhook-service` EndpointSlice was populated, but GKE's konnectivity agent had not connected, so the control plane could reach no in-cluster webhook at all.
+**One failure, and it was the bring-up rather than the posture.** The first `e2e-start.sh` failed its tenant apply with `No agent available` from the conversion webhook, a third variant of that error which [troubleshooting.md](../operations/troubleshooting.md#applying-any-v2-object-fails-with-no-endpoints-available-for-service-webhook-service) did not then cover: the GMC was `1/1 Running` and the `webhook-service` EndpointSlice was populated, but GKE's konnectivity agent had not connected, so the control plane could reach no in-cluster webhook at all.
 Re-running the same script unchanged succeeded.
-Filed as [Q1016](../queue/Q1016.md) rather than fixed here, since it is bring-up sequencing and this phase is egress.
+Filed as Q1016 rather than fixed here, since it is bring-up sequencing and this phase is egress.
 
 ## 4. Phases
 

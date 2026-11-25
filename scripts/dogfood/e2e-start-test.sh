@@ -49,6 +49,7 @@ REPO=octo/repo
 CALL_LOG="${WORKDIR}/calls.log"
 GATEWAYS_FILE="${WORKDIR}/gateways"
 WAIT_EXIT=0
+AGENT_EXIT=0
 ROLLOUT_EXIT=0
 # The Dragonfly CA Secret: whether it exists, and the base64 ca.crt it holds.
 SECRET_EXISTS=0
@@ -63,6 +64,7 @@ kubectl() {
 	get\ secret*) ((SECRET_EXISTS)) || return 1 ;;
 	get\ actionsgateways*) cat "${GATEWAYS_FILE}" ;;
 	config\ current-context) echo "gke_${PROJECT}_${ZONE}_${CLUSTER}" ;;
+	wait*konnectivity-agent*) return "${AGENT_EXIT}" ;;
 	wait*) return "${WAIT_EXIT}" ;;
 	rollout\ status*) return "${ROLLOUT_EXIT}" ;;
 	esac
@@ -80,6 +82,7 @@ reset_stubs() {
 	printf '%s\n' "$@" >"${GATEWAYS_FILE}"
 	: >"${CALL_LOG}"
 	WAIT_EXIT=0
+	AGENT_EXIT=0
 	ROLLOUT_EXIT=0
 	E2E_VARIANT=kata
 	E2E_MIRROR_BACKEND=distribution
@@ -210,11 +213,11 @@ check_not_contains "never waits on a pod label selector" \
 # The gateway CR does not exist until the overlay is applied, and `kubectl wait`
 # on an absent named resource fails immediately rather than waiting for it.
 check_before "applies the overlay before waiting on it" \
-	"apply -k" "kubectl wait"
+	"apply -k" "kubectl wait --namespace gag-dogfood-e2e"
 # The AGC has nowhere to schedule until the pool has grown, so a resize after
 # the wait leaves it Pending for the whole timeout (Q335).
 check_before "grows the system pool before waiting for the AGC" \
-	"clusters resize" "kubectl wait"
+	"clusters resize" "kubectl wait --namespace gag-dogfood-e2e"
 # Nothing may mutate a cluster before the context is pinned and verified.
 check_before "pins the cluster context before the resize" \
 	"config current-context" "clusters resize"
@@ -280,7 +283,7 @@ check_contains "opts into the repo-wide window on request" \
 check_contains "routes to the scale set as a single JSON string" \
 	'--body "gag-ci-e2e"' "${route_call}"
 check_before "flips routing only after the tenant is Ready" \
-	"kubectl wait" "variable set"
+	"kubectl wait --namespace gag-dogfood-e2e" "variable set"
 
 # --- the registry pull-through cache comes up with the tenant (Q408) ---------
 
@@ -367,6 +370,20 @@ check_not_contains "never applies the tenant without the validating webhooks" \
 	"apply -k" "$(cat "${CALL_LOG}")"
 check_not_contains "never routes e2e jobs when GMC is down" \
 	"variable set" "$(cat "${CALL_LOG}")"
+
+# With no konnectivity agent the same apply fails while the rollout reads
+# complete (Q1016).
+reset_stubs gag-dogfood gag-dogfood-ci
+run_main
+check_before "waits for a konnectivity agent before the apply its webhook admits" \
+	"deployment/konnectivity-agent" "apply -k"
+
+reset_stubs gag-dogfood gag-dogfood-ci
+AGENT_EXIT=1
+run_main
+check "no ready konnectivity agent fails the bring-up" 1 "${MAIN_RC}"
+check_not_contains "never applies the tenant with no agent ready" \
+	"apply -k" "$(cat "${CALL_LOG}")"
 
 # --- the Kata lane's open-egress policy is deleted, not merely unmanifested ---
 #
