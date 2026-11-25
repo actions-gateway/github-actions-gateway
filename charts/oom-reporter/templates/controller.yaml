@@ -66,7 +66,7 @@ spec:
                 values: [{{ .Values.controller.nodeLabel.value | quote }}]
       {{- end }}
       nodeSelector:
-        {{- toYaml (merge (dict "kubernetes.io/os" "linux") .Values.controller.nodeSelector) | nindent 8 }}
+        {{- toYaml (merge (dict "kubernetes.io/os" "linux") (default dict .Values.controller.nodeSelector)) | nindent 8 }}
       {{- with .Values.controller.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}

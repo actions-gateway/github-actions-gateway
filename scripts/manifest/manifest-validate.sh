@@ -180,6 +180,7 @@ oom_renders=(
 	"--set networkPolicy.apiServerCIDRs={192.0.2.1/32}"
 	"--set namespaces=null --set allNamespaces=true"
 	"--set image.digest= --set allowFloatingImageTags=true"
+	"--set agent.nodeSelector=null --set controller.nodeSelector=null"
 )
 for extra in "" "${oom_renders[@]}"; do
 	# shellcheck disable=SC2086

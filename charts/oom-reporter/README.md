@@ -86,7 +86,9 @@ Leave this namespace out of it.
 **An upgrade stops at a node whose agent exits**, since the agents are replaced one at a time, and leaves the others' as they were.
 
 **Uninstalling leaves** the `oom-report-` ConfigMaps, the node labels, the namespace, and the conditions of the pods there are.
-A node that is replaced comes without the label, so put it on the pool.
+A node that is replaced comes without the label, and the controller is Pending until one has it.
+Set it again, by hand or by a controller of yours that writes Nodes: a kubelet may not be given it, so a pool that passes its labels to the kubelet makes nodes that do not start.
+Where nothing can, use `controller.placement=Taints`.
 
 **A change of the cluster's encryption keys** that rewrites every stored ConfigMap is refused on the reports, as any other writer is.
 Delete the `oom-report-` ConfigMaps before it, and the controller makes them again.
