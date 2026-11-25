@@ -2,8 +2,7 @@
 #
 # Scope (see `make manifest-validate`): the hand-maintained and
 # controller-gen/kustomize-generated YAML under cmd/*/config/** and the
-# non-template YAML in charts/actions-gateway/ (Chart.yaml, values.yaml,
-# polaris.yaml). Helm templates themselves are NOT linted here — they embed Go
+# non-template YAML in charts/ (Chart.yaml, values.yaml, polaris.yaml). Helm templates themselves are NOT linted here — they embed Go
 # template syntax ({{ ... }}) that is not parseable YAML; their rendered output
 # is validated with `helm lint` + kubeconform instead.
 #
@@ -22,6 +21,7 @@ extends: default
 ignore: |
   charts/actions-gateway/templates/
   charts/actions-gateway-crds-v2/templates/
+  charts/oom-reporter/templates/
   deploy/dragonfly-core/ca-chart/templates/
 
 rules:

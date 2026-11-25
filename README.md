@@ -312,9 +312,10 @@ Integration tests need the envtest binaries.
 Use the make targets: they stage `KUBEBUILDER_ASSETS` at the Kubernetes version each module pins, and apply the suite's wall-clock budget.
 
 ```sh
-make test-integration              # both modules
+make test-integration              # all three modules
 make -C cmd/agc test-integration   # AGC only
 make -C cmd/gmc test-integration   # GMC only
+make test-integration-oomreporter  # oomreporter only (needs helm)
 ```
 
 </details>

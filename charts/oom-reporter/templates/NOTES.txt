@@ -1,0 +1,17 @@
+The agent runs on every node it tolerates, and needs namespace {{ .Release.Namespace }} to have the label
+pod-security.kubernetes.io/enforce=privileged. With none of its pods there:
+
+  kubectl -n {{ .Release.Namespace }} describe daemonset {{ include "oom-reporter.agentName" . }}
+
+{{- if eq .Values.controller.placement "NodeLabel" }}
+
+The controller stays Pending until a node has the label:
+
+  kubectl label node <a platform node> {{ .Values.controller.nodeLabel.key }}={{ .Values.controller.nodeLabel.value }}
+{{- else }}
+
+The controller may run on any node without a taint (controller.placement=Taints). Keep one on every
+pool that runs tenants' jobs.
+{{- end }}
+
+An agent that exits naming its pods' root has the wrong agent.podsRoot for its node.

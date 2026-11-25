@@ -1,0 +1,31 @@
+apiVersion: v2
+name: oom-reporter
+description: |-
+  Says on a pod which memory limit ran out when one of its containers was killed
+  for memory: the container's own, the pod's, the one all pods share, or the
+  node's. A node agent that can read no pod reports cgroup counters, and one
+  controller writes a pod condition and an Event from them. Stands alone: it
+  needs nothing of the actions-gateway charts, and they do not need it.
+type: application
+# Chart version: bump on every chart change (templates, values, packaging).
+version: 0.1.0
+# appVersion tracks the released image tag. The image reference operators run is
+# in values.yaml, pinned by digest.
+appVersion: "0.1.0"
+# The admission policies read a service account token's node claim, and the
+# tests run them on 1.35.
+kubeVersion: ">=1.35.0-0"
+keywords:
+  - oom
+  - out-of-memory
+  - cgroup
+  - memory-limit
+home: https://github.com/actions-gateway/github-actions-gateway
+sources:
+  - https://github.com/actions-gateway/github-actions-gateway
+maintainers:
+  - name: actions-gateway maintainers
+annotations:
+  # DEV PLACEHOLDER: publish.yml overrides this from the release tag at package
+  # time (Q293), same as the other charts.
+  artifacthub.io/prerelease: "true"
