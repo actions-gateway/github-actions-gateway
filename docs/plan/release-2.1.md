@@ -16,7 +16,7 @@
 
 `v2.0.0` ships the first half of automatic recovery: flaky-job detection (Q555), the futility checks on the disruption arms (Q1181), and the first retry class, an out-of-memory kill under right-sizing (Q1183).
 Each of those landed ahead of the dogfood readings its design put first, and the classes after the first are designed but not built ([q555-automatic-recovery-design.md](q555-automatic-recovery-design.md)).
-This release finishes it: it measures what the shipped half rests on, then adds the classes, so that fewer platform failures need someone to click re-run.
+This release finishes it: it measures what the shipped half rests on, then adds a class where something GAG owns separates it from a tenant's own failure, so that fewer platform failures need someone to click re-run.
 
 The order inside the release is the design's: the measurements first, because each class and the job-granular re-run are built on their answers.
 
@@ -45,11 +45,17 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | Q1381 | Withhold the re-run of a merge-group run displaced from the queue, which GitHub does not cancel | `2.1-gate` | ✅ landed: withheld once the pull request has a newer group, which 5 of 106 measured had as they concluded (the failed ones among 373 runs that never merged); a removed one not queued again is [Q1391](../queue/Q1391.md), not gated |
 | Q1319 | Re-run only the classified job, found by its runner's name | `2.1-gate` | ✅ landed: M6 measured 2026-11-24, and the out-of-memory retry re-runs the killed job alone |
 | [Q1401](../queue/Q1401.md) | Recover a fail-fast matrix's siblings behind an aggregate job | `2.1-gate` | 🔲 open: Q1319 leaves them cancelled, where `v2.0.0` re-runs them |
-| [Q1315](../queue/Q1315.md) | Retry a job failed while its colocated egress proxy pool was unavailable | `2.1-gate` | 🔲 open |
+| [Q1315](../queue/Q1315.md) | Retry a job failed while its colocated egress proxy pool was unavailable | rides | ⤴ punted: [explicitly out of scope](#explicitly-out-of-scope) |
 | [Q1316](../queue/Q1316.md) | Retry a job whose Docker-in-Docker sidecar crashed under it | `2.1-gate` | 🔲 open: readings taken 2026-11-24 on a local node, no discriminator found in what GAG reads; dogfood reproduction not run |
 | Q1395 | Keep a nested container's out-of-memory kill from reading as a platform fault on the sidecar | `2.1-gate` | ✅ landed: a sidecar's `OOMKilled` is a fault only with exit code 137; not run on Kata |
 | [Q1400](../queue/Q1400.md) | Keep a runner killed for its node's memory from being read as killed at its own limit | `2.1-gate` | 🔲 open: read from source; Q1316's dogfood reproduction would produce the kill |
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
 
-**Scoped 2026-11-09, and nothing rides yet.** `v2.1.0` follows `v2.0.0`, so nothing here waits on anything but its own row and the 2.0 tag.
+**Scoped 2026-11-09, and nothing rides yet: the `rides` cell on Q1315 marks a punted row.** `v2.1.0` follows `v2.0.0`, so nothing here waits on anything but its own row and the 2.0 tag.
 The ledger takes a row for each item that merges onto the released surface before the tag.
+
+## Explicitly out of scope
+
+| Q-ID | Item | Why it is out |
+|---|---|---|
+| [Q1315](../queue/Q1315.md) | Retry a job failed while its colocated egress proxy pool was unavailable | Nothing read so far tells a job the outage failed from one that failed for its own reason during it (reasoned), so the class could re-run genuine failures, which this release must not do. The designed reading also misses an outage the worker outlives and that is over when the completion arrives ([the readings](q555-automatic-recovery-design.md#readings-for-the-egress-proxy-class-q1315), 2026-11-24, kind), and how often a pool loses every replica is unmeasured. The row keeps its place in the queue. |

@@ -521,8 +521,9 @@ Either way it reads the same snapshot detection records, which is why Q1183 wait
 
 For a class whose job ends on a step's result ([Q1315](../queue/Q1315.md), [Q1316](../queue/Q1316.md)), the completion is where it fires, and the amendment (`amendFailedJob`, Q1376) adds what only a later read of the pod shows:
 
-- **The proxy class** fires from `Completed`, which holds the result and the proxy readiness together.
-  The amendment never replaces that reading, so it changes nothing for the class, and a restart after the record is written costs it nothing.
+- **The proxy class** (not built yet, [its readings](#readings-for-the-egress-proxy-class-q1315)) was designed to fire from `Completed`, which holds the result and the proxy readiness together.
+  Where the worker outlives an outage that is over when the completion arrives, that reading misses it, so the class needs one taken while the job runs.
+  The amendment never replaces the completion's reading, so it changes nothing for the class, and a restart after the record is written costs it nothing.
 - **The sidecar class** (not built yet, [its readings](#readings-for-the-dockerd-sidecar-class-q1316)) would fire from `Completed` where the running pod already shows the crash, as a restarted container's last termination.
   A crash the pod reports later, which the near-simultaneous end of a sidecar and the step that used it makes likely, is first known to the amendment, so the class also judges the record there, and the crash's time tells one before the job's end from one after.
   It cannot read the crash from the finished pod alone: the kubelet drops a restarted container's earlier termination from the status it writes as the pod finishes (measured on kubelet v1.35.5, 2026-11-23), so the AGC carries it from the events before.
@@ -601,10 +602,84 @@ In the order the CI history and existing machinery make cheapest:
 2. **Egress proxy pool unavailable** (`observable`), for a colocated pool: the snapshot's proxy `Ready` was `False` or `readyReplicas` was 0 while the job ran, and `ready` is the EgressProxy's `Ready` condition.
    The AGC already watches EgressProxies in its own namespace, so this needs nothing from Q1178.
    A shared pool in another namespace is invisible to it, so the class does not cover one.
+   The snapshot is taken too late for an outage the worker outlives and that ends before the completion arrives, and `Ready` is the wrong fact on both sides: the class needs zero ready replicas seen during the job, and a release that needs a ready replica ([the readings](#readings-for-the-egress-proxy-class-q1315)).
 3. **`dockerd` sidecar crash** (`freshPod`): the Docker-in-Docker sidecar's restart count rose.
    Open: the status and the usage sampler do not separate a platform's crash from the job's own, and R12's dogfood reproduction has not been run ([the readings](#readings-for-the-dockerd-sidecar-class-q1316)).
 
 **Decide (open question 3):** measure in that order, and ship only the out-of-memory class under Q1183; each later class is a row of its own once reproduced.
+
+### Readings for the egress proxy class (Q1315)
+
+The reading the class was designed around misses an outage the worker outlives and that is over when the completion arrives.
+A job whose worker outlives the outage can be recorded after the pool is back, because the runner reports through that pool, and the record then shows a healthy one.
+In two outages on each of two gateway shapes, one job of four was recorded with the fault.
+
+**How it was read**, on 2026-11-24 on a local kind cluster (Calico, Kubernetes v1.36.1, the images built from 38b8321f3) with two v2 scale sets on a private repository.
+One gateway reaches GitHub directly, the other through its own pool (`defaultProxyRef`); the workers of both use a colocated unmanaged pool of one replica, taken down with `kubectl scale --replicas=0`.
+The job is a `sleep 600`, failed by killing the `sleep` from outside, which stands for a step that failed because its network went away.
+It does not stand for a job assigned during the outage, which nothing here covers.
+The GMC was seeded with GitHub's IP ranges as the e2e suite does (Q1119): an earlier attempt without the seed stopped before any case, because the GMC's own fetch met a spent anonymous quota and the pools' policies allowed no GitHub address.
+Dogfood was not used, so R12's dogfood reproduction is still owed and GKE's treatment of a Service with no endpoints is unread.
+Each case ran once, so it shows what can happen and not how often.
+
+| Case (all times UTC) | Gateway | Steps failed | Pool back at 1 | GitHub concluded `failure` | AGC recorded it | `readyReplicas` recorded | Fault |
+|---|---|---|---|---|---|---|---|
+| A, no outage | direct | 02:43:21 | not down | 02:43:23 | 02:43:23 | 1 | none |
+| A, no outage | proxied | 02:43:23 | not down | 02:43:25 | 02:43:25 | 1 | none |
+| B, pods gone 02:45:31, scaled up 02:47:36 | direct | 02:45:37 | 02:47:40 | 02:47:50 | 02:47:50 | 1 | **missed** |
+| B | proxied | 02:45:39 | 02:47:42 | 02:47:52 | 02:47:52 | 1 | **missed** |
+| C, pods gone 02:49:55, scaled up 02:59:51 | direct | 02:50:05 | 02:59:53 | 02:59:31 | 02:59:31 | 0 | `EgressProxy pool-direct has no ready replicas` |
+| C | proxied | 02:50:07 | 02:59:53 | 02:59:33 | 03:00:04 | 1 | **missed** |
+
+"Pool back" is the `Ready` transition time on the EgressProxy, and C's hold ended when GitHub concluded both jobs, 9 min 26 s after their steps failed.
+
+**What the cases were set to decide**, written before they ran, and what they read (two more rows, for a 0 in B and for a canceled or unrecorded C, were not met):
+
+- A with `failure` and a replica ready says the harness stands: it did, on both gateways.
+- B with `readyReplicas` 1 says the completion-time recogniser misses the ordinary outage on that gateway shape: both shapes.
+- C with 0 on the direct gateway and 1 on the proxied one says it works past the lapse, on direct gateways only: that is what was read.
+- B and C both missing on both gateways would have asked whether the class stays in the release: not reached, since C was seen on the direct one.
+
+**Why B misses.** Both runners kept running through the outage, and GitHub heard of both failures 10 s after the pool was back.
+The record was written from that message, so it reads the restored pool.
+A runner that outlives the outage can only report after it, through the same pool (reasoned; B is one run of it).
+
+**Why C is split.** GitHub concluded both jobs while the pools were down, which fits a job lock lapsing (M3).
+The direct gateway heard it at once and recorded 0 replicas.
+The proxied gateway's polls failed through both outages (02:45:29 to 02:47:37 and 02:49:54 to 03:00:02; 23 of the 25 errors are `proxyconnect tcp: ... i/o timeout`, and the first of each outage is `unexpected EOF` as the proxy drained), so it heard C's conclusion 31 s later, with the pool back.
+A proxied gateway hears nothing from GitHub while its own pool is down, so it misses an outage of any length that the runner outlives (reasoned; both proxied jobs fit it).
+
+**A worker that ends inside the outage was not run.** Its pod's terminal event takes the snapshot from the AGC's own watch, with no message from GitHub (`SnapshotScaleSetWorker`), and the completion uses that snapshot where there is one.
+Read from source, so either gateway shape should record 0 replicas there.
+All six workers here ended after their pools were back or with none down: A at 02:43:23 and 02:43:25, B at 02:48:00 and 02:48:02, C at 03:00:32 (direct) and 03:00:24 (proxied).
+C's direct record kept 0 when its worker's later end amended it (03:00:33), with the pool back at 1: the amendment leaves the reading as it was.
+
+**`Ready` is the wrong fact for this class.** Every sample with the proxy pods gone (12 in B and 55 in C, 10 to 14 s apart) read `Ready=True` with `readyReplicas` absent, which is 0: an unmanaged pool at 0 of 0 is ready (`TestEgressProxyReconcile_UnmanagedScaleToZeroIsReady`).
+In the other direction, a pool below its floor reads `Ready=False` and can still serve from the replica it has (`ready := readyReplicas >= minReplicas`, read from source; no test of 1 of 2 was seen).
+So the recogniser needs zero ready replicas and not `Ready=False`, and the release needs a ready replica and not `Ready`.
+
+**A recogniser on `Ready`'s transition time is untested**, and these readings show where it would not hold.
+On these pools the time, read from the samples after the fact, moved at each restore, not at the outage's start: 02:47:40 and 02:47:42 in B, inside both runs, and 02:59:53 for case C's two pools.
+Reading the times alone, one that asks for a transition inside the run would have fired for case B's two jobs; none was run.
+In case C it would not have fired on the direct gateway, whose pool moved before the run (02:47:40) and after the record (02:59:53) but not between, and on the proxied one it moved 20 s after GitHub concluded the job and 11 s before the AGC recorded it.
+That it moved at all is inferred to be the GMC reconciling in the window when the pool was 0 of 1: no sample shows `Ready=False` in either outage, and the time stamped at the restore fits it.
+A managed pool, which turns `False` at the start, was not tested.
+
+**What would see it** is the AGC noting, from the EgressProxies it already watches, when a pool has no ready replica, and reading that against the job's own span.
+That is not built or tested, and it does not help a job the AGC learns of only after the fact unless the note is kept.
+
+**The nearest tenant shape was not run.** A job that fails on a host its allowlist denies leaves the pool `Ready` with its replicas, since the proxy's `/readyz` depends on its listener and its drain and never on a destination (read from source), so that shape does separate from an outage.
+
+**A job that fails for its own reason during an outage does not.** It has no replica in its pool either, so a class on the pool's state sees what it sees of a victim, and would re-run a genuine failure (reasoned, not run).
+The readings record the pool and the pod, and neither says why a step failed.
+
+**What could have moved the times.** Two other kind clusters shared the Docker VM for part of B and C, one from 02:44:36 to 02:46:22 and one from 02:45:12 to 02:54:54 by their owners' figures, with the load average as high as 40 on 18 cores in the readings taken.
+They overlap B from the pools' drain to its end, and C from its dispatch to about five minutes into its outage.
+They could bear on the drains (47 s and 46 s), on how soon GitHub heard after B's restore, and on C's 9 min 26 s.
+They are not shown to bear on the replica counts or the conclusions, which the readings rest on.
+The order in B rests on 10 s between the pool's return and the completion, which load could move; C's rests on minutes.
+Another session also ran `docker exec q1315-worker true` once before it made its cluster, and three older kind clusters were running throughout (how busy they were was not read).
+Case A's steps were failed 25 s and 27 s after their jobs started, not the 30 s planned, and B's pools were restored 125 s after they emptied, not 120 s.
 
 ### Readings for the `dockerd` sidecar class (Q1316)
 
