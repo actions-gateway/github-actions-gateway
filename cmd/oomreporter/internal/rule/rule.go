@@ -25,7 +25,8 @@ const (
 //
 // A kill of one process ends a container or does not, so nothing is claimed for it. Every
 // whole kill at a limit follows at least one allocation counted there, so a count
-// smaller than the kills leaves one that met some other limit. A limit below a container
+// smaller than the kills leaves one that met some other limit. A larger one proves nothing:
+// several allocations can wait for one kill, and each is counted. A limit below a container
 // kills no container whole, so what was counted there says nothing once the containers'
 // own files have.
 func Decide(r cgroup.Rise, podLimit bool) Reason {
@@ -38,7 +39,7 @@ func Decide(r cgroup.Rise, podLimit bool) Reason {
 		return Unknown
 	case r.Pod+r.Pods == 0 && r.Own > 0 && r.Own == r.GroupKills:
 		return ContainerLimit
-	case inside+r.Pods == 0 && r.Pod > 0 && r.Pod >= r.GroupKills:
+	case inside+r.Pods == 0 && r.Pod > 0 && r.GroupKills == 1:
 		if podLimit {
 			return PodLimit
 		}

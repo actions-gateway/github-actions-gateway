@@ -244,6 +244,9 @@ func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
 		"a neighbour's at the shared limit, then this at the node's, one process": {
 			then([]event{podsOOM, killed(peer, old)}, death(pod, runner)), 100 * time.Millisecond, 0,
 			map[string]Reason{runner: AbovePods}},
+		"one container's at the pod's, met twice, the other's at the node's": {
+			then(death(pod, runner, podOOM(pod), podOOM(pod)), death(pod, sidecar)), time.Millisecond, 0,
+			map[string]Reason{runner: PodLimit, sidecar: AbovePods}},
 		"a nested kill, then this at the shared limit": {
 			then(nested, death(pod, runner, podsOOM)), 100 * time.Millisecond, 0,
 			map[string]Reason{runner: PodsLimit}},
@@ -281,13 +284,24 @@ func TestDecide_ANestedKillHidesNoLimitAboveIt(t *testing.T) {
 	}
 }
 
-// The neighbour's allocation is at the shared limit before this pod's kill is first seen,
-// and its own kill after, so nothing shows that it was not this pod's.
-func TestDecide_CannotTellANeighboursPendingAllocation(t *testing.T) {
-	events := []event{podsOOM, killed(pod, runner), whole(pod, runner), killed(peer, runner), whole(peer, runner)}
-	r := observe(events, every(100*time.Millisecond), 0b11111, 0)[pod]
-	require.Len(t, r, 1)
-	assert.Equal(t, PodsLimit, Decide(r[0], false))
+// This pod is killed for the node's memory, and an allocation at the shared limit is there
+// that nothing has accounted for.
+func TestDecide_CannotTellANeighboursSpareAllocation(t *testing.T) {
+	gone := []event{func(n *node) { delete(n.pods, peer) }}
+	for name, tc := range map[string]struct {
+		events []event
+		mask   uint
+	}{
+		"before its kill":      {[]event{podsOOM, killed(pod, runner), whole(pod, runner), killed(peer, runner), whole(peer, runner)}, 0b11111},
+		"two for its one kill": {then(death(peer, runner, podsOOM, podsOOM), death(pod, runner)), 0b111111},
+		"of a pod gone unread": {then(death(peer, runner, podsOOM), gone, death(pod, runner)), 0b110001},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := observe(tc.events, every(100*time.Millisecond), tc.mask, 0)[pod]
+			require.Len(t, r, 1)
+			assert.Equal(t, PodsLimit, Decide(r[0], false))
+		})
+	}
 }
 
 func TestDecide_TwoReadsThatAgreeAreBothAnswered(t *testing.T) {
@@ -311,6 +325,7 @@ func TestDecide_ClaimsNothing(t *testing.T) {
 		"of one not read, and the pod's":        {GroupKills: 1, Inside: 1, Pod: 1, Confirmed: true},
 		"of a container's, and all pods'":       {GroupKills: 1, Inside: 1, Own: 1, Read: true, Pods: 1, Confirmed: true},
 		"of one read too soon":                  {GroupKills: 1, Inside: 1, Pod: 1, Read: true},
+		"of two kills at one limit":             {GroupKills: 2, Pod: 3, Confirmed: true, Read: true},
 		"of more kills than allocations":        {GroupKills: 2, Pod: 1, Confirmed: true},
 		"of a pod gone before a second":         {GroupKills: 1, Pods: 1},
 		"of one gone with nothing counted":      {GroupKills: 1},
