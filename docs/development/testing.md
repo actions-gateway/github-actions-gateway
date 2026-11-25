@@ -2091,7 +2091,7 @@ Both went unsettled in [Q1316's second run](../plan/q1316-dogfood-reproduction.m
   Take the tag from the running Deployment's image, fetch it, and read the code at it (`git show <tag>:<path>`); whether a commit is an ancestor of the tag misses a cherry-pick and a revert.
 - **Does a step that must land while a job is running wait on a permission prompt?** One fill's prompt waited 28 minutes, by which time both workers had ended, so that push read nothing and was repeated.
   Give the job a window longer than a prompt can take; that has not been run here.
-  Set a cutoff past which the step is not applied, so a late yes costs a repeat and not a wrong reading, and do not move it during the run.
+  Set a cutoff past which the step is not applied, so a late yes costs a repeat and not a wrong reading, and keep it where it was set; that run raised its own from 400 to 458 seconds between one prompt and the next.
   Never move the action out from behind its prompt to save the time: an object approved while it sleeps, and cued later, acts with nobody asked.
 
 ### A goroutine stack in the output is not always a failure
