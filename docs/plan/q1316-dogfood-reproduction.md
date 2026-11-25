@@ -159,6 +159,20 @@ The node reporter's design rests on five facts, and R8, R2 and R3 read them with
   Only `kubepods.slice` is read, so a virtual machine Kata keeps in a cgroup outside it is not seen, and where Kata keeps it is not read here.
 - **Who was over its request.** Every pod's `memory.current` in the sample before the kill, beside its requested memory from R0 by UID, and the plain pod's 12Gi.
 
+What the local runs read, the same in six of six (2026-11-24, kernel 6.12.76, one privileged container holding a `kubepods.slice` of its own, the reader at uid 65534 in it and `sample.py` as root; no kubelet, containerd or pod):
+
+- **Opening.** `memory.events` is owned by root with mode 0444, and the reader opened all 24 files, three in each of eight cgroups.
+- **`/dev/kmsg`.** The reader got `EPERM` with `kernel.dmesg_restrict` 1; as root it opened.
+- **Counters and the kernel's line**, for one kill at each limit in each run, the victim a container with `memory.oom.group` set:
+
+| Limit hit | `oom` in `memory.events.local`: container, pod, QoS slice, `kubepods.slice` | `oom_memcg` in the kernel's line | `task_memcg` |
+|---|---|---|---|
+| The container's | 1, 0, 0, 0 | The container | The container |
+| The pod's | 0, 1, 0, 0 | The pod | The container |
+| `kubepods.slice`'s | 0, 0, 0, 1 | `kubepods.slice` | The container |
+
+A node-wide kill was not made locally.
+
 | Outcome | Conclusion |
 |---|---|
 | The reader and the plain pod open every file | A reporter of the counters needs no privileged container, and its `hostPath` alone decides its namespace's level |
