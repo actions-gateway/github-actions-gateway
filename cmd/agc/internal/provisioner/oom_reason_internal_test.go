@@ -1,8 +1,10 @@
 package provisioner
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -77,14 +79,14 @@ func recordedReasons(t *testing.T, p *Provisioner, target Target) map[string]str
 	return reasons
 }
 
-const killedWithNoReason = `Job "build" of run 900 failed on worker worker-runner-1, which shows: pod Failed; container runner OOMKilled.`
+const killedWithNoReason = `Job "build" of run 900 failed on worker worker-runner-1, with: pod Failed; container runner OOMKilled.`
 
 // TestOOMReason_IsSaidBesideTheKill: the condition comes after the snapshot, and the pod is
 // gone before the job is red.
 func TestOOMReason_IsSaidBesideTheKill(t *testing.T) {
 	for reason, words := range map[string]string{
-		"ContainerLimit": "its own memory limit ran out, or those of its pod's containers together",
-		"PodLimit":       "the memory limit in its pod's spec.resources ran out",
+		"ContainerLimit": "the container's own memory limit ran out, or those of the pod's containers together",
+		"PodLimit":       "the memory limit in the pod's spec.resources ran out",
 		"PodsLimit":      "the memory limit that the node's pods share ran out, or that of those of one QoS class",
 		"AbovePods":      "memory ran out above the pods, which on an ordinary node is the node's",
 		"Unknown":        "which limit ran out is not known",
@@ -104,12 +106,27 @@ func TestOOMReason_IsSaidBesideTheKill(t *testing.T) {
 	}
 }
 
+// TestOOMReason_IsSaidInTheLog: the log's faults have the words, and keep them where the
+// Event's length gives them up.
+func TestOOMReason_IsSaidInTheLog(t *testing.T) {
+	s := &workerSnapshot{Pod: "worker-runner-1", Containers: []containerSnapshot{{Name: runnerContainer, OOMReason: "AbovePods"}}}
+	_, p, target := flakyFixture(t)
+	for _, job := range []string{"build", strings.Repeat("j", 1000)} {
+		var log bytes.Buffer
+		p.reportFailedJob(target, "900", job, "", s, []string{"pod Failed", s.Containers[0].oomFault()}, slog.New(slog.NewJSONHandler(&log, nil)))
+		var line struct{ Faults []string }
+		require.NoError(t, json.Unmarshal(log.Bytes(), &line))
+		assert.Equal(t, []string{"pod Failed", "container runner OOMKilled (a pod condition says memory ran out above the pods, which on an ordinary node is the node's)"}, line.Faults)
+	}
+	assert.NotContains(t, target.messages[1], "a pod condition says", "the second Event is too long for them")
+}
+
 // TestOOMReason_IsSaidOfTheContainerItsTypeNames: the sidecar's answer is not the runner's.
 func TestOOMReason_IsSaidOfTheContainerItsTypeNames(t *testing.T) {
 	pod := oomWorker()
 	pod.Status.InitContainerStatuses = []corev1.ContainerStatus{oomContainer("dind", "containerd://2")}
 	event, reasons := failedWith(t, pod, saying(pod, "dind", "PodLimit"))
-	assert.Contains(t, event, "container dind OOMKilled (a pod condition says the memory limit in its pod's spec.resources ran out); container runner OOMKilled.")
+	assert.Contains(t, event, "container dind OOMKilled (a pod condition says the memory limit in the pod's spec.resources ran out); container runner OOMKilled.")
 	assert.Equal(t, map[string]string{"dind": "PodLimit"}, reasons)
 }
 
@@ -129,7 +146,7 @@ func TestOOMReason_AddsNothingButWordsToAKill(t *testing.T) {
 	exited.Status.ContainerStatuses[0].State.Terminated.Reason = "Error"
 	green := scaleSetWorker("runner-1", corev1.PodSucceeded, "")
 	green.Status.ContainerStatuses = []corev1.ContainerStatus{terminated(runnerContainer, "Completed", 0, time.Now())}
-	const podFailed = `Job "build" of run 900 failed on worker worker-runner-1, which shows: pod Failed`
+	const podFailed = `Job "build" of run 900 failed on worker worker-runner-1, with: pod Failed`
 	for _, tc := range []struct {
 		name  string
 		pod   *corev1.Pod

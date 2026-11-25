@@ -23,8 +23,8 @@ const oomReasonUnknown = "Unknown"
 // oomReasonWords is what a reporter's reason is repeated as. A reason that is not here is
 // no answer.
 var oomReasonWords = map[string]string{
-	"ContainerLimit": "its own memory limit ran out, or those of its pod's containers together",
-	"PodLimit":       "the memory limit in its pod's spec.resources ran out",
+	"ContainerLimit": "the container's own memory limit ran out, or those of the pod's containers together",
+	"PodLimit":       "the memory limit in the pod's spec.resources ran out",
 	"PodsLimit":      "the memory limit that the node's pods share ran out, or that of those of one QoS class",
 	"AbovePods":      "memory ran out above the pods, which on an ordinary node is the node's",
 	oomReasonUnknown: "which limit ran out is not known",

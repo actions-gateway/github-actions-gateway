@@ -751,7 +751,7 @@ func (p *Provisioner) reportFailedJob(target Target, runID, jobName, cause strin
 	said := snap.withOOMReasons(faults)
 	log.Warn("scale-set job failed with a platform fault", "cause", cause, "faults", said, "context", snapJSON)
 	note := func(faults []string) string {
-		return fmt.Sprintf("Job %q of run %s failed on worker %s, which shows: %s.", jobName, runID, snap.Pod, strings.Join(faults, "; "))
+		return fmt.Sprintf("Job %q of run %s failed on worker %s, with: %s.", jobName, runID, snap.Pod, strings.Join(faults, "; "))
 	}
 	text := note(said)
 	if len(text) > maxEventNote {

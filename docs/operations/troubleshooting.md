@@ -3140,6 +3140,7 @@ Where the Warning goes on `(a pod condition says …)`, a condition of type `oom
 It is the out-of-memory reporter's (Q1403), which is not released yet, and the AGC repeats what it names and checks nothing: whoever can write `pods/status` in the namespace could have written it.
 Without one, nothing GAG reads separates the two ([how to tell](worker-rightsizing.md#which-limit-ran-out)).
 On a sidecar it means the sidecar was killed with that reason, usually for its own memory limit.
+A sidecar killed while the runner works on is restarted, and a kill before a restart is recorded with no limit named.
 A sidecar that runs the job's containers in its own cgroup, as `kata-dind`'s does, is also marked `OOMKilled` when one of them passes its own `docker run -m` limit (measured with runc, and under Kata on GKE on 2026-11-25), so one killed later for another reason, such as the SIGKILL that ends its grace period, reads the same; check the job's log for a container that exited 137 before raising the sidecar's limit.
 A sidecar marked that way which then exits with any code but 137 is taken to have survived the kill, so it raises no Warning, and the record's `context` still shows the reason beside the exit code (Q1395).
 Under Kata that includes a kill at the sidecar's own limit that took one of the job's containers and left the daemon running (the status was read once on GKE, on 2026-11-25; the rule has not run there).

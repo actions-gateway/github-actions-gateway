@@ -895,7 +895,7 @@ Whoever can write `pods/status` can write such a condition, so it changes no act
   Any other reason is ignored, as is the condition's message.
 - A container that restarted is recorded as without one, since its condition may be an earlier kill's.
 - The first reason read for a container's ID stands, except that any other replaces `Unknown`.
-- A condition that comes after the completion is not recorded, and an AGC restart drops the snapshots that wait.
+- A condition that comes after the completion is not recorded, nor one whose update reaches the AGC in one event with the pod's deletion, and an AGC restart drops the snapshots that wait.
 
 #### Why preemption *deletes* rather than *evicts*, and what that costs us
 
