@@ -637,6 +637,20 @@ What the kind run read, beside what the sections above cite:
 
 Not run: two containers killed at once, several threads or pods at the pods' limit together, and a cluster whose containers have no `memory.oom.group`.
 
+What GKE read, as reading 8 (Q1316's R3, R3t and R8; kernel 6.8.0-1064-gke):
+
+- **8.** Thirteen kills on five nodes: twelve at `kubepods`' limit, three on each of four filled nodes, and R8's runner at its own.
+  Each filled node's three were the metrics collector's two containers and then the runner: a kill at the pods' limit takes another pod's processes.
+  PR 5's tests replay each recording, an inotify watch's and a poll's apart.
+  On the watch's, the rule answered twelve: the runner's five with the kernel's limit, and the collector's eight as six `Unknown`, one `PodsLimit` and one not at all: the config reloader of R3t's second run, whose counts neither recording shows rising, though the container outlived its kill by 42 s.
+  It named no other limit than the kernel's on either.
+  `memory.oom.group` was read on one node, R3's first: 0 on every container started before containerd was restarted, 1 after.
+  On the others the replay infers it, taking `oom_kill` 1 with `oom_group_kill` 0 in a container's last counts to mean it was 0 there; without that, 7 of the test's 10 cases fail, since a container read as a group that never group-killed shows no kill.
+  It takes every container's `cgroup.stat` as showing nothing below it, which was not read.
+  The pods' use beside their requests was read in one sample, before R3's first kill, and not in the others.
+  The agent did not run there: the counters were recorded, and the rule replayed them.
+  Not shown on GKE: a node filling up, a pod-level limit, and a one-container pod's cap.
+
 Q1316's plan takes readings 1, 3, 7 and 8 in its runs as its branch had them on 2026-11-24, but for reading 3's CPU, which needs the agent built; its non-root reader is a container of the job's own Docker for R2 and R8, and a pod in R3, R3t, R4 and on the Kata node.
 It prints `oom_group_kill` and each container's own rise beside the pod's, so R8, with two containers in the pod, reads the join as well as the limit.
 It does not read whether a non-root pod could open `/dev/kmsg` or the journal through a `hostPath`, which would be another way to the log.
@@ -679,7 +693,7 @@ What it has to do is let somebody tell one root cause of an out-of-memory kill f
 | Event only | 1 to 5, each smaller | The Event, with no `pods/status` grant, no policy 2 and no condition | An answer that expires with Events, after an hour by default, that `edit` can forge, and that the AGC could neither keep nor act on |
 
 Beside today, this set makes nothing worse in action where it is installed, and nothing at all where it is not.
-Reading 8 is Q1316's dogfood run, which is the only test of the rule on GKE: without it the tool says on its page that GKE has not been read.
+Reading 8 is Q1316's dogfood run, which is the only test of the rule on GKE; the operator's page says which limits it showed and which it did not.
 PR 4 cannot follow a release that claims the tool, since an unpublished image is a source build.
 PR 5 could, and then the rule ships with nothing that kills a container on purpose behind it, and the image signed with nothing that has started it.
 D2's single DaemonSet would save the report ConfigMap, one policy and about a third of 2 and 3.
