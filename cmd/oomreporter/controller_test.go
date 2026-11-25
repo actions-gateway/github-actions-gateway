@@ -5,8 +5,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"slices"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -56,8 +59,11 @@ func TestController_ReadsNoMoreNamespacesThanItIsTold(t *testing.T) {
 }
 
 func TestController_LeavesTheLimitToTheAPIServer(t *testing.T) {
-	cfg, _ := api(t)
-	mgr, err := controllerOptions{namespace: "oom", agents: "app=agent", all: true}.manager(t.Context(), cfg)
+	cfg, _ := api(t, nil)
+	o := controllerOptions{namespace: "oom", agents: "app=agent", all: true}
+	r, err := o.reconciler()
+	require.NoError(t, err)
+	mgr, err := o.manager(t.Context(), unlimited(cfg), r)
 	require.NoError(t, err)
 	assert.Negative(t, mgr.GetConfig().QPS)
 	assert.Zero(t, cfg.QPS)
@@ -86,8 +92,9 @@ func TestSlim_KeepsWhatTheControllerReads(t *testing.T) {
 	assert.Equal(t, "a tombstone", got)
 }
 
-// api is an API server with nothing in it, and what is listed of it.
-func api(t *testing.T) (*rest.Config, func() []string) {
+// api is an API server with nothing in it and the policies in force, which answers nothing that
+// forbids says it does, and what is listed of it.
+func api(t *testing.T, forbids func(*http.Request) bool) (*rest.Config, func() []string) {
 	t.Helper()
 	var mu sync.Mutex
 	var lists []string
@@ -99,7 +106,15 @@ func api(t *testing.T) (*rest.Config, func() []string) {
 				{"name":"pods","namespaced":true,"kind":"Pod"},{"name":"configmaps","namespaced":true,"kind":"ConfigMap"}]}`,
 		}
 		w.Header().Set("Content-Type", "application/json")
+		forbidden := func(message string) {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = io.WriteString(w, `{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"Forbidden","code":403,"message":"`+message+`"}`)
+		}
 		switch answer, ok := answers[r.URL.Path]; {
+		case forbids != nil && forbids(r):
+			forbidden("by RBAC")
+		case r.Method == http.MethodPost && r.URL.Query().Get("dryRun") == metav1.DryRunAll:
+			forbidden("ValidatingAdmissionPolicy 'x' denied request: " + refused)
 		case ok:
 			_, _ = io.WriteString(w, answer)
 		case r.URL.Query().Get("sendInitialEvents") != "":
@@ -117,7 +132,12 @@ func api(t *testing.T) (*rest.Config, func() []string) {
 			_, _ = io.WriteString(w, `{"kind":"List","apiVersion":"v1","metadata":{"resourceVersion":"1"},"items":[]}`)
 		}
 	}))
-	t.Cleanup(s.Close)
+	t.Cleanup(func() {
+		// Close waits for the watches of what does not end with the test.
+		_ = s.Listener.Close()
+		s.CloseClientConnections()
+		s.Close()
+	})
 	return &rest.Config{Host: s.URL, ContentConfig: rest.ContentConfig{ContentType: "application/json"}}, func() []string {
 		mu.Lock()
 		defer mu.Unlock()
@@ -131,7 +151,7 @@ func TestController_ListsNoMoreThanItIsGranted(t *testing.T) {
 		"GET /api/v1/namespaces/oom/configmaps", "GET /api/v1/namespaces/oom/pods",
 		"GET /api/v1/namespaces/team-a/pods", "GET /api/v1/namespaces/team-b/pods",
 	}
-	cfg, lists := api(t)
+	cfg, lists := api(t, nil)
 	ctx, stop := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() {
@@ -143,4 +163,99 @@ func TestController_ListsNoMoreThanItIsGranted(t *testing.T) {
 	assert.Equal(t, want, lists())
 	stop()
 	require.NoError(t, <-done)
+}
+
+// soon are the options of a controller of namespaces that looks again soon.
+func soon(namespaces string) controllerOptions {
+	return controllerOptions{
+		namespace: "oom", agents: "app=agent", namespaces: namespaces,
+		guardedWithin: time.Minute, guardedEvery: 10 * time.Millisecond, syncedWithin: time.Minute, againEvery: 20 * time.Millisecond,
+	}
+}
+
+func TestController_DoesNothingWithoutThePolicies(t *testing.T) {
+	cfg, lists := api(t, func(r *http.Request) bool { return r.Method == http.MethodPost })
+	o := soon("team-a")
+	o.guardedWithin = 100 * time.Millisecond
+	require.ErrorContains(t, o.run(t.Context(), cfg, noLog), "policies are not in force")
+	assert.Empty(t, lists())
+}
+
+func TestController_WaitsForThePolicies(t *testing.T) {
+	var tries atomic.Int32
+	cfg, lists := api(t, func(r *http.Request) bool { return r.Method == http.MethodPost && tries.Add(1) < 4 })
+	ctx, stop := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- soon("team-a").run(ctx, cfg, noLog) }()
+	assert.Eventually(t, func() bool { return len(lists()) >= 3 }, 20*time.Second, 20*time.Millisecond)
+	assert.Equal(t, int32(4), tries.Load())
+	stop()
+	require.NoError(t, <-done)
+}
+
+func TestController_StopsWhileItWaitsForThePolicies(t *testing.T) {
+	ctx, stop := context.WithCancel(t.Context())
+	cfg, _ := api(t, func(r *http.Request) bool { stop(); return r.Method == http.MethodPost })
+	o := soon("team-a")
+	o.guardedWithin, o.guardedEvery = time.Hour, time.Hour
+	require.NoError(t, o.run(ctx, cfg, noLog))
+}
+
+// Who may edit a namespace can take its RoleBinding away.
+func TestController_RunsWithoutANamespaceItMayNotList(t *testing.T) {
+	var bound, read atomic.Bool
+	cfg, lists := api(t, func(r *http.Request) bool {
+		if bound.Load() || !strings.Contains(r.URL.Path, "/namespaces/team-b/") {
+			return false
+		}
+		if r.URL.Query().Get("limit") != "1" {
+			read.Store(true)
+		}
+		return true
+	})
+	o := soon("team-a,team-b")
+	ctx, stop := context.WithCancel(t.Context())
+	defer stop()
+	done := make(chan error, 1)
+	go func() { done <- o.run(ctx, cfg, noLog) }()
+	want := []string{"GET /api/v1/namespaces/oom/configmaps", "GET /api/v1/namespaces/oom/pods", "GET /api/v1/namespaces/team-a/pods"}
+	assert.Eventually(t, func() bool { return len(lists()) >= len(want) }, 20*time.Second, 20*time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
+	assert.Equal(t, want, lists())
+	assert.False(t, read.Load(), "a cache of it would not sync")
+	select {
+	case err := <-done:
+		t.Fatal("stopped", err)
+	default:
+	}
+	bound.Store(true)
+	require.ErrorContains(t, <-done, "starting over")
+}
+
+func TestController_RunsWithNoNamespaceItMayList(t *testing.T) {
+	cfg, lists := api(t, func(r *http.Request) bool { return strings.Contains(r.URL.Path, "/namespaces/team-") })
+	ctx, stop := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- soon("team-a,team-b").run(ctx, cfg, noLog) }()
+	assert.Eventually(t, func() bool { return len(lists()) >= 2 }, 20*time.Second, 20*time.Millisecond)
+	stop()
+	require.NoError(t, <-done)
+	assert.Equal(t, []string{"GET /api/v1/namespaces/oom/configmaps", "GET /api/v1/namespaces/oom/pods"}, lists())
+}
+
+// One whose grant went after it was looked for: it starts over, and looks again.
+func TestController_EndsWhereItsCachesDoNotSync(t *testing.T) {
+	cfg, _ := api(t, func(r *http.Request) bool {
+		return strings.Contains(r.URL.Path, "/namespaces/team-a/") && r.URL.Query().Get("limit") != "1"
+	})
+	// The manager does not end with the test.
+	o := soon("team-a")
+	o.syncedWithin = 100 * time.Millisecond
+	require.ErrorContains(t, o.run(context.WithoutCancel(t.Context()), cfg, noLog), "have not synced")
+}
+
+func TestController_WaitsForWhatThePolicySays(t *testing.T) {
+	data, err := os.ReadFile("testdata/chart/templates/admission-policies.yaml")
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(string(data), `message: "`+refused+`"`))
 }
