@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -73,18 +75,6 @@ func cgroupfs(prefix string) []string {
 
 func TestSample_ReadsTheKubeletsTree(t *testing.T) {
 	n := func(i uint64) Events { return Events{i, i, i} }
-	want := Sample{
-		Pods: map[string]Pod{
-			burstableUID: {
-				QoS: "burstable", Subtree: n(4), Local: n(4),
-				Containers: map[string]Events{runnerID: n(5), sandboxID: n(6)}, Single: map[string]bool{}, Refused: map[string]bool{},
-			},
-			guaranteedUID: {Subtree: n(7), Local: n(7), Containers: map[string]Events{}, Single: map[string]bool{}, Refused: map[string]bool{}},
-		},
-		QoS:     map[string]Events{"burstable": n(2), "besteffort": n(3)},
-		Root:    n(1),
-		Refused: map[string]bool{},
-	}
 	for name, dirs := range map[string][]string{
 		"systemd":                       systemd(""),
 		"systemd under cgroupRoot":      systemd("kubelet-"),
@@ -93,6 +83,19 @@ func TestSample_ReadsTheKubeletsTree(t *testing.T) {
 		"cgroupfs as deep as it may be": cgroupfs("a/b"),
 	} {
 		t.Run(name, func(t *testing.T) {
+			want := Sample{
+				Pods: map[string]Pod{
+					burstableUID: {
+						Cgroup: dirs[3], QoS: "burstable", Subtree: n(4), Local: n(4),
+						Containers: map[string]Events{runnerID: n(5), sandboxID: n(6)}, Single: map[string]bool{}, Refused: map[string]bool{},
+					},
+					guaranteedUID: {Cgroup: dirs[6], Subtree: n(7), Local: n(7), Containers: map[string]Events{}, Single: map[string]bool{}, Refused: map[string]bool{}},
+				},
+				QoS:     map[string]Events{"burstable": n(2), "besteffort": n(3)},
+				Root:    n(1),
+				Refused: map[string]bool{},
+				Doubled: map[string]bool{},
+			}
 			tree, err := Open(mount(dirs...), "")
 			require.NoError(t, err)
 			got, err := tree.Sample()
@@ -298,6 +301,44 @@ func TestSample_LeavesOutAPodItMayNotRead(t *testing.T) {
 	}
 }
 
+// A container that has the host's view of the tree can make a cgroup named as another pod's, with
+// cgroups named as its containers' in it.
+func TestSample_LeavesOutAPodWithTwoDirectories(t *testing.T) {
+	under := strings.ReplaceAll(burstableUID, "-", "_")
+	for name, copied := range map[string]string{
+		"of its own class's place": "kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod" + burstableUID + ".slice",
+		"of one read before":       "kubepods.slice/kubepods-pod" + under + ".slice",
+		"of one read after":        "kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-pod" + under + ".slice",
+		"both":                     "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dirs := systemd("")
+			if copied != "" {
+				dirs = append(dirs, copied, copied+"/cri-containerd-"+runnerID+".scope")
+			} else {
+				dirs = append(dirs, "kubepods.slice/kubepods-pod"+under+".slice", "kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-pod"+under+".slice")
+			}
+			tree, err := Open(mount(dirs...), "")
+			require.NoError(t, err)
+			got, err := tree.Sample()
+			require.NoError(t, err)
+			assert.Equal(t, []string{guaranteedUID}, slices.Collect(maps.Keys(got.Pods)))
+			assert.Equal(t, map[string]bool{burstableUID: true}, got.Refused)
+			assert.Equal(t, map[string]bool{burstableUID: true}, got.Doubled)
+			_, ok := tree.PodFile(burstableUID)
+			assert.False(t, ok)
+		})
+	}
+}
+
+func TestSample_LeavesOutAPodWithADirectoryItMayNotRead(t *testing.T) {
+	dirs := append(systemd(""), "kubepods.slice/kubepods-pod"+strings.ReplaceAll(burstableUID, "-", "_")+".slice")
+	got, err := mayNotRead(t, dirs, path.Join(dirs[7], subtreeFile))
+	require.NoError(t, err)
+	assert.Equal(t, []string{guaranteedUID}, slices.Collect(maps.Keys(got.Pods)))
+	assert.True(t, got.Refused[burstableUID] && got.Doubled[burstableUID])
+}
+
 func TestSample_LeavesOutAContainerItMayNotRead(t *testing.T) {
 	dirs := systemd("")
 	for _, file := range []string{localFile, groupFile, statFile} {
@@ -323,6 +364,10 @@ func TestOpen_RefusesANodeWhosePodsItMayNotRead(t *testing.T) {
 		"all of them":    {dirs, []string{dirs[3], dirs[6]}, true},
 		"one of them":    {dirs, dirs[3:4], false},
 		"there are none": {dirs[:3], nil, false},
+		// It would not start while a job goes on doing so.
+		"all have two": {append(slices.Clone(dirs),
+			"kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod"+strings.ReplaceAll(guaranteedUID, "-", "_")+".slice",
+			"kubepods.slice/kubepods-pod"+strings.ReplaceAll(burstableUID, "-", "_")+".slice"), nil, false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			h := &hookFS{FS: mount(tc.dirs...), open: func(n string) error {
@@ -335,6 +380,52 @@ func TestOpen_RefusesANodeWhosePodsItMayNotRead(t *testing.T) {
 			assert.Equal(t, tc.wantErr, errors.Is(err, fs.ErrPermission), err)
 		})
 	}
+}
+
+func TestSample_TellsOneCgroupFromAnotherInItsPlace(t *testing.T) {
+	root, dirs := t.TempDir(), systemd("")
+	write := func() {
+		for name, f := range mount(dirs...) {
+			file := filepath.Join(root, name)
+			require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o750))
+			require.NoError(t, os.WriteFile(file, f.Data, 0o600))
+		}
+	}
+	write()
+	tree, err := Open(os.DirFS(root), "")
+	require.NoError(t, err)
+	cgroupNow := func() string {
+		s, err := tree.Sample()
+		require.NoError(t, err)
+		return s.Pods[burstableUID].Cgroup
+	}
+	first := cgroupNow()
+	assert.Equal(t, first, cgroupNow())
+	// Kept, so its inode is not used again.
+	require.NoError(t, os.Rename(filepath.Join(root, dirs[3]), filepath.Join(root, "before")))
+	write()
+	assert.NotEqual(t, first, cgroupNow())
+}
+
+func TestSample_LeavesOutAPodThatGoesAsItIsRead(t *testing.T) {
+	dirs := systemd("")
+	opened, limit := 0, 100
+	h := &hookFS{FS: mount(dirs...), open: func(name string) error {
+		if name == dirs[3] {
+			if opened++; opened > limit {
+				return fs.ErrNotExist
+			}
+		}
+		return nil
+	}}
+	tree, err := Open(h, "")
+	require.NoError(t, err)
+	opened, limit = 0, 1
+	s, err := tree.Sample()
+	require.NoError(t, err)
+	assert.Equal(t, 2, opened)
+	assert.NotContains(t, s.Pods, burstableUID)
+	assert.Contains(t, s.Pods, guaranteedUID)
 }
 
 func TestSample_FailsOnAFileItCannotParse(t *testing.T) {
@@ -371,4 +462,38 @@ func TestSample_MarksAPodCountedInTheMiddleOfTheRead(t *testing.T) {
 func TestGone(t *testing.T) {
 	assert.False(t, gone(nil))
 	assert.False(t, gone(errors.New("other")))
+}
+
+func TestPodEvents_ReadsAPodOfTheLastSampleAgain(t *testing.T) {
+	dirs := systemd("")
+	m := mount(dirs...)
+	tree, err := Open(m, "")
+	require.NoError(t, err)
+	m[path.Join(dirs[3], subtreeFile)] = eventsFile(Events{7, 8, 9})
+	got, err := tree.PodEvents(burstableUID)
+	require.NoError(t, err)
+	assert.Equal(t, Events{7, 8, 9}, got)
+	m[subtreeFile] = eventsFile(Events{})
+	_, err = tree.PodEvents(staticUID)
+	require.ErrorIs(t, err, fs.ErrNotExist)
+}
+
+func TestPodFile_IsThatOfAPodOfTheLastSample(t *testing.T) {
+	dirs := systemd("")
+	m := mount(dirs...)
+	tree, err := Open(m, "")
+	require.NoError(t, err)
+	got, ok := tree.PodFile(burstableUID)
+	assert.True(t, ok)
+	assert.Equal(t, dirs[3]+"/"+subtreeFile, got)
+
+	for name := range m {
+		if strings.HasPrefix(name, dirs[3]) {
+			delete(m, name)
+		}
+	}
+	_, err = tree.Sample()
+	require.NoError(t, err)
+	_, ok = tree.PodFile(burstableUID)
+	assert.False(t, ok)
 }

@@ -33,6 +33,8 @@ var (
 type Tree struct {
 	fsys fs.FS
 	root string
+	// dirs is each pod's directory at the last sample, by UID.
+	dirs map[string]string
 }
 
 // Open returns the kubelet's tree in fsys, a cgroup v2 mount. An empty root is found:
@@ -53,7 +55,7 @@ func Open(fsys fs.FS, root string) (*Tree, error) {
 	}
 	t := &Tree{fsys: fsys, root: root}
 	s, err := t.Sample()
-	if err == nil && len(s.Pods) == 0 && len(s.Refused) > 0 {
+	if err == nil && len(s.Pods) == 0 && len(s.Refused) > len(s.Doubled) {
 		err = fmt.Errorf("none of %d pods may be read: %w", len(s.Refused), fs.ErrPermission)
 	}
 	if err != nil {
@@ -143,6 +145,8 @@ func (t *Tree) podUIDOf(class, name string) (string, bool) {
 
 // Pod is one pod's counters.
 type Pod struct {
+	// Cgroup is the pod's: the path of its directory, and its inode.
+	Cgroup string
 	// QoS is the class whose cgroup the pod is in, empty for a Guaranteed pod.
 	QoS            string
 	Subtree, Local Events
@@ -168,20 +172,25 @@ type Sample struct {
 	Pods map[string]Pod // by UID
 	QoS  map[string]Events
 	Root Events
-	// Refused is the pods whose files may not be read, by UID.
+	// Refused is the pods whose files may not be read, or may not be the pod's, by UID.
 	Refused map[string]bool
+	// Doubled is those of them with two directories. The kubelet makes one, and a container that
+	// has the host's view of the tree can make another (Q1396).
+	Doubled map[string]bool
 }
 
 // Sample reads the tree. A pod or container is left out where it is removed while it is
 // read, or may not be read.
 func (t *Tree) Sample() (Sample, error) {
-	s := Sample{Pods: map[string]Pod{}, QoS: map[string]Events{}, Refused: map[string]bool{}}
-	if err := t.samplePods(s, "", t.root); err != nil {
+	s := Sample{Pods: map[string]Pod{}, QoS: map[string]Events{}, Refused: map[string]bool{}, Doubled: map[string]bool{}}
+	t.dirs = map[string]string{}
+	seen := map[string]bool{}
+	if err := t.samplePods(s, seen, "", t.root); err != nil {
 		return Sample{}, err
 	}
 	for _, class := range qosClasses {
 		dir := t.qosDir(class)
-		if err := t.samplePods(s, class, dir); err != nil {
+		if err := t.samplePods(s, seen, class, dir); err != nil {
 			return Sample{}, err
 		}
 		e, err := readEvents(t.fsys, path.Join(dir, localFile))
@@ -195,7 +204,7 @@ func (t *Tree) Sample() (Sample, error) {
 	return s, err
 }
 
-func (t *Tree) samplePods(s Sample, class, dir string) error {
+func (t *Tree) samplePods(s Sample, seen map[string]bool, class, dir string) error {
 	names, err := subdirs(t.fsys, dir)
 	if err != nil {
 		return err
@@ -205,6 +214,13 @@ func (t *Tree) samplePods(s Sample, class, dir string) error {
 		if !ok {
 			continue
 		}
+		if seen[uid] {
+			s.Refused[uid], s.Doubled[uid] = true, true
+			delete(s.Pods, uid)
+			delete(t.dirs, uid)
+			continue
+		}
+		seen[uid] = true
 		pod, err := t.samplePod(path.Join(dir, name))
 		if errors.Is(err, fs.ErrPermission) {
 			s.Refused[uid] = true
@@ -218,6 +234,7 @@ func (t *Tree) samplePods(s Sample, class, dir string) error {
 		}
 		pod.QoS = class
 		s.Pods[uid] = pod
+		t.dirs[uid] = path.Join(dir, name)
 	}
 	return nil
 }
@@ -227,7 +244,14 @@ func (t *Tree) samplePod(dir string) (Pod, error) {
 	if err != nil {
 		return Pod{}, err
 	}
-	pod := Pod{Containers: map[string]Events{}, Single: map[string]bool{}, Refused: map[string]bool{}}
+	info, err := fs.Stat(t.fsys, dir)
+	if err != nil {
+		return Pod{}, err
+	}
+	pod := Pod{Cgroup: dir, Containers: map[string]Events{}, Single: map[string]bool{}, Refused: map[string]bool{}}
+	if st, ok := info.Sys().(*syscall.Stat_t); ok {
+		pod.Cgroup = fmt.Sprintf("%s#%d", dir, st.Ino)
+	}
 	containerName := cgroupName
 	if t.systemdPrefix() != "" {
 		containerName = scopeName
@@ -281,6 +305,22 @@ func (t *Tree) sampleContainer(dir string) (e Events, single, nested bool, err e
 	e, err = readEvents(t.fsys, path.Join(dir, localFile))
 	// nr_dying_descendants counts cgroups removed and still charged.
 	return e, strings.TrimSpace(string(group)) != "1", descendants.Match(stat), err
+}
+
+// PodFile is the path of the file that changes with any kill in a pod of the last sample, and
+// whether that had the pod.
+func (t *Tree) PodFile(uid string) (string, bool) {
+	dir, ok := t.dirs[uid]
+	return path.Join(dir, subtreeFile), ok
+}
+
+// PodEvents reads the counts of a pod of the last sample, and of all in it, again.
+func (t *Tree) PodEvents(uid string) (Events, error) {
+	name, ok := t.PodFile(uid)
+	if !ok {
+		return Events{}, fs.ErrNotExist
+	}
+	return readEvents(t.fsys, name)
 }
 
 // gone reports whether err is a cgroup's removal: ENOENT for its path, and ENODEV for a

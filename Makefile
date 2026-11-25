@@ -681,7 +681,7 @@ api-reference-sync: $(CRD_REF_DOCS) ## Regenerate docs/reference/api.md, re-pinn
 	CRD_REF_DOCS=$(CRD_REF_DOCS) scripts/docs/gen-api-reference.sh --sync
 
 .PHONY: build
-build: build-agc build-gmc build-probe build-proxy ## Build all binaries into .build/
+build: build-agc build-gmc build-oomreporter build-probe build-proxy ## Build all binaries into .build/
 
 .PHONY: build-agc
 build-agc: ## Build the AGC binary
@@ -694,6 +694,10 @@ build-gmc: ## Build the GMC binary
 .PHONY: build-migrate
 build-migrate: ## Build the gag-migrate one-shot upgrade-migration CLI (storage-version) into .build/
 	go build -C cmd/gmc -o ../../.build/gag-migrate ./migrate
+
+.PHONY: build-oomreporter
+build-oomreporter: ## Build the out-of-memory kill reporter's binary
+	go build -C cmd/oomreporter -o ../../.build/oomreporter .
 
 .PHONY: build-probe
 build-probe: ## Build the probe binary

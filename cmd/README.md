@@ -9,7 +9,7 @@ Each subdirectory is its own Go module (see [go-workspaces.md](../docs/developme
 | [gmc](gmc/) | Gateway Manager Controller — reconciles a single `ActionsGateway` CR into per-tenant AGC instances and their supporting resources (Namespace, RBAC, Secret, Service, NetworkPolicy, egress proxy pool). | Cluster |
 | [worker](worker/) | Entrypoint wrapper for ephemeral runner pods. Materializes job payload + JIT runner config from a mounted Secret, then exec's `Runner.Worker` over anonymous pipes. | Per-job |
 | [proxy](proxy/) | Stateless HTTPS CONNECT proxy that gives each tenant an isolated egress IP for GitHub traffic. | Per-tenant pool |
-| [oomreporter](oomreporter/) | Says which limit ran out when a container is killed for memory, from the kernel's cgroup counters (Q1403). Being built: no binary yet. Imports nothing else in this repo, and nothing else imports it. | Node (opt-in) |
+| [oomreporter](oomreporter/) | Says which limit ran out when a container is killed for memory, from the kernel's cgroup counters (Q1403): an agent on each node reports the counts, and one controller writes the answer on the pod. Being built: no image or chart yet. Imports nothing else in this repo, and nothing else imports it. | Node (opt-in) |
 | [probe](probe/) | Standalone broker wire-protocol probe — authenticates via a GitHub App, registers a session, polls for a job, and renews the lock. Used for Milestone 1 investigations and protocol regression checks against real GitHub. | Dev tool |
 
 See [DESIGN.md](../DESIGN.md) and [docs/design/02-architecture.md](../docs/design/02-architecture.md) for how these tiers fit together.

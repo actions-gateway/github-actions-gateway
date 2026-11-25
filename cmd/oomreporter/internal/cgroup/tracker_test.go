@@ -95,7 +95,7 @@ func TestObserve_AContainerThatGoesIsCountedAsLastRead(t *testing.T) {
 	}{
 		"not at all":        {[2]Pod{killed, killed}, Rise{Own: 1, Read: true, Containers: []string{runnerID}}},
 		"after its kill":    {[2]Pod{killed, without}, Rise{Own: 1, Containers: []string{runnerID}}},
-		"before it is read": {[2]Pod{without, without}, Rise{Own: 1}},
+		"before it is read": {[2]Pod{without, without}, Rise{Own: 1, Inferred: 1}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var tr Tracker
@@ -490,4 +490,133 @@ func TestObserve_GivesUpAnAllocationThatLedToNoKill(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestObserve_ClaimsNothingOfWhatWasDoneWhileItMightNotReadAPod(t *testing.T) {
+	var tr Tracker
+	shut := Sample{Refused: map[string]bool{burstableUID: true}}
+	tr.Observe(one(Pod{}), start)
+	tr.Observe(shut, start.Add(time.Second))
+	opened := one(dead())
+	opened.Root.OOM, opened.Pods[guaranteedUID] = 2, dead()
+	rises, again := tr.Observe(opened, start.Add(2*time.Second))
+	assert.False(t, again)
+	want := Rise{Late: true, GroupKills: 1, Pod: 1, Read: true, Containers: []string{runnerID}}
+	assert.Equal(t, want, rises[burstableUID])
+
+	rises, _ = tr.Observe(opened, start.Add(3*time.Second))
+	assert.NotContains(t, rises, burstableUID)
+}
+
+func TestObserve_ClaimsNothingOfAProcessKilledWhileItMightNotReadAPod(t *testing.T) {
+	var tr Tracker
+	single := func(e Events) Sample {
+		return one(Pod{Subtree: e, Containers: map[string]Events{runnerID: e}, Single: map[string]bool{runnerID: true}})
+	}
+	tr.Observe(single(Events{}), start)
+	tr.Observe(Sample{Refused: map[string]bool{burstableUID: true}}, start.Add(time.Second))
+	rises, _ := tr.Observe(single(Events{OOM: 1, OOMKill: 1}), start.Add(2*time.Second))
+	assert.True(t, rises[burstableUID].Late)
+	assert.Equal(t, uint64(1), rises[burstableUID].Singles)
+}
+
+// A container's counts rise before its pod's, and one sample may be between the two.
+func TestObserve_WaitsForThePodToCountWhatAContainerOfItHas(t *testing.T) {
+	of := func(pod, container Events) Sample {
+		return one(Pod{Subtree: pod, Containers: map[string]Events{runnerID: container}})
+	}
+	met, killed := Events{OOM: 1}, Events{OOM: 1, OOMKill: 1, OOMGroupKill: 1}
+	for name, between := range map[string][]Sample{
+		"its allocation":                {of(Events{}, met), of(met, met)},
+		"its allocation, and then both": {of(Events{}, met)},
+		"its kill":                      {of(met, killed)},
+		"both":                          {of(Events{}, killed)},
+		"each":                          {of(Events{}, met), of(met, met), of(met, killed)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var tr Tracker
+			tr.Observe(of(Events{}, Events{}), start)
+			at := start
+			for _, s := range append(between, of(killed, killed)) {
+				at = at.Add(time.Second)
+				rises, _ := tr.Observe(s, at)
+				assert.Empty(t, rises)
+			}
+			rises, _ := tr.Observe(of(killed, killed), at)
+			r := rises[burstableUID]
+			assert.Equal(t, []string{runnerID}, r.Containers)
+			assert.Equal(t, uint64(1), r.Own)
+			assert.Equal(t, uint64(1), r.Inside)
+			assert.True(t, r.Read)
+		})
+	}
+}
+
+func TestObserve_WaitsForThePodToCountAKillAboveItThatAContainerOfItHas(t *testing.T) {
+	of := func(pod, container Events) Sample {
+		return one(Pod{Subtree: pod, Containers: map[string]Events{runnerID: container}})
+	}
+	killed := Events{OOMKill: 1, OOMGroupKill: 1}
+	var tr Tracker
+	tr.Observe(of(Events{}, Events{}), start)
+	tr.Observe(of(Events{}, killed), start.Add(time.Second))
+	tr.Observe(of(killed, killed), start.Add(2*time.Second))
+	rises, _ := tr.Observe(of(killed, killed), start.Add(2*time.Second))
+	assert.Equal(t, []string{runnerID}, rises[burstableUID].Containers)
+	assert.True(t, rises[burstableUID].Read)
+}
+
+// A kill of none of its processes follows an allocation that met no limit of it.
+func TestObserve_WaitsForAnAllocationMetAfterOneAtThePodsLimit(t *testing.T) {
+	of := func(root, peer uint64, e Events) Sample {
+		return Sample{Root: Events{OOM: root}, Pods: map[string]Pod{
+			burstableUID:  {Subtree: e, Containers: map[string]Events{runnerID: e}},
+			guaranteedUID: {Subtree: Events{OOMKill: peer, OOMGroupKill: peer}},
+		}}
+	}
+	met, killed := Events{OOM: 1}, Events{OOM: 1, OOMKill: 1, OOMGroupKill: 1}
+	var tr Tracker
+	for i, s := range []Sample{of(0, 0, Events{}), of(1, 0, Events{}), of(1, 1, met), of(1, 1, killed)} {
+		tr.Observe(s, start.Add(time.Duration(i)*time.Second))
+	}
+	rises, _ := tr.Observe(of(1, 1, killed), start.Add(3*time.Second))
+	assert.Equal(t, uint64(1), rises[burstableUID].Own)
+}
+
+// It is not waited for longer than any other.
+func TestObserve_WaitsNoLongerForAPodThatCountsLessThanItsContainer(t *testing.T) {
+	var tr Tracker
+	of := func(pod, container Events) Sample {
+		return one(Pod{Subtree: pod, Containers: map[string]Events{runnerID: container}})
+	}
+	tr.Observe(of(Events{}, Events{}), start)
+	tr.Observe(of(Events{}, Events{1, 1, 1}), start.Add(time.Second))
+	assert.Zero(t, tr.pods[burstableUID].base.pod.Containers[runnerID])
+	tr.Observe(of(Events{}, Events{1, 1, 1}), start.Add(time.Second+settle))
+	assert.Equal(t, Events{1, 1, 1}, tr.pods[burstableUID].base.pod.Containers[runnerID])
+}
+
+// A refused pod keeps its base, so the counts above it since then are a neighbour's.
+func TestObserve_AKillAfterAPodIsOpenedIsCountedFromThen(t *testing.T) {
+	var tr Tracker
+	s := one(Pod{})
+	s.Pods[guaranteedUID] = Pod{}
+	tr.Observe(s, start)
+	shut := one(Pod{})
+	delete(shut.Pods, burstableUID)
+	shut.Refused = map[string]bool{burstableUID: true}
+	shut.Pods[guaranteedUID], shut.Root.OOM = dead(), 2
+	tr.Observe(shut, start.Add(time.Second))
+	opened := one(Pod{})
+	opened.Pods[guaranteedUID], opened.Root.OOM = dead(), 2
+	rises, _ := tr.Observe(opened, start.Add(2*time.Second))
+	assert.NotContains(t, rises, burstableUID)
+
+	killed := one(Pod{Subtree: Events{OOMKill: 1, OOMGroupKill: 1}})
+	killed.Pods[guaranteedUID], killed.Root.OOM = dead(), 2
+	tr.Observe(killed, start.Add(3*time.Second))
+	rises, _ = tr.Observe(killed, start.Add(3*time.Second))
+	r := rises[burstableUID]
+	assert.Zero(t, r.Pods)
+	assert.True(t, r.Recent)
 }

@@ -23,35 +23,42 @@ const (
 // Rise is what the counters gained across the whole kills of a pod's cgroups: kills of
 // every process in a cgroup that asks for it, as a container's does.
 type Rise struct {
-	// Late: the pod was first sampled after the kill, so the counts are since it began,
-	// and Pods and Peers are not known.
-	Late bool
+	// Late: the pod was first sampled after the kill, so the counts are since it began, or it
+	// might not be read at the sample before. Pods and Peers are then not known.
+	Late bool `json:"late,omitempty"`
 	// Confirmed: a sample taken after the one that showed the kill is in the counts.
-	Confirmed bool
+	Confirmed bool `json:"confirmed,omitempty"`
 	// Torn: the pod's two files were not read at one moment.
-	Torn bool
+	Torn bool `json:"torn,omitempty"`
 	// Recent: the counts leave out an allocation that met a limit within the last minute, and
 	// RecentOwn: one that may have met the pod's or a container's.
-	Recent, RecentOwn bool
+	Recent    bool `json:"recent,omitempty"`
+	RecentOwn bool `json:"recentOwn,omitempty"`
 
 	// GroupKills is how many of the pod's cgroups were killed whole, and Singles how many
 	// processes of containers that are not.
-	GroupKills, Singles uint64
+	GroupKills uint64 `json:"groupKills,omitempty"`
+	Singles    uint64 `json:"singles,omitempty"`
 	// Inside, Pod and Pods count the allocations that met a limit inside the pod, the pod's
 	// own, and that of its QoS cgroup or the pods' root.
-	Inside, Pod, Pods uint64
+	Inside uint64 `json:"inside,omitempty"`
+	Pod    uint64 `json:"pod,omitempty"`
+	Pods   uint64 `json:"pods,omitempty"`
 	// Own is how many of the whole kills a container's own limit accounts for. A container's
 	// cgroup is often gone milliseconds after its kill (kubelet v1.35.5, containerd 2.3.1):
 	// for a pod with one whole kill, one container gone, and no limit inside it but its
 	// containers', one is also told by an allocation that met no container's still there.
-	Own uint64
+	Own uint64 `json:"own,omitempty"`
+	// Inferred, where Own is told by a container having gone, is how many containers the pod
+	// had cgroups of, the sandbox's and the one that went included.
+	Inferred int `json:"inferred,omitempty"`
 	// Read: every whole kill is of a container whose own file was read at the last sample.
-	Read bool
+	Read bool `json:"read,omitempty"`
 	// Peers is the kills of either kind in other pods over the same time.
-	Peers uint64
+	Peers uint64 `json:"peers,omitempty"`
 	// Containers is the containers with a kill of either kind, by ID. One whose cgroup went
 	// before its kill was read is not among them.
-	Containers []string
+	Containers []string `json:"containers,omitempty"`
 }
 
 // Tracker turns successive samples of a Tree into rises.
@@ -85,6 +92,8 @@ type tracked struct {
 	gone map[string]bool
 	// nested is set once a sample of the pod has been.
 	nested bool
+	// refused is set where the pod might not be read at the newest sample.
+	refused bool
 }
 
 // Observe takes the next sample, made at at, and returns by pod UID the rises it
@@ -117,6 +126,12 @@ func (t *Tracker) Observe(s Sample, at time.Time) (rises map[string]Rise, again 
 		m.mine = p.last.mine + mine[uid]
 		m.pod, p.gone = carry(p.last.pod, now)
 		p.last, p.nested = m, p.nested || now.Nested
+		if p.refused {
+			if r := p.reopen(at); r.GroupKills+r.Singles > 0 {
+				rises[uid] = r
+			}
+			continue
+		}
 		r, done, more := p.step(at)
 		if done {
 			rises[uid] = r
@@ -150,7 +165,11 @@ func carry(was, now Pod) (Pod, map[string]bool) {
 func (t *Tracker) forget(s Sample, at time.Time) map[string]Rise {
 	left := map[string]Rise{}
 	for uid, p := range t.pods {
-		if now, ok := s.Pods[uid]; ok && !restarted(p.last.pod, now) || s.Refused[uid] {
+		if now, ok := s.Pods[uid]; ok && !restarted(p.last.pod, now) {
+			continue
+		}
+		if s.Refused[uid] {
+			p.refused = true
 			continue
 		}
 		if p.shown > 0 {
@@ -190,6 +209,15 @@ func (p *tracked) step(at time.Time) (r Rise, done, again bool) {
 	return r, true, false
 }
 
+// reopen returns the rise p's newest mark has where the one before it might not be read, and
+// moves base. What stood above the pod and beside it meanwhile says nothing of its kill.
+func (p *tracked) reopen(at time.Time) Rise {
+	r := p.rise(at)
+	p.advance(r, at)
+	r.Late, r.Pods, r.Peers, p.refused = true, 0, 0, false
+	return r
+}
+
 // settled reports whether base may move past r, which has no kill to return: no allocation in
 // it can still lead to one, or it has been waited for long enough.
 func (p *tracked) settled(r Rise, at time.Time) bool {
@@ -197,17 +225,19 @@ func (p *tracked) settled(r Rise, at time.Time) bool {
 	if p.last.pod.Torn {
 		return false
 	}
-	if own+r.Pods == 0 {
+	// A container's counts rise before its pod's.
+	behind := len(r.Containers) > 0 || p.known() > r.Inside
+	if own+r.Pods == 0 && !behind {
 		return true
 	}
 	if p.pending.IsZero() {
 		p.pending = at
 	}
-	if p.killed.IsZero() && p.last.pod.Subtree.OOMKill-p.base.pod.Subtree.OOMKill >= own {
+	if own > 0 && p.killed.IsZero() && p.last.pod.Subtree.OOMKill-p.base.pod.Subtree.OOMKill >= own {
 		p.killed = at
 	}
 	ownDone := own == 0 || !p.killed.IsZero() && at.Sub(p.killed) >= groupLag
-	return ownDone && r.Pods <= r.Peers || at.Sub(p.pending) >= settle
+	return ownDone && !behind && r.Pods <= r.Peers || at.Sub(p.pending) >= settle
 }
 
 func (p *tracked) advance(r Rise, at time.Time) {
@@ -243,7 +273,7 @@ func (p *tracked) rise(at time.Time) Rise {
 	r.count(was, now)
 	r.Read = r.Read && !slices.ContainsFunc(r.Containers, func(id string) bool { return p.gone[id] })
 	if !p.nested && r.GroupKills == 1 && len(p.gone) == 1 && len(r.Containers) == 0 && r.Inside > p.known() {
-		r.Own = 1
+		r.Own, r.Inferred = 1, len(now.Containers)
 	}
 	return r
 }
