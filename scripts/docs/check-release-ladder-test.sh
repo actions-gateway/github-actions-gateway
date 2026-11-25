@@ -326,9 +326,9 @@ expect label-scalar 1 'a scalar gate label its ledger does not name fails' \
 # the ledger check reading them and not a parse failure.
 write_plan forms 19 "$LEDGER_19"
 write_plan forms ga "$LEDGER_GA
-| Q7 | Inline | \`2.0-gate\` | 🔲 |
-| Q8 | Quoted | \`2.0-gate\` | 🔲 |
-| Q9 | Scalar | \`2.0-gate\` | 🔲 |"
+| [Q7](../queue/Q7.md) | Inline | \`2.0-gate\` | 🔲 |
+| [Q8](../queue/Q8.md) | Quoted | \`2.0-gate\` | 🔲 |
+| [Q9](../queue/Q9.md) | Scalar | \`2.0-gate\` | 🔲 |"
 FORMS_STORE="$(write_labelled_store forms Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
 printf -- '---\nid: Q7\nlabels: [ci, "2.0-gate"]\nstatus: ready\n---\n\n# Q7\n' > "$FORMS_STORE/Q7.md"
 printf -- "---\nid: Q8\nlabels:\n    - ci\n    - '2.0-gate'\nstatus: ready\n---\n\n# Q8\n" > "$FORMS_STORE/Q8.md"
@@ -341,10 +341,75 @@ expect label-forms-named 0 'inline, quoted and scalar gate labels the ledger nam
 # one: read loosely, Q5 below is unlabelled and nothing would say so.
 write_plan qual 19 "$LEDGER_19"
 write_plan qual ga "$LEDGER_GA
-| Q5 | Qualified | \`2.0-gate\` (from 1.9) | 🔲 |"
+| [Q5](../queue/Q5.md) | Qualified | \`2.0-gate\` (from 1.9) | 🔲 |"
 page="$(write_ladder qual)"
 store="$(write_labelled_store qual Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q5:ci)"
 expect gates-cell-qualified 1 'a Gates? cell naming a gate with extra text fails' \
+	"$page" "$store"
+
+# 6. The ledger's link and status against the store. `bound` above is the green
+# control for each: a live row linked, a closed one bare and ticked, a riding row
+# linked.
+write_plan bare 19 "$LEDGER_19"
+write_plan bare ga "$LEDGER_GA
+| Q5 | Bare | \`2.0-gate\` | 🔲 |"
+page="$(write_ladder bare)"
+store="$(write_labelled_store bare Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q5:ci,2.0-gate)"
+expect ledger-bare-live 1 'a live item written bare in a ledger fails' \
+	"$page" "$store"
+
+write_plan bareride 19 "$LEDGER_19"
+write_plan bareride ga "$LEDGER_GA
+| Q5 | Rides, bare | rides | 🔲 |"
+page="$(write_ladder bareride)"
+store="$(write_labelled_store bareride Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q5:ci)"
+expect ledger-bare-riding 1 'a live riding item written bare in a ledger fails' \
+	"$page" "$store"
+
+write_plan wrong 19 "$LEDGER_19"
+write_plan wrong ga "$LEDGER_GA
+| [Q5](../queue/Q3.md) | Another item's file | rides | 🔲 |"
+page="$(write_ladder wrong)"
+store="$(write_labelled_store wrong Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q5:ci)"
+expect ledger-wrong-target 1 'a live item linked to the file of another fails' \
+	"$page" "$store"
+
+write_plan ticked 19 "$LEDGER_19"
+write_plan ticked ga "$LEDGER_GA
+| [Q5](../queue/Q5.md) | Landed, it says | \`2.0-gate\` | ✅ landed |"
+page="$(write_ladder ticked)"
+store="$(write_labelled_store ticked Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q5:ci,2.0-gate)"
+expect ledger-ticked-live 1 'a live item a ledger marks ✅ fails' \
+	"$page" "$store"
+
+# A fixed flake's item stays, deferred, while it is watched.
+printf -- '---\nid: Q5\nlabels:\n    - flake\n    - 2.0-gate\nstatus: deferred\n---\n\n# Q5\n' > "$store/Q5.md"
+expect ledger-ticked-deferred 0 'a deferred item a ledger marks ✅ passes' \
+	"$page" "$store"
+
+write_plan dead 19 "$LEDGER_19"
+write_plan dead ga "$LEDGER_GA
+| [Q5](../queue/Q5.md) | Closed | \`2.0-gate\` | ✅ shipped |"
+page="$(write_ladder dead)"
+store="$(write_labelled_store dead Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+expect ledger-linked-closed 1 'a closed item still linked in a ledger fails' \
+	"$page" "$store"
+
+write_plan openclosed 19 "$LEDGER_19"
+write_plan openclosed ga "$LEDGER_GA
+| Q5 | Closed | \`2.0-gate\` | 🔲 open |"
+page="$(write_ladder openclosed)"
+store="$(write_labelled_store openclosed Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+expect ledger-open-closed 1 'a closed item whose ledger row reads as open fails' \
+	"$page" "$store"
+
+# An escaped pipe belongs to its cell; split naively, the Status cell is the Gates? one.
+write_plan piped 19 "$LEDGER_19"
+write_plan piped ga "$LEDGER_GA
+| Q5 | The \`a \\| b\` switch | \`2.0-gate\` | 🔲 open |"
+page="$(write_ladder piped)"
+store="$(write_labelled_store piped Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+expect ledger-escaped-pipe 1 'an escaped pipe does not hide a closed item that reads as open' \
 	"$page" "$store"
 
 NOCOL_PLAN="$FIXTURE_DIR/plan.nocol.ga.md"
