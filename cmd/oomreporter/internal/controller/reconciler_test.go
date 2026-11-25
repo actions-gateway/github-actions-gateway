@@ -484,7 +484,8 @@ func TestReconcile_WaitsForTheNextReportWhereOnlyTheTimeTells(t *testing.T) {
 		"from then on":                         {hold, []report.Kill{first}, 0, []string{"AbovePods"}},
 		"what its counts show does not":        {0, []report.Kill{next}, 0, []string{"ContainerLimit"}},
 		"nor what those of it and others show": {0, []report.Kill{first, next}, 0, []string{"ContainerLimit"}},
-		"not where the clocks are not one":     {-time.Millisecond, []report.Kill{first}, 0, []string{"AbovePods"}},
+		"by a clock a little behind":           {-hold, []report.Kill{first}, holdMost, nil},
+		"not by one far behind":                {-hold - time.Millisecond, []report.Kill{first}, 0, []string{"AbovePods"}},
 		"another's says nothing of it":         {hold, []report.Kill{dind}, 0, nil},
 	} {
 		t.Run(name, func(t *testing.T) {

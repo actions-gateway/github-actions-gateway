@@ -20,8 +20,10 @@ const (
 	endedWithin = 5 * time.Second
 	// hold is how long after its container's end a verdict that is joined is said. The kill it is
 	// joined to may be another's, and that of this one in the node's next report, which is written
-	// at most 8 seconds after the one before.
-	hold = 10 * time.Second
+	// at most 8 seconds after the one before. One longer than holdMost, by a clock that is behind
+	// the node's, is none.
+	hold     = 10 * time.Second
+	holdMost = 2 * hold
 
 	reasonOOMKilled = "OOMKilled"
 	exitSIGKILL     = 137

@@ -225,7 +225,7 @@ func (r *Reconciler) apply(ctx context.Context, node string, kills []report.Kill
 		verdicts, processes := judge(pod, by[uid])
 		verdicts = slices.DeleteFunc(verdicts, func(v verdict) bool {
 			left := v.ended.at.Add(hold).Sub(r.Now())
-			if !v.joined || left <= 0 || left > hold {
+			if !v.joined || left <= 0 || left > holdMost {
 				return false
 			}
 			wait = sooner(wait, left)
