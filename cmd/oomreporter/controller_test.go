@@ -341,6 +341,18 @@ func TestController_EndsWhereItsCachesDoNotSync(t *testing.T) {
 	require.ErrorContains(t, ended(t, func() error { return o.run(context.WithoutCancel(t.Context()), cfg, noLog) }), "have not synced")
 }
 
+func TestController_EndsWhereAListIsNotAnswered(t *testing.T) {
+	cfg, _ := api(t, func(r *http.Request) bool {
+		if r.URL.Query().Get("limit") == "1" {
+			<-r.Context().Done()
+		}
+		return false
+	})
+	o := soon("team-a")
+	o.guardedWithin = 500 * time.Millisecond
+	require.ErrorContains(t, ended(t, func() error { return o.run(t.Context(), cfg, noLog) }), "namespace team-a")
+}
+
 // What fails otherwise says nothing of a grant.
 func TestController_TakesNoOtherFailureForAMissingGrant(t *testing.T) {
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) }))
