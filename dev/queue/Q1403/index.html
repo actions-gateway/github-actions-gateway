@@ -23,7 +23,7 @@
     
     
       
-        <title>Tell a node's out-of-memory kill from a job's with a node reporter - GitHub Actions Gateway</title>
+        <title>Say which memory limit killed a container, with a node reporter - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tell-a-nodes-out-of-memory-kill-from-a-jobs-with-a-node-reporter" class="md-skip">
+        <a href="#say-which-memory-limit-killed-a-container-with-a-node-reporter" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Tell a node's out-of-memory kill from a job's with a node reporter
+              Say which memory limit killed a container, with a node reporter
             
           </span>
         </div>
@@ -2703,13 +2703,14 @@
   
 
 
-<h1 id="tell-a-nodes-out-of-memory-kill-from-a-jobs-with-a-node-reporter">Tell a node's out-of-memory kill from a job's with a node reporter<a class="headerlink" href="#tell-a-nodes-out-of-memory-kill-from-a-jobs-with-a-node-reporter" title="Permanent link">&para;</a></h1>
+<h1 id="say-which-memory-limit-killed-a-container-with-a-node-reporter">Say which memory limit killed a container, with a node reporter<a class="headerlink" href="#say-which-memory-limit-killed-a-container-with-a-node-reporter" title="Permanent link">&para;</a></h1>
 <p>Nothing the AGC reads says which limit ran out when a runner is killed for memory, so Q1400's Events name no cause.
 A small tool could say it on the pod, as a condition and an Event, for anyone debugging such a kill, with or without GAG.
-It gates 2.1, whose headline is telling a platform's failure from a job's own, and it replaces that text with an answer.</p>
+It gates 2.1, and puts the limit that ran out in place of that text.
+It does not say whose memory it was: a job and its neighbours can each fill the limit all pods share, or the node, so that is the operator's to judge.</p>
 <p><a href="../../plan/q1403-oom-kill-reporter/">The design</a> is decided: cgroup counters read by an unprivileged node agent, a controller that writes the answer, off by default, in its own module and chart here.
 It carries what is read, measured and from recall, who could forge each part, and the build.
-This row is its PRs 2 to 6 and reading 8, PR 1 being the reader and the rule in <code>cmd/oomreporter</code>; <a href="../Q1406/">Q1406</a> and <a href="../Q1407/">Q1407</a> ride 2.1, and <a href="../Q1408/">Q1408</a> is after it.
+This row is its PRs 5 and 6 and reading 8; <code>cmd/oomreporter</code>, its image and <code>charts/oom-reporter</code> are the first four's; <a href="../Q1406/">Q1406</a> and <a href="../Q1407/">Q1407</a> ride 2.1, and <a href="../Q1408/">Q1408</a> is after it.
 Its rule agrees with the kernel on the kills a kind run made; <a href="../Q1316/">Q1316</a>'s dogfood reproduction reads the counters it rests on, and says whether they hold on GKE.</p>
 <p>The duplicate search flags Q1399, about a job GitHub lists as cancelled, and Q1389, which was about which job a killed worker ran; neither reads a node.</p>
 

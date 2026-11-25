@@ -3040,8 +3040,8 @@
 
 <h1 id="a-node-reporter-for-out-of-memory-kills-q1403">A node reporter for out-of-memory kills: Q1403<a class="headerlink" href="#a-node-reporter-for-out-of-memory-kills-q1403" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status (2026-11-24): decided, D1 to D6 each as recommended.
-<a href="#build-size">PR 1</a>, the reader and the rule, is built; nothing here has run in the shape proposed.</strong></p>
+<p><strong>Status (2026-11-25): decided, D1 to D6 each as recommended.
+<a href="#build-size">PRs 1 to 4</a> are built: the reader and the rule, the two programs, the chart, and the image; they have run together against an API server alone, and not on a node.</strong></p>
 </blockquote>
 <p>A container killed for memory reads <code>OOMKilled</code> with exit code 137 whichever limit ran out: its own, its pod's, the one all pods share, or the node's memory.
 The AGC therefore names no cause (Q1400), and neither does anything else in the Kubernetes API that a tenant's operator can read on the pod.
@@ -3475,6 +3475,7 @@ Two things narrow it:</p>
 <li><strong>An answer that rests on the time of a container's end is held for 10 seconds after it</strong> (PR 2's).
   The kill may be another container's, and that of this one in the node's next report, which is written at most 8 seconds after the one before.
   The times are the node's and the controller's: a controller ahead of the node holds for less, and one over 10 seconds behind it not at all.
+  Holding from when the controller first sees the end would need no agreement of clocks; it has not been tried.
   Where a container's own counts show the kill, the answer waits for nothing.</li>
 <li><strong>A limit lowered below use raises <code>oom</code> with no charge failing</strong> (read, <code>memory_max_write</code>), as an in-place resize can; the kill that follows is that limit's, and reads so.</li>
 </ul>
@@ -3558,7 +3559,7 @@ Each shape below needs a second limit to run out at the same moment, or a spare 
 <td>Nothing to go on (reasoned, not run)</td>
 </tr>
 <tr>
-<td>Killed at its own limit within 6 seconds of another container's kill above the pod, whose end the status no longer names, and reported more than 10 seconds after its own end</td>
+<td>Killed at its own limit within 6 seconds of another container's kill above the pod, whose end the status no longer names, and reported more than 10 seconds after its own end, or never</td>
 <td><code>AbovePods</code></td>
 <td><strong>No raise, no re-run</strong></td>
 <td>Raise and re-run</td>
@@ -3572,7 +3573,7 @@ Each shape below needs a second limit to run out at the same moment, or a spare 
 </tbody>
 </table>
 <p>So of the shapes known, four can withhold a raise and a re-run that were right.
-One needs an allocation to wait more than a minute for its kill, one a sample to straddle it by the time between two reads, expected to be microseconds (read, not measured), one a job that forges cgroups as the agent restarts, in the seconds after the pod's are removed, and one a container that ended twice in those seconds beside a report that is late.
+One needs an allocation to wait more than a minute for its kill, one a sample to straddle it by the time between two reads, expected to be microseconds (read, not measured), one a job that forges cgroups as the agent restarts, in the seconds after the pod's are removed, where the job can probably cause the restart by filling the agent's own memory limit (reasoned, not run), and one a container that ended twice in those seconds beside a report that is late.
 The others at worst leave a raise that was not right, which is what the AGC does now.
 Other orders of two limits were tried against the rule on fakes and read the right limit or <code>Unknown</code>; none was tried on a kernel.
 A re-run class that trusted <code>PodsLimit</code> would have to answer the first two (<a href="../../queue/Q1408/">Q1408</a>).</p>
@@ -3626,6 +3627,9 @@ It writes them, with counter values and times, into one ConfigMap named for its 
 It needs <code>update</code> there and nothing else.</p>
 <p><strong>The controller</strong> maps UID to pod (a static pod's cgroup has another UID than its mirror pod's (recall), so its kills are dropped), <strong>drops and logs any whose <code>spec.nodeName</code> is not the node in the report's name</strong>, which is what holds an agent to its own node's pods, decides the reason, writes the condition and the Event, and copies no string from a report into either: beyond the identifiers it looks up, a report is numbers.
 It creates each node's ConfigMap and deletes it when the node has no agent, which it learns from the agents' pods in its own namespace, so it needs no read of Nodes.
+A namespace whose pods it may not list, since whoever administers it deleted the RoleBinding or the namespace, is left out with a warning, and the others go on: an informer that never syncs would stop the controller for every tenant at its next start.
+It looks again every five minutes, and takes in one that can be read by listing them all anew within the process, since ending it would let that tenant have it restarted into the kubelet's backoff.
+One that can be listed as it looks and not a moment later, as its cache is filled, still costs every tenant the two minutes after which it ends and looks again (measured, against a fake API server).
 A ConfigMap and not a custom resource, because a CRD is a cluster-wide install and the controller checks the shape either way.
 It runs where tenants' jobs do not, and the chart has to make that so: it requires node affinity on a label of the <code>node-restriction.kubernetes.io/</code> namespace, which a kubelet may not set on its own node (read, <code>noderestriction/admission.go</code>).
 An ordinary node-pool label is not enough: outside the <code>kubernetes.io</code> and <code>k8s.io</code> namespaces a label is the kubelet's to set (read, <code>getForbiddenLabels</code>), so an escaped job could set one on its node and draw the controller's token there.
@@ -3663,8 +3667,8 @@ So one DaemonSet is a step down for every cluster that runs <code>privileged-din
 </tr>
 <tr>
 <td>Network</td>
-<td>The API server only</td>
-<td>The API server only</td>
+<td>Egress to the API server's ports, at any address unless the operator narrows it</td>
+<td>The same</td>
 </tr>
 </tbody>
 </table>
@@ -3675,13 +3679,15 @@ Kubernetes' <code>edit</code> role can mint a token for, and impersonate, any se
 <p>Three, in the reporter's chart, with <code>failurePolicy: Fail</code>:</p>
 <ol>
 <li><strong>A report is written only by its own node's agent.</strong> A report's name is a fixed prefix and then the node's name.
-   On create and update in the reporter's namespace, any writer but the controller is refused a name with that prefix whose rest is not its token's node claim, and the agent is refused every other name, since its <code>configmaps</code> update covers the namespace.
+   On create and update in the reporter's namespace, a name with that prefix is refused to any writer but the controller and the agent whose token's node claim is the rest of it, and the agent and the controller are refused every other name, since what they may write covers the namespace.
    Other ConfigMaps stay writable by others: the control plane itself keeps <code>kube-root-ca.crt</code> in every namespace, which both pods' token volumes mount (read, <code>rootcacertpublisher</code> and <code>serviceaccount/admission.go</code>).
-   It also refuses the agent <code>immutable</code>, finalizers and owner references on its report: <code>immutable</code> would refuse its successor's writes until the node had had no agent for ten minutes (reasoned).
+   A report has no <code>immutable</code>, finalizer or owner reference: <code>immutable</code> would refuse the next agent's writes until the node had had no agent for ten minutes (reasoned).
+   It has no label or annotation either, and no data but the report's one key, of at most 256 KiB: dashboards' sidecars and replicators pick ConfigMaps by those, across namespaces (recall), so one node's stolen token would feed them.
    The claim is <code>authentication.kubernetes.io/node-name</code>, which a projected token carries (read, <code>ServiceAccountTokenPodNodeInfo</code>, locked on since 1.32; this chart's floor is 1.35); a token without it is refused.</li>
 <li><strong>The controller may change only its own conditions.</strong> <code>pods/status</code> is wider than its name: the API server resets the spec, the deletion timestamp and the owner references on such a write, and not labels, annotations or finalizers (read, <code>podStatusStrategy.PrepareForUpdate</code>).
    The AGC keeps its recovery marks in annotations, so an unguarded grant could forge "already handled" on any worker.
-   The policy requires metadata unchanged but for <code>managedFields</code>, every other status field unchanged, every changed condition to be of the reporter's domain, and no more conditions outside it than before.
+   The policy requires metadata unchanged but for <code>managedFields</code>, every other status field unchanged, the conditions outside the reporter's domain to be the same list in the same order, and those in it to be at most 200, with bounded reasons and messages, since a pod too large to store is one its kubelet cannot write to (reasoned).
+   A pod with two conditions of one type and another between them gets none of the reporter's: the strategic merge patch moves the two together, which is a change of their order (measured; the API server takes such a pod, and side by side they are no hindrance).
    A typed object's fields cannot be iterated, so it lists them; a test walks <code>PodStatus</code> and <code>ObjectMeta</code> and fails on a field the policy does not name, which is how a later release's field is caught.</li>
 <li><strong>The controller's Events carry only its own reasons.</strong> It matches both Event API groups.
    The AGC's opt-in <code>AutoscalerVerdict</code> mode reads a <code>NotTriggerScaleUp</code> or <code>TriggeredScaleUp</code> Event by its reason and no other field (read, <code>classifyAutoscalerEvent</code>), so <code>events</code> create without this could gate or ungate a set's intake in every namespace it covers.
@@ -3694,9 +3700,16 @@ Policy 1's binding selects its namespace by <code>kubernetes.io/metadata.name</c
 A selector that names the wrong namespace judges nothing, so reading 5 loads the bindings the chart renders.
 Its rule reads the node claim for a name with the prefix and no other, since the publisher of <code>kube-root-ca.crt</code> has none.
 RBAC and policy take the name from one value, with a test.</p>
-<p>RBAC alone would let an agent write any node's report, so the chart has no way to install without them.
-None is written in the chart.
-A draft of the first two exists, and no run of it is cited here; that the language reaches each check within its cost limit, and each refusal, are to be shown in envtest before the rest is built (reading 5).</p>
+<p>The controller's <code>delete</code> is held by RBAC alone: it may delete any ConfigMap of the reporter's namespace.
+A rule on deletion would be evaluated as the namespace is deleted too, where a fault in it would keep the namespace.</p>
+<p>RBAC alone would let an agent write any node's report, so no value of the chart leaves them out.
+<strong>They can still be absent while the grants stand.</strong> Helm makes them after the pods and the grants (read, the order of a render by Helm 4.2.3), so an install that fails there leaves both unguarded, as does one that applies part of the render.
+The controller therefore does nothing until it is refused, in a dry run, a ConfigMap that is no report, and exits after a minute; with no report made, an agent has no report to write.
+That keeps an unguarded install from working unseen, and does not guard it: whoever takes a token then is held to RBAC alone, so the install command takes a failed install back.
+It looks once, at its start, and for policy 1 alone, since a dry run of what policy 2 refuses needs a pod: one of the others absent, or any deleted later, is not seen.
+Their names begin with the release's namespace, as those of every object outside it do: two releases of one name, applied by something other than Helm, would otherwise replace each other's policies and leave one controller with none.
+Reading 5 has been taken: on an API server of 1.35.0 the three, with the bindings the chart renders, load within the cost limit and refuse what is listed here, to the tokens the two components' pods would have, and <code>kube-root-ca.crt</code> is still written.
+A field a later API server adds to a pod's status is the controller's to change until the chart names it; its test sees it when this repository takes that API.</p>
 <h3 id="who-could-forge-the-answer-r9">Who could forge the answer (R9)<a class="headerlink" href="#who-could-forge-the-answer-r9" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -4126,7 +4139,7 @@ None is granted on a cloud node.
 </tr>
 <tr>
 <td>3</td>
-<td>From the kill: first rise seen, by inotify and by poll; container's and pod's directory gone; <code>Failed</code> arrived; the status's <code>finishedAt</code> against the rise; the agent's CPU at 250 and 50 ms with a full node of pods</td>
+<td>From the kill: first rise seen, by inotify and by poll; container's and pod's directory gone; <code>Failed</code> arrived; the status's <code>finishedAt</code> against the rise; the agent's CPU at 250 and 50 ms with a full node of pods, some of them reclaiming at their limit, where a notice is one read of the pod's file and the kernel spaces them 10 ms apart</td>
 <td>kind, dogfood</td>
 <td>The watch, the poll, the bound that names the container, and the 30 seconds</td>
 </tr>
@@ -4226,13 +4239,13 @@ PRs 1 to 6 are <a href="../../queue/Q1403/">Q1403</a>, which gates 2.1; the thre
 </tr>
 <tr>
 <td>3</td>
-<td>Chart: RBAC, the admission policies and their envtest, the node affinity, NetworkPolicy; the no-import gate. From PR 2's review: policy 1 refuses the agent <code>immutable</code>, finalizers and owner references, the chart sets <code>-pods-root</code>, and a test holds a condition's writes and the Events to their limits against a real API server</td>
+<td>Chart, and its entry in <code>publish.yml</code> and <code>verify-release.sh</code>: RBAC, the admission policies and their envtest, the node affinity, NetworkPolicy; the no-import gate. From PR 2's review: policy 1 refuses the agent <code>immutable</code>, finalizers and owner references, the chart sets <code>-pods-root</code>, and a test holds a condition's writes and the Events to their limits against a real API server</td>
 <td>M</td>
 <td>The tool</td>
 </tr>
 <tr>
 <td>4</td>
-<td>Image and publish: a <code>Dockerfile</code> stage, <code>docker-bake.hcl</code>, the <code>publish.yml</code> matrix (seven images become eight) and a third chart, SBOM, Trivy, <code>verify-release.sh</code> and the docs that count seven</td>
+<td>Image and publish: a <code>Dockerfile</code> stage, <code>docker-bake.hcl</code>, the <code>publish.yml</code> matrix (seven images become eight), SBOM, Trivy, <code>verify-release.sh</code> and the docs that count seven</td>
 <td>M</td>
 <td>The tool, outside a source build</td>
 </tr>
@@ -4315,7 +4328,7 @@ For scale of PR 4: the newest image, <code>cache-runner</code>, is named in 16 f
 <p>Beside today, this set makes nothing worse in action where it is installed, and nothing at all where it is not.
 Reading 8 is Q1316's dogfood run, which is the only test of the rule on GKE: without it the tool says on its page that GKE has not been read.
 PR 4 cannot follow a release that claims the tool, since an unpublished image is a source build.
-PR 5 could, and then the rule ships with nothing that kills a container on purpose behind it.
+PR 5 could, and then the rule ships with nothing that kills a container on purpose behind it, and the image signed with nothing that has started it.
 D2's single DaemonSet would save the report ConfigMap, one policy and about a third of 2 and 3.</p>
 <p><strong>Where PR 9 sits</strong>, for any of these sets:</p>
 <table>
