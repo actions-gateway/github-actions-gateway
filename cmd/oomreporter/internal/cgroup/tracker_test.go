@@ -29,7 +29,7 @@ func TestObserve_ReturnsAKillOnceOnTheSecondSampleThatShowsIt(t *testing.T) {
 	assert.True(t, again)
 
 	rises, again = tr.Observe(one(dead()), start)
-	assert.Equal(t, map[string]Rise{burstableUID: {Confirmed: true, GroupKills: 1, Pod: 1, Containers: []string{runnerID}}}, rises)
+	assert.Equal(t, map[string]Rise{burstableUID: {Confirmed: true, GroupKills: 1, Pod: 1, Read: true, Containers: []string{runnerID}}}, rises)
 	assert.False(t, again)
 
 	rises, again = tr.Observe(one(dead()), start)
@@ -49,7 +49,7 @@ func TestObserve_AKillBeforeThePodWasSeenIsLate(t *testing.T) {
 			}
 			s := one(dead())
 			s.Root.OOM = 5
-			want := Rise{Late: true, GroupKills: 1, Pod: 1, Containers: []string{runnerID}}
+			want := Rise{Late: true, GroupKills: 1, Pod: 1, Read: true, Containers: []string{runnerID}}
 			rises, _ := tr.Observe(s, start)
 			assert.Equal(t, map[string]Rise{burstableUID: want}, rises)
 
@@ -80,9 +80,42 @@ func TestObserve_ReturnsWhatIsLeftOfAPodThatGoes(t *testing.T) {
 			tr.Observe(one(Pod{}), start)
 			tr.Observe(one(dead()), start)
 			rises, _ := tr.Observe(next, start)
-			assert.Equal(t, map[string]Rise{burstableUID: {GroupKills: 1, Pod: 1, Containers: []string{runnerID}}}, rises)
+			assert.Equal(t, map[string]Rise{burstableUID: {GroupKills: 1, Pod: 1, Read: true, Containers: []string{runnerID}}}, rises)
 		})
 	}
+}
+
+func TestObserve_AContainerThatGoesIsCountedAsLastRead(t *testing.T) {
+	own := Events{OOM: 2, OOMKill: 3, OOMGroupKill: 1}
+	killed := Pod{Subtree: own, Containers: map[string]Events{runnerID: own}}
+	without := Pod{Subtree: own}
+	for name, tc := range map[string]struct {
+		samples [2]Pod
+		want    Rise
+	}{
+		"not at all":        {[2]Pod{killed, killed}, Rise{Own: 1, Read: true, Containers: []string{runnerID}}},
+		"after its kill":    {[2]Pod{killed, without}, Rise{Own: 1, Containers: []string{runnerID}}},
+		"before it is read": {[2]Pod{without, without}, Rise{}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var tr Tracker
+			tr.Observe(one(Pod{Containers: map[string]Events{runnerID: {}}}), start)
+			tr.Observe(one(tc.samples[0]), start)
+			rises, _ := tr.Observe(one(tc.samples[1]), start)
+			tc.want.Confirmed, tc.want.GroupKills, tc.want.Inside = true, 1, 2
+			assert.Equal(t, map[string]Rise{burstableUID: tc.want}, rises)
+			assert.Len(t, tr.pods[burstableUID].base.pod.Containers, len(tc.samples[1].Containers))
+		})
+	}
+}
+
+func TestObserve_AKillBelowAContainerIsNoContainers(t *testing.T) {
+	var tr Tracker
+	tr.Observe(one(Pod{}), start)
+	nested := Pod{Subtree: Events{OOM: 1, OOMKill: 1, OOMGroupKill: 1}, Containers: map[string]Events{runnerID: {}}}
+	tr.Observe(one(nested), start)
+	rises, _ := tr.Observe(one(nested), start)
+	assert.Equal(t, map[string]Rise{burstableUID: {Confirmed: true, GroupKills: 1, Inside: 1}}, rises)
 }
 
 func TestObserve_APodMadeAgainStartsFromNothing(t *testing.T) {
@@ -133,7 +166,7 @@ func TestObserve_ATornSampleIsNoBaseWhileNothingWasKilled(t *testing.T) {
 	tr.Observe(one(Pod{Torn: true}), start)
 	tr.Observe(one(dead()), start)
 	rises, _ := tr.Observe(one(dead()), start)
-	assert.Equal(t, Rise{Confirmed: true, GroupKills: 1, Pod: 1, Containers: []string{runnerID}}, rises[burstableUID])
+	assert.Equal(t, Rise{Confirmed: true, GroupKills: 1, Pod: 1, Read: true, Containers: []string{runnerID}}, rises[burstableUID])
 }
 
 func TestObserve_AFirstSampleThatIsTornLeavesTheKillTorn(t *testing.T) {

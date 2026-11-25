@@ -215,6 +215,27 @@ func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
 		"both at the shared limit, the reports overlapping": {
 			[]event{podsOOM, podsOOM, killed(peer, runner), whole(peer, runner), killed(pod, runner), whole(pod, runner)},
 			100 * time.Millisecond, 0, map[string]Reason{runner: PodsLimit}},
+		"a nested kill just before this at the node's": {
+			then(nested, death(pod, runner)), 100 * time.Millisecond, 0,
+			map[string]Reason{runner: AbovePods}},
+		"a nested kill a little before": {
+			then(nested, []event{func(*node) {}}, death(pod, runner)), 130 * time.Millisecond, 0,
+			map[string]Reason{runner: AbovePods}},
+		"two nested kills before": {
+			then(nested, nested, death(pod, runner)), 100 * time.Millisecond, 0,
+			map[string]Reason{runner: AbovePods}},
+		"a nested allocation waiting for its kill": {
+			then(nested[:1], death(pod, runner)), 100 * time.Millisecond, 0,
+			map[string]Reason{runner: AbovePods}},
+		"one that has waited seconds": {
+			then(nested[:1], []event{func(*node) {}}, death(pod, runner)), 1500 * time.Millisecond, 0,
+			map[string]Reason{runner: AbovePods}},
+		"a nested kill, then this at the pod's": {
+			then(nested, death(pod, runner, podOOM(pod))), 100 * time.Millisecond, 0,
+			map[string]Reason{runner: PodLimit}},
+		"one container's limit met twice, the other at the node's": {
+			then(death(pod, runner, containerOOM(pod, runner), containerOOM(pod, runner)), death(pod, sidecar)), time.Millisecond, 0,
+			map[string]Reason{runner: ContainerLimit, sidecar: AbovePods}},
 		"a nested kill, then this at the shared limit": {
 			then(nested, death(pod, runner, podsOOM)), 100 * time.Millisecond, 0,
 			map[string]Reason{runner: PodsLimit}},
@@ -243,6 +264,15 @@ func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
 	}
 }
 
+func TestDecide_ANestedKillHidesNoLimitAboveIt(t *testing.T) {
+	for want, limit := range map[Reason]event{PodLimit: podOOM(pod), PodsLimit: podsOOM} {
+		events := then([]event{nestedOOM(pod), nestedKill(pod)}, death(pod, runner, limit))
+		r := observe(events, every(100*time.Millisecond), 1<<len(events)-1, 0)[pod]
+		require.Len(t, r, 1)
+		assert.Equal(t, want, Decide(r[0], true), "%+v", r[0])
+	}
+}
+
 // The neighbour's allocation is at the shared limit before this pod's kill is first seen,
 // and its own kill after, so nothing shows that it was not this pod's.
 func TestDecide_CannotTellANeighboursPendingAllocation(t *testing.T) {
@@ -266,8 +296,12 @@ func TestDecide_ClaimsNothing(t *testing.T) {
 	for name, r := range map[string]cgroup.Rise{
 		"of a pod first seen after":             {Late: true, GroupKills: 1, Pod: 1, Confirmed: true},
 		"of files not of one moment":            {Torn: true, GroupKills: 1, Pod: 1, Confirmed: true},
-		"of two limits":                         {GroupKills: 2, Inside: 1, Pod: 1, Confirmed: true},
-		"of more kills than allocations inside": {GroupKills: 2, Inside: 1, Confirmed: true},
+		"of two limits":                         {GroupKills: 2, Inside: 1, Own: 1, Read: true, Pod: 1, Confirmed: true},
+		"of more kills than allocations inside": {GroupKills: 2, Inside: 1, Own: 1, Read: true, Confirmed: true},
+		"of a container not read":               {GroupKills: 1, Inside: 1, Confirmed: true},
+		"of one not read, and the pod's":        {GroupKills: 1, Inside: 1, Pod: 1, Confirmed: true},
+		"of a container's, and all pods'":       {GroupKills: 1, Inside: 1, Own: 1, Read: true, Pods: 1, Confirmed: true},
+		"of one read too soon":                  {GroupKills: 1, Inside: 1, Pod: 1, Read: true},
 		"of more kills than allocations":        {GroupKills: 2, Pod: 1, Confirmed: true},
 		"of a pod gone before a second":         {GroupKills: 1, Pods: 1},
 		"of one gone with nothing counted":      {GroupKills: 1},

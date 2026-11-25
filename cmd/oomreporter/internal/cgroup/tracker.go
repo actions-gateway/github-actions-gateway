@@ -38,10 +38,14 @@ type Rise struct {
 	// Inside, Pod and Pods count the allocations that met a limit inside the pod, the pod's
 	// own, and that of its QoS cgroup or the pods' root.
 	Inside, Pod, Pods uint64
+	// Own is how many of the whole kills a container's own limit accounts for.
+	Own uint64
+	// Read: every whole kill is of a container whose own file was read at the last sample.
+	Read bool
 	// Peers is the whole kills in other pods over the same time.
 	Peers uint64
-	// Containers is the containers killed whole, by ID. One whose cgroup went unread is
-	// not among them.
+	// Containers is the containers killed whole, by ID. One whose cgroup went before its
+	// kill was read is not among them.
 	Containers []string
 }
 
@@ -69,6 +73,8 @@ type tracked struct {
 	// stood above the pod at the first.
 	shown int
 	above uint64
+	// gone is the containers not in the newest sample, whose events are the last read.
+	gone map[string]bool
 }
 
 // Observe takes the next sample, made at at, and returns by pod UID the rises it
@@ -87,6 +93,7 @@ func (t *Tracker) Observe(s Sample, at time.Time) (rises map[string]Rise, again 
 			}
 			continue
 		}
+		m.pod.Containers, p.gone = carry(p.last.pod, m.pod)
 		p.last = m
 		r, done, more := p.step(at)
 		if done {
@@ -95,6 +102,18 @@ func (t *Tracker) Observe(s Sample, at time.Time) (rises map[string]Rise, again 
 		again = again || more
 	}
 	return rises, again
+}
+
+// carry returns now's containers with those of was that now lacks, and which those are.
+func carry(was, now Pod) (all map[string]Events, gone map[string]bool) {
+	all, gone = map[string]Events{}, map[string]bool{}
+	maps.Copy(all, now.Containers)
+	for id, e := range was.Containers {
+		if _, ok := all[id]; !ok {
+			all[id], gone[id] = e, true
+		}
+	}
+	return all, gone
 }
 
 // forget drops the pods s does not continue, and returns the rises it leaves unconfirmed.
@@ -172,6 +191,9 @@ func (p *tracked) advance(r Rise, at time.Time) {
 	if r.Inside+r.Pod+r.Pods > 0 {
 		p.absorbed = at
 	}
+	for id := range p.gone {
+		delete(p.last.pod.Containers, id)
+	}
 	p.base, p.shown = p.last, 0
 	p.pending, p.killed = time.Time{}, time.Time{}
 }
@@ -187,33 +209,34 @@ func (p *tracked) rise() Rise {
 		Torn:       now.Torn || was.Torn,
 		GroupKills: now.Subtree.OOMGroupKill - was.Subtree.OOMGroupKill,
 		Pods:       above - p.base.above,
-		Containers: wholeKilled(was, now),
 	}
 	r.Peers = p.last.whole - p.base.whole - r.GroupKills
-	r.Inside, r.Pod = ownOOM(was, now)
+	r.count(was, now)
+	r.Read = r.Read && !slices.ContainsFunc(r.Containers, func(id string) bool { return p.gone[id] })
 	return r
 }
 
 func lateRise(now Pod) Rise {
-	r := Rise{Late: true, Torn: now.Torn, GroupKills: now.Subtree.OOMGroupKill, Containers: wholeKilled(Pod{}, now)}
-	r.Inside, r.Pod = ownOOM(Pod{}, now)
+	r := Rise{Late: true, Torn: now.Torn, GroupKills: now.Subtree.OOMGroupKill}
+	r.count(Pod{}, now)
 	return r
 }
 
-func ownOOM(was, now Pod) (inside, pod uint64) {
-	pod = now.Local.OOM - was.Local.OOM
+// count sets what r says of the pod's own cgroup and those inside it.
+func (r *Rise) count(was, now Pod) {
+	r.Pod = now.Local.OOM - was.Local.OOM
 	all := now.Subtree.OOM - was.Subtree.OOM
-	return all - min(all, pod), pod
-}
-
-func wholeKilled(was, now Pod) []string {
-	var ids []string
+	r.Inside = all - min(all, r.Pod)
+	var kills uint64
 	for _, id := range slices.Sorted(maps.Keys(now.Containers)) {
-		if now.Containers[id].OOMGroupKill > was.Containers[id].OOMGroupKill {
-			ids = append(ids, id)
+		old, e := was.Containers[id], now.Containers[id]
+		if k := e.OOMGroupKill - old.OOMGroupKill; k > 0 {
+			r.Containers = append(r.Containers, id)
+			r.Own += min(k, e.OOM-old.OOM)
+			kills += k
 		}
 	}
-	return ids
+	r.Read = kills == r.GroupKills
 }
 
 // restarted reports whether now is of a cgroup made since was, under the same UID, as a
