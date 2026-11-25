@@ -29,15 +29,20 @@ trap 'rm -rf "${WORKDIR}"' EXIT
 fails=0
 CALL_LOG="${WORKDIR}/calls.log"
 KUBECTL_EXIT=0
+WAIT_EXIT=0
 
 kubectl() {
 	printf 'kubectl %s\n' "$*" >>"${CALL_LOG}"
-	return "${KUBECTL_EXIT}"
+	case "$1" in
+	wait) return "${WAIT_EXIT}" ;;
+	*) return "${KUBECTL_EXIT}" ;;
+	esac
 }
 
 reset() {
 	: >"${CALL_LOG}"
 	KUBECTL_EXIT=0
+	WAIT_EXIT=0
 	unset GMC_ROLLOUT_TIMEOUT
 }
 
@@ -102,6 +107,32 @@ KUBECTL_EXIT=1
 rc=0
 wait_for_gmc >/dev/null 2>&1 || rc=$?
 check "a failed rollout fails the caller" 1 "${rc}"
+
+# --- a konnectivity agent has to be ready too (Q1016) -------------------------
+#
+# With none, every webhook call fails while the rollout above reads complete.
+
+reset
+wait_for_gmc >/dev/null
+agent_wait="$(grep '^kubectl wait' "${CALL_LOG}" || true)"
+check "waits for one ready konnectivity agent" \
+	"kubectl wait --namespace kube-system --for=jsonpath={.status.readyReplicas} deployment/konnectivity-agent --timeout=5m" \
+	"${agent_wait}"
+
+reset
+wait_for_gmc 3m >/dev/null
+check_contains "under the caller's timeout" "--timeout=3m" "$(grep '^kubectl wait' "${CALL_LOG}" || true)"
+
+reset
+WAIT_EXIT=1
+rc=0
+wait_for_gmc >/dev/null 2>&1 || rc=$?
+check "no ready agent fails the caller" 1 "${rc}"
+
+reset
+KUBECTL_EXIT=1
+wait_for_gmc >/dev/null 2>&1 || true
+check "a failed rollout does not go on to the agent" 1 "$(wc -l <"${CALL_LOG}" | tr -d ' ')"
 
 # --- gmc_ready answers, it does not assert -----------------------------------
 #

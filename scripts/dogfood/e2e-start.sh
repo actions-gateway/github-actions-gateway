@@ -56,7 +56,8 @@
 #                lands on. e2e-stop.sh deletes it.
 #   GMC_ROLLOUT_TIMEOUT
 #                How long to wait for the GMC rollout that serves the validating
-#                webhooks (default: 5m).
+#                webhooks, and then for a konnectivity agent to carry the calls
+#                to them (default: 5m each).
 #   E2E_VARIANT  Worker-isolation overlay: "kata" (unprivileged kind in a Kata
 #                micro-VM — the default, live-validated green under Q286) or
 #                "dind" (privileged DinD — explicit opt-in fallback for
