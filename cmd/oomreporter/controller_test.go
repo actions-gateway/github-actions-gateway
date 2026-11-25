@@ -55,6 +55,14 @@ func TestController_ReadsNoMoreNamespacesThanItIsTold(t *testing.T) {
 	assert.Equal(t, map[string]cache.Config{"oom": {}}, reports)
 }
 
+func TestController_LeavesTheLimitToTheAPIServer(t *testing.T) {
+	cfg, _ := api(t)
+	mgr, err := controllerOptions{namespace: "oom", agents: "app=agent", all: true}.manager(t.Context(), cfg)
+	require.NoError(t, err)
+	assert.Negative(t, mgr.GetConfig().QPS)
+	assert.Zero(t, cfg.QPS)
+}
+
 func TestController_ServesNothing(t *testing.T) {
 	assert.Equal(t, "0", controllerOptions{}.options(nil).Metrics.BindAddress)
 	assert.Empty(t, controllerOptions{}.options(nil).HealthProbeBindAddress)

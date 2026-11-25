@@ -100,6 +100,18 @@ func TestJudge_NamesTheContainer(t *testing.T) {
 				s.State.Terminated.ExitCode = 143
 				return s
 			}()), []report.Kill{above(killedAt, 1)}, nil},
+		"not where another ended so as another thing, which it may be of": {
+			pod(dead("runner", 1, killedAt), func() corev1.ContainerStatus {
+				s := dead("dind", 2, killedAt.Add(-2*time.Second))
+				s.State.Terminated.Reason = "Error"
+				return s
+			}()), []report.Kill{above(killedAt.Add(-2*time.Second), 1)}, []string{"runner Unknown"}},
+		"nor of one that another's file showed": {
+			pod(dead("runner", 1, killedAt), func() corev1.ContainerStatus {
+				s := dead("dind", 2, killedAt)
+				s.State.Terminated.Reason = "Error"
+				return s
+			}()), []report.Kill{own(killedAt, 2), above(killedAt, 1)}, []string{"runner AbovePods"}},
 		"not one that ended as another thing": {
 			pod(func() corev1.ContainerStatus {
 				s := dead("runner", 1, killedAt)
@@ -158,21 +170,57 @@ func TestJudge_NamesTheContainer(t *testing.T) {
 	}
 }
 
-func TestJudge_CountsEachContainerAPodHasHad(t *testing.T) {
-	p := pod(dead("runner", 1, killedAt))
-	p.Status.InitContainerStatuses = []corev1.ContainerStatus{func() corev1.ContainerStatus {
-		s := alive("dind", 3)
-		s.LastTerminationState.Terminated = over(2, killedAt.Add(-time.Hour))
+// A cgroup that is none of the pod's is one more than those the status has there at the kill.
+func TestJudge_CountsTheContainersThereAtTheKill(t *testing.T) {
+	started := func(s corev1.ContainerStatus, at time.Time) corev1.ContainerStatus {
+		if s.State.Running != nil {
+			s.State.Running.StartedAt = metav1.NewTime(at)
+		} else {
+			s.State.Terminated.StartedAt = metav1.NewTime(at)
+		}
 		return s
-	}()}
-	p.Status.EphemeralContainerStatuses = []corev1.ContainerStatus{alive("debug", 4), {Name: "not made yet"}}
-	inferred := func(seen int) report.Kill {
-		return kill(killedAt, cgroup.Rise{Confirmed: true, GroupKills: 1, Inside: 1, Own: 1, Inferred: seen})
 	}
-	got, _ := judged(p, inferred(5))
-	assert.Equal(t, []string{"runner ContainerLimit"}, got)
-	got, _ = judged(p, inferred(6))
-	assert.Equal(t, []string{"runner Unknown"}, got)
+	again := func(end, start time.Time) corev1.ContainerStatus {
+		s := started(alive("dind", 3), start)
+		s.LastTerminationState.Terminated = over(2, end)
+		s.LastTerminationState.Terminated.StartedAt = metav1.NewTime(killedAt.Add(-time.Hour))
+		return s
+	}
+	hour := killedAt.Add(-time.Hour)
+	for name, tc := range map[string]struct {
+		other corev1.ContainerStatus
+		there int
+	}{
+		"one that runs":                        {started(alive("dind", 2), hour), 3},
+		"one that runs from the second before": {started(alive("dind", 2), killedAt.Add(-time.Second)), 3},
+		"not one from its second on":           {started(alive("dind", 2), killedAt), 2},
+		"one that ended as it did":             {started(dead("dind", 2, killedAt), hour), 3},
+		"one that ended just before":           {started(dead("dind", 2, killedAt.Add(-endedWithin-time.Second)), hour), 3},
+		"not one that ended long before":       {started(dead("dind", 2, killedAt.Add(-endedWithin-2*time.Second)), hour), 2},
+		"one before it was made again":         {again(killedAt, killedAt.Add(time.Second)), 3},
+		"or after":                             {again(killedAt.Add(-time.Minute), killedAt.Add(-30*time.Second)), 3},
+		"not both, long before":                {again(killedAt.Add(-time.Minute), killedAt.Add(time.Second)), 2},
+		"not one that is not made":             {corev1.ContainerStatus{Name: "dind"}, 2},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, kind := range []string{"a container", "an init container", "an ephemeral container"} {
+				p := pod(started(dead("runner", 1, killedAt), hour))
+				switch kind {
+				case "a container":
+					p.Status.ContainerStatuses = append(p.Status.ContainerStatuses, tc.other)
+				case "an init container":
+					p.Status.InitContainerStatuses = []corev1.ContainerStatus{tc.other}
+				default:
+					p.Status.EphemeralContainerStatuses = []corev1.ContainerStatus{tc.other}
+				}
+				for seen, want := range map[int]string{tc.there: "runner ContainerLimit", tc.there + 1: "runner Unknown"} {
+					k := kill(killedAt, cgroup.Rise{Confirmed: true, GroupKills: 1, Inside: 1, Own: 1, Inferred: seen, Containers: []string{id(1)}})
+					got, _ := judged(p, k)
+					assert.Contains(t, got, want, "%s, %d", kind, seen)
+				}
+			}
+		})
+	}
 }
 
 func TestJudge_TakesThePodsOwnLimitFromItsSpec(t *testing.T) {
@@ -233,6 +281,7 @@ func TestJudge_SaysWhetherALimitInsideRanOutWithALateKill(t *testing.T) {
 		"the pod's did":    {cgroup.Rise{Late: true, GroupKills: 1, Pod: 1}, false},
 		"one inside did":   {cgroup.Rise{Late: true, GroupKills: 1, Inside: 1}, false},
 		"one may, half":    {cgroup.Rise{Late: true, GroupKills: 1, Torn: true}, false},
+		"one had, before":  {cgroup.Rise{Late: true, GroupKills: 1, RecentOwn: true}, false},
 		"it was in time":   {cgroup.Rise{Confirmed: true, GroupKills: 1, Recent: true}, false},
 		"nor where needed": {cgroup.Rise{Confirmed: true, GroupKills: 1}, false},
 	} {

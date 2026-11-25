@@ -208,7 +208,6 @@ func TestReconcile_AConditionOfOursThatAnotherChangedIsWrittenAgain(t *testing.T
 			want := p.Status.Conditions[0]
 			change(&p.Status.Conditions[0])
 			require.NoError(t, w.Status().Update(t.Context(), p))
-			w.now = w.now.Add(writeEvery)
 			w.reconcile(t, "node-a")
 			got := w.podNow(t).Status.Conditions
 			require.Len(t, got, 1)
@@ -366,34 +365,52 @@ func TestWriteEvent_AReportsTimesMakeNoMoreEvents(t *testing.T) {
 	assert.Len(t, w.eventsNow(t), 3)
 }
 
-func TestWriteConditions_OneAMinute(t *testing.T) {
-	w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a", own(killedAt, 1)), pod(dead("runner", 1, killedAt), dead("dind", 2, killedAt)))
-	patches := func() (n int) {
+// The condition says the last, and the Events say each.
+func TestWriteEvent_OneForEachReason(t *testing.T) {
+	w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a", above(killedAt, 1)), pod(dead("runner", 1, killedAt)))
+	w.reconcile(t, "node-a")
+	require.NoError(t, w.Update(t.Context(), reportOf(t, "node-a", above(killedAt, 1), own(killedAt, 1))))
+	w.reconcile(t, "node-a")
+	var reasons []string
+	for _, e := range w.eventsNow(t) {
+		reasons = append(reasons, e.Reason)
+	}
+	assert.ElementsMatch(t, []string{"OOMAbovePods", "OOMContainerLimit"}, reasons)
+}
+
+func TestWriteConditions_ThreeAMinute(t *testing.T) {
+	w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a"), pod(dead("runner", 1, killedAt), dead("dind", 2, killedAt)))
+	say := func(kills ...report.Kill) (patches int, wait time.Duration) {
+		w.writes = nil
+		require.NoError(t, w.Update(t.Context(), reportOf(t, "node-a", kills...)))
+		wait = w.reconcile(t, "node-a").RequeueAfter
 		for _, write := range w.writes {
 			if write == "patch pod/status" {
-				n++
+				patches++
 			}
 		}
-		return n
+		return patches, wait
 	}
-	say := func(kills ...report.Kill) time.Duration {
-		cm := reportOf(t, "node-a", kills...)
-		require.NoError(t, w.Update(t.Context(), cm))
-		return w.reconcile(t, "node-a").RequeueAfter
+	it := func(t *testing.T, wantPatches int, wantWait time.Duration, kills ...report.Kill) {
+		t.Helper()
+		patches, wait := say(kills...)
+		assert.Equal(t, wantPatches, patches)
+		assert.Equal(t, wantWait, wait)
 	}
-	assert.Zero(t, say(own(killedAt, 1)))
-	assert.Equal(t, 1, patches())
+	node := kill(killedAt, cgroup.Rise{Confirmed: true, GroupKills: 1, Containers: []string{id(1)}})
+	it(t, 1, 0, own(killedAt, 1))
 	w.now = w.now.Add(20 * time.Second)
-	assert.Zero(t, say(own(killedAt.Add(time.Second), 1)), "the time alone is no change")
-	assert.Equal(t, 40*time.Second, say(kill(killedAt, cgroup.Rise{Confirmed: true, GroupKills: 1, Containers: []string{id(1)}})))
-	assert.Equal(t, 1, patches())
-	assert.Equal(t, 40*time.Second, say(kill(killedAt, cgroup.Rise{Confirmed: true, GroupKills: 1, Containers: []string{id(1)}}), own(killedAt, 2)), "another container's is not held up")
-	assert.Equal(t, 2, patches())
-	w.now = w.now.Add(40 * time.Second)
-	assert.Zero(t, w.reconcile(t, "node-a").RequeueAfter)
-	assert.Equal(t, 3, patches())
+	it(t, 0, 0, own(killedAt.Add(time.Second), 1)) // The time alone is no change.
+	it(t, 1, 0, node)
+	it(t, 1, 0, own(killedAt, 1))
+	it(t, 0, 40*time.Second, node)
+	w.now = w.now.Add(time.Second)
+	it(t, 1, 39*time.Second, node, own(killedAt, 2)) // Another container's is not held up.
+	it(t, 0, 39*time.Second, node, own(killedAt, 2))
+	w.now = w.now.Add(39 * time.Second)
+	it(t, 1, 0, node, own(killedAt, 2))
 	w.now = w.now.Add(writeEvery)
-	w.reconcile(t, "node-a")
+	it(t, 0, 0, node, own(killedAt, 2))
 	assert.Empty(t, w.written)
 }
 
@@ -470,12 +487,14 @@ func TestWriteEvent_ForgetsThoseOfLongAgo(t *testing.T) {
 func TestEventName_IsAName(t *testing.T) {
 	p := pod()
 	p.Name = strings.Repeat("a", 235) + ".-." + strings.Repeat("b", 15)
-	name := eventName(p, "spec.containers{runner}", killedAt)
+	name := eventName(p, "spec.containers{runner}", id(1), "OOMUnknown")
 	assert.Len(t, name, 235+1+16)
 	assert.NotContains(t, name, ".-")
-	assert.NotEqual(t, name, eventName(p, "spec.containers{dind}", killedAt))
+	assert.NotEqual(t, name, eventName(p, "spec.containers{dind}", id(1), "OOMUnknown"))
+	assert.NotEqual(t, name, eventName(p, "spec.containers{runner}", id(2), "OOMUnknown"))
+	assert.NotEqual(t, name, eventName(p, "spec.containers{runner}", id(1), "OOMAbovePods"))
 	p.UID = "another"
-	assert.NotEqual(t, name, eventName(p, "spec.containers{runner}", killedAt))
+	assert.NotEqual(t, name, eventName(p, "spec.containers{runner}", id(1), "OOMUnknown"))
 }
 
 // failing has the API server refuse one kind of write with err.
@@ -644,6 +663,9 @@ func TestWatches(t *testing.T) {
 
 	assert.Equal(t, []string{"node-a"}, nodes(w.ofPod(t.Context(), pod(dead("runner", 1, killedAt)))))
 	assert.Empty(t, w.ofPod(t.Context(), pod(alive("runner", 1))))
+	failed := pod(dead("runner", 1, killedAt))
+	failed.Status.ContainerStatuses[0].State.Terminated.Reason = "Error"
+	assert.Empty(t, w.ofPod(t.Context(), failed))
 	assert.Empty(t, w.ofPod(t.Context(), cm))
 }
 

@@ -8,6 +8,7 @@ import (
 	"hash/fnv"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,12 +35,19 @@ const (
 	// clock.
 	eventWithin = 10 * time.Minute
 	skew        = time.Minute
-	// writeEvery is how far apart two writes of one condition are, and two Events of one pod that
-	// are of no container.
-	writeEvery = time.Minute
+	// In writeEvery a condition is written conditionWrites times, which leaves room for an answer
+	// to be corrected by the node's next reports, and a pod has one Event that is of no container.
+	writeEvery      = time.Minute
+	conditionWrites = 3
 
 	uidIndex = "metadata.uid"
 )
+
+// writes is how many of a thing there were since since.
+type writes struct {
+	since time.Time
+	n     int
+}
 
 // Reconciler reconciles a node: its report, and the pods that names.
 type Reconciler struct {
@@ -54,8 +62,8 @@ type Reconciler struct {
 
 	idle   map[string]time.Time // by node
 	events map[string]time.Time // made, by namespace and name
-	// written is the conditions, by pod UID and type, and the Events of no container, by pod UID.
-	written map[string]time.Time
+	// written is of the conditions, by pod UID and type, and of the Events of no container, by UID.
+	written map[string]writes
 }
 
 // SetupWithManager registers r, and the index it finds pods by.
@@ -85,7 +93,8 @@ func (r *Reconciler) ofPod(_ context.Context, o client.Object) []reconcile.Reque
 	if !ok || pod.Spec.NodeName == "" {
 		return nil
 	}
-	if killed, _ := containers(pod); len(killed) == 0 && !r.isAgent(pod) {
+	killed, _ := containers(pod)
+	if !slices.ContainsFunc(killed, func(e ended) bool { return e.oom }) && !r.isAgent(pod) {
 		return nil
 	}
 	return request(pod.Spec.NodeName)
@@ -189,7 +198,7 @@ func (r *Reconciler) expire(ctx context.Context, node string, cm *corev1.ConfigM
 
 // apply says what node's kills say of its pods, and returns how long it waits to say the rest.
 func (r *Reconciler) apply(ctx context.Context, node string, kills []report.Kill) (time.Duration, error) {
-	maps.DeleteFunc(r.written, func(_ string, at time.Time) bool { return r.Now().Sub(at) >= writeEvery })
+	maps.DeleteFunc(r.written, func(_ string, w writes) bool { return r.Now().Sub(w.since) >= writeEvery })
 	var uids []string
 	by := map[string][]report.Kill{}
 	for _, k := range kills {
@@ -244,8 +253,8 @@ func (r *Reconciler) writeConditions(ctx context.Context, pod *corev1.Pod, verdi
 		if !is {
 			continue
 		}
-		if last, ok := r.written[conditionKey(pod, c)]; ok {
-			wait = sooner(wait, writeEvery-r.Now().Sub(last))
+		if w := r.written[conditionKey(pod, c)]; w.n >= conditionWrites {
+			wait = sooner(wait, writeEvery-r.Now().Sub(w.since))
 			continue
 		}
 		changed = append(changed, c)
@@ -277,35 +286,40 @@ func conditionKey(pod *corev1.Pod, c corev1.PodCondition) string {
 
 func (r *Reconciler) wrote(key string) {
 	if r.written == nil {
-		r.written = map[string]time.Time{}
+		r.written = map[string]writes{}
 	}
-	r.written[key] = r.Now()
+	w := r.written[key]
+	if w.n++; w.n == 1 {
+		w.since = r.Now()
+	}
+	r.written[key] = w
 }
 
-// writeEvents makes at most one Event for each minute a container ended in, and one a minute for
-// the newest kill that ended none, whose time is the report's.
+// writeEvents makes one Event for each end of a container and each reason, and at most one a minute
+// for the newest kill that ended none, whose time is the report's.
 func (r *Reconciler) writeEvents(ctx context.Context, pod *corev1.Pod, verdicts []verdict, processes []time.Time) error {
 	for _, v := range verdicts {
 		text := fmt.Sprintf("Container %s: %s", v.ended.name, v.text())
-		if err := r.writeEvent(ctx, pod, v.ended.field, v.ended.at, eventPrefix+string(v.reason), text); err != nil {
+		if err := r.writeEvent(ctx, pod, v.ended.field, v.ended.id, v.ended.at, eventPrefix+string(v.reason), text); err != nil {
 			return err
 		}
 	}
 	if _, ok := r.written[string(pod.UID)]; ok || len(processes) == 0 {
 		return nil
 	}
-	return r.writeEvent(ctx, pod, "", slices.MaxFunc(processes, time.Time.Compare), reasonProcess, wordsProcess)
+	at := slices.MaxFunc(processes, time.Time.Compare)
+	return r.writeEvent(ctx, pod, "", strconv.FormatInt(at.Unix()/60, 10), at, reasonProcess, wordsProcess)
 }
 
-func (r *Reconciler) writeEvent(ctx context.Context, pod *corev1.Pod, field string, at time.Time, reason, text string) error {
+func (r *Reconciler) writeEvent(ctx context.Context, pod *corev1.Pod, field, of string, at time.Time, reason, text string) error {
 	now := r.Now()
 	for name, made := range r.events {
 		if now.Sub(made) > 2*eventWithin {
 			delete(r.events, name)
 		}
 	}
-	// The name holds the limit across a restart of the controller, and across two of it.
-	name := eventName(pod, field, at)
+	// The name makes it one across a restart of the controller, and across two of it.
+	name := eventName(pod, field, of, reason)
 	if _, made := r.events[pod.Namespace+"/"+name]; made || now.Sub(at) > eventWithin || at.Sub(now) > skew {
 		return nil
 	}
@@ -332,9 +346,9 @@ func (r *Reconciler) writeEvent(ctx context.Context, pod *corev1.Pod, field stri
 	return nil
 }
 
-func eventName(pod *corev1.Pod, field string, at time.Time) string {
+func eventName(pod *corev1.Pod, field, of, reason string) string {
 	h := fnv.New64a()
-	_, _ = fmt.Fprintf(h, "%s\x00%s\x00%d", pod.UID, field, at.Unix()/60)
+	_, _ = fmt.Fprintf(h, "%s\x00%s\x00%s\x00%s", pod.UID, field, of, reason)
 	name := pod.Name
 	// A name has at most 253 characters.
 	if most := 253 - len(".") - 16; len(name) > most {

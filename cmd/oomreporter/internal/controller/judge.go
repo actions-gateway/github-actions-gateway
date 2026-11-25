@@ -34,17 +34,27 @@ type verdict struct {
 	weak bool
 }
 
-// ended is a container whose last end was as OOMKilled.
+// ended is a container's last end.
 type ended struct {
 	name, id string
 	field    string
 	code     int32
 	at       time.Time
+	// oom: it ended as OOMKilled.
+	oom bool
+}
+
+// life is when a container's cgroup was there. Its ends are zero where they are not known.
+type life struct{ start, end time.Time }
+
+// at reports whether it may have been there at t. A status has whole seconds.
+func (l life) at(t time.Time) bool {
+	return (l.start.IsZero() || l.start.Before(t.Truncate(time.Second))) && (l.end.IsZero() || t.Sub(l.end) <= endedWithin+time.Second)
 }
 
 // judge returns pod's verdicts by container, and when kills ended no container.
 func judge(pod *corev1.Pod, kills []report.Kill) (verdicts []verdict, processes []time.Time) {
-	all, total := containers(pod)
+	all, lives := containers(pod)
 	// A container whose own counts show a kill is not looked for behind another.
 	shown := map[string]bool{}
 	for _, k := range kills {
@@ -56,6 +66,9 @@ func judge(pod *corev1.Pod, kills []report.Kill) (verdicts []verdict, processes 
 	}
 	by, weak := map[string]verdict{}, map[string]verdict{}
 	add := func(v verdict, e ended, late bool) {
+		if !e.oom {
+			return
+		}
 		v.ended = e
 		if late || !near(v.at, e.at) {
 			v.reason, v.weak = rule.Unknown, true
@@ -74,11 +87,17 @@ func judge(pod *corev1.Pod, kills []report.Kill) (verdicts []verdict, processes 
 		}
 		v := verdict{
 			reason: rule.Decide(*k.Rise, podLimit(pod)), at: k.Time(),
-			none: k.Rise.Late && !k.Rise.Torn && k.Rise.Inside+k.Rise.Pod == 0,
+			none: k.Rise.Late && !k.Rise.Torn && !k.Rise.RecentOwn && k.Rise.Inside+k.Rise.Pod == 0,
 		}
 		// More cgroups than containers and the one sandbox: one is another's, as a job with the
 		// host's view of the tree can make it, and may be what has gone.
-		if k.Rise.Inferred > total+1 {
+		there := 1
+		for _, l := range lives {
+			if l.at(v.at) {
+				there++
+			}
+		}
+		if k.Rise.Inferred > there {
 			v.reason = rule.Unknown
 		}
 		var of, maybe []ended
@@ -127,9 +146,9 @@ func near(kill, end time.Time) bool {
 	return d >= -endedWithin && d <= endedWithin+time.Second
 }
 
-// containers returns pod's containers whose last end was as OOMKilled, and how many it has had
-// that its status still names.
-func containers(pod *corev1.Pod) (all []ended, total int) {
+// containers returns the last end of each of pod's containers that has had one, and the life of
+// each its status still names.
+func containers(pod *corev1.Pod) (all []ended, lives []life) {
 	for _, g := range []struct {
 		field    string
 		statuses []corev1.ContainerStatus
@@ -139,27 +158,30 @@ func containers(pod *corev1.Pod) (all []ended, total int) {
 		{"spec.ephemeralContainers", pod.Status.EphemeralContainerStatuses},
 	} {
 		for _, s := range g.statuses {
-			ids := map[string]bool{s.ContainerID: true}
 			last := s.State.Terminated
 			if was := s.LastTerminationState.Terminated; was != nil {
-				ids[was.ContainerID] = true
+				lives = append(lives, life{was.StartedAt.Time, was.FinishedAt.Time})
 				if last == nil {
 					last = was
 				}
 			}
-			delete(ids, "")
-			total += len(ids)
-			if last == nil || last.Reason != reasonOOMKilled {
+			switch {
+			case s.State.Terminated != nil:
+				lives = append(lives, life{last.StartedAt.Time, last.FinishedAt.Time})
+			case s.State.Running != nil:
+				lives = append(lives, life{start: s.State.Running.StartedAt.Time})
+			}
+			if last == nil {
 				continue
 			}
 			_, id, _ := strings.Cut(last.ContainerID, "://")
 			all = append(all, ended{
 				name: s.Name, id: id, field: fmt.Sprintf("%s{%s}", g.field, s.Name),
-				code: last.ExitCode, at: last.FinishedAt.Time,
+				code: last.ExitCode, at: last.FinishedAt.Time, oom: last.Reason == reasonOOMKilled,
 			})
 		}
 	}
-	return all, total
+	return all, lives
 }
 
 // podLimit reports whether pod's spec.resources sets a memory limit.
