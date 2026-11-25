@@ -1,4 +1,7 @@
 {{- if .Values.networkPolicy.enabled }}
+{{- if not .Values.networkPolicy.apiServerPorts }}
+{{- fail "networkPolicy.apiServerPorts names no port, which lets egress go to all of them" }}
+{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

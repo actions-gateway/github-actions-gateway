@@ -99,8 +99,6 @@ spec:
   policyName: {{ include "oom-reporter.sharedName" . }}-event-reasons
   validationActions: [Deny]
 ---
-# Last, since the controller waits for it.
-#
 # A report is written by its own node's agent: the one whose token names the node
 # the report is named for. Neither component writes another ConfigMap, and those
 # stay writable by others, as kube-root-ca.crt is by its publisher.

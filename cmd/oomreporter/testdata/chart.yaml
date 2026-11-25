@@ -181,6 +181,8 @@ spec:
         hostPath:
           path: /sys/fs/cgroup
           type: Directory
+      nodeSelector:
+        kubernetes.io/os: linux
       tolerations:
         - operator: Exists
 ---
@@ -243,6 +245,8 @@ spec:
               - key: node-restriction.kubernetes.io/oom-reporter
                 operator: In
                 values: ["controller"]
+      nodeSelector:
+        kubernetes.io/os: linux
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy

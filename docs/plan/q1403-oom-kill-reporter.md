@@ -385,6 +385,7 @@ Three, in the reporter's chart, with `failurePolicy: Fail`:
 2. **The controller may change only its own conditions.** `pods/status` is wider than its name: the API server resets the spec, the deletion timestamp and the owner references on such a write, and not labels, annotations or finalizers (read, `podStatusStrategy.PrepareForUpdate`).
    The AGC keeps its recovery marks in annotations, so an unguarded grant could forge "already handled" on any worker.
    The policy requires metadata unchanged but for `managedFields`, every other status field unchanged, the conditions outside the reporter's domain to be the same list in the same order, and those in it to be at most 200, with bounded reasons and messages, since a pod too large to store is one its kubelet cannot write to (reasoned).
+   A pod with two conditions of one type gets none of the reporter's, since the strategic merge patch changes such a list (measured).
    A typed object's fields cannot be iterated, so it lists them; a test walks `PodStatus` and `ObjectMeta` and fails on a field the policy does not name, which is how a later release's field is caught.
 3. **The controller's Events carry only its own reasons.** It matches both Event API groups.
    The AGC's opt-in `AutoscalerVerdict` mode reads a `NotTriggerScaleUp` or `TriggeredScaleUp` Event by its reason and no other field (read, `classifyAutoscalerEvent`), so `events` create without this could gate or ungate a set's intake in every namespace it covers.
@@ -398,11 +399,14 @@ A selector that names the wrong namespace judges nothing, so reading 5 loads the
 Its rule reads the node claim for a name with the prefix and no other, since the publisher of `kube-root-ca.crt` has none.
 RBAC and policy take the name from one value, with a test.
 
+The controller's `delete` is held by RBAC alone: it may delete any ConfigMap of the reporter's namespace.
+A rule on deletion would be evaluated as the namespace is deleted too, where a fault in it would keep the namespace.
+
 RBAC alone would let an agent write any node's report, so no value of the chart leaves them out.
 **They can still be absent while the grants stand.** Helm makes them after the pods and the grants (read, the order of a render by Helm 4.2.3), so an install that fails there leaves both unguarded, as does one that applies part of the render.
-The controller therefore does nothing until it is refused, in a dry run, a ConfigMap that is no report, and exits after a minute; with no report made, an agent has nothing it may write either.
+The controller therefore does nothing until it is refused, in a dry run, a ConfigMap that is no report, and exits after a minute; with no report made, an agent has no report to write.
 That keeps an unguarded install from working unseen, and does not guard it: whoever takes a token then is held to RBAC alone, so the install command takes a failed install back.
-It looks once, at its start, and for policy 1 alone, which the render has last, since a dry run of what policy 2 refuses needs a pod: one of the others absent, or any deleted later, is not seen.
+It looks once, at its start, and for policy 1 alone, since a dry run of what policy 2 refuses needs a pod: one of the others absent, or any deleted later, is not seen.
 Their names begin with the release's namespace, as those of every object outside it do: two releases of one name, applied by something other than Helm, would otherwise replace each other's policies and leave one controller with none.
 Reading 5 has been taken: on an API server of 1.35.0 the three, with the bindings the chart renders, load within the cost limit and refuse what is listed here, to the tokens the two components' pods would have, and `kube-root-ca.crt` is still written.
 A field a later API server adds to a pod's status is the controller's to change until the chart names it; its test sees it when this repository takes that API.

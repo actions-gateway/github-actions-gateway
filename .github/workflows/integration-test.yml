@@ -177,7 +177,7 @@ jobs:
           KUBEBUILDER_ASSETS=$(.build/setup-envtest use "$ENVTEST_K8S_VERSION" --bin-dir /tmp/envtest-bins -p path)
           echo "KUBEBUILDER_ASSETS=$KUBEBUILDER_ASSETS" >> "$GITHUB_ENV"
       # The wrapper owns -race, the `integration` tag and the -timeout budget, so
-      # the budget is one number here and in both module Makefiles, and a breach
+      # the budget is one number here and in each module's make target, and a breach
       # annotates the step with "the suite ran out of time" instead of leaving
       # the panic to blame whichever test held the wall (Q741).
       - name: Run ${{ matrix.module }} integration tests

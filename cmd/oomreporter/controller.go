@@ -25,27 +25,28 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/controller"
 )
 
-const (
-	// The policies are in force a while after they are made, which is after the controller is.
-	guardedWithin, guardedEvery = time.Minute, 2 * time.Second
-	syncedWithin                = 2 * time.Minute
-	// Each time the pods of every namespace are listed anew, and a tenant can bring it about.
-	againEvery = 5 * time.Minute
-	stoppedIn  = 10 * time.Second
+// refused is what the report-writer policy says of a ConfigMap that is no report.
+const refused = "the oom-reporter writes no ConfigMap but its reports"
 
-	// refused is what the report-writer policy says of a ConfigMap that is no report.
-	refused = "the oom-reporter writes no ConfigMap but its reports"
-)
+type waits struct{ guardedWithin, guardedEvery, syncedWithin, againEvery, stoppedIn time.Duration }
+
+var usual = waits{
+	// The policies are in force a while after they are made, which is after the controller is.
+	guardedWithin: time.Minute, guardedEvery: 2 * time.Second,
+	syncedWithin: 2 * time.Minute,
+	// Each time the pods of every namespace are listed anew, and a tenant can bring it about.
+	againEvery: 5 * time.Minute,
+	stoppedIn:  10 * time.Second,
+}
 
 type controllerOptions struct {
 	namespace, agents, namespaces string
 	all                           bool
-	// For tests, the constants of those names otherwise.
-	guardedWithin, guardedEvery, syncedWithin, againEvery time.Duration
+	waits
 }
 
 func controllerFlags(flags *flag.FlagSet, env func(string) string) func(context.Context, *rest.Config, *slog.Logger) error {
-	o := controllerOptions{guardedWithin: guardedWithin, guardedEvery: guardedEvery, syncedWithin: syncedWithin, againEvery: againEvery}
+	o := controllerOptions{waits: usual}
 	flags.StringVar(&o.namespace, "namespace", env("POD_NAMESPACE"), "the reports' and the agents' namespace (default $POD_NAMESPACE)")
 	flags.StringVar(&o.agents, "agents", "", "the labels of the agents' pods, as key=value,key=value")
 	flags.StringVar(&o.namespaces, "namespaces", "", "the namespaces whose pods are written to, with commas between")
@@ -124,7 +125,7 @@ func (o controllerOptions) round(ctx context.Context, cfg *rest.Config, r *contr
 	select {
 	case err := <-ended:
 		return again, err
-	case <-time.After(stoppedIn):
+	case <-time.After(o.stoppedIn):
 		return false, errors.New("the controller did not stop")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -168,10 +169,18 @@ func TestController_ListsNoMoreThanItIsGranted(t *testing.T) {
 
 // soon are the options of a controller of namespaces that looks again soon.
 func soon(namespaces string) controllerOptions {
-	return controllerOptions{
-		namespace: "oom", agents: "app=agent", namespaces: namespaces,
-		guardedWithin: time.Minute, guardedEvery: 10 * time.Millisecond, syncedWithin: time.Minute, againEvery: 20 * time.Millisecond,
+	return controllerOptions{namespace: "oom", agents: "app=agent", namespaces: namespaces, waits: waits{
+		guardedWithin: time.Minute, guardedEvery: 10 * time.Millisecond, syncedWithin: time.Minute, againEvery: 20 * time.Millisecond, stoppedIn: time.Minute,
+	}}
+}
+
+// None is a loop without a wait, or one that ends at once.
+func TestController_Waits(t *testing.T) {
+	v := reflect.ValueOf(usual)
+	for i := range v.NumField() {
+		assert.GreaterOrEqual(t, time.Duration(v.Field(i).Int()), time.Second, v.Type().Field(i).Name)
 	}
+	assert.Greater(t, usual.guardedWithin, usual.guardedEvery)
 }
 
 // ended is what run returns, which is to be soon.

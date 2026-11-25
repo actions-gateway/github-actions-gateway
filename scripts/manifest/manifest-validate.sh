@@ -208,6 +208,8 @@ oom_refuses "must be empty under controller.placement=Taints" "${OOM_REPORTER_RE
 # A label a kubelet may set on its own node keeps nothing off it.
 oom_refuses "nodeLabel" "${OOM_REPORTER_RENDER_ARGS[@]}" --set controller.nodeLabel.key=example.com/platform
 oom_refuses "namespaces holds the release's own" "${OOM_REPORTER_RENDER_ARGS[@]}" --namespace team-a --set "namespaces={team-a}"
+oom_refuses "names no port" "${OOM_REPORTER_RENDER_ARGS[@]}" --set networkPolicy.apiServerPorts=null
+oom_refuses "networkpolicy" "${OOM_REPORTER_RENDER_ARGS[@]}" --set networkpolicy.enabled=true
 oom_refuses "podsRoot" "${OOM_REPORTER_RENDER_ARGS[@]}" --set agent.podsRoot=
 
 echo "==> helm template: oom-reporter's policies name the accounts its grants do, however long the names"

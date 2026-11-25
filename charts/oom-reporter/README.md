@@ -66,6 +66,8 @@ helm install oom-reporter oci://ghcr.io/actions-gateway/charts/oom-reporter --ve
 
 **Keep `--rollback-on-failure`** (`--atomic` in Helm 3).
 Helm makes the admission policies last, after the grants and the pods, so an install that fails there leaves the grants without them.
+It also waits for every pod to be ready, and takes the install back where one is not within five minutes: no node has the label, or an agent exits for its pods' root.
+Read the agents' logs before that.
 The controller does nothing until the policies refuse it, and no agent has a report to write until it does.
 One whose controller keeps exiting with `the admission policies are not in force` is such an install: uninstall it, since until then the grants are all that holds a token of either component.
 One that says it `cannot tell` was not answered, or was refused by something else, and says what: `networkPolicy.apiServerCIDRs` that do not hold the API server, for one.
@@ -77,6 +79,14 @@ The controller's log names it, and it is taken in within five minutes of being r
 
 The chart requires Kubernetes ≥ 1.35 and cgroup v2.
 `helm template` has no cluster to ask, so it checks the first against the version Helm was built for: pass `--kube-version <your cluster's version>` where that is older.
+
+**Anything that labels or annotates every ConfigMap**, such as a mutating webhook, has each report refused, and the tool says nothing.
+Leave this namespace out of it.
+
+**An upgrade stops at a node whose agent exits**, since the agents are replaced one at a time, and leaves the others' as they were.
+
+**Uninstalling leaves** the `oom-report-` ConfigMaps, the node labels, the namespace, and the conditions of the pods there are.
+A node that is replaced comes without the label, so put it on the pool.
 
 **A change of the cluster's encryption keys** that rewrites every stored ConfigMap is refused on the reports, as any other writer is.
 Delete the `oom-report-` ConfigMaps before it, and the controller makes them again.
@@ -92,13 +102,13 @@ Delete the `oom-report-` ConfigMaps before it, and the controller makes them aga
 | `imagePullSecrets` | `[]` | Pull Secrets in the release's namespace. |
 | `allowFloatingImageTags` | `false` | Dev and test only: render `image.tag` where no digest is set. |
 | `agent.podsRoot` | `kubepods.slice` | The kubelet's cgroup of all pods, below `/sys/fs/cgroup`. `kubepods.slice` for the systemd driver, `kubepods` for cgroupfs, `kubelet.slice/kubelet-kubepods.slice` on kind. Fixed and not found, because a job with the host's view of the cgroup tree can make a second one. |
-| `agent.nodeSelector`, `agent.affinity` | `{}` | Where the agent runs. A node without it gets no answer. |
+| `agent.nodeSelector`, `agent.affinity` | `{}` | Where the agent runs, on Linux nodes alone. A node without it gets no answer. |
 | `agent.tolerations` | every taint | As above. |
 | `agent.priorityClassName` | `""` | |
 | `agent.resources` | 50m and 64Mi, limit 128Mi | |
 | `controller.placement` | `NodeLabel` | `NodeLabel` requires `controller.nodeLabel`. `Taints` requires nothing, and refuses `controller.tolerations`. |
 | `controller.nodeLabel.{key,value}` | `node-restriction.kubernetes.io/oom-reporter`, `controller` | The label. Its key has to be in the `node-restriction.kubernetes.io` namespace. |
-| `controller.nodeSelector` | `{}` | |
+| `controller.nodeSelector` | `{}` | Beside Linux. |
 | `controller.tolerations` | `[]` | |
 | `controller.priorityClassName` | `""` | |
 | `controller.resources` | 20m and 64Mi, limit 256Mi | |

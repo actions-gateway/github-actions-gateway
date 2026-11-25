@@ -66,10 +66,8 @@ spec:
         hostPath:
           path: /sys/fs/cgroup
           type: Directory
-      {{- with .Values.agent.nodeSelector }}
       nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- toYaml (merge (dict "kubernetes.io/os" "linux") .Values.agent.nodeSelector) | nindent 8 }}
       {{- with .Values.agent.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}

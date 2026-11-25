@@ -65,10 +65,8 @@ spec:
                 operator: In
                 values: [{{ .Values.controller.nodeLabel.value | quote }}]
       {{- end }}
-      {{- with .Values.controller.nodeSelector }}
       nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- toYaml (merge (dict "kubernetes.io/os" "linux") .Values.controller.nodeSelector) | nindent 8 }}
       {{- with .Values.controller.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}

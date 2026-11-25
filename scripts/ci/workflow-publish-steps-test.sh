@@ -69,7 +69,7 @@ REPORTS="$WORK/reports"
 : >"$REPORTS"
 fails=0
 
-# The 19 cases plus registry-complete. Bump it with the case you add.
+# The cases plus registry-complete. Bump it with the case you add.
 EXPECTED_REPORTS=22
 
 fail() {
