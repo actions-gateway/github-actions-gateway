@@ -7,8 +7,8 @@ A container killed for memory reads `OOMKilled` with exit code 137 whichever lim
 The AGC therefore names no cause (Q1400), and neither does anything else in the Kubernetes API that a tenant's operator can read on the pod.
 This is the design of a small tool that says which limit ran out, on the pod, for anyone debugging such a kill, and of what the Actions Gateway Controller (AGC) would do with the answer.
 
-**How claims are marked.** *(read)* is source at a pinned version: Kubernetes `v1.35.5`, Linux `v6.12`, or this repository at `2d13c2305`, an earlier head of Q1400's branch and not on `main`.
-*(measured)* names where; *(reported)* is a reading another session took for this design, none of it re-run here and none on GKE, all on kernel 6.12.76: eighteen kills in six runs in one local container with its own `kubepods.slice` and no kubelet, recorded in Q1316's plan at `d62b1785b` (not on `main`).
+**How claims are marked.** *(read)* is source at a pinned version: Kubernetes `v1.35.5`, Linux `v6.12`, or this repository at `274ca688f`, where the functions cited were compared with an earlier reading.
+*(measured)* names where; *(reported)* is a reading another session took for this design, none of it re-run here and none on GKE, all on kernel 6.12.76: eighteen kills in six runs in one local container with its own `kubepods.slice` and no kubelet, recorded in Q1316's plan (on its branch, not on `main`).
 *(recall)* is neither.
 A GKE node of Q1316's run is on `6.8.0-1064-gke` (reported).
 Of the kernel functions cited here for the counters, the kill and its line, each is the same at `v6.8`, but for the cgroup v1 half of `mem_cgroup_oom` and an argument in `memory_max_write`; `check_syslog_permissions` also takes `CAP_SYS_ADMIN` there (read, compared function by function, without `___ratelimit`, `cgroup_mkdir` and what else prints to the log, and not in Ubuntu's own tree).
@@ -196,6 +196,7 @@ Two things narrow it:
   A `singleProcessOOMKill` node is the same case.
 - **The container is the one whose own `.local` `oom_group_kill` was seen to rise**, or, where its cgroup went unread, the only one whose status ended `OOMKilled` with exit 137 within a bound of the rise, which reading 3 sets.
   Otherwise `Unknown`.
+  A container that ended with 137 and another reason counts among those it may be of, and nothing is written on it.
 
 A nested group that does ask for it, such as a nested kind node inside a job, can still be taken for the container, and only beside a container that died of SIGKILL at the same time.
 
@@ -246,7 +247,8 @@ So an `oom` inside the pod is also taken as the killed container's where five th
 The last two keep a nested limit from being taken for the container's.
 CRI-O can put a container's monitor beside it, named `crio-conmon-` (recall), and that name is let through.
 A name alone is not proof: under cgroupfs a Docker container's cgroup has the same bare ID as the runtime's, and a job that can write the host's cgroup tree can use any name.
-The controller has the pod's status, so it can count the containers the agent reported against the status's and the one sandbox, and take a pod with more as nested; that is PR 2's.
+The controller has the pod's status, so it counts the containers the agent reported against the one sandbox and those the status has running at the kill, and takes a pod with more as nested (PR 2's).
+One that ended over 6 seconds before, or started in the kill's second or later, is not counted, since it would make room for another's cgroup.
 An ordinary runner cannot make a cgroup (recall), unless containerd's `CgroupWritable` is on (reported, v2.3.1).
 `privileged-dind`'s are outside its pod ([above](#what-it-covers)), so its pod does not count as nested.
 
@@ -275,9 +277,10 @@ A re-run class that trusted `PodsLimit` would have to answer the first two ([Q14
 
 ### Watching
 
-The agent would keep the last sample of each pod in memory and take a new one on an inotify event for the pod's `memory.events`, with a 250 ms poll behind it.
+The agent would keep the last sample of each pod in memory and take a new one where an inotify event for the pod's `memory.events` finds its `oom` or a kill count risen, with a 250 ms poll behind it.
+The file changes for `low`, `high` and `max` too, and for `max` before any kill at that limit (read, `memcg_memory_event` and `try_charge_memcg`), so on an event the agent reads that one file first: a pod near its limit must not spend its watch on them.
 Only the pod's file is watched: a container's counts reach it too, so one watch for each pod tells of any of its containers.
-A rise there starts a burst of closer samples, at most one a minute for a pod, so a job that kills its children in a loop cannot hold the agent in one.
+A rise starts a burst of closer samples, at most one a minute for a pod, so a job that kills its children in a loop cannot hold the agent in one.
 A 50 ms poll of two files for each of 110 pods would be 4,400 reads a second on every node (computed).
 Inotify saw each rise 1 to 50 ms before a 50 ms poll, and gave no delete event for any of twelve removed cgroups; a file held open across the removal read `ENODEV` (reported).
 So the poll, or a watch on the parent directory (recall), is what notices a removal, and the last values are whatever was read before it.
@@ -307,7 +310,7 @@ Both, on the pod, in the pod's namespace:
   A kill the agent was late for, or too far from that end to be its, claims nothing and takes back no answer already written for that container ID.
 - **An Event** with the same words, for people, whose reason is `OOM` and the condition's reason, or `OOMProcessKilled` for a kill that ended no container.
   It outlives the pod, and it covers a kill that ended no container, such as a build's child process, where a condition would mislead.
-  At most one for each minute a container ended in, by its status, and one a minute for a pod's kills that ended none, so neither a job that makes its children die in a loop nor a report with many times in it writes a flood.
+  At most one for each end of a container, by its status, and reason, and one a minute for a pod's kills that ended none, so neither a job that makes its children die in a loop nor a report with many times in it writes a flood.
 
 The kubelet keeps a condition it does not own, through the pod's terminal update too (read, `mergePodStatus`).
 
@@ -476,7 +479,7 @@ The agent's part was under 0.1 s on kind, from the first rise it read to its ans
 | `Unknown`, a `Log` reason, or none in time | Today's | Today's, with Q1400's text |
 | Any, on a runner with no limit | A log line, no Event | An Event that names the reason |
 
-A raise after a kill made above the pod costs twice: it is kept 7 days, and under `Throughput` it lifts the limit and not the request, which makes an overcommitted node more so.
+A raise after a kill made above the pod costs twice: it is kept up to 7 days, and under `Throughput` it lifts the limit and not the request, which makes an overcommitted node more so.
 That is why the raise goes at once, and the re-run is a separate question.
 
 ### D3: the re-run
@@ -612,7 +615,7 @@ What the kind run read, beside what the sections above cite:
 
 Not run: two containers killed at once, several threads or pods at the pods' limit together, and a cluster whose containers have no `memory.oom.group`.
 
-Q1316's plan takes readings 1, 3, 7 and 8 in its runs as of `d62b1785b`, but for reading 3's CPU, which needs the agent built; its non-root reader is a container of the job's own Docker for R2 and R8, and a pod in R3, R3t, R4 and on the Kata node.
+Q1316's plan takes readings 1, 3, 7 and 8 in its runs as its branch had them on 2026-11-24, but for reading 3's CPU, which needs the agent built; its non-root reader is a container of the job's own Docker for R2 and R8, and a pod in R3, R3t, R4 and on the Kata node.
 It prints `oom_group_kill` and each container's own rise beside the pod's, so R8, with two containers in the pod, reads the join as well as the limit.
 It does not read whether a non-root pod could open `/dev/kmsg` or the journal through a `hostPath`, which would be another way to the log.
 Nor reading 10, since the job's own privileged container opens `/dev/kmsg`; on GKE that is one more pod on a node the run already has, if the run's plan takes it.
