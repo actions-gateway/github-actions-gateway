@@ -451,7 +451,7 @@ if [[ -n "$dir" ]]; then
 			"**gmc** — \`ghcr.io/actions-gateway/gmc@$INDEX_DIGEST\`" &&
 		expect_file_has compose-creates-draft "$dir/runner-temp/release-notes.md" \
 			'make verify-release VERSION=v1.6.0' &&
-		pass compose-creates-draft 'a stable tag with no Release gets a draft carrying the six index digests'
+		pass compose-creates-draft 'a stable tag with no Release gets a draft carrying the eight index digests'
 fi
 
 dir="$(run_compose compose-stable-not-prerelease false false "$INDEX_DIGEST")"

@@ -12,9 +12,10 @@ Operators *consuming* a release pin the published digests at install time — se
 
 A release is a `vX.Y.Z` git tag plus its outputs:
 
-- The seven first-party images — `gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`, `cache-runner` — pushed to GHCR (`ghcr.io/actions-gateway/<name>`), each tagged `vX.Y.Z` and by long commit SHA.
+- The eight first-party images — `gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`, `cache-runner`, `oomreporter` — pushed to GHCR (`ghcr.io/actions-gateway/<name>`), each tagged `vX.Y.Z` and by long commit SHA.
   Each is **multi-arch** (`linux/amd64` + `linux/arm64`): the pushed artifact is an OCI image **index**, and the digest recorded everywhere (run summary, release notes, chart pins) is the index digest — the kubelet resolves the per-arch manifest from it at pull time, so one pinned digest schedules on both amd64 and arm64 (e.g.
   Graviton) nodes.
+  `oomreporter` is not part of the gateway: it is the out-of-memory kill reporter's single image, run in `agent` mode on each node and in `controller` mode once, as UID 65532 on a distroless base like `gmc`, and nothing in the gateway's chart pins or pulls it.
 - A keyless **cosign signature** on every image (sigstore/Fulcio via GitHub Actions OIDC — no signing key, no stored secret), signed **recursively** — the index *and* each per-arch manifest — and an **SPDX-JSON SBOM per architecture** attached as a keyless cosign attestation to that architecture's manifest.
 - A signed **SLSA build-provenance attestation** on every image (`actions/attest-build-provenance`), attached to the index digest as an OCI referrer.
   It is generated through the *same* keyless path as the signatures — the publish workflow's GitHub OIDC identity → a short-lived Fulcio cert → Rekor — so the provenance is **authenticated** (it records the workflow, repo, commit, and trigger that produced the image and cannot be forged by a pusher).
@@ -33,7 +34,7 @@ A release is a `vX.Y.Z` git tag plus its outputs:
 - The **`gag-migrate` CLI binaries** (Q306), cross-compiled by `chart-publish` for the operator platform matrix (`linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`) via `scripts/release/build-migrate-binaries.sh` and attached to the **GitHub Release** as `gag-migrate-<tag>-<os>-<arch>` assets.
   A single `SHA256SUMS` manifest is keyless **cosign `sign-blob`**-signed (`SHA256SUMS.cosign.bundle`) — the same no-secret Fulcio/Rekor path as the v2 CRD manifest — so one signature covers the whole set (verify the manifest signature, then `sha256sum -c`).
   This is the one-shot v1→v2 migration tool, previously source-build-only.
-- The **GitHub Release** itself (Q293), composed by `chart-publish`: the seven image index digests, the `make verify-release` command, a generated changelog, and a tag-derived `--prerelease` flag.
+- The **GitHub Release** itself (Q293), composed by `chart-publish`: the eight image index digests, the `make verify-release` command, a generated changelog, and a tag-derived `--prerelease` flag.
   It is created only if the tag has no Release yet, so a maintainer's pre-tag curated notes are never clobbered.
 
 Both the image and chart work are automated by the [`publish.yml`](../../.github/workflows/publish.yml) workflow, which triggers on the `v*` tag push (the `chart-publish` job runs after every image leg succeeds).
@@ -44,11 +45,11 @@ The maintainer's job is to cut the tag and verify the result.
 
 ## One-time setup (first release only)
 
-1. **GHCR package visibility.** The first publish *creates* the `ghcr.io/actions-gateway/{gmc,agc,proxy,worker,wrapper}` image packages **and the `ghcr.io/actions-gateway/charts/actions-gateway` chart package**.
+1. **GHCR package visibility.** The first publish *creates* the `ghcr.io/actions-gateway/{gmc,agc,proxy,worker,wrapper,build-runner,cache-runner,oomreporter}` image packages **and the `ghcr.io/actions-gateway/charts/actions-gateway` chart package**.
    They inherit the repository's visibility and may start **private**.
    For third parties to run `cosign verify` / `helm pull` (and for an air-gapped operator to pull), set each package to **public** in the org's GHCR package settings, or keep them private and distribute pull credentials.
    Verification by *this project's* CI and by anyone with pull access works either way — but the **released-chart upgrade gate** (`make chart-released-upgrade-check`, run by every e2e CI pass) pulls the chart and the released `gmc` image **anonymously**, so those two packages must be public for PR CI to stay green.
-   An image added in a later release creates its package on that release's publish, so this step recurs then: `build-runner` is public already, and `cache-runner` needs it on the first release that publishes it.
+   An image added in a later release creates its package on that release's publish, so this step recurs then: `build-runner` is public already, and `cache-runner` and `oomreporter` each need it on the first release that publishes them.
 2. **Workflow permissions** are already declared in `publish.yml` (`packages: write` to push, `id-token: write` for keyless cosign and provenance, `attestations: write` for the build-provenance attestation).
    No repo secret is required — that is the point of keyless signing.
 
@@ -802,7 +803,7 @@ A compat failure is the same stop-ship as a signature failure.
 
 Each run checks every artifact against the publish workflow's keyless identity:
 
-- the seven image signatures (`gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`, `cache-runner`);
+- the eight image signatures (`gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`, `cache-runner`, `oomreporter`);
 - the SPDX SBOM attestation on each image's `linux/amd64` and `linux/arm64` manifests, failing if either platform is missing from the index;
 - both chart signatures (tag `X.Y.Z`, without the leading `v`);
 - every `*.cosign.bundle` blob signature on the GitHub Release: the v2 CRD manifest (Q276), which must be present, and `SHA256SUMS` while `gag-migrate` ships.
@@ -863,7 +864,7 @@ It asserts each digest matches the registry **and** is a multi-arch index, becau
 ### 5. Cut the GitHub Release
 
 **`publish.yml` creates the GitHub Release itself** (Q293) — no manual step.
-The `chart-publish` job's "Compose and create the GitHub Release" step writes the body with the six `name@sha256:…` **index digests**, the `make verify-release VERSION=vX.Y.Z` command, and a generated changelog (previous-tag compare link), and sets `--prerelease` from the tag (0.x or a `-rc`/`-alpha`/`-beta` suffix ⇒ prerelease; a stable `≥1.0.0` tag ⇒ latest).
+The `chart-publish` job's "Compose and create the GitHub Release" step writes the body with the eight `name@sha256:…` **index digests**, the `make verify-release VERSION=vX.Y.Z` command, and a generated changelog (previous-tag compare link), and sets `--prerelease` from the tag (0.x or a `-rc`/`-alpha`/`-beta` suffix ⇒ prerelease; a stable `≥1.0.0` tag ⇒ latest).
 So the default flow for this step is: **nothing — verify the auto-created Release looks right.**
 
 The step only creates a Release when the tag has **none yet**, so it never clobbers curated notes.
@@ -1165,14 +1166,14 @@ Navigation comes from section order and the danger banner, not from a ToC.
 **Watch the chart-version form.** Images are tagged `vX.Y.Z`, charts `X.Y.Z`.
 A copy-pasteable `helm` command with a `v` in it fails.
 
-**Curating the notes means adding the image digests by hand — after the tag.** The compose step in `publish.yml` writes the six index digests, the verify command, and a changelog, but it runs **only when the tag has no Release yet**.
+**Curating the notes means adding the image digests by hand — after the tag.** The compose step in `publish.yml` writes the eight index digests, the verify command, and a changelog, but it runs **only when the tag has no Release yet**.
 A curated draft is exactly that condition, so the step logs `already exists; leaving its notes and flags untouched` and the digests never appear.
 They also cannot be written in advance: the images are built *from* the tag.
 
 So after `publish.yml` goes green, resolve them and amend the notes file:
 
 ```bash
-for img in gmc agc proxy worker wrapper build-runner cache-runner; do
+for img in gmc agc proxy worker wrapper build-runner cache-runner oomreporter; do
   docker buildx imagetools inspect "ghcr.io/actions-gateway/${img}:vX.Y.Z" \
     --format '{{json .Manifest.Digest}}'
 done
@@ -1375,7 +1376,7 @@ Tag a patch from the released line instead:
   Delete the branch afterward if you don't maintain the line.
 - **Long-lived release branch.** If you support multiple minor lines at once, keep a `release-X.Y` branch at the minor's tag and land backported fixes on it.
 
-**The candidate is not optional on a patch line, and this is the one place that surprises people.** A patch is usually cut in a hurry, off a released tag, for a fix users cannot get any other way, and none of that changes what publishes: six signed images and a chart.
+**The candidate is not optional on a patch line, and this is the one place that surprises people.** A patch is usually cut in a hurry, off a released tag, for a fix users cannot get any other way, and none of that changes what publishes: eight signed images and a chart.
 `publish.yml`'s `validated-candidate` job asks the same question of `v1.2.1` that it asks of `v2.0.0`, so a patch tag with no `v1.2.1-rc.*` marker fails before anything is pushed.
 Budget the dogfood run into the patch, or the tag fails at the end instead of the start.
 

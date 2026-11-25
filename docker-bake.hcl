@@ -107,6 +107,16 @@ target "worker" {
   tags     = ["${IMAGE_REGISTRY}/worker:e2e-${GIT_SHA}"]
 }
 
+// oomreporter is outside the default group: no e2e tier deploys it yet, so
+// building it with the six would spend the bake's critical path on an image
+// nothing pulls. Build it by name (`docker buildx bake oomreporter`); the kind
+// lane that deploys it adds it to the group.
+target "oomreporter" {
+  inherits = ["_common"]
+  target   = "oomreporter"
+  tags     = ["${IMAGE_REGISTRY}/oomreporter:e2e-${GIT_SHA}"]
+}
+
 // wrapper is the ~2 MB scratch image holding just the cmd/worker wrapper binary,
 // injected into worker pods at runtime so the runner image can be the unmodified
 // upstream actions-runner (Q235). It shares the `build-wrapper` stage with the

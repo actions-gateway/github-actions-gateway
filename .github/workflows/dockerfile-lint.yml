@@ -33,7 +33,7 @@ jobs:
       matrix:
         # The root Dockerfile holds every first-party image as a named stage
         # (gmc, agc, proxy, worker, wrapper, build-runner, cache-runner,
-        # fakegithub); hadolint
+        # oomreporter, fakegithub); hadolint
         # lints the whole file in one leg. The dogfood runner image is built
         # separately.
         dockerfile:
