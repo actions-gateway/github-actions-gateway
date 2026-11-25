@@ -23,8 +23,8 @@ const (
 // Rise is what the counters gained across the whole kills of a pod's cgroups: kills of
 // every process in a cgroup that asks for it, as a container's does.
 type Rise struct {
-	// Late: the pod was first sampled after the kill, so the counts are since it began,
-	// and Pods and Peers are not known.
+	// Late: the pod was first sampled after the kill, so the counts are since it began, or it
+	// might not be read at the sample before. Pods and Peers are then not known.
 	Late bool
 	// Confirmed: a sample taken after the one that showed the kill is in the counts.
 	Confirmed bool
@@ -45,6 +45,9 @@ type Rise struct {
 	// for a pod with one whole kill, one container gone, and no limit inside it but its
 	// containers', one is also told by an allocation that met no container's still there.
 	Own uint64
+	// Inferred, where Own is told by a container having gone, is how many containers the pod
+	// had cgroups of, the sandbox's and the one that went included.
+	Inferred int
 	// Read: every whole kill is of a container whose own file was read at the last sample.
 	Read bool
 	// Peers is the kills of either kind in other pods over the same time.
@@ -85,6 +88,8 @@ type tracked struct {
 	gone map[string]bool
 	// nested is set once a sample of the pod has been.
 	nested bool
+	// refused is set where the pod might not be read at the newest sample.
+	refused bool
 }
 
 // Observe takes the next sample, made at at, and returns by pod UID the rises it
@@ -117,6 +122,12 @@ func (t *Tracker) Observe(s Sample, at time.Time) (rises map[string]Rise, again 
 		m.mine = p.last.mine + mine[uid]
 		m.pod, p.gone = carry(p.last.pod, now)
 		p.last, p.nested = m, p.nested || now.Nested
+		if p.refused {
+			if r := p.reopen(at); r.GroupKills+r.Singles > 0 {
+				rises[uid] = r
+			}
+			continue
+		}
 		r, done, more := p.step(at)
 		if done {
 			rises[uid] = r
@@ -150,7 +161,11 @@ func carry(was, now Pod) (Pod, map[string]bool) {
 func (t *Tracker) forget(s Sample, at time.Time) map[string]Rise {
 	left := map[string]Rise{}
 	for uid, p := range t.pods {
-		if now, ok := s.Pods[uid]; ok && !restarted(p.last.pod, now) || s.Refused[uid] {
+		if now, ok := s.Pods[uid]; ok && !restarted(p.last.pod, now) {
+			continue
+		}
+		if s.Refused[uid] {
+			p.refused = true
 			continue
 		}
 		if p.shown > 0 {
@@ -188,6 +203,15 @@ func (p *tracked) step(at time.Time) (r Rise, done, again bool) {
 	r.Confirmed = true
 	p.advance(r, at)
 	return r, true, false
+}
+
+// reopen returns the rise p's newest mark has where the one before it might not be read, and
+// moves base. What stood above the pod and beside it meanwhile says nothing of its kill.
+func (p *tracked) reopen(at time.Time) Rise {
+	r := p.rise(at)
+	p.advance(r, at)
+	r.Late, r.Pods, r.Peers, p.refused = true, 0, 0, false
+	return r
 }
 
 // settled reports whether base may move past r, which has no kill to return: no allocation in
@@ -243,7 +267,7 @@ func (p *tracked) rise(at time.Time) Rise {
 	r.count(was, now)
 	r.Read = r.Read && !slices.ContainsFunc(r.Containers, func(id string) bool { return p.gone[id] })
 	if !p.nested && r.GroupKills == 1 && len(p.gone) == 1 && len(r.Containers) == 0 && r.Inside > p.known() {
-		r.Own = 1
+		r.Own, r.Inferred = 1, len(now.Containers)
 	}
 	return r
 }

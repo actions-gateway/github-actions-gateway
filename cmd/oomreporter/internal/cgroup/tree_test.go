@@ -372,3 +372,23 @@ func TestGone(t *testing.T) {
 	assert.False(t, gone(nil))
 	assert.False(t, gone(errors.New("other")))
 }
+
+func TestPodFile_IsThatOfAPodOfTheLastSample(t *testing.T) {
+	dirs := systemd("")
+	m := mount(dirs...)
+	tree, err := Open(m, "")
+	require.NoError(t, err)
+	got, ok := tree.PodFile(burstableUID)
+	assert.True(t, ok)
+	assert.Equal(t, dirs[3]+"/"+subtreeFile, got)
+
+	for name := range m {
+		if strings.HasPrefix(name, dirs[3]) {
+			delete(m, name)
+		}
+	}
+	_, err = tree.Sample()
+	require.NoError(t, err)
+	_, ok = tree.PodFile(burstableUID)
+	assert.False(t, ok)
+}

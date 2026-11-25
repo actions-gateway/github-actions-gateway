@@ -95,7 +95,7 @@ func TestObserve_AContainerThatGoesIsCountedAsLastRead(t *testing.T) {
 	}{
 		"not at all":        {[2]Pod{killed, killed}, Rise{Own: 1, Read: true, Containers: []string{runnerID}}},
 		"after its kill":    {[2]Pod{killed, without}, Rise{Own: 1, Containers: []string{runnerID}}},
-		"before it is read": {[2]Pod{without, without}, Rise{Own: 1}},
+		"before it is read": {[2]Pod{without, without}, Rise{Own: 1, Inferred: 1}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var tr Tracker
@@ -490,4 +490,45 @@ func TestObserve_GivesUpAnAllocationThatLedToNoKill(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestObserve_ClaimsNothingOfWhatWasDoneWhileItMightNotReadAPod(t *testing.T) {
+	var tr Tracker
+	shut := Sample{Refused: map[string]bool{burstableUID: true}}
+	tr.Observe(one(Pod{}), start)
+	tr.Observe(shut, start.Add(time.Second))
+	opened := one(dead())
+	opened.Root.OOM, opened.Pods[guaranteedUID] = 2, dead()
+	rises, again := tr.Observe(opened, start.Add(2*time.Second))
+	assert.False(t, again)
+	want := Rise{Late: true, GroupKills: 1, Pod: 1, Read: true, Containers: []string{runnerID}}
+	assert.Equal(t, want, rises[burstableUID])
+
+	rises, _ = tr.Observe(opened, start.Add(3*time.Second))
+	assert.NotContains(t, rises, burstableUID)
+}
+
+// A refused pod keeps its base, so the counts above it since then are a neighbour's.
+func TestObserve_AKillAfterAPodIsOpenedIsCountedFromThen(t *testing.T) {
+	var tr Tracker
+	s := one(Pod{})
+	s.Pods[guaranteedUID] = Pod{}
+	tr.Observe(s, start)
+	shut := one(Pod{})
+	delete(shut.Pods, burstableUID)
+	shut.Refused = map[string]bool{burstableUID: true}
+	shut.Pods[guaranteedUID], shut.Root.OOM = dead(), 2
+	tr.Observe(shut, start.Add(time.Second))
+	opened := one(Pod{})
+	opened.Pods[guaranteedUID], opened.Root.OOM = dead(), 2
+	rises, _ := tr.Observe(opened, start.Add(2*time.Second))
+	assert.NotContains(t, rises, burstableUID)
+
+	killed := one(Pod{Subtree: Events{OOMKill: 1, OOMGroupKill: 1}})
+	killed.Pods[guaranteedUID], killed.Root.OOM = dead(), 2
+	tr.Observe(killed, start.Add(3*time.Second))
+	rises, _ = tr.Observe(killed, start.Add(3*time.Second))
+	r := rises[burstableUID]
+	assert.Zero(t, r.Pods)
+	assert.True(t, r.Recent)
 }

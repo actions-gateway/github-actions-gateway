@@ -33,6 +33,8 @@ var (
 type Tree struct {
 	fsys fs.FS
 	root string
+	// dirs is each pod's directory at the last sample, by UID.
+	dirs map[string]string
 }
 
 // Open returns the kubelet's tree in fsys, a cgroup v2 mount. An empty root is found:
@@ -176,6 +178,7 @@ type Sample struct {
 // read, or may not be read.
 func (t *Tree) Sample() (Sample, error) {
 	s := Sample{Pods: map[string]Pod{}, QoS: map[string]Events{}, Refused: map[string]bool{}}
+	t.dirs = map[string]string{}
 	if err := t.samplePods(s, "", t.root); err != nil {
 		return Sample{}, err
 	}
@@ -218,6 +221,7 @@ func (t *Tree) samplePods(s Sample, class, dir string) error {
 		}
 		pod.QoS = class
 		s.Pods[uid] = pod
+		t.dirs[uid] = path.Join(dir, name)
 	}
 	return nil
 }
@@ -281,6 +285,13 @@ func (t *Tree) sampleContainer(dir string) (e Events, single, nested bool, err e
 	e, err = readEvents(t.fsys, path.Join(dir, localFile))
 	// nr_dying_descendants counts cgroups removed and still charged.
 	return e, strings.TrimSpace(string(group)) != "1", descendants.Match(stat), err
+}
+
+// PodFile is the path of the file that changes with any kill in a pod of the last sample, and
+// whether that had the pod.
+func (t *Tree) PodFile(uid string) (string, bool) {
+	dir, ok := t.dirs[uid]
+	return path.Join(dir, subtreeFile), ok
 }
 
 // gone reports whether err is a cgroup's removal: ENOENT for its path, and ENODEV for a
