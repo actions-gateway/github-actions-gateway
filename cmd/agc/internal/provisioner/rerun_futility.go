@@ -9,6 +9,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -73,8 +74,7 @@ func (p *Provisioner) futileRerun(ctx context.Context, target Target, owner, rep
 		d.failedAttempt = run.attempt
 	}
 	switch {
-	case run.status == runStatusCompleted && run.conclusion == runConclusionCancelled &&
-		p.selfCancelledAttempt(ctx, target, runID) != run.attempt:
+	case run.cancelled:
 		return p.withholdFutileRerun(target, runID, cause, run.attempt, log, rerunWithheldReasonRunCancelled, runCancelledMessage(runID, cause))
 	case run.status == runStatusCompleted && run.conclusion == runConclusionSuccess:
 		return p.withholdFutileRerun(target, runID, cause, run.attempt, log, rerunWithheldReasonRunSucceeded, runSucceededMessage(runID, cause))
@@ -234,6 +234,45 @@ func jobRerunIn(jobs []workflowJobSummary, run runState, d rerunDisruption) (job
 		return jobRerun, nil
 	}
 	return jobRerunUnknown, nil
+}
+
+// cancelledByOther reports whether run, where GitHub concluded it cancelled, was cancelled
+// by anybody but GAG's own force-cancel. GitHub also concludes an attempt cancelled that
+// only carries cancelled jobs from an earlier one, as a single-job re-run beside a
+// fail-fast matrix's cancelled legs does (measured on rust-lang/cargo's runs 40960902618
+// and 38222465819, 2026-11-24). So an attempt that ran no job it lists as cancelled is
+// judged by the attempt before it. What cannot be read counts as somebody's cancel; an
+// error wraps errRunConclusionUnreadable.
+func (p *Provisioner) cancelledByOther(ctx context.Context, target Target, owner, repo, runID string, run runState) (bool, error) {
+	if run.status != runStatusCompleted || run.conclusion != runConclusionCancelled {
+		return false, nil
+	}
+	for self := p.selfCancelledAttempt(ctx, target, runID); run.conclusion == runConclusionCancelled; {
+		switch {
+		case run.attempt == self:
+			return false, nil
+		case run.attempt <= 1:
+			return true, nil
+		}
+		jobs, err := p.attemptJobs(ctx, owner, repo, runID, run.attempt)
+		if errors.Is(err, errRunConclusionUnreadable) {
+			return true, err
+		}
+		if err != nil || len(jobs) == 0 || slices.ContainsFunc(jobs, func(j workflowJobSummary) bool {
+			return j.Conclusion == runConclusionCancelled && !j.carried(run)
+		}) {
+			return true, nil
+		}
+		before, err := p.readRun(ctx, owner, repo, runID, run.attempt-1)
+		if errors.Is(err, errRunConclusionUnreadable) {
+			return true, err
+		}
+		if err != nil || before.attempt != run.attempt-1 || before.conclusion == "" {
+			return true, nil
+		}
+		run = before
+	}
+	return false, nil
 }
 
 // attemptJobs lists every job of one attempt of a run.

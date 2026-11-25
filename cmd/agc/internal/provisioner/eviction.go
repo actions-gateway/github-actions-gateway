@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	neturl "net/url"
+	"strconv"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -259,7 +260,7 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 				"runID", runID, "cause", cause)
 			return
 		}
-		run, err := p.readRerunCandidate(rctx, owner, repo, runID, d, log)
+		run, err := p.readRerunCandidate(rctx, target, owner, repo, runID, d, log)
 		if err != nil {
 			reason := rerunFailureReasonAPIError
 			if errors.Is(err, errRunConclusionUnreadable) {
@@ -333,7 +334,7 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 // Where the run moved past the attempt d's job failed in, it also asks whether that
 // re-ran the job, waiting for the jobs list to settle; any other list it cannot read
 // leaves the verdict unknown, which does not withhold.
-func (p *Provisioner) readRerunCandidate(ctx context.Context, owner, repo, runID string, d rerunDisruption, log *slog.Logger) (runState, error) {
+func (p *Provisioner) readRerunCandidate(ctx context.Context, target Target, owner, repo, runID string, d rerunDisruption, log *slog.Logger) (runState, error) {
 	windowC, stopWindow := p.startRerunWindow()
 	defer stopWindow()
 	for {
@@ -350,6 +351,9 @@ func (p *Provisioner) readRerunCandidate(ctx context.Context, owner, repo, runID
 					"runID", runID, "runAttempt", run.attempt, "error", err)
 				err = nil
 			}
+		}
+		if err == nil {
+			run.cancelled, err = p.cancelledByOther(ctx, target, owner, repo, runID, run)
 		}
 		if err == nil {
 			return run, nil
@@ -527,11 +531,18 @@ func (p *Provisioner) attemptRerun(ctx context.Context, target Target, owner, re
 			}
 		}
 		if checksCancel && run.status == runStatusCompleted && run.conclusion == runConclusionCancelled {
-			if tier != evictionTierScaleSet || run.attempt == 0 ||
-				p.selfCancelledAttempt(ctx, target, runID) != run.attempt {
+			// The classic tier holds no ledger, and its jobs are never re-run alone.
+			cancelled := true
+			if tier == evictionTierScaleSet && run.attempt != 0 {
+				var err error
+				if cancelled, err = p.cancelledByOther(ctx, target, owner, repo, runID, run); err != nil {
+					return fmt.Errorf("read who cancelled the run before re-running it: %w", err)
+				}
+			}
+			if cancelled {
 				return errRunCancelled
 			}
-			log.Info("the run was cancelled by GAG's own force-cancel of this attempt, not by a user; re-running it",
+			log.Info("the run was cancelled by GAG's own force-cancel of an attempt, or holds only jobs an earlier attempt cancelled; re-running it",
 				"runID", runID, "runAttempt", run.attempt)
 		}
 		if tier == evictionTierScaleSet && run.status == runStatusCompleted {
@@ -771,10 +782,18 @@ type runState struct {
 	headRepo string
 	// rerun is set by readRerunCandidate where attempt is past the one the job failed in.
 	rerun jobRerunVerdict
+	// cancelled is set by readRerunCandidate: somebody other than GAG cancelled the run.
+	cancelled bool
 }
 
-// runConclusion calls GET /repos/{owner}/{repo}/actions/runs/{run_id} and returns the
-// run's status, conclusion and attempt. The guards mirror rerunFailedJobs,
+// runConclusion reads the run's latest attempt.
+func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID string) (runState, error) {
+	return p.readRun(ctx, owner, repo, runID, 0)
+}
+
+// readRun calls GET /repos/{owner}/{repo}/actions/runs/{run_id}, or its /attempts/{n}
+// where attempt is not 0, and returns the run's status, conclusion and attempt. The
+// guards mirror rerunFailedJobs,
 // except that a run this cannot address is an error rather than a warning: the caller
 // asks in order to decide, and a silent empty answer would read as "not cancelled".
 //
@@ -785,7 +804,7 @@ type runState struct {
 // 2xx carrying something other than a run is an endpoint that is not the API (a proxy's
 // error page, a misconfigured GHES), and re-asking it thirty times only delays the Event
 // that tells an operator so.
-func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID string) (runState, error) {
+func (p *Provisioner) readRun(ctx context.Context, owner, repo, runID string, attempt int) (runState, error) {
 	if err := p.githubReady(owner, repo, "run-status"); err != nil {
 		return runState{}, err
 	}
@@ -794,6 +813,9 @@ func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID stri
 		neturl.PathEscape(owner),
 		neturl.PathEscape(repo),
 		neturl.PathEscape(runID))
+	if attempt != 0 {
+		apiURL += "/attempts/" + strconv.Itoa(attempt)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return runState{}, fmt.Errorf("build run-status request: %w", err)

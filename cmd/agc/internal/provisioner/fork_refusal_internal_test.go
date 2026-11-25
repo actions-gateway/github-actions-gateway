@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // eventTarget is a rungTarget that keeps the reasons of the Events recorded on it.
@@ -58,7 +59,7 @@ func (f *forkGitHub) handler() http.HandlerFunc {
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"status": orString(f.status, "queued"), "conclusion": "cancelled", "event": f.event, "head_sha": "abc123",
-				"head_repository": map[string]any{"full_name": f.headRepo},
+				"head_repository": map[string]any{"full_name": f.headRepo}, "run_attempt": 2, "run_started_at": time.Now(),
 			})
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/actions/runs/42/force-cancel"):
 			w.WriteHeader(orStatus(f.cancelStatus, http.StatusAccepted))
@@ -186,6 +187,9 @@ func TestRefuseForkJob(t *testing.T) {
 			}
 			if got := gh.called("GET /repos/acme/widgets/actions/runs/42"); got != tc.wantRead {
 				t.Errorf("run read = %v, want %v; calls %v", got, tc.wantRead, gh.calls)
+			}
+			if gh.called("GET /repos/acme/widgets/actions/runs/42/") {
+				t.Errorf("read more than the run; calls %v", gh.calls)
 			}
 			if got := gh.called("POST /repos/acme/widgets/check-runs"); got != tc.wantCheck {
 				t.Errorf("check run written = %v, want %v; calls %v", got, tc.wantCheck, gh.calls)

@@ -3,6 +3,7 @@ package provisioner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -58,8 +59,20 @@ type jobsAPI struct {
 	calls []string
 }
 
-func (a *jobsAPI) failed(i int) bool {
-	return a.jobs[i].conclusion != "success" && a.jobs[i].conclusion != "skipped"
+func (a *jobsAPI) failed(i int) bool { return a.jobs[i].failed() }
+
+func (j runJob) failed() bool { return j.conclusion != "success" && j.conclusion != "skipped" }
+
+// conclusion is what GitHub concludes attempt. One past the first that holds a cancelled
+// job is cancelled, though none it ran was (measured 2026-11-24).
+func (a *jobsAPI) conclusion(attempt int, jobs []runJob) string {
+	switch {
+	case !slices.ContainsFunc(jobs, runJob.failed):
+		return "success"
+	case attempt > 1 && slices.ContainsFunc(jobs, func(j runJob) bool { return j.conclusion == "cancelled" }):
+		return "cancelled"
+	}
+	return "failure"
 }
 
 // rerun starts the next attempt with the jobs at indexes.
@@ -143,7 +156,7 @@ func (a *jobsAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			a.rerun(a.jobs[id%1000].runner, id%1000)
 			w.WriteHeader(http.StatusCreated)
 		}
-	case strings.HasPrefix(path, "runs/4242/attempts/") && r.Method == http.MethodGet:
+	case strings.HasPrefix(path, "runs/4242/attempts/") && strings.HasSuffix(path, "/jobs"):
 		attempt, _ := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(path, "runs/4242/attempts/"), "/jobs"))
 		jobs := a.jobs
 		if attempt != a.attempt {
@@ -164,18 +177,17 @@ func (a *jobsAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"conclusion": j.conclusion, "run_attempt": attempt, "completed_at": at.Format(time.RFC3339)})
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"total_count": len(rows), "jobs": rows})
-	case path == "runs/4242" && r.Method == http.MethodGet:
-		status, conclusion := "completed", "success"
-		for i := range a.jobs {
-			if a.failed(i) {
-				conclusion = "failure"
-			}
+	case strings.HasPrefix(path, "runs/4242") && r.Method == http.MethodGet:
+		attempt, jobs := a.attempt, a.jobs
+		if n, err := strconv.Atoi(strings.TrimPrefix(path, "runs/4242/attempts/")); err == nil && n != a.attempt {
+			attempt, jobs = n, a.past[n]
 		}
-		if a.running {
+		status, conclusion := "completed", a.conclusion(attempt, jobs)
+		if a.running && attempt == a.attempt {
 			status, conclusion = "in_progress", ""
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"id": 4242, "status": status, "conclusion": conclusion, "run_attempt": a.attempt,
-			"run_started_at": time.Now().Add(-time.Duration(105-10*a.attempt) * time.Minute).Format(time.RFC3339)})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": 4242, "status": status, "conclusion": conclusion, "run_attempt": attempt,
+			"run_started_at": time.Now().Add(-time.Duration(105-10*attempt) * time.Minute).Format(time.RFC3339)})
 	default:
 		w.WriteHeader(http.StatusTeapot)
 	}
@@ -421,6 +433,119 @@ func TestJobRerun_TwoSetsOfOneRunTakeTurns(t *testing.T) {
 	trigger, cause := pairFailure(readLedger(t, p, lost).Reruns["4242"], 2, name)
 	assert.Equal(t, rerunTriggerGAG, trigger, "the re-run is recorded under the attempt it started from")
 	assert.Equal(t, recoveryCauseOOM, cause)
+}
+
+// TestJobRerun_ACarriedCancelDoesNotEndTheTurns: GitHub concludes cancelled the attempt that
+// carries a fail-fast matrix's cancelled legs, which nobody cancelled, and the next killed
+// leg has its turn all the same.
+func TestJobRerun_ACarriedCancelDoesNotEndTheTurns(t *testing.T) {
+	p, api, gpu, clock, _ := jobsFixture(t,
+		runJob{name: "lint", runner: "r-lint", conclusion: "failure"},
+		runJob{name: "a", runner: "r-a", conclusion: "failure"},
+		runJob{name: "b", runner: "r-b", conclusion: "failure"},
+		runJob{name: "c", runner: "r-c", conclusion: "cancelled"})
+	cpu := &stubTarget{key: client.ObjectKey{Namespace: "team-a", Name: "cpu"}, spec: gpu.spec}
+	parkKill(p, gpu, "pod-a", "a", "r-a")
+	parkKill(p, cpu, "pod-b", "b", "r-b")
+	api.conclude()
+	clock.advance(10 * time.Minute)
+	for _, done := range p.sweepPendingReruns(context.Background()) {
+		<-done
+	}
+	require.Len(t, api.accepted(), 1)
+	release(t, p, api, clock, 1)
+	assert.ElementsMatch(t, []string{"r-a", "r-b"}, api.accepted())
+}
+
+// TestFutileRerun_WhoCancelledIsReadAgain: an attempt that carries cancelled jobs is no
+// cancel on any arm, and a list GitHub fails to serve is asked for again before that is
+// decided.
+func TestFutileRerun_WhoCancelledIsReadAgain(t *testing.T) {
+	p, api, target, _, _ := jobsFixture(t,
+		runJob{name: "a", runner: "r-a", conclusion: "failure", ranIn: 2},
+		runJob{name: "c", runner: "r-c", conclusion: "cancelled"})
+	api.attempt, api.running = 2, false
+	api.past = map[int][]runJob{1: {{name: "a", conclusion: "failure"}, {name: "c", conclusion: "cancelled"}}}
+	api.jobsStatus, api.jobsFailures = http.StatusBadGateway, 1
+	evictScaleSet(p, target, "4242", 2, recoveryCauseEviction, rerunDisruption{key: "pod-a", job: "a", failedAttempt: 2})
+	assert.Equal(t, []string{"failed-jobs"}, api.accepted())
+}
+
+// TestCancelledByOther covers who cancelled a run concluded cancelled.
+func TestCancelledByOther(t *testing.T) {
+	type attempt struct {
+		conclusion string
+		jobs       []runJob
+	}
+	ran := func(in int, conclusion string) runJob {
+		return runJob{name: conclusion, conclusion: conclusion, ranIn: in}
+	}
+	carried := attempt{"cancelled", []runJob{ran(1, "cancelled"), ran(2, "failure")}}
+	for _, tc := range []struct {
+		name     string
+		attempts []attempt
+		self     int
+		// jobs and run answer every jobs list, and every earlier attempt's read, with a status.
+		jobs, run int
+		want      bool
+		retry     bool
+		// other serves an earlier attempt's read as another attempt's.
+		other bool
+	}{
+		{"not cancelled", []attempt{{"failure", []runJob{ran(1, "cancelled")}}}, 0, 0, 0, false, false, false},
+		{"the first attempt", []attempt{{"cancelled", []runJob{ran(1, "cancelled")}}}, 0, 0, 0, true, false, false},
+		{"a first attempt that lists no cancelled job", []attempt{{"cancelled", []runJob{ran(1, "failure")}}}, 0, 0, 0, true, false, false},
+		{"another attempt read for the one before", []attempt{{"failure", nil}, carried}, 0, 0, 0, true, false, true},
+		{"a job of a later attempt", []attempt{{"failure", []runJob{ran(1, "failure")}}, {"cancelled", []runJob{ran(2, "cancelled")}}}, 0, 0, 0, true, false, false},
+		{"carried from a failed attempt", []attempt{{"failure", []runJob{ran(1, "cancelled")}}, carried}, 0, 0, 0, false, false, false},
+		{"carried from a cancelled first attempt", []attempt{{"cancelled", []runJob{ran(1, "cancelled")}}, carried}, 0, 0, 0, true, false, false},
+		{"carried twice", []attempt{{"failure", []runJob{ran(1, "cancelled")}}, carried, {"cancelled", []runJob{ran(1, "cancelled"), ran(3, "failure")}}}, 0, 0, 0, false, false, false},
+		{"carried from one somebody cancelled", []attempt{{"failure", []runJob{ran(1, "failure")}}, {"cancelled", []runJob{ran(2, "cancelled")}}, {"cancelled", []runJob{ran(2, "cancelled"), ran(3, "failure")}}}, 0, 0, 0, true, false, false},
+		{"GAG's own", []attempt{{"cancelled", []runJob{ran(1, "cancelled")}}}, 1, 0, 0, false, false, false},
+		{"carried from GAG's own", []attempt{{"cancelled", []runJob{ran(1, "cancelled")}}, carried}, 1, 0, 0, false, false, false},
+		{"a list GitHub refuses", []attempt{{"failure", nil}, carried}, 0, http.StatusForbidden, 0, true, false, false},
+		{"a list GitHub fails to serve", []attempt{{"failure", nil}, carried}, 0, http.StatusBadGateway, 0, true, true, false},
+		{"an empty list", []attempt{{"failure", nil}, {"cancelled", nil}}, 0, 0, 0, true, false, false},
+		{"an earlier attempt GitHub refuses", []attempt{{"failure", nil}, carried}, 0, 0, http.StatusForbidden, true, false, false},
+		{"an earlier attempt GitHub fails to serve", []attempt{{"failure", nil}, carried}, 0, 0, http.StatusBadGateway, true, true, false},
+		{"an earlier attempt without a conclusion", []attempt{{"", nil}, carried}, 0, 0, 0, true, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			start := time.Now().Add(-time.Hour)
+			at := func(attempt int) time.Time { return start.Add(time.Duration(attempt) * time.Minute) }
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				path, jobs := strings.CutSuffix(strings.TrimPrefix(r.URL.Path, "/repos/myorg/myrepo/actions/runs/4242/attempts/"), "/jobs")
+				n, _ := strconv.Atoi(path)
+				switch status := map[bool]int{true: tc.jobs, false: tc.run}[jobs]; {
+				case status != 0:
+					w.WriteHeader(status)
+				case jobs:
+					rows := []map[string]any{}
+					for _, j := range tc.attempts[n-1].jobs {
+						rows = append(rows, map[string]any{"name": j.name, "conclusion": j.conclusion, "completed_at": at(j.ranIn).Add(time.Second)})
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"total_count": len(rows), "jobs": rows})
+				default:
+					served := n
+					if tc.other {
+						served++
+					}
+					_ = json.NewEncoder(w).Encode(map[string]any{"status": "completed", "conclusion": tc.attempts[n-1].conclusion, "run_attempt": served, "run_started_at": at(n)})
+				}
+			}))
+			t.Cleanup(srv.Close)
+			p := ledgerProvisioner(fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).Build(), srv)
+			target := &stubTarget{key: client.ObjectKey{Namespace: "team-a", Name: "gpu"}, spec: &ResolvedSpec{}}
+			if tc.self > 0 {
+				require.NoError(t, p.recordSelfCancel(context.Background(), target, "4242", tc.self))
+			}
+			n := len(tc.attempts)
+			got, err := p.cancelledByOther(context.Background(), target, "myorg", "myrepo", "4242", runState{
+				status: "completed", conclusion: tc.attempts[n-1].conclusion, attempt: n, startedAt: at(n)})
+			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.retry, errors.Is(err, errRunConclusionUnreadable))
+		})
+	}
 }
 
 // TestJobRerun_ARefusedReleaseEndsWithTheWait: a run that reads concluded and is refused as
