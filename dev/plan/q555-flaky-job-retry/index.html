@@ -3292,8 +3292,8 @@ The out-of-memory class was built without one, so that requirement is open for i
 <tr>
 <td>Egress proxy pool unavailable</td>
 <td>The pool had no ready endpoint during the job's window</td>
-<td>Observable: pool readiness</td>
-<td>GAG owns the pool</td>
+<td>Observable: a ready replica, not the pool's <code>Ready</code></td>
+<td>GAG owns the pool. Open: the pool's state at the completion misses an outage the worker outlives and that is over by then, and nothing read separates an outage's victims from jobs that failed for their own reason during it (<a href="../q555-automatic-recovery-design/#readings-for-the-egress-proxy-class-q1315">the readings</a>)</td>
 </tr>
 <tr>
 <td>Registry mirror unavailable</td>
@@ -3388,7 +3388,7 @@ It cannot see an HTTP status inside TLS, so a 403 or 429 from the upstream is in
 <td>Proxy pool unready or saturated</td>
 <td>Pool readiness, active tunnels against capacity</td>
 <td>Retry class</td>
-<td>Already observable from the pool</td>
+<td>Observable from the pool, but a read at the job's completion misses an outage the worker outlives and that is over by then (<a href="../q555-automatic-recovery-design/#readings-for-the-egress-proxy-class-q1315">the readings</a>)</td>
 </tr>
 <tr>
 <td>Policy denial</td>

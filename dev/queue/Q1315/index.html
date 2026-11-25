@@ -2705,14 +2705,30 @@
 
 <h1 id="retry-a-job-failed-while-its-colocated-egress-proxy-pool-was-unavailable">Retry a job failed while its colocated egress proxy pool was unavailable<a class="headerlink" href="#retry-a-job-failed-while-its-colocated-egress-proxy-pool-was-unavailable" title="Permanent link">&para;</a></h1>
 <p>A job that fails because the tenant's egress proxy pool was down is a platform failure, and today it needs a manual re-run.
-The design's second retry class recognises it from the worker snapshot: the colocated <code>EgressProxy</code>'s <code>Ready</code> condition was <code>False</code>, or <code>readyReplicas</code> was 0, while the job ran, and the class clears by observation once <code>Ready</code> is true again.</p>
+The design's second retry class recognises it from the worker snapshot at the job's completion, and that reading misses an outage the worker outlives and that is over when the completion arrives.
+<a href="../../plan/q555-automatic-recovery-design/#readings-for-the-egress-proxy-class-q1315">The readings</a>, taken on 2026-11-24 on kind against GitHub, one run of each case, show these points:</p>
 <ul>
-<li><strong>Reproduce first (R12).</strong> Scale a dogfood set's colocated pool to zero mid-job, then show the discriminator separates it from the nearest tenant-caused shape, a job that fails on a host its allowlist denies.</li>
-<li><strong>The <code>observable</code> release is not built.</strong> Q1244 built only the <code>freshPod</code> release the out-of-memory class needs; this class needs the deferred path to wait on <code>ready</code> (<a href="../../plan/q555-automatic-recovery-design/#how-it-waits">How it waits</a>).</li>
+<li>A pool that is back before the completion arrives reads healthy on both gateway shapes, because a runner that outlives the outage reports through the pool.</li>
+<li>A pool that stays down until GitHub gives up on the job is recorded with 0 replicas on a direct gateway, and as healthy on a proxied one, which hears nothing from GitHub while its own pool is down.</li>
+<li>A worker that ends inside the outage was not run; by source its end is read from the pod, so both shapes should record 0.</li>
+<li><code>Ready</code> is the wrong fact: it reads <code>True</code> at 0 of 0 and <code>False</code> while a replica serves.
+  The recogniser needs zero ready replicas, the release needs a ready one.</li>
+</ul>
+<p>What is left:</p>
+<ul>
+<li><strong>A reading taken during the job</strong>: the AGC noting when a watched pool has no ready replica, matched against the job's span.
+  Not designed or tested, a managed pool's outage was not run, and the note has to outlive the moment the AGC learns of the job.
+  A recogniser on <code>Ready</code>'s transition time is untested, and the readings show where it would not hold.</li>
+<li><strong>The dogfood reproduction (R12)</strong>, owed by the design before the class merges: scale a dogfood set's colocated pool to zero mid-job.
+  These readings are kind only.</li>
+<li><strong>The nearest tenant-caused shape (R12)</strong>, a job that fails on a host its allowlist denies: read from source, and not run.</li>
+<li><strong>A fact that separates a job failed by the outage</strong> from one that failed for its own reason during it: overlap in time alone does not (reasoned, <a href="../../plan/q555-automatic-recovery-design/#readings-for-the-egress-proxy-class-q1315">the readings</a>).</li>
+<li><strong>The <code>observable</code> release is not built.</strong> Q1244 built only the <code>freshPod</code> release the out-of-memory class needs; this class needs the deferred path to wait on a ready replica (<a href="../../plan/q555-automatic-recovery-design/#how-it-waits">How it waits</a>).</li>
 <li><strong>A shared pool in another namespace is out of scope</strong>: the AGC watches EgressProxies in its own namespace only, so the class cannot see one.</li>
+<li><strong>If nothing separates them</strong>, the class is not buildable as designed and <a href="../../plan/q555-automatic-recovery-design/#classes-after-the-first">the design</a> has to say so.</li>
 </ul>
 <p>It counts under its own <code>cause</code>, goes through the breaker (a pool outage is exactly a stampede) and the futility checks (Q1320, built), and needs nothing from the proxy outcome metrics.
-Gated on 2.1 as part of its headline (<a href="../../plan/release-2.1/">release-2.1.md</a>).</p>
+Not a 2.1 gate: nothing separates an outage's victims from the tenant's own failures, and how often a pool loses every replica is unmeasured (<a href="../../plan/release-2.1/#explicitly-out-of-scope">release-2.1.md</a>).</p>
 
 
 

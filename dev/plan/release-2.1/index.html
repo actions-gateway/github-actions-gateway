@@ -2724,6 +2724,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#explicitly-out-of-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Explicitly out of scope
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2761,7 +2772,7 @@ Nothing here is a commitment to a date.</p>
 <h2 id="why-this-release-exists">Why this release exists<a class="headerlink" href="#why-this-release-exists" title="Permanent link">&para;</a></h2>
 <p><code>v2.0.0</code> ships the first half of automatic recovery: flaky-job detection (Q555), the futility checks on the disruption arms (Q1181), and the first retry class, an out-of-memory kill under right-sizing (Q1183).
 Each of those landed ahead of the dogfood readings its design put first, and the classes after the first are designed but not built (<a href="../q555-automatic-recovery-design/">q555-automatic-recovery-design.md</a>).
-This release finishes it: it measures what the shipped half rests on, then adds the classes, so that fewer platform failures need someone to click re-run.</p>
+This release finishes it: it measures what the shipped half rests on, then adds a class where something GAG owns separates it from a tenant's own failure, so that fewer platform failures need someone to click re-run.</p>
 <p>The order inside the release is the design's: the measurements first, because each class and the job-granular re-run are built on their answers.</p>
 <h2 id="what-this-release-must-not-do">What this release must NOT do<a class="headerlink" href="#what-this-release-must-not-do" title="Permanent link">&para;</a></h2>
 <p><strong>It must not re-run a genuine failure.</strong> The boundary in <a href="../../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">troubleshooting.md</a> stands: every class retries only a cause GAG can observe on facts it owns (R9), arrives with a dogfood reproduction (R12), and is punted rather than shipped when no discriminator separates it from a tenant-caused shape.
@@ -2854,8 +2865,8 @@ One known limit stays from <code>v2.0.0</code>: beside a memory kill, a job past
 <tr>
 <td><a href="../../queue/Q1315/">Q1315</a></td>
 <td>Retry a job failed while its colocated egress proxy pool was unavailable</td>
-<td><code>2.1-gate</code></td>
-<td>🔲 open</td>
+<td>rides</td>
+<td>⤴ punted: <a href="#explicitly-out-of-scope">explicitly out of scope</a></td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1316/">Q1316</a></td>
@@ -2883,8 +2894,25 @@ One known limit stays from <code>v2.0.0</code>: beside a memory kill, a job past
 </tr>
 </tbody>
 </table>
-<p><strong>Scoped 2026-11-09, and nothing rides yet.</strong> <code>v2.1.0</code> follows <code>v2.0.0</code>, so nothing here waits on anything but its own row and the 2.0 tag.
+<p><strong>Scoped 2026-11-09, and nothing rides yet: the <code>rides</code> cell on Q1315 marks a punted row.</strong> <code>v2.1.0</code> follows <code>v2.0.0</code>, so nothing here waits on anything but its own row and the 2.0 tag.
 The ledger takes a row for each item that merges onto the released surface before the tag.</p>
+<h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Q-ID</th>
+<th>Item</th>
+<th>Why it is out</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../../queue/Q1315/">Q1315</a></td>
+<td>Retry a job failed while its colocated egress proxy pool was unavailable</td>
+<td>Nothing read so far tells a job the outage failed from one that failed for its own reason during it (reasoned), so the class could re-run genuine failures, which this release must not do. The designed reading also misses an outage the worker outlives and that is over when the completion arrives (<a href="../q555-automatic-recovery-design/#readings-for-the-egress-proxy-class-q1315">the readings</a>, 2026-11-24, kind), and how often a pool loses every replica is unmeasured. The row keeps its place in the queue.</td>
+</tr>
+</tbody>
+</table>
 
 
 
