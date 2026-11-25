@@ -1,7 +1,7 @@
 # Q1316: the dogfood reproduction, planned
 
-> **Run once, on 2026-11-24, and stopped at R2 by the abort for a node not ready.** R0, R1, R6 and R8 were read, R2 was not, and R3, R3t, R4, R5 and R7 were not run ([the first run](#the-first-run)).
-> The plan below is the second run's, which [changes](#what-the-second-run-changes) R2 and the order, and needs a new grant for the prod-classified dogfood cluster, read-only checks included.
+> **Run once, on 2026-11-24, and stopped at R2 by the abort for a node not ready.** R0, R1, R6 and R8 were read, R2 was not, and R3, R3t, R4 and R7 were not run ([the first run](#the-first-run)).
+> The plan below is the second run's, which [drops](#what-the-second-run-changes) R2 and R5, and needs a new grant for the prod-classified dogfood cluster, read-only checks included.
 > Local readings it builds on are in [the design](q555-automatic-recovery-design.md#readings-for-the-dockerd-sidecar-class-q1316).
 
 ## What it decides
@@ -30,7 +30,7 @@ A debug pod would add the node's process list; the container statuses, the line 
 The trade is that the privilege stays the one this tenant already has.
 Where the statuses and the counters do not name the victim, the reading is reported as unresolved rather than widened to a debug pod.
 The kubelet's `SystemOOM` Event is read beside them and not relied on: it is raised where the kernel's line names no memory cgroup, which a node-wide kill's does not and a kill at `kubepods`' limit does (kernel 6.12 `memcontrol.c`, kubelet 1.35.5 and its cAdvisor `oomparser.go`, read; the pattern run over both lines in their source format).
-So it should appear for R2 and R5 and not for R3 and R4, naming a process and not a pod.
+So it should not appear for R3 and R4, and a node-wide kill, where it should, is not made.
 
 ## Kill order, computed
 
@@ -54,7 +54,6 @@ Each process takes 2 MiB at a time and exits when either worker's `oom_kill` ris
 Run locally on two workers and two higher-scored pods under one 700 MiB `kubepods.slice`, with `oom.group` set: one worker killed, the other untouched and no filler killed in 10 of 10 runs, the higher-scored pods at 20 and 100 MiB.
 An earlier version with 64 MiB steps overshot and killed a second process in 3 of 3, so the step stays small.
 A restarted DaemonSet container is not modelled, and can be killed again.
-This is for R3, R3t and R4; R2 and R5 [do not fill](#what-the-second-run-changes).
 The scripts are at [the end](#the-probe).
 
 ## Shape
@@ -63,8 +62,8 @@ One e2e node, two workers on it at once, on a throwaway branch `claude/q1316-pro
 
 Both jobs sample the host's cgroup tree every second to their logs: each pod's `memory.current`, `memory.events` and `memory.events.local`, the same and `memory.max` for `kubepods.slice`, `/sys/fs/cgroup/docker`'s `memory.current`, and `/proc/vmstat`'s `oom_kill`, with the kernel's line for each kill.
 Each also runs [a second reader](#what-it-decides-for-q1403) beside it, shaped as a node reporter would be: uid 65534, every capability dropped, and the cgroup tree read-only.
-The two pods are scored alike, so a kill can take either; the survivor's log holds both pods' counters, and is the record: the fill's or the press's own summary line is lost where its worker is the one killed.
-Both do the same actions, except the fill or the presses, which one of them makes.
+The two pods are scored alike, so a kill can take either; the survivor's log holds both pods' counters, and is the record: the fill's own summary line is in the plain pod's log.
+Both do the same actions, except R8's allocation, which one of them made.
 Each job ends in failure once its sampler ends, after 2.5 minutes for R0, R1, R6 and R7 and 8 for a fill, so its end is observable.
 R1, R6 and R7 use one worker; R8 uses the pair, so the other worker's log survives the kill.
 
@@ -83,17 +82,15 @@ R0 also reads, by read-only `kubectl`, the UID, QoS class, requests and priority
 | R0 | 1 | Nothing: cgroup paths; `oom_score_adj` and resident memory of dockerd, the runner's processes and a nested container; node memory, kernel, `memory.oom.group`, `kubepods.slice`'s `memory.max` | | Nested containers outside the pod; 969, 907, 0; `kubepods` capped. Also answers Q1396's first step |
 | R1 | 1 | A job runs a container past its own `-m 64m` | Tenant, honest | `Completed`, exit 0; nothing raised |
 | R6 | 2 | A job sends dockerd SIGKILL, then in a second run SIGABRT, from a `--pid=host` container | Tenant, deliberate | `Error` 137 and `Error` 2; the job fails with the runner alive |
-| R8 | 1 | One worker's step allocates 4 GiB, past the runner's own 3Gi limit | Tenant, honest | The runner `OOMKilled`, 137; pod `Failed`; withheld as `own_limit`, as R2 is; pod `oom` 1, `kubepods.slice` `oom` 0, no `SystemOOM` |
-| R2 | 1 | A job's own container asks the kernel for a node-wide kill, through `/proc/sysrq-trigger`, until a worker dies | Tenant, deliberate | One runner dies; pod `Failed`; the AGC withholds as `own_limit`, which is Q1400's reading; `kubepods.slice` `oom` 0; a `SystemOOM` Event |
+| R8 | 1 | One worker's step allocates 4 GiB, past the runner's own 3Gi limit | Tenant, honest | The runner `OOMKilled`, 137; pod `Failed`; withheld as `own_limit`, as R3 is; pod `oom` 1, `kubepods.slice` `oom` 0, no `SystemOOM` |
 | R3 | 2 | A plain pod on the same node, 12Gi requested and no limit, fills: seven 4 GiB processes | Platform: a neighbour over its request | One runner dies; `kubepods.slice` `oom` above 0; no `SystemOOM` |
 | R3t | 2 | R3, with each worker's dockerd set to its runner's `oom_score_adj`, the tie a 3Gi runner request gives | Platform, tie | The larger process of the two goes, by R0's resident memory |
 | R4 | 1 | R3, with each dockerd at 1000 | Platform, forced | dockerd `OOMKilled`, 137; runner alive; pod `oom` 0 |
-| R5 | 1 | R2, with the same | Tenant, deliberate | As R4, with `kubepods.slice` `oom` 0 where R4's rose |
 | R7 | 1 | Under Kata, one worker: the sidecar's `memory.oom.group` as the guest sees it, R1, then the job's containers past the sidecar's 8Gi | Tenant, honest | `memory.oom.group` 0, since Kata 3.32.0's agent does not set it (read). R1: `OOMKilled`, 143. Second: one process dies, and the sidecar reads `OOMKilled` with 143 if it was the job's, or 137 if it was dockerd |
 
-Order: R0, R3 twice, R3t twice, R4, R2, R5, then R7.
+Order: R0, R3 twice, R3t twice, R4, then R7.
 R1, R6 and R8 were read in the first run and are not repeated.
-**R4 and R5 run only if** R3 or R3t killed a sidecar with its runner alive, because otherwise no question needs a killed sidecar's counters.
+**R4 runs only if** R3 or R3t killed a sidecar with its runner alive, because otherwise no question needs a killed sidecar's counters.
 
 `kubepods.slice`'s counters are the node's since it started, so every reading is the rise across its own window, and the first sample of each is its baseline.
 
@@ -139,35 +136,33 @@ Step 5's lease check did not gate it; the lease read as this run's before and af
 
 ## What the second run changes
 
-1. **R2 and R5 ask for the kill and do not fill.** A root process of the job's own privileged container writes `f` to `/proc/sysrq-trigger`, which runs the kernel's node-wide killer with the scoring and the group kill of a real one, and no shortage (`sysrq.c`, `oom_kill.c`, v6.8 upstream, read; not run, since a local run would kill something in the shared Docker machine).
-   The first kills are expected to be the collector's, at 999, as the fill's would have been, so it presses until a worker dies, 12 times at most.
-   A press only queues the killer, which prints its report before the kill is made and counted (R8's print took up to 564 ms, for one container), and a queued press cannot be cancelled.
-   So it never presses with one outstanding: it waits for `/proc/vmstat`'s `oom_kill` to rise, then 2 seconds for a group kill's own counts, and reads both workers before the next.
-   A press that picks a process already dying counts nothing; 60 seconds with no rise, or 12 presses with no worker dead, end it with the reading void.
-   It answers which process dies, what the statuses, counters, kernel line, Events and AGC say, and not how a node behaves with no memory left, which the first run is the only reading of.
-   If the write is refused the reading is void and not replaced by a fill.
+1. **R2 and R5 are dropped.** R2's fill is what lost the node, and nothing the second run has to decide rests on either.
+   Which of the two dies is read by R3 and R3t: the kernel scores a node-wide kill and a kill at `kubepods`' limit alike but for the limit, 31.3 GiB against 27.8, so the runner's lead over dockerd is 2.0 GiB against 1.8 and R3 is the closer call.
+   Q1400's and Q1403's node-killed runner is R3's.
+   R5's `kubepods` `oom` is 0 by the kernel's code, which raises it for a kill at a cgroup's limit alone (`mem_cgroup_oom` in `memcontrol.c`, v6.8 upstream, read), so it would have compared R4 with a constant.
+   What is left unread, and is said so below: a node-wide kill's counters, kernel line and `SystemOOM` Event, which rest on source; and a job's own fill, whose one try recorded no kill.
+   Asking the kernel for that kill through `/proc/sysrq-trigger` was considered and is not used: it would read what the source already fixes, at the cost of killing by hand on the cluster.
 2. **The fills that remain stop at `kubepods`' limit.** R3, R3t and R4 reach 27.8 GiB of 31.3, so the kubelet and containerd, outside `kubepods.slice`, keep about 3.5 GiB; run locally at 700 MiB, with no kubelet, and not on a node.
    A slower fill is not used: the kubelet's eviction would come first.
    A lower limit on `kubepods` is not used: it is another change to the node.
-3. **R3 runs before R2**, so a lost node costs the least, and it gives Q1316's first question first.
+3. **R3 runs right after R0**, so a lost node costs the least, and it gives Q1316's first question first.
 4. **`set +e`** in the probe's script, so a failing command does not end the sampling (run under `bash -eo pipefail` with and without).
 5. **The recorder acts on the node.** It ends the reading once an e2e node has been not ready for 5 minutes, rather than at the reading's own end; replayed over the first run's node record it ends 5 minutes after the `Unknown` arrived.
 6. **The lease check gates the step**, in one command with it; the first run ran it beside step 5 and not before it.
 
-The abort gains one condition, for R2's and R5's kill.
-The restore and every other mutation are unchanged, and step 2 pushes the new file.
+No mutation is added, the abort and the restore are unchanged, and step 2 pushes the new file.
 
-R3 and R3t still decide whether the sidecar or the runner goes first, so whether Q1316's class has a memory cause; R3 is the shape Q1403's counters and Q1400's runner are read in, at a limit above the pod; R2 is the shape with no counter rising; R4 and R5 decide whether a counter separates them, if a sidecar dies at all.
+R3 and R3t decide whether the sidecar or the runner goes first, so whether Q1316's class has a memory cause; R3 is the shape Q1403's counters and Q1400's runner are read in, at a limit above the pod; R4 reads the counters with a sidecar killed, if one dies at all.
 
 ## What each outcome means
 
 | Outcome | Conclusion |
 |---|---|
 | R3's runner dies first in 2 of 2 | At the shipped requests a node out of memory is not this class. The pod fails, and what the AGC does with it is Q1400's misreading, not a recovery |
-| R3t's sidecar dies with the runner alive | The class has a platform cause on a template that requests 3Gi or more for its runner, and R4 against R5 decides whether a counter separates it |
+| R3t's sidecar dies with the runner alive | The class has a platform cause on a template that requests 3Gi or more for its runner, and R4 reads the counter that kill raises |
 | R3t's runner dies in 2 of 2 | The tie is decided by which process is larger in that job; R0's figures say by how much, and no general claim is made |
-| R4 and R5 read the same in the pod's and `kubepods.slice`'s counters | R4's kill was not at `kubepods`' limit, since R5's cannot raise its `oom`; R4 is unread |
-| R4 and R5 differ as predicted | A kill at `kubepods`' limit is separated from a node-wide kill that was asked for, where the kernel does not raise `kubepods`' `oom` by its code. A fill by a job's own containers is unread: the only one tried lost the node with no kill recorded. Nor is it a neighbour against the job: the job's own pod over its request raises `kubepods`' `oom` too, so a class needs the pod's usage at or under its request beside it. The shipped limits let two workers use 14Gi, which does not reach `kubepods`' limit, so that twin is not run |
+| R4's `kubepods.slice` `oom` does not rise | R4's kill was not at `kubepods`' limit; R4 is unread |
+| R4's rises as predicted | A kill at `kubepods`' limit is told from R1's, R6's and R8's, where it stayed 0. A fill by a job's own containers is unread: the only one tried lost the node with no kill recorded. Nor is it a neighbour against the job: the job's own pod over its request raises `kubepods`' `oom` too, so a class needs the pod's usage at or under its request beside it. The shipped limits let two workers use 14Gi, which does not reach `kubepods`' limit, so that twin is not run |
 | The kubelet evicts a worker or the plain pod before any kill | The kill order is not read by that run; it is repeated once. Two such runs mean eviction comes first on this node, which the existing arms classify, and R3's question stays unread |
 | Another pod is killed before a worker | Expected where R0 lists it; the fill goes on and the kill is logged. It says nothing about the two workers' order |
 | A worker and another pod die in one window | The samples give the order to the second; where they do not, the statuses' `finishedAt` does |
@@ -175,31 +170,31 @@ R3 and R3t still decide whether the sidecar or the runner goes first, so whether
 | R6 matches the local statuses | `Error` stays a status any job can produce; a class keyed on it needs a platform cause, and none is known |
 | R7's first is not `OOMKilled`, or exits 137 | Q1395's rule is wrong for Kata and is refiled |
 | R7's second reads `OOMKilled` with 143 | A job's container killed at the sidecar's own limit reads as one killed at its own, which Q1395's rule does not name; the rule's documented miss is confirmed |
-| R2's or R3's runner reads `OOMKilled` and the AGC withholds or raises | Q1400 is reproduced, with the counters and the Event that could have told |
+| R3's runner reads `OOMKilled` and the AGC withholds or raises | Q1400 is reproduced, with the counters and the Event that could have told |
 
 **Not buildable at the shipped requests**, with that bound stated: R3 runner-first in both runs, and no platform cause for the `Error` shapes, which the local runtime-loss readings already point to.
 
-**Buildable** needs all three: a platform fill kills the sidecar with its runner alive; R4 and R5 differ in a counter, which bounds a kill at `kubepods`' limit against one asked for and says nothing of a job's own fill; and something carries the node's counters to the AGC.
+**Buildable** needs all three: a platform fill kills the sidecar with its runner alive; R4's kill raises a counter that a job's own does not, with a job's own fill unread; and something carries the node's counters to the AGC.
 No carrier is known.
 The template's entrypoint is not one: on its restart it can read its own pod's counter, but the fact is `kubepods`' and a rise over a baseline, and a termination message is published when the restarted sidecar stops, after the job's completion.
 A node agent could, which is a new privileged component, and a message a container the job controls could write meets R9's "nothing tenant code writes".
-So a run in which R4 and R5 differ leaves the class to a design decision rather than building it.
+So a run in which R4's counter rises leaves the class to a design decision rather than building it.
 
 ## What it decides for Q1400
 
-R2 and R3 are the kill [Q1400](../queue/Q1400.md) describes, a runner killed for the node's memory, so one window serves both.
+R3 is the kill [Q1400](../queue/Q1400.md) describes, a runner killed for the node's memory, so one window serves both.
 They settle whether the pod reads `Failed` with the runner `OOMKilled` at the API server, what the AGC then says and does, and when its `PlatformFaultOnFailedJob` comes.
 R8 is the kill they are told apart from, a runner past its own limit, and the AGC is expected to treat it alike.
 [M3](q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22) read that kill's status and not its counters or Events.
 Each container's `current` and `peak` beside its `max` say how far below its own limit a node-killed runner was, which is the claim Q1400 makes.
-What separates them is expected to be the pod's `oom`, 1 for R8 and 0 for R2 and R3; `kubepods`' `oom` then tells R3 from R2, and the `SystemOOM` Event R2 from the rest.
+What separates them is expected to be the pod's `oom`, 1 for R8 (read) and 0 for R3; `kubepods`' `oom` and the `SystemOOM` Event would then tell a node-wide kill, which is not read.
 None of those reaches the AGC today, so the readings say what honest wording can rest on and what a class would need.
 The set is `NodeShare`, so what is read is the withheld `own_limit` branch.
 Not read: a raise under `Binpack` or `Throughput`, which starts from the same two facts, and a runner with no limit.
 
 ## What it decides for Q1403
 
-The node reporter's design rests on five facts, and R8, R2 and R3 read them with no further change to the cluster; a sixth, under Kata, takes one more pod.
+The node reporter's design rests on five facts, and R8 and R3 read them with no further change to the cluster; a sixth, under Kata, takes one more pod.
 
 - **Whether it may read.** The second reader opens every pod's and container's `memory.events`, `memory.events.local` and `memory.peak`, and prints each refusal's errno, its own AppArmor profile, one file's owner and mode, and each cgroup that appears after it started.
   It is an unprivileged container of the job's own Docker, so it is under Docker's default seccomp profile; the plain pod of R3, R3t and R4, which is a pod as a reporter would be, makes the same opens once before it fills.
@@ -212,7 +207,8 @@ The node reporter's design rests on five facts, and R8, R2 and R3 read them with
   The node's own error against the same source is assumed under 100 ms and not read.
   In R3 the plain pod's log is followed and stamped too: its first line's arrival less the time it prints is the most the client can be ahead, and nothing bounds it being behind but `sntp`.
   A margin, either way, inside the two errors together is reported as unresolved.
-- **Which counter names the limit.** Expected `oom` in `memory.events.local`, for the container, its pod, its QoS slice and `kubepods.slice`: 1, 0, 0, 0 for R8; 0, 0, 0 and a rise for R3; and no rise in any for R2.
+- **Which counter names the limit.** Expected `oom` in `memory.events.local`, for the container, its pod, its QoS slice and `kubepods.slice`: 1, 0, 0, 0 for R8; and 0, 0, 0 and a rise for R3.
+  No rise in any, for a node-wide kill, is from source.
   A pod's own limit (`spec.resources`) is the fourth shape and is not run: locally it read 0 for the container and 1 for the pod.
   The kernel's line is the answer each is checked against.
 - **What the host sees of a kill in a Kata guest.** One more plain pod, `q1316-read`, in the shape and with the mounts of step 3's and no fill, runs the reader on the Kata worker's node.
@@ -242,7 +238,7 @@ A node-wide kill was not made locally.
 | Either is refused | `EACCES` is a file mode or an AppArmor profile, so the owner, mode and profile are read with it; a reporter needs more than the row's cost names |
 | The pod's cgroup outlives the arrival of `Failed` in every run, by more than the clocks' error | The shortest margin, less that error, is the bound a reporter has, from these few kills on one node image |
 | It is gone first in any run, by more than the clocks' error | A reporter has to read as the kill happens, not after the pod fails |
-| The counters and the kernel's line name the same limit in R8, R2 and R3 | The counters are enough for those three |
+| The counters and the kernel's line name the same limit in R8 and R3 | The counters are enough for those two |
 | A kill has no line, or `/dev/kmsg` does not open | The counters are unchecked for that kill. The kernel prints at most ten such reports in 5 seconds for the node and none for a group kill's other processes (`oom_kill.c`, v6.12, read); the sampler says where lines were lost |
 | They differ in any | The counters are not, and the kernel's log is the reporter's source |
 | R7b's kill raises nothing in the sandbox pod's counters, where the log has a `new` line with counters for that pod's UID before the kill, and the poll's `gone` for it or an `end` line after | A host reporter of the pods' cgroups cannot see a Kata job's kill |
@@ -262,7 +258,7 @@ The values are the runbook's ([gke-dogfood.md](gke-dogfood.md#variables)) and ar
 | 0a | `gcloud container clusters get-credentials $CLUSTER --project=$PROJECT --zone=$ZONE` | Writes the `KUBECONFIG` file |
 | 0b | [Take the release gate's lease](#the-lease) | Creates one Lease, `default/actions-gateway-release-gate` |
 | 1 | `E2E_VARIANT=dind E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | System pool to its running size, which brings up the always-on gateways; the `dind` overlay (namespace labels, template, open egress policy, gateway); registry mirrors up |
-| 2 | `git push origin HEAD:claude/q1316-probe-run`, one push per reading | One workflow run of the file below; the e2e pool scales 0 to 1; R2's and R5's job kills processes on that node through `/proc/sysrq-trigger` |
+| 2 | `git push origin HEAD:claude/q1316-probe-run`, one push per reading | One workflow run of the file below; the e2e pool scales 0 to 1 |
 | 3 | `kubectl --context $CTX -n gag-dogfood-e2e create configmap q1316-fill --from-file=fill.py --from-file=reader.py`, once, then `apply -f hog.yaml` with `NODE` set, per R3, R3t and R4 | One ConfigMap, and one non-root, unprivileged pod with the host's `/sys/fs/cgroup` mounted read-only, which is how it sees a worker die |
 | 4 | `kubectl --context $CTX -n gag-dogfood-e2e delete pod/q1316-hog` after each, `pod/q1316-read` once its log has its `end` lines, 15 minutes after it starts, or once it is dead, its log read first, then `configmap/q1316-fill` | Removes them |
 | 5 | `E2E_VARIANT=kata E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | Back to the `kata` overlay, and deletes the open egress policy |
@@ -313,7 +309,7 @@ EOF
 ```
 
 The holder is kept in a file because a shell variable does not outlive one command of an agent session.
-Each of steps 1 to 8 is joined to this with `&&` in one command, so a step does not start where it fails, which an empty holder or an empty read makes it do:
+Each of steps 1 to 9, and the restore's NetworkPolicy deletion, is joined to this with `&&` in one command, so a step does not start where it fails, which an empty holder or an empty read makes it do:
 
 ```bash
 lease_held() {
@@ -345,13 +341,12 @@ A gate started in the window refuses, and a candidate tagged in it fails its val
 Stop, run the restore, and report what was read, on any of:
 
 - another session's job reaches the e2e set, or the lease is gone or another's;
-- R2's or R5's kill takes a container other than a worker's, and not one R0 lists above it;
 - the e2e node is `NotReady` for 5 minutes, or a pod other than the workers, the two plain pods of steps 3 and 5a or a DaemonSet's is on it;
 - a container on any other node restarts during a reading;
 - Spot preemption twice;
 - 4 hours from step 1, which leaves the restore inside 4.5.
 
-R3, R3t and R4 reach `kubepods`' limit on the e2e node on purpose, and R2 and R5 kill on it.
+R3, R3t and R4 reach `kubepods`' limit on the e2e node on purpose.
 The pool's taint keeps other workloads off it, and it is Spot and disposable.
 Its DaemonSets' containers are expected to be killed and restart, the metrics collector among them, so the node's own monitoring has gaps during a fill; that is not an abort.
 The system pool is a different pool.
@@ -373,7 +368,7 @@ The system pool is a different pool.
 
 ## Time and cost
 
-Estimated at 2 hours 35 minutes with the cluster held, 3 hours 1 with R4 and R5, from the first run's times where it has one: 25 minutes to start and read the baseline, 15 for R0, 5 readings at about 13 minutes each, 2 more if R4 and R5 run, 30 for the switch to Kata and R7 with its reader, 20 to restore.
+Estimated at 2 hours 22 minutes with the cluster held, 2 hours 35 with R4, from the first run's times where it has one: 25 minutes to start and read the baseline, 15 for R0, 4 readings at about 13 minutes each, 1 more if R4 runs, 30 for the switch to Kata and R7 with its reader, 20 to restore.
 A fill is 12 because a runner that dies holds its job about 10 minutes, until the lock lapses ([M1](q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22)), each uses both worker slots, and none overlaps another.
 
 Estimated from third-party price listings read on 2026-11-24 (Google's own page was not read), over 4.5 hours, the abort limit and the restore:
@@ -394,7 +389,7 @@ The commit pushed to `claude/q1316-probe-run` adds one file, `.github/workflows/
 R6 is `R6a` and `R6b`, and R7 is `R7a` and `R7b`.
 `bash -n`, `shellcheck -S warning` and `actionlint` pass on it but for the runner label it does not know and info notes that single quotes do not expand, which is meant.
 `sample.py` and `reader.py` ran locally over a `kubepods.slice` made in one container, six times, while `reader.py` gained its counters at the end (from the fourth), its profile (the fifth) and the first and last values on its `new` and `gone` lines (the sixth).
-The first run's file ran on GitHub; this one, with `set +e`, `press.py` and R2's and R5's new line, has not.
+The first run's file ran on GitHub; this one, with `set +e` and without R2's and R5's lines, has not.
 
 ```yaml
 name: q1316-probe
@@ -433,9 +428,6 @@ jobs:
           cat > reader.py <<'PY'
           @READER@
           PY
-          cat > press.py <<'PY'
-          @PRESS@
-          PY
           until docker info >/dev/null 2>&1; do sleep 1; done
           docker pull "$I"
           host() { docker run --rm -i --privileged --pid=host -v /sys/fs/cgroup:/h:ro "$I" "$@"; }
@@ -447,7 +439,7 @@ jobs:
           own=$(cat /proc/1/oom_score_adj)
           case $R in
             R3t) host sh -c "echo $own > /proc/\$(pidof dockerd)/oom_score_adj" ;;
-            R4|R5) host sh -c 'echo 1000 > /proc/$(pidof dockerd)/oom_score_adj' ;;
+            R4) host sh -c 'echo 1000 > /proc/$(pidof dockerd)/oom_score_adj' ;;
           esac
           sleep 20
           case $R in
@@ -462,7 +454,6 @@ jobs:
             R6b) host sh -c 'kill -ABRT $(pidof dockerd)' ;;
             R7b) docker run --rm "$I" python3 -c 'b = bytearray(b"\1") * (9 << 30)'; echo "exit $?" ;;
             R8) if [[ $W == a ]]; then python3 -c 'b = bytearray(b"\1") * (4 << 30)'; echo "exit $?"; fi ;;
-            R2|R5) if [[ $W == a ]]; then sleep 45; host python3 - < press.py; fi ;;
           esac
           wait
           exit 1
@@ -720,46 +711,4 @@ spec:
   volumes:
     - { name: fill, configMap: { name: q1316-fill } }
     - { name: cgroup, hostPath: { path: /sys/fs/cgroup, type: Directory } }
-```
-
-`@PRESS@` is `press.py`, which finds the workers as `fill.py` does:
-
-```python
-import glob, os, sys, time
-
-def field(path):
-    with open(path) as f:
-        return next(int(l.split()[1]) for l in f if l.startswith("oom_kill "))
-
-def kills():
-    return [field(w) for w in workers]
-
-def node():
-    return field("/proc/vmstat")
-
-workers = sorted(
-    os.path.dirname(os.path.dirname(f)) + "/memory.events"
-    for f in glob.glob("/h/kubepods.slice/*/*pod*.slice/*/memory.max")
-    if open(f).read().strip() == str(4 << 30)
-)
-if len(workers) != 2:
-    sys.exit(f"found {len(workers)} workers, want 2: not pressing")
-base = kills()
-for n in range(12):
-    was, end = node(), time.time() + 60
-    try:
-        with open("/proc/sysrq-trigger", "w") as f:
-            f.write("f")
-    except OSError as e:
-        sys.exit(f"press refused: {e}")
-    while node() == was and time.time() < end:
-        time.sleep(0.05)
-    time.sleep(2)
-    print("press", n + 1, time.strftime("%T"), "node oom_kill +", node() - was, "workers", kills(), flush=True)
-    if node() == was:
-        sys.exit("no kill in 60 s: void, and one press may be outstanding")
-    if kills() != base:
-        break
-else:
-    print("12 presses and no worker killed: void")
 ```
