@@ -8,7 +8,7 @@ The AGC therefore names no cause (Q1400), and neither does anything else in the 
 This is the design of a small tool that says which limit ran out, on the pod, for anyone debugging such a kill, and of what the Actions Gateway Controller (AGC) would do with the answer.
 
 **How claims are marked.** *(read)* is source at a pinned version: Kubernetes `v1.35.5`, Linux `v6.12`, or this repository at `274ca688f`, where the functions cited were compared with an earlier reading.
-*(measured)* names where; *(reported)* is a reading another session took for this design, none of it re-run here and none on GKE, all on kernel 6.12.76: eighteen kills in six runs in one local container with its own `kubepods.slice` and no kubelet, recorded in Q1316's plan (on its branch, not on `main`).
+*(measured)* names where; *(reported)* is a reading another session took for this design, none of it re-run here and none on GKE, all on kernel 6.12.76: eighteen kills in six runs in one local container with its own `kubepods.slice` and no kubelet, recorded in [Q1316's plan](q1316-dogfood-reproduction.md).
 *(recall)* is neither.
 A GKE node of Q1316's run is on `6.8.0-1064-gke` (reported).
 Of the kernel functions cited here for the counters, the kill and its line, each is the same at `v6.8`, but for the cgroup v1 half of `mem_cgroup_oom` and an argument in `memory_max_write`; `check_syslog_permissions` also takes `CAP_SYS_ADMIN` there (read, compared function by function, without `___ratelimit`, `cgroup_mkdir` and what else prints to the log, and not in Ubuntu's own tree).
@@ -183,8 +183,7 @@ Readings behind it (kind's measured for this design, the others reported):
 | A slice above `kubepods`, on kind | 0 | 0 | 0, 0 | That slice |
 
 The last is one reading, of a limit put on the slice above the pods' root for a few seconds.
-Nothing has filled a node.
-Q1316's R2 would.
+Nothing has filled a node: Q1316's R2 lost it, and [its second run](q1316-dogfood-reproduction.md#the-second-run) drops that fill and reads a kill at `kubepods`' limit.
 Its R8 cannot show the second row, because `privileged-dind`'s pod cap has room above the runner's limit (computed, not run).
 
 **Which container.** A pod-level rise does not say, and containerd marks a container `OOMKilled` for an earlier nested kill too (measured on local nodes, Q1395), so a status alone would give a later SIGKILL the nested kill's answer.

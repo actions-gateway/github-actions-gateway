@@ -8,7 +8,9 @@
 
 `v2.0.0` ships the first half of automatic recovery: flaky-job detection (Q555), the futility checks on the disruption arms (Q1181), and the first retry class, an out-of-memory kill under right-sizing (Q1183).
 Each of those landed ahead of the dogfood readings its design put first, and the classes after the first are designed but not built ([q555-automatic-recovery-design.md](q555-automatic-recovery-design.md)).
-This release finishes it: it measures what the shipped half rests on, then adds a class where something GAG owns separates it from a tenant's own failure, so that fewer platform failures need someone to click re-run.
+This release finishes it: it measures what the shipped half rests on, and was to add a class where something GAG owns separates it from a tenant's own failure, so that fewer platform failures need someone to click re-run.
+Neither of the two classes it named is buildable on what has been read, each for the reason [below](#explicitly-out-of-scope), so both are punted and it ships no new retry class.
+What it ships is [in the ledger](#scope-ledger), among it job-granular re-run (Q1319), the fix that keeps the out-of-memory class off a job whose pod has not named it (Q1389), the detection readings and their corrections, and the reporter that says which memory limit ran out (Q1403).
 
 The order inside the release is the design's: the measurements first, because each class and the job-granular re-run are built on their answers.
 
@@ -38,8 +40,8 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | Q1319 | Re-run only the classified job, found by its runner's name | `2.1-gate` | ✅ landed: M6 measured 2026-11-24, and the out-of-memory retry re-runs the killed job alone |
 | Q1401 | Recover a fail-fast matrix's siblings behind an aggregate job | `2.1-gate` | ✅ landed for one matrix and one aggregate, on a second attempt and a second slot of `maxEvictionRetries`; what is left is in the upgrade notes |
 | [Q1315](../queue/Q1315.md) | Retry a job failed while its colocated egress proxy pool was unavailable | rides | ⤴ punted: [explicitly out of scope](#explicitly-out-of-scope) |
-| [Q1316](../queue/Q1316.md) | Retry a job whose Docker-in-Docker sidecar crashed under it | `2.1-gate` | 🔲 open: readings taken 2026-11-24 on a local node, no discriminator found in what GAG reads; dogfood reproduction not run |
-| Q1395 | Keep a nested container's out-of-memory kill from reading as a platform fault on the sidecar | `2.1-gate` | ✅ landed: a sidecar's `OOMKilled` is a fault only with exit code 137; not run on Kata |
+| [Q1316](../queue/Q1316.md) | Retry a job whose Docker-in-Docker sidecar crashed under it | rides | ⤴ punted: [explicitly out of scope](#explicitly-out-of-scope) |
+| Q1395 | Keep a nested container's out-of-memory kill from reading as a platform fault on the sidecar | `2.1-gate` | ✅ landed: a sidecar's `OOMKilled` is a fault only with exit code 137; the status it is keyed on was read under Kata on 2026-11-25, `OOMKilled`, 143, after each of two nested kills, and the rule is unit-tested and not run on a cluster |
 | Q1400 | Keep a runner killed for its node's memory from being read as killed at its own limit | `2.1-gate` | ✅ landed as text: the Events name the worker, its node, its memory request and its limit, and no cause; nothing the AGC reads separates the two ([what each fact says](../design/04-operational-flows.md#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183)) |
 | [Q1403](../queue/Q1403.md) | Tell a node's out-of-memory kill from a job's own, with a node reporter | `2.1-gate` | 🔲 open: [a design](q1403-oom-kill-reporter.md), decided, the first of its six PRs built; the other five and its dogfood reading are open; replaces the text Q1400 leaves with an answer |
 | [Q1406](../queue/Q1406.md) | Act on the limit a killed runner's condition names | rides | 🔲 open |
@@ -47,7 +49,7 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
 
 **Scoped 2026-11-09.
-Q1406 and Q1407 ride; the `rides` cell on Q1315 marks a punted row.** `v2.1.0` follows `v2.0.0`, so nothing here waits on anything but its own row and the 2.0 tag.
+Q1406 and Q1407 ride; the `rides` cells on Q1315 and Q1316 mark punted rows.** `v2.1.0` follows `v2.0.0`, so nothing here waits on anything but its own row and the 2.0 tag.
 The ledger takes a row for each item that merges onto the released surface before the tag.
 
 ## Why the rows added since gate
@@ -78,7 +80,7 @@ Detection could name a platform fault that did not happen, in the release whose 
 
 Settled 2026-11-24.
 The out-of-memory class `v2.0.0` shipped could name a cause it did not check, in the release whose headline is telling platform failures from a job's own: its Events named the runner's own limit for a kill the node could have made.
-They name no cause now, and what the class re-runs, raises and withholds is unchanged; no node kill of a runner has been reproduced.
+They name no cause now, and what the class re-runs, raises and withholds is unchanged; a kill at `kubepods`' limit leaves the same status, reproduced on GKE on 2026-11-25, and a node-wide kill has not been reproduced.
 
 ### Q1401
 
@@ -94,3 +96,4 @@ Naming no cause leaves the operator without one, and [its design](q1403-oom-kill
 | Q-ID | Item | Why it is out |
 |---|---|---|
 | [Q1315](../queue/Q1315.md) | Retry a job failed while its colocated egress proxy pool was unavailable | Nothing read so far tells a job the outage failed from one that failed for its own reason during it (reasoned), so the class could re-run genuine failures, which this release must not do. The designed reading also misses an outage the worker outlives and that is over when the completion arrives ([the readings](q555-automatic-recovery-design.md#readings-for-the-egress-proxy-class-q1315), 2026-11-24, kind), and how often a pool loses every replica is unmeasured. The row keeps its place in the queue. |
+| [Q1316](../queue/Q1316.md) | Retry a job whose Docker-in-Docker sidecar crashed under it | A class needs a platform cause that kills the sidecar and leaves the runner alive to fail the job, and none was found: [two dogfood runs](q1316-dogfood-reproduction.md#what-the-second-run-settles) on 2026-11-24 and 25 filled a node to `kubepods`' limit and killed the runner, in four kills of four, and a class without it would retry jobs that failed for their own reason, which this release must not do. A node-wide kill's order is computed and not read, and how often a sidecar crashes first is unmeasured. The row is deferred, with the trigger that would revive it. |
