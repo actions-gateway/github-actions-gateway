@@ -1349,7 +1349,7 @@ All but `AutoRetryPaused`, which is about a set, also name the worker, its node,
 
 **Who is affected:** anyone who alerts on or parses the text of `PlatformFaultOnFailedJob`.
 
-**What changed.** The text said the job failed `with a platform fault: <faults>`, and now says it failed `on worker <pod>, with: <faults>`, since a container killed at its own memory limit is not the platform's fault.
+**What changed.** The text said the job failed `on worker <pod> with a platform fault: <faults>`, and now says `on worker <pod>, with: <faults>`, since a container killed at its own memory limit is not the platform's fault.
 The Event's reason, when it is raised and the AGC's log message are unchanged.
 Where a pod condition names the limit that ran out, the fault of that container goes on `(a pod condition says …)`, in the Event and in the log line's `faults`, and the record's `context` holds it as `oomReason` ([which limit ran out](worker-rightsizing.md#which-limit-ran-out), Q1403).
 
