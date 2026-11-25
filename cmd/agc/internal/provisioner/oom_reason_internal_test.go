@@ -17,7 +17,7 @@ import (
 // Q1403: the out-of-memory reporter's answer in a failed job's record and Event, and the
 // limits on repeating it (docs/design/04-operational-flows.md §4.2).
 
-// oomWorker is a Failed worker whose runner the kubelet reports killed for memory.
+// oomWorker is a Failed worker whose runner's status shows it killed for memory.
 func oomWorker() *corev1.Pod {
 	pod := scaleSetWorker("runner-1", corev1.PodFailed, "")
 	pod.Status.ContainerStatuses = []corev1.ContainerStatus{oomContainer(runnerContainer, "containerd://1")}
@@ -114,7 +114,7 @@ func TestOOMReason_IsSaidOfTheContainerItsTypeNames(t *testing.T) {
 }
 
 // TestOOMReason_AddsNothingButWordsToAKill is the first three of the design's limits: the
-// fault and its Event are the kubelet's, a condition's own text is never repeated, and a
+// fault and its Event are the container status's, a condition's own text is never repeated, and a
 // container that restarted is recorded as without a condition.
 func TestOOMReason_AddsNothingButWordsToAKill(t *testing.T) {
 	const runnerCondition = "oom.actions-gateway.com/runner"
@@ -136,7 +136,7 @@ func TestOOMReason_AddsNothingButWordsToAKill(t *testing.T) {
 		said  *corev1.Pod
 		event string
 	}{
-		{"a runner the kubelet does not report killed", exited, saying(exited, runnerContainer, "ContainerLimit"),
+		{"a runner whose status shows no kill", exited, saying(exited, runnerContainer, "ContainerLimit"),
 			podFailed + "; container runner exited 137."},
 		{"a healthy worker", green, saying(green, runnerContainer, "ContainerLimit"), ""},
 		{"a container the pod has not", oomWorker(), saying(oomWorker(), "other", "ContainerLimit"), killedWithNoReason},

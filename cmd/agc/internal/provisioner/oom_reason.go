@@ -10,8 +10,8 @@ import (
 // The out-of-memory reporter's answer in a failed job's record (Q1403). It writes a pod
 // condition per killed container, whose reason names the limit that ran out
 // (cmd/oomreporter/internal/controller/words.go). Whoever can write pods/status can write
-// one too, so the record repeats it as words of its own beside a kill the kubelet
-// reported, and no action rests on it. The limits on that are in
+// one too, so the record repeats it as words of its own beside a kill the pod's status
+// shows, and no action rests on it. The limits on that are in
 // docs/design/04-operational-flows.md §4.2.
 
 // oomConditionPrefix starts the type of a reporter's condition; the container's name ends it.
@@ -116,7 +116,7 @@ func firstOOMReason(first, then string) string {
 	return first
 }
 
-// noteOOMReason keeps reason for the container, where the kubelet reported it killed for
+// noteOOMReason keeps reason for the container, where its status shows it killed for
 // memory and it never restarted.
 func (s *workerSnapshot) noteOOMReason(container, reason string) {
 	for i := range s.Containers {

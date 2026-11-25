@@ -888,7 +888,8 @@ A condition the pod already has when it fails, or when a completion reads it, is
 The reason is `oomReason` beside the container in the record, and words of the AGC's in the Event and the log line.
 Whoever can write `pods/status` can write such a condition, so it changes no action, and what it can change in a record is bounded:
 
-- It adds words to a fault that is there: the container its type names, reported `OOMKilled` by the kubelet, and for any container but the runner with exit code 137.
+- It adds words to a fault that is there: the container its type names, `OOMKilled` in the pod's status, and for any container but the runner with exit code 137.
+  Whoever can write `pods/status` can write that too, as they could before this.
   It raises no Event of its own.
 - The words are the AGC's, one set for each of `ContainerLimit`, `PodLimit`, `PodsLimit`, `AbovePods` and `Unknown`, and say that a pod condition reported it.
   Any other reason is ignored, as is the condition's message.
