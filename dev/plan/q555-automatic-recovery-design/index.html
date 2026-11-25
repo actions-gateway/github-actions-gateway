@@ -2852,6 +2852,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#what-counts-as-a-container-killed-for-memory-q1395" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What counts as a container killed for memory (Q1395)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3653,10 +3664,53 @@ No job or repository name is a label (R3).
 Per occurrence, the names go to:</p>
 <ul>
 <li><strong>a Normal Event, <code>FlakyJobDetected</code>,</strong> on the set when a pairing reaches the flaky verdict, naming the run, the job and the trigger;</li>
-<li><strong>a Warning Event, <code>PlatformFaultOnFailedJob</code>,</strong> when a failed job's snapshot shows a fault (a non-zero or <code>OOMKilled</code> container, a <code>DisruptionTarget</code> condition, an unready colocated proxy), not on every red test;</li>
+<li><strong>a Warning Event, <code>PlatformFaultOnFailedJob</code>,</strong> when a failed job's snapshot shows a fault (the runner exiting non-zero, a container <a href="#what-counts-as-a-container-killed-for-memory-q1395">killed for memory</a>, a <code>DisruptionTarget</code> condition, an unready colocated proxy), not on every red test;</li>
 <li><strong>a log line per failed job carrying the snapshot</strong>, at Warn when the snapshot shows a fault and Info otherwise.
   A log store that keeps only warnings, as dogfood's does, still keeps every platform fault.</li>
 </ul>
+<h3 id="what-counts-as-a-container-killed-for-memory-q1395">What counts as a container killed for memory (Q1395)<a class="headerlink" href="#what-counts-as-a-container-killed-for-memory-q1395" title="Permanent link">&para;</a></h3>
+<p>A runtime marks a container <code>OOMKilled</code> while it runs, whenever anything in its cgroup subtree is killed for memory, and keeps the reason for whatever exit follows.
+So a Docker-in-Docker sidecar holding the job's containers in its own cgroup reads <code>OOMKilled</code> for a container the job ran past its own <code>docker run -m</code> limit, and detection named that as a platform fault.
+Measured on 2026-11-24, on a static pod of containerd 2.3.1 and kubelet 1.35.5 (the <code>kindest/node:v1.35.5</code> image, no control plane, so the API server's copy of a status was not read):</p>
+<table>
+<thead>
+<tr>
+<th>What happened</th>
+<th>Sidecar status</th>
+<th>A fault?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A nested container is killed at a 32 MB limit; dockerd runs on; the job ends and the sidecar stops</td>
+<td><code>OOMKilled</code>, exit 0</td>
+<td>No</td>
+</tr>
+<tr>
+<td>The same, then dockerd is killed by SIGKILL from the node</td>
+<td><code>OOMKilled</code>, exit 137, restarted</td>
+<td>Yes, though the kill was not for memory</td>
+</tr>
+<tr>
+<td>The sidecar's own 256 MB limit is exceeded</td>
+<td><code>OOMKilled</code>, exit 137</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>A nested kill where the nested cgroup is not under the sidecar's (<code>privileged-dind</code> as shipped)</td>
+<td><code>Completed</code>, exit 0</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<p>A container other than the runner therefore counts only with a SIGKILL's exit code, 137, which separates the first row from the third and cannot separate the second, nor a sidecar still running when its grace period ends after a nested kill, which is SIGKILLed and reads the same.
+<code>kata-dind</code> is the shipped template with the layout, read from its entrypoint and Kata 3.32.0's source and not run; a normal stop of its sidecar should exit 143 (POSIX <code>wait</code>, not run).
+The rule misses a sidecar whose child was killed for memory and whose main process then exited with another code, which needs a container without <code>memory.oom.group</code>: the kubelet sets it on cgroup v2 unless <code>singleProcessOOMKill</code> is on, and the dogfood worker read in <a href="#readings-from-the-dogfood-turn-up-2026-11-22">M3</a> had it.
+A Kata guest is the other such container: the guest kernel runs its own cgroups, and Kata 3.32.0's agent sets no <code>memory.oom.group</code> there (no reference in <code>rustjail/src/cgroups/fs/mod.rs</code> or <code>systemd/subsystem/memory.rs</code>, read 2026-11-24).
+So a kill at <code>kata-dind</code>'s own sidecar limit can take one of the job's processes and leave dockerd running, the sidecar then stops with another code, and the status reads as a nested container killed at its own limit does.
+Neither raises the Warning, and the record's <code>context</code> shows the reason for both (read from source, not run).
+The runner's own <code>OOMKilled</code> counts with any exit code, since no runner has been read surviving a nested kill.
+The record's <code>context</code> still carries the reason and the exit code as the pod showed them.</p>
 <h2 id="component-2-one-run-read-before-every-re-run-q1182-budget-q1181-futility">Component 2: one run read before every re-run (Q1182 budget, Q1181 futility)<a class="headerlink" href="#component-2-one-run-read-before-every-re-run-q1182-budget-q1181-futility" title="Permanent link">&para;</a></h2>
 <h3 id="what-the-read-decodes">What the read decodes<a class="headerlink" href="#what-the-read-decodes" title="Permanent link">&para;</a></h3>
 <p><code>runConclusion</code> (<code>eviction.go</code>) decodes <code>status</code> and <code>conclusion</code> from <code>GET /repos/{o}/{r}/actions/runs/{id}</code>, and only the deletion arm calls it.
@@ -3943,9 +3997,9 @@ A job that outgrows its sidecar is ordinary behaviour and needs a bigger limit, 
 Under <code>privileged-dind</code> the job's containers are charged to the node instead (containers were under <code>/sys/fs/cgroup/docker</code>, outside the sidecar's limit), so dockerd and its own processes are what reach the sidecar's limit, and a job that exhausts the node's memory, or a neighbour's that does, could get the daemon killed by the node's out-of-memory killer with one and the same status (not run; <a href="#what-is-left-open-q1316">whether it would</a> is open).</p>
 <p><strong>The usage sampler does not separate them.</strong> It polls <code>metrics.k8s.io</code> every 15 s and keeps each container's peak, the sidecar's included, so GAG can hold a sampled peak beside the sidecar's limit (<code>cmd/agc/internal/usage/sampler.go</code>; detection does not read it).
 A peak near the limit says the limit was reached, which is the job's side.
-A peak far below it fits a spike between two samples, a nested container killed at its own limit (<a href="../../queue/Q1395/">Q1395</a>) and a node out of memory, and under <code>privileged-dind</code> the sampled figure leaves out the job's containers altogether (<a href="../../queue/Q1396/">Q1396</a>).
+A peak far below it fits a spike between two samples, a nested container killed at its own limit (<a href="#what-counts-as-a-container-killed-for-memory-q1395">Q1395</a>) and a node out of memory, and under <code>privileged-dind</code> the sampled figure leaves out the job's containers altogether (<a href="../../queue/Q1396/">Q1396</a>).
 So it can rule a limit in and cannot rule the platform in (reasoned from the source, not run).</p>
-<p>A nested kill also marks the sidecar <code>OOMKilled</code> without killing it (<a href="../../queue/Q1395/">Q1395</a>), and Q1395's second row shows the status then indistinguishable from a real one.</p>
+<p>A nested kill also marks the sidecar <code>OOMKilled</code> without killing it, and the <a href="#what-counts-as-a-container-killed-for-memory-q1395">second row of Q1395's readings</a> shows the status then indistinguishable from a real one.</p>
 <p><strong>Two shapes have no honest tenant twin.</strong> A SIGKILL that is not out of memory has no known platform cause on the shipped templates that leaves the runner running.
 A template with a liveness probe on its daemon, the operator's or the tenant's own, is the exception, and what it kills is a daemon the job may have hung.
 A daemon that aborts by itself is nearly one: its twin is thread or process exhaustion by the job, a rare thing to do by accident.

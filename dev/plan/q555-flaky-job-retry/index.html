@@ -3309,7 +3309,7 @@ The out-of-memory class was built without one, so that requirement is open for i
 </tr>
 <tr>
 <td>Node-level out-of-memory kill</td>
-<td>Container killed below its own limit, with a <code>SystemOOM</code> node event (the kubelet's name, from recall)</td>
+<td>Container killed below its own limit, with a <code>SystemOOM</code> node event, which the kubelet raises for a node-wide kill and not for one at <code>kubepods</code>' limit (<a href="../../queue/Q1400/">Q1400</a>)</td>
 <td>Fresh pod, not guaranteed: it can land on the same packed node</td>
 <td>Overcommitted packing is the platform's doing; a kill at the container's own limit is not</td>
 </tr>

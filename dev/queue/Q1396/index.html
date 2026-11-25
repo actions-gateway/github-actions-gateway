@@ -2731,7 +2731,7 @@ CPU follows from the one cgroup path and was not measured.</p>
 <ul>
 <li>Read <code>/proc/&lt;pid&gt;/cgroup</code> of a job's container on a dogfood node (<code>E2E_VARIANT=dind</code>), and the sidecar's metrics while one allocates.</li>
 <li>Where it holds, decide between a <code>--cgroup-parent</code> under the sidecar's own cgroup, as <code>kata-dind</code>'s entrypoint does by evacuating its root (its step 4), and saying in the template that the limit covers the daemon only.
-  The first needs its own probe: <a href="../Q1395/">Q1395</a> records what a nested kill then does to the sidecar's status.</li>
+  The first needs its own probe: <a href="../../plan/q555-automatic-recovery-design/#what-counts-as-a-container-killed-for-memory-q1395">Q1395's readings</a> say what a nested kill then does to the sidecar's status.</li>
 <li>Correct the claims listed above to whatever this finds.</li>
 </ul>
 

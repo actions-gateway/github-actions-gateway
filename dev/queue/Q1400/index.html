@@ -2705,7 +2705,8 @@
 
 <h1 id="a-runner-killed-for-the-nodes-memory-is-read-as-its-own-limit-kill">A runner killed for the node's memory is read as its own-limit kill<a class="headerlink" href="#a-runner-killed-for-the-nodes-memory-is-read-as-its-own-limit-kill" title="Permanent link">&para;</a></h1>
 <p>The out-of-memory class, shipped in <code>v2.0.0</code> (Q1183) and unchanged for this by 2.1, acts on a runner the kernel killed because its <strong>node</strong> ran out of memory as if the runner had reached its own limit.
-Read from source and not run: no node-level kill of a runner has been made or found on record.</p>
+Read from source and not run: no node-level kill of a runner has been made or found on record.
+It gates 2.1 because that release's headline is telling a platform's failure from a job's own, and here the class states the job's limit as the cause of a kill the platform made.</p>
 <p><code>oomKilledAwaitingRecovery</code> (<code>cmd/agc/internal/provisioner/oom_class.go</code>) takes any <code>PodFailed</code> worker whose runner terminated <code>OOMKilled</code>, and <code>recoverOOMKilled</code> compares nothing with the limit.
 The reason is expected for a node kill too: containerd sets it from the cgroup's <code>oom_kill</code>, which counts "any kind of OOM killer" (kernel <code>cgroup-v2</code> documentation), and that counter rose for a kill made by a limit above the pod on one local kernel (<a href="../../plan/q555-automatic-recovery-design/#what-is-left-open-q1316">the counters</a>).</p>
 <p>What an operator would see, by the runner's shape, beside the <code>PlatformFaultOnFailedJob</code> Event that a killed runner's completion raises about ten minutes later (<a href="../../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">M4</a>, whose runner had a limit; read from <code>flaky_jobs.go</code> for one without):</p>
@@ -2718,13 +2719,20 @@ The reason is expected for a node kill too: containerd sets it from the cgroup's
   A fresh pod on another node would have been a fair retry.</li>
 <li><strong>No memory limit:</strong> no re-run and no Event from the class, and an Info log line that says the runner had no limit of its own.</li>
 </ul>
-<p>The exposure is a Burstable worker's, where the kubelet scores a container by its request: <code>Throughput</code>, <code>Static</code> or <code>NodeShare</code> without equal limits, and <code>Binpack</code> beside a container that keeps its pod Burstable, as <code>privileged-dind</code>'s sidecar does, or the wrapper's init container where image volumes are off.
-Inside such a pod a Docker-in-Docker sidecar never scores above the runner (<a href="../../plan/q555-automatic-recovery-design/#what-is-left-open-q1316">why</a>).
+<p>The exposure is widest for a BestEffort worker, scored 1000: one whose regular containers each declare some resource and where no container, init containers included, declares CPU or memory.
+A <code>Static</code> runner that declares only a <code>nvidia.com/gpu</code> limit, or only ephemeral storage, is one, and so is the same template under <code>Binpack</code> or <code>Throughput</code> while it is <code>AwaitingSamples</code>; a namespace <code>LimitRange</code> default would end it.
+It has no memory limit, so it takes the last shape above.
+<code>gapFilledResources</code> (<code>defaults.go</code>, read) gives a regular container 500m and 1Gi of both only where it declares no resource at all, and the QoS class counts CPU and memory alone (<code>pkg/apis/core/v1/helper/qos/qos.go</code>, v1.35.5, read).
+Next is a Burstable worker: <code>Throughput</code>, <code>Static</code> or <code>NodeShare</code> without equal limits, and <code>Binpack</code> beside a container that keeps its pod Burstable, as <code>privileged-dind</code>'s sidecar does, or the wrapper's init container where image volumes are off.
+There the kubelet scores a container by its memory request, so a runner that sets a CPU request alone is scored 999.
+Inside a Burstable pod a Docker-in-Docker sidecar never scores above the runner (<a href="../../plan/q555-automatic-recovery-design/#what-is-left-open-q1316">why</a>).
 A Guaranteed pod, which <code>Binpack</code> is meant to give, is scored -997 whatever it requests and is among the last to go (<code>pkg/kubelet/qos/policy.go</code>, v1.35.5, read).</p>
 <ul>
-<li>What separates the two is open, and is the <a href="../../plan/q555-flaky-job-retry/#candidate-classes">node-level out-of-memory kill</a> candidate's question: a kill below the container's own limit, with a <code>SystemOOM</code> Node Event (that name is from recall) or the pod's <code>oom</code> counter at 0.
+<li>What separates the two is open, and is the <a href="../../plan/q555-flaky-job-retry/#candidate-classes">node-level out-of-memory kill</a> candidate's question: a kill below the container's own limit, with a <code>SystemOOM</code> Node Event or the pod's <code>oom</code> counter at 0.
+  The Event names a process and not a pod, and is raised for a node-wide kill and not for one at <code>kubepods</code>' limit: the kubelet records it where the kernel's line names no memory cgroup (kubelet 1.35.5 <code>oom_watcher_linux.go</code> and its cAdvisor <code>oomparser.go</code>, kernel 6.12 <code>memcontrol.c</code>, read).
   The AGC reads neither Node Events nor cgroups today; the usage sampler's peak beside the limit is the one fact it has, and a spike between samples defeats it.</li>
-<li>Reproduce it first, since every step above is read: <a href="../Q1316/">Q1316</a>'s dogfood reproduction fills a node and expects exactly this kill.</li>
+<li>Reproduce it first, since every step above is read: <a href="../Q1316/">Q1316</a>'s dogfood reproduction fills a node and expects exactly this kill.
+  That set is <code>NodeShare</code>, so it reads the withheld branch; a raise under <code>Binpack</code> or <code>Throughput</code> starts from the same two facts (<code>PodFailed</code>, the runner <code>OOMKilled</code>) and is not run by it.</li>
 <li>Failing a discriminator, the Event and the withheld reason's text can stop asserting a cause the class did not check.</li>
 </ul>
 

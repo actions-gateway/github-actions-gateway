@@ -7251,7 +7251,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>PlatformFaultOnFailedJob</code></td>
 <td>Warning</td>
-<td>A scale-set job failed and its worker shows a platform fault: the pod <code>Failed</code>, a <code>DisruptionTarget</code> condition, a container <code>OOMKilled</code>, the runner container exiting non-zero, or the set's colocated EgressProxy not <code>Ready</code> or with no ready replica (Q555, Q1237). Names the run, the job, the worker and the fault.</td>
+<td>A scale-set job failed and its worker shows a platform fault: the pod <code>Failed</code>, a <code>DisruptionTarget</code> condition, a container killed for memory (the runner <code>OOMKilled</code>, or another container <code>OOMKilled</code> with exit code 137), the runner container exiting non-zero, or the set's colocated EgressProxy not <code>Ready</code> or with no ready replica (Q555, Q1237). Names the run, the job, the worker and the fault.</td>
 <td><a href="#flaky-jobs-and-platform-faults-on-failed-jobs">Flaky Jobs and Platform Faults on Failed Jobs</a></td>
 </tr>
 <tr>
@@ -8113,7 +8113,13 @@ A job recorded while its worker still ran is logged twice: at its completion, an
 <div class="highlight"><pre><span></span><code><a id="__codelineno-131-1" name="__codelineno-131-1" href="#__codelineno-131-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>scaleset-failures-&lt;runnerset&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.failures\.json}'</span>
 </code></pre></div>
 <p><strong>A <code>PlatformFaultOnFailedJob</code> Warning</strong> names the fault.
-<code>OOMKilled</code> means the job needs more memory than the worker template gives it; a <code>DisruptionTarget</code> condition or a <code>Failed</code> pod means the node or the scheduler removed the worker, which the <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">disruption arms</a> recover on their own.
+<code>OOMKilled</code> on the runner means it was killed for memory, at its own limit or because memory ran out above it, such as on its node (Q1400).
+At its own limit, the job needs more memory than the worker template gives it.
+On a sidecar it means the sidecar was killed with that reason, usually for its own memory limit.
+A sidecar that runs the job's containers in its own cgroup, as <code>kata-dind</code>'s does, is also marked <code>OOMKilled</code> when one of them passes its own <code>docker run -m</code> limit (measured with runc, not under Kata), so one killed later for another reason, such as the SIGKILL that ends its grace period, reads the same; check the job's log for a container that exited 137 before raising the sidecar's limit.
+A sidecar marked that way which then exits with any code but 137 is taken to have survived the kill, so it raises no Warning, and the record's <code>context</code> still shows the reason beside the exit code (Q1395).
+Under Kata that includes a kill at the sidecar's own limit that took one of the job's containers and left the daemon running (read from source, not run).
+A <code>DisruptionTarget</code> condition or a <code>Failed</code> pod means the node or the scheduler removed the worker, which the <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">disruption arms</a> recover on their own.
 A fault that came after the job's completion, such as a node drain while the runner shut down, stays in the context and raises no Warning.
 <code>EgressProxy &lt;name&gt; has no ready replicas</code> means no proxy pod could carry the job's egress when the job completed, or when the worker finished if that came first.
 <code>EgressProxy &lt;name&gt; not Ready</code>, with its ready count, means the pool had fewer ready pods than its floor (<code>spec.minReplicas</code>, or the Deployment's replicas under bring-your-own autoscaling), as during a rolling update or after an eviction, so the remaining pods may still have carried the job's egress.

@@ -2752,7 +2752,9 @@ The readings' three refutations, Q1374 to Q1376, gated it from 2026-11-22 becaus
 Q1381 gated it too, settled 2026-11-22, because its re-runs landed in merge-queue runs nothing reads and each spent a <code>maxEvictionRetries</code> slot, which is the opposite of what this release is for; it and Q1320 are built, and the case it leaves is Q1391.
 Q1389 gates it too: the out-of-memory class <code>v2.0.0</code> shipped can act on the wrong job where a worker dies before its pod names the job it ran, and Q1319 fixes only the re-run half of that, not the raised limit.
 The wrong-job half is read from source, so its first step is reproducing it.
-Q1395 gates it too, settled 2026-11-24: detection can name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
+Q1395 gates it too, settled 2026-11-24: detection could name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
+Q1400 gates it too, settled 2026-11-24, for the same reason in the out-of-memory class <code>v2.0.0</code> shipped: it reads a runner killed for its node's memory as one killed at its own limit, so the Event and the raised limit name a cause it did not check.
+That is read from source, so its first step is reproducing it.
 Nothing here is a commitment to a date.</p>
 </blockquote>
 <h2 id="why-this-release-exists">Why this release exists<a class="headerlink" href="#why-this-release-exists" title="Permanent link">&para;</a></h2>
@@ -2854,10 +2856,16 @@ This release finishes it: it measures what the shipped half rests on, then adds 
 <td>🔲 open: readings taken 2026-11-24 on a local node, no discriminator found in what GAG reads; dogfood reproduction not run</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1395/">Q1395</a></td>
+<td>Q1395</td>
 <td>Keep a nested container's out-of-memory kill from reading as a platform fault on the sidecar</td>
 <td><code>2.1-gate</code></td>
-<td>🔲 open</td>
+<td>✅ landed: a sidecar's <code>OOMKilled</code> is a fault only with exit code 137; not run on Kata</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1400/">Q1400</a></td>
+<td>Keep a runner killed for its node's memory from being read as killed at its own limit</td>
+<td><code>2.1-gate</code></td>
+<td>🔲 open: read from source; Q1316's dogfood reproduction would produce the kill</td>
 </tr>
 <tr>
 <td>-</td>

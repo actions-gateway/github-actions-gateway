@@ -3258,7 +3258,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1400/">Q1400</a></td>
 <td><a href="../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">A runner killed for the node's memory is read as its own-limit kill</a></td>
-<td><code>bug</code></td>
+<td><code>bug</code> <code>2.1-gate</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>The out-of-memory class, shipped in <code>v2.0.0</code> (Q1183) and unchanged for this by 2.1, acts on a runner the kernel killed because its <strong>node</strong> …</td>
@@ -3278,14 +3278,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>pr-mergeability-watch.py</code> emits <code>head_change</code>, <code>conflict</code>, <code>closed</code> and <code>timeout</code>, and nothing when the merge queue evicts a PR.</td>
-</tr>
-<tr>
-<td><a href="Q1395/">Q1395</a></td>
-<td><a href="../operations/troubleshooting/#flaky-jobs-and-platform-faults-on-failed-jobs">A sidecar reads OOMKilled for a nested container's kill it survived</a></td>
-<td><code>bug</code> <code>2.1-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The shipped <code>privileged-dind</code> template does not reach this as measured, because dockerd puts a job's containers outside the sidecar's …</td>
 </tr>
 <tr>
 <td><a href="Q1185/">Q1185</a></td>
