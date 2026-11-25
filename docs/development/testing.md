@@ -2084,14 +2084,15 @@ So when you take a live measurement, **file it where the next reader will look f
 
 ### Check the deployed build and the prompts before booking a live run
 
-A live run can hold the cluster and read nothing it was booked for, so settle two questions before taking the lease.
-Each cost a reading in [Q1316's second run](../plan/q1316-dogfood-reproduction.md#what-is-weak-in-it) on `gag-dogfood`, overnight into 2026-11-25.
+A live run can hold the cluster and not read what it was booked for, so settle two questions before taking the lease.
+Both went unsettled in [Q1316's second run](../plan/q1316-dogfood-reproduction.md#what-is-weak-in-it) on `gag-dogfood`, overnight into 2026-11-25.
 
 - **Does the deployed build hold the code under test?** That run's Kata readings bear on Q1395's rule, and the cluster ran `v2.0.1-rc.2`, which predates it, so they read the status the rule is keyed on and not the rule.
-  Take the tag from the running Deployment's image, then `git merge-base --is-ancestor <commit> <tag>`, which exits 0 when the build has the commit.
-- **Does a step that must land while a job is running wait on a permission prompt?** One fill's prompt waited 28 minutes, by which time both workers had ended and the reading was void.
-  Put the approval before the job's clock starts, by creating the object early and having it wait for its cue, or give the job a window longer than a prompt can take; neither has been run here.
-  Set a cutoff past which the step is not applied, so a late yes costs a repeat and not a wrong reading.
+  Take the tag from the running Deployment's image, fetch it, and read the code at it (`git show <tag>:<path>`); whether a commit is an ancestor of the tag misses a cherry-pick and a revert.
+- **Does a step that must land while a job is running wait on a permission prompt?** One fill's prompt waited 28 minutes, by which time both workers had ended, so that push read nothing and was repeated.
+  Give the job a window longer than a prompt can take; that has not been run here.
+  Set a cutoff past which the step is not applied, so a late yes costs a repeat and not a wrong reading, and do not move it during the run.
+  Never move the action out from behind its prompt to save the time: an object approved while it sleeps, and cued later, acts with nobody asked.
 
 ### A goroutine stack in the output is not always a failure
 
