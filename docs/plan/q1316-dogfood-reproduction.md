@@ -127,8 +127,10 @@ R0's sidecars started before it and its runners after, so one pod held both valu
 `kata-deploy`'s container started four seconds before that restart; what restarted containerd, and how that changes the value, is not read.
 
 What R2's outcome is evidence of is bounded.
-The time of the last report is computed from the node controller's grace and the fill's start from the script's sleeps; neither is read, and no sample survives.
-That the fill stalled the node is the likeliest reading and is not shown: a Spot preemption or a reset in the same minute would look the same, and the Compute operation list, which would tell them apart, is not among this plan's reads.
+The Compute operation list for that node (2026-11-25 04:30 to 05:15 UTC, read once, after the run) has a delete at 05:01:56, an insert at 05:02:48 and the scale-down's delete at 05:14:54, and no preemption, reset or stop.
+So the machine was there and not preempted for the 11 minutes it did not answer, and what came back at 05:04 was a new machine under the same name; the two sources agree.
+Who deleted it was not read.
+That the fill stalled the node rests on the times: the last report, computed from the node controller's grace, and the fill's start, computed from the script's sleeps, fall together, and no sample survives to show it.
 
 Three things went wrong in the run itself.
 The probe's script ran under GitHub's `bash -e`, so a failing command ended its step: R1's and R6's samples stop seconds after the kill, which was read before that.
