@@ -387,7 +387,7 @@ func TestSample_TellsOneCgroupFromAnotherInItsPlace(t *testing.T) {
 	write := func() {
 		for name, f := range mount(dirs...) {
 			file := filepath.Join(root, name)
-			require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
+			require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o750))
 			require.NoError(t, os.WriteFile(file, f.Data, 0o600))
 		}
 	}
