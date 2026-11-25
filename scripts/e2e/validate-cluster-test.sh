@@ -216,7 +216,7 @@ expect_floor() {
 	fi
 }
 
-for chart in charts/actions-gateway/Chart.yaml charts/actions-gateway-crds-v2/Chart.yaml; do
+for chart in charts/actions-gateway/Chart.yaml charts/actions-gateway-crds-v2/Chart.yaml charts/oom-reporter/Chart.yaml; do
 	expect_floor "$chart" "$(sed -n 's/^kubeVersion: ">=\([0-9]*\.[0-9]*\)\..*/\1/p' "$chart")"
 done
 # shellcheck disable=SC2016 # the pattern matches a literal `${` in the script.

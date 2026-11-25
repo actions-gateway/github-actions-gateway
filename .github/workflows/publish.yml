@@ -679,6 +679,35 @@ jobs:
           ref="${REGISTRY}/${OWNER}/charts/actions-gateway-crds-v2@${digest}"
           scripts/fetch/retry.sh cosign sign --yes --new-bundle-format=false --use-signing-config=false "${ref}"
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+      - name: Package, push, and sign the oom-reporter chart (keyless)
+        id: chart_oom_reporter
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          OWNER: ${{ github.repository_owner }}
+          PRERELEASE: ${{ steps.tag.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          # The node reporter's chart, which stands alone (Q1403). Same
+          # versioning/sign path as the main chart.
+          version="${TAG#v}"
+          repo="oci://${REGISTRY}/${OWNER}/charts"
+          # Same tag-derived prerelease stamp as the main chart (Q293).
+          yq -i '.annotations["artifacthub.io/prerelease"] = strenv(PRERELEASE)' \
+            charts/oom-reporter/Chart.yaml
+          helm package charts/oom-reporter \
+            --version "${version}" --app-version "${version}" \
+            --destination "${RUNNER_TEMP}"
+          pkg="${RUNNER_TEMP}/oom-reporter-${version}.tgz"
+          scripts/fetch/retry.sh helm push "${pkg}" "${repo}" >"${RUNNER_TEMP}/push-oom-reporter.log" 2>&1
+          cat "${RUNNER_TEMP}/push-oom-reporter.log"
+          digest="$(awk '/^Digest: /{print $2}' "${RUNNER_TEMP}/push-oom-reporter.log")"
+          if [[ -z "${digest}" ]]; then
+            echo "could not parse pushed oom-reporter chart digest from helm push output" >&2
+            exit 1
+          fi
+          ref="${REGISTRY}/${OWNER}/charts/oom-reporter@${digest}"
+          scripts/fetch/retry.sh cosign sign --yes --new-bundle-format=false --use-signing-config=false "${ref}"
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
       - name: Compose and create the GitHub Release (prerelease-aware, Q293)
         env:
           TAG: ${{ steps.tag.outputs.tag }}
@@ -825,6 +854,7 @@ jobs:
         env:
           REF: ${{ steps.chart.outputs.ref }}
           REF_CRDS_V2: ${{ steps.chart_crds_v2.outputs.ref }}
+          REF_OOM_REPORTER: ${{ steps.chart_oom_reporter.outputs.ref }}
           TAG: ${{ steps.tag.outputs.tag }}
           REPO: ${{ github.repository }}
           OWNER: ${{ github.repository_owner }}
@@ -841,4 +871,5 @@ jobs:
               "${REPO}" "${TAG}"
             printf -- '  install (helm render — for a custom GMC namespace; the chart exceeds the 1 MiB release-Secret limit so `helm install` cannot store it): `helm template actions-gateway-crds-v2 oci://%s/%s/charts/actions-gateway-crds-v2 --version %s --namespace <ns> | kubectl apply --server-side -f -`\n' \
               "${REGISTRY}" "${OWNER}" "${TAG#v}"
+            printf -- '- **chart (oom-reporter, opt-in)** — `%s`\n' "${REF_OOM_REPORTER}"
           } >> "${GITHUB_STEP_SUMMARY}"

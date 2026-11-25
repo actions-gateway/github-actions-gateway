@@ -27,7 +27,8 @@ A release is a `vX.Y.Z` git tag plus its outputs:
 - The **v2 CRD chart**, packaged and pushed alongside the main chart to `oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2`, with the same version derivation and keyless signature.
   It ships only the `actions-gateway.com` CRDs — separated from the main chart because the large pod-template CRDs would otherwise push the main chart's Helm release Secret past its 1 MiB limit (Q149).
   Every install needs it, because `v2` is the only API served.
-  Both chart packages are produced by the same `chart-publish` job.
+- The **oom-reporter chart**, which runs the `oomreporter` image and stands alone, packaged and pushed to `oci://ghcr.io/actions-gateway/charts/oom-reporter` with the same version derivation and keyless signature.
+  The same `chart-publish` job produces all three chart packages.
 - The **signed v2 CRD manifest** (Q276), a pre-rendered `actions-gateway-crds-v2.yaml` (rendered for the default `gmc-system` namespace) attached to the tag's **GitHub Release** with a keyless **cosign blob signature** (`sign-blob` → a Sigstore bundle, `actions-gateway-crds-v2.yaml.cosign.bundle`).
   This is the helm-free manual install path — the v2 CRD chart is too large to `helm install`, so operators `kubectl apply --server-side -f …/releases/download/<tag>/actions-gateway-crds-v2.yaml`.
   The `chart-publish` job renders, signs, and uploads it (widening the job to `contents: write`).
@@ -45,11 +46,11 @@ The maintainer's job is to cut the tag and verify the result.
 
 ## One-time setup (first release only)
 
-1. **GHCR package visibility.** The first publish *creates* the `ghcr.io/actions-gateway/{gmc,agc,proxy,worker,wrapper,build-runner,cache-runner,oomreporter}` image packages **and the `ghcr.io/actions-gateway/charts/actions-gateway` chart package**.
+1. **GHCR package visibility.** The first publish *creates* the `ghcr.io/actions-gateway/{gmc,agc,proxy,worker,wrapper,build-runner,cache-runner,oomreporter}` image packages **and the `ghcr.io/actions-gateway/charts/{actions-gateway,actions-gateway-crds-v2,oom-reporter}` chart packages**.
    They inherit the repository's visibility and may start **private**.
    For third parties to run `cosign verify` / `helm pull` (and for an air-gapped operator to pull), set each package to **public** in the org's GHCR package settings, or keep them private and distribute pull credentials.
    Verification by *this project's* CI and by anyone with pull access works either way — but the **released-chart upgrade gate** (`make chart-released-upgrade-check`, run by every e2e CI pass) pulls the chart and the released `gmc` image **anonymously**, so those two packages must be public for PR CI to stay green.
-   An image added in a later release creates its package on that release's publish, so this step recurs then: `build-runner` and `cache-runner` are public already, and `oomreporter` needs it on the first release that publishes it.
+   An image added in a later release creates its package on that release's publish, so this step recurs then: `build-runner` and `cache-runner` are public already, and `oomreporter` needs it on the first release that publishes it, as the `charts/oom-reporter` package does.
 2. **Workflow permissions** are already declared in `publish.yml` (`packages: write` to push, `id-token: write` for keyless cosign and provenance, `attestations: write` for the build-provenance attestation).
    No repo secret is required — that is the point of keyless signing.
 
@@ -209,7 +210,7 @@ In 1.5 the answers arrived after `rc.1` had been cut, published and validated, a
 
   This step exists because it nearly did not happen: Q476 renamed `capacityGate.mode: On` days before 1.3.0 would have published it, and only because the question came up in an unrelated conversation.
 
-- **Read both chart READMEs against the tree you are about to tag.** `charts/actions-gateway/README.md` and `charts/actions-gateway-crds-v2/README.md` ship inside the chart tarballs, so a fix after the cut costs a new candidate and a full dogfood run.
+- **Read the three chart READMEs against the tree you are about to tag.** `charts/actions-gateway/README.md`, `charts/actions-gateway-crds-v2/README.md` and `charts/oom-reporter/README.md` ship inside the chart tarballs, so a fix after the cut costs a new candidate and a full dogfood run.
   Check that every `values.yaml` key has a row in the values table, and that the install and upgrade commands, the Kubernetes floor, and the links into `docs/operations/` still hold.
   No gate checks the table yet, and none can check the prose: at `v2.0.0-rc.1`'s target six top-level keys had no row, and none of the six appeared in `v1.10.0`'s README either.
 
@@ -805,7 +806,7 @@ Each run checks every artifact against the publish workflow's keyless identity:
 
 - the eight image signatures (`gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`, `cache-runner`, `oomreporter`);
 - the SPDX SBOM attestation on each image's `linux/amd64` and `linux/arm64` manifests, failing if either platform is missing from the index;
-- both chart signatures (tag `X.Y.Z`, without the leading `v`);
+- the three chart signatures (tag `X.Y.Z`, without the leading `v`);
 - every `*.cosign.bundle` blob signature on the GitHub Release: the v2 CRD manifest (Q276), which must be present, and `SHA256SUMS` while `gag-migrate` ships.
 
 It needs `docker` (for `buildx imagetools`), `jq` and an authenticated `gh`, and no registry credentials once the GHCR packages are public.
@@ -1225,7 +1226,7 @@ The remaining items below are one-time setup or guardrails, not per-release step
 
 - **Prerelease annotation — derived, not hand-flipped (Q293).** [`Chart.yaml`](../../charts/actions-gateway/Chart.yaml) carries `artifacthub.io/prerelease`, but its committed value is a **dev placeholder**: `publish.yml` overrides it with `yq` before `helm package`, setting `"true"` for a `0.x` or `-rc`/`-alpha`/`-beta` tag and `"false"` for a stable `≥1.0.0` tag (same test that sets the Release's `--prerelease` flag).
   There is **no flip PR** to land before or after a cut.
-  The v2 CRD chart is stamped the same way.
+  The v2 CRD chart and the oom-reporter chart are stamped the same way.
 - **Artifact Hub listing.** Discoverability metadata (description, keywords, prerelease flag) ships in the chart's own annotations.
   Ownership verification uses [`artifacthub-repo.yml`](../../artifacthub-repo.yml) at the repo root — register the OCI repository in the Artifact Hub control panel, copy the assigned `repositoryID` into that file, and push it to the registry as the repository-metadata OCI artifact (the file's header documents the exact steps).
   This is a one-time control-panel action, not part of `publish.yml`.
