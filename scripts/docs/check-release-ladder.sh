@@ -53,8 +53,9 @@
 #   6. A ledger row links its Q-ID while the item is live and writes it bare once it
 #      is closed. A closed item's row does not read as open (🔲 ❌ 🚧), and a live
 #      one's does not read ✅ unless the item is deferred, which is how a fixed
-#      flake is watched. The ledger is the one place that says what a release waits for (Q1185), so its
-#      Status column is held to the store the way a plan's Status cell is.
+#      flake is watched. The ledger is the one place that says what a release waits
+#      for (Q1185), so its Status column is held to the store the way a plan's
+#      Status cell is.
 # "Names as gating" is the ledger's `Gates?` column, which every release plan
 # already carries by convention; the rest of a plan mentions many rows.
 #
@@ -330,15 +331,18 @@ item_gate_labels() {
 }
 
 # "ID<TAB>linked<TAB>state<TAB>gates-cell" for each Q-ID row of a plan's scope ledger,
-# where linked is 0 or 1 and state is open, done or other, read off the Status marker. Both columns are found by header rather than by
-# position, so a ledger that grows a column still reads. Exits 3 when the section
-# exists but no header names `Gates?`.
+# where linked is 0 (bare), 1 (its own item) or 2 (some other target), and state is
+# open, done or other, read off the Status marker. Both columns are found by header
+# rather than by position, so a ledger that grows a column still reads. Exits 3 when
+# the section exists but no header names `Gates?`.
 ledger_rows() {
 	awk '
 		/^## Scope ledger/ { in_section = 1; next }
 		in_section && /^## / { exit }
 		in_section && /^\|/ {
-			n = split($0, cell, "|")
+			line = $0
+			gsub(/\\\|/, "\001", line)
+			n = split(line, cell, "|")
 			if (!col) {
 				for (i = 2; i < n; i++) {
 					if (cell[i] ~ /Gates\?/) col = i
@@ -350,7 +354,8 @@ ledger_rows() {
 			id = substr(cell[2], RSTART, RLENGTH)
 			g = cell[col]
 			gsub(/[`* \t]/, "", g)
-			linked = index(cell[2], "[" id "](") > 0
+			linked = 0
+			if (index(cell[2], "[" id "](")) linked = index(cell[2], "/" id ".md)") ? 1 : 2
 			state = "other"
 			if (status && cell[status] ~ /^[ \t]*(🔲|❌|🚧)/) state = "open"
 			if (status && cell[status] ~ /^[ \t]*✅/) state = "done"
@@ -385,8 +390,8 @@ for version in "${!rung_plan[@]}"; do
 		ledger_cell["$version/$id"]="$cell"
 		# 6. The row's link and status agree with the store.
 		if [[ -f "$STORE/$id.md" ]]; then
-			if ((!linked)); then
-				fail "$plan's scope ledger writes $id bare, the closed form, but it is still an item in $STORE
+			if ((linked != 1)); then
+				fail "$plan's scope ledger does not link $id, but it is still an item in $STORE
        write [$id](../queue/$id.md), so closing the item breaks the link and the row gets re-read"
 			fi
 			if [[ "$state" == "done" && "$(item_status "$id")" != deferred ]]; then

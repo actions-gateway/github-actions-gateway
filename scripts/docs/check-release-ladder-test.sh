@@ -366,6 +366,14 @@ store="$(write_labelled_store bareride Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-
 expect ledger-bare-riding 1 'a live riding item written bare in a ledger fails' \
 	"$page" "$store"
 
+write_plan wrong 19 "$LEDGER_19"
+write_plan wrong ga "$LEDGER_GA
+| [Q5](../queue/Q3.md) | Another item's file | rides | 🔲 |"
+page="$(write_ladder wrong)"
+store="$(write_labelled_store wrong Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate Q5:ci)"
+expect ledger-wrong-target 1 'a live item linked to the file of another fails' \
+	"$page" "$store"
+
 write_plan ticked 19 "$LEDGER_19"
 write_plan ticked ga "$LEDGER_GA
 | [Q5](../queue/Q5.md) | Landed, it says | \`2.0-gate\` | ✅ landed |"
@@ -393,6 +401,15 @@ write_plan openclosed ga "$LEDGER_GA
 page="$(write_ladder openclosed)"
 store="$(write_labelled_store openclosed Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
 expect ledger-open-closed 1 'a closed item whose ledger row reads as open fails' \
+	"$page" "$store"
+
+# An escaped pipe belongs to its cell; split naively, the Status cell is the Gates? one.
+write_plan piped 19 "$LEDGER_19"
+write_plan piped ga "$LEDGER_GA
+| Q5 | The \`a \\| b\` switch | \`2.0-gate\` | 🔲 open |"
+page="$(write_ladder piped)"
+store="$(write_labelled_store piped Q1:bug,2.0-gate Q3:debt Q4:milestone,1.9-gate)"
+expect ledger-escaped-pipe 1 'an escaped pipe does not hide a closed item that reads as open' \
 	"$page" "$store"
 
 NOCOL_PLAN="$FIXTURE_DIR/plan.nocol.ga.md"
