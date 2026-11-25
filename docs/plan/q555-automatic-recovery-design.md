@@ -938,7 +938,7 @@ The jobs list gives `conclusion: cancelled` for every shape below; the failure-l
 - **`rerun-failed-jobs` takes a cancelled job.** In 21 public runs whose second attempt re-ran the failed jobs (18 of them `rust-lang/cargo`'s), it ran every job the first had cancelled, 1 to 12 a run, and of the successful ones a single job, of `rust-lang/rust-analyzer` 43474205606 (not read why).
 - **A single-job re-run leaves a cancelled job cancelled**, carried with its old `completed_at` and `runner_name`, in both public runs found with one (`rust-lang/cargo` 40960902618 and 38222465819, 11 cancelled legs each).
   Each re-ran the failed leg and `conclusion`, which needs it and was red again; 40960902618's third attempt then took the 11 and `conclusion`, and succeeded.
-- **GitHub concluded both of those second attempts `cancelled`**, though nobody cancelled them, so `run_cancelled` withholds whatever the AGC would do next.
+- **GitHub concluded both of those second attempts `cancelled`**, though neither lists a job it ran as `cancelled`, so `run_cancelled` withholds whatever the AGC would do next.
   In two more runs, a leg past its 6-hour limit beside a red `conclusion` was concluded `cancelled` too (43369863330 and 37671009459).
   What decides between `failure` and `cancelled` for a run holding both is not established.
 - **This repository's matrices mostly set `fail-fast: false`**, so its 0 is not a rate for a tenant that leaves the default.

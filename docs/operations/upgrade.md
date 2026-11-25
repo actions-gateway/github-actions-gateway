@@ -1303,6 +1303,7 @@ The AGC now finds the killed job by its runner's name and re-runs it alone; [whe
 **What you will see.** The sibling keeps its `failure`, and the run stays red.
 Where several jobs of one run were killed and another failed on its own, the killed ones are re-run one attempt at a time, a slot of `maxEvictionRetries` each.
 Where two sets each lost a job of one run, the sets go one after the other.
+Where such jobs are legs of one `fail-fast: true` matrix that a red job reports on, only the first may be re-run: GitHub can conclude its attempt `cancelled`, which ends the retry with `EvictionRerunWithheld` and `reason="run_cancelled"` (Q1401).
 `actions_gateway_eviction_rerun_withheld_total` can carry `reason="job_not_found"`.
 
 **Rolling back** returns the retry to `rerun-failed-jobs`, for the re-runs still waiting too.
