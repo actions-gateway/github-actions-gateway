@@ -501,6 +501,14 @@ func TestReconcile_WaitsForTheNextReportWhereOnlyTheTimeTells(t *testing.T) {
 	}
 }
 
+func TestReconcile_WaitsForTheFirstOfThoseThatWait(t *testing.T) {
+	w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a", above(killedAt, 1)),
+		pod(dead("dind", 2, killedAt.Add(-3*time.Second)), dead("runner", 1, killedAt)))
+	w.now = killedAt
+	assert.Equal(t, hold-3*time.Second, w.reconcile(t, "node-a").RequeueAfter)
+	assert.Empty(t, w.writes)
+}
+
 func TestWriteConditions_ThreeAMinuteOfEachPod(t *testing.T) {
 	objects := []client.Object{agentOn("node-a")}
 	var kills []report.Kill

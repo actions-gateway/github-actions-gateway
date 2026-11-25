@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -378,6 +380,52 @@ func TestOpen_RefusesANodeWhosePodsItMayNotRead(t *testing.T) {
 			assert.Equal(t, tc.wantErr, errors.Is(err, fs.ErrPermission), err)
 		})
 	}
+}
+
+func TestSample_TellsOneCgroupFromAnotherInItsPlace(t *testing.T) {
+	root, dirs := t.TempDir(), systemd("")
+	write := func() {
+		for name, f := range mount(dirs...) {
+			file := filepath.Join(root, name)
+			require.NoError(t, os.MkdirAll(filepath.Dir(file), 0o755))
+			require.NoError(t, os.WriteFile(file, f.Data, 0o600))
+		}
+	}
+	write()
+	tree, err := Open(os.DirFS(root), "")
+	require.NoError(t, err)
+	cgroupNow := func() string {
+		s, err := tree.Sample()
+		require.NoError(t, err)
+		return s.Pods[burstableUID].Cgroup
+	}
+	first := cgroupNow()
+	assert.Equal(t, first, cgroupNow())
+	// Kept, so its inode is not used again.
+	require.NoError(t, os.Rename(filepath.Join(root, dirs[3]), filepath.Join(root, "before")))
+	write()
+	assert.NotEqual(t, first, cgroupNow())
+}
+
+func TestSample_LeavesOutAPodThatGoesAsItIsRead(t *testing.T) {
+	dirs := systemd("")
+	opened, limit := 0, 100
+	h := &hookFS{FS: mount(dirs...), open: func(name string) error {
+		if name == dirs[3] {
+			if opened++; opened > limit {
+				return fs.ErrNotExist
+			}
+		}
+		return nil
+	}}
+	tree, err := Open(h, "")
+	require.NoError(t, err)
+	opened, limit = 0, 1
+	s, err := tree.Sample()
+	require.NoError(t, err)
+	assert.Equal(t, 2, opened)
+	assert.NotContains(t, s.Pods, burstableUID)
+	assert.Contains(t, s.Pods, guaranteedUID)
 }
 
 func TestSample_FailsOnAFileItCannotParse(t *testing.T) {
