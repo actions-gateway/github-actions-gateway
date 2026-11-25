@@ -38,7 +38,7 @@ type world struct {
 
 func newWorld(t *testing.T, objects ...client.Object) *world {
 	t.Helper()
-	w := &world{now: killedAt.Add(time.Second)}
+	w := &world{now: killedAt.Add(hold)}
 	w.funcs = interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, o client.Object, opts ...client.CreateOption) error {
 			w.writes = append(w.writes, "create "+kindOf(o))
@@ -345,6 +345,32 @@ func TestWriteEvent_OneAMinuteForAContainerAndOneForNone(t *testing.T) {
 	}
 }
 
+// One of a time that no Event may be of stands for no other.
+func TestWriteEvent_AProcessKilledAtNoTimeHidesNoOther(t *testing.T) {
+	stray := func(at time.Time) report.Kill { return report.Kill{Pod: podUID, At: at.UnixMilli(), Processes: 1} }
+	for name, tc := range map[string]struct {
+		others []time.Duration
+		want   int
+	}{
+		"one to come":                  {[]time.Duration{skew + time.Millisecond, 0}, 1},
+		"one as far ahead as it may":   {[]time.Duration{skew}, 1},
+		"one to come alone":            {[]time.Duration{skew + time.Millisecond}, 0},
+		"one as long ago as it may be": {[]time.Duration{-eventWithin}, 1},
+		"one longer ago":               {[]time.Duration{-eventWithin - time.Millisecond}, 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a"), pod(alive("runner", 1)))
+			var kills []report.Kill
+			for _, d := range tc.others {
+				kills = append(kills, stray(w.now.Add(d)))
+			}
+			require.NoError(t, w.Update(t.Context(), reportOf(t, "node-a", kills...)))
+			w.reconcile(t, "node-a")
+			assert.Len(t, w.eventsNow(t), tc.want)
+		})
+	}
+}
+
 // The time of a kill that ended no container is the report's, and that of another its status's.
 func TestWriteEvent_AReportsTimesMakeNoMoreEvents(t *testing.T) {
 	w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a"), pod(dead("runner", 1, killedAt)))
@@ -427,6 +453,38 @@ func TestWriteConditions_ThreeAMinute(t *testing.T) {
 	w.now = w.now.Add(writeEvery)
 	it(t, 0, 0, node, own(killedAt, 2))
 	assert.Empty(t, w.written)
+}
+
+// One kill may be read before the one that ended a container, and be taken for it by its time.
+func TestReconcile_WaitsForTheNextReportWhereOnlyTheTimeTells(t *testing.T) {
+	first, next := above(killedAt.Add(-3*time.Second), 1), own(killedAt, 1)
+	dind := kill(killedAt.Add(-3*time.Second), cgroup.Rise{Confirmed: true, GroupKills: 1, Containers: []string{id(2)}})
+	for name, tc := range map[string]struct {
+		now   time.Duration // Since the end.
+		kills []report.Kill
+		wait  time.Duration
+		want  []string
+	}{
+		"at once":                              {0, []report.Kill{first}, hold, nil},
+		"until then":                           {hold - time.Millisecond, []report.Kill{first}, time.Millisecond, nil},
+		"from then on":                         {hold, []report.Kill{first}, 0, []string{"AbovePods"}},
+		"what its counts show does not":        {0, []report.Kill{next}, 0, []string{"ContainerLimit"}},
+		"nor what those of it and others show": {0, []report.Kill{first, next}, 0, []string{"ContainerLimit"}},
+		"not where the clocks are not one":     {-time.Millisecond, []report.Kill{first}, 0, []string{"AbovePods"}},
+		"another's says nothing of it":         {hold, []report.Kill{dind}, 0, nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a", tc.kills...), pod(dead("runner", 1, killedAt)))
+			w.now = killedAt.Add(tc.now)
+			assert.Equal(t, tc.wait, w.reconcile(t, "node-a").RequeueAfter)
+			var got []string
+			for _, c := range w.podNow(t).Status.Conditions {
+				got = append(got, c.Reason)
+			}
+			assert.Equal(t, tc.want, got)
+			assert.Len(t, w.eventsNow(t), len(tc.want))
+		})
+	}
 }
 
 func TestSooner(t *testing.T) {
@@ -647,7 +705,7 @@ func TestPatch_IsOfThePodOfThatUIDAndNoMoreThanItsConditions(t *testing.T) {
 	w.reconcile(t, "node-a")
 	assert.JSONEq(t, `{"metadata":{"uid":"`+podUID+`"},"status":{"conditions":[{
 		"type":"oom.actions-gateway.com/runner","status":"True","reason":"ContainerLimit","lastProbeTime":null,
-		"lastTransitionTime":"2027-01-15T08:00:01Z",
+		"lastTransitionTime":"2027-01-15T08:00:10Z",
 		"message":"The container's own memory limit ran out, or those of the pod's containers together. It ended at 2027-01-15T08:00:00Z, container ID `+id(1)+`."}]}}`, body)
 }
 

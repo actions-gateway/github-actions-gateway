@@ -223,6 +223,14 @@ func (r *Reconciler) apply(ctx context.Context, node string, kills []report.Kill
 			continue
 		}
 		verdicts, processes := judge(pod, by[uid])
+		verdicts = slices.DeleteFunc(verdicts, func(v verdict) bool {
+			left := v.ended.at.Add(hold).Sub(r.Now())
+			if !v.joined || left <= 0 || left > hold {
+				return false
+			}
+			wait = sooner(wait, left)
+			return true
+		})
 		left, err := r.writeConditions(ctx, pod, verdicts)
 		wait = sooner(wait, left)
 		errs = append(errs, err, r.writeEvents(ctx, pod, verdicts, processes))
@@ -304,7 +312,11 @@ func (r *Reconciler) writeEvents(ctx context.Context, pod *corev1.Pod, verdicts 
 			return err
 		}
 	}
-	if _, ok := r.written[string(pod.UID)]; ok || len(processes) == 0 {
+	if _, ok := r.written[string(pod.UID)]; ok {
+		return nil
+	}
+	processes = slices.DeleteFunc(processes, func(at time.Time) bool { return !r.timely(at) })
+	if len(processes) == 0 {
 		return nil
 	}
 	at := slices.MaxFunc(processes, time.Time.Compare)
@@ -320,7 +332,7 @@ func (r *Reconciler) writeEvent(ctx context.Context, pod *corev1.Pod, field, of 
 	}
 	// The name makes it one across a restart of the controller, and across two of it.
 	name := eventName(pod, field, of, reason)
-	if _, made := r.events[pod.Namespace+"/"+name]; made || now.Sub(at) > eventWithin || at.Sub(now) > skew {
+	if _, made := r.events[pod.Namespace+"/"+name]; made || !r.timely(at) {
 		return nil
 	}
 	err := r.Create(ctx, &corev1.Event{
@@ -344,6 +356,12 @@ func (r *Reconciler) writeEvent(ctx context.Context, pod *corev1.Pod, field, of 
 		r.wrote(string(pod.UID))
 	}
 	return nil
+}
+
+// timely reports whether a kill at at gets an Event.
+func (r *Reconciler) timely(at time.Time) bool {
+	ago := r.Now().Sub(at)
+	return ago <= eventWithin && ago >= -skew
 }
 
 func eventName(pod *corev1.Pod, field, of, reason string) string {

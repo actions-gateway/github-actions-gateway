@@ -18,6 +18,10 @@ const (
 	// endedWithin bounds how far apart a kill and the end of a container it may be of are, the
 	// clock of both being the node's. A status has whole seconds.
 	endedWithin = 5 * time.Second
+	// hold is how long after its container's end a verdict that is joined is said. The kill it is
+	// joined to may be another's, and that of this one in the node's next report, which is written
+	// at most 8 seconds after the one before.
+	hold = 10 * time.Second
 
 	reasonOOMKilled = "OOMKilled"
 	exitSIGKILL     = 137
@@ -30,6 +34,8 @@ type verdict struct {
 	at     time.Time
 	// none: no limit of the pod or inside it ran out with the kill.
 	none bool
+	// joined: the container is told by the time of its end, and not by its counts.
+	joined bool
 	// weak: it takes back nothing that another kill says of the container.
 	weak bool
 }
@@ -123,6 +129,7 @@ func judge(pod *corev1.Pod, kills []report.Kill) (verdicts []verdict, processes 
 		if k.Rise.GroupKills != whole+1 || len(maybe) != 1 {
 			v.reason = rule.Unknown
 		}
+		v.joined = true
 		for _, e := range maybe {
 			add(v, e, k.Rise.Late)
 		}

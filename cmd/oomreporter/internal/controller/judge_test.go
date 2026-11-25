@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -63,6 +64,26 @@ func own(at time.Time, ns ...int) report.Kill {
 // above is a kill above the pod of n containers whose files were gone.
 func above(at time.Time, n uint64) report.Kill {
 	return kill(at, cgroup.Rise{Confirmed: true, GroupKills: n})
+}
+
+func TestJudge_SaysWhichAreJoined(t *testing.T) {
+	p := pod(dead("runner", 1, killedAt), dead("dind", 2, killedAt.Add(-time.Minute)))
+	for name, tc := range map[string]struct {
+		kills  []report.Kill
+		joined bool
+	}{
+		"not one its counts show":          {[]report.Kill{own(killedAt, 1)}, false},
+		"one that it may be by its time":   {[]report.Kill{above(killedAt, 1)}, true},
+		"nor one shown, beside another":    {[]report.Kill{kill(killedAt, cgroup.Rise{Confirmed: true, GroupKills: 2, Containers: []string{id(1)}})}, false},
+		"one the agent was late for, also": {[]report.Kill{kill(killedAt, cgroup.Rise{Late: true, GroupKills: 1})}, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			verdicts, _ := judge(p, tc.kills)
+			require.Len(t, verdicts, 1)
+			assert.Equal(t, "runner", verdicts[0].ended.name)
+			assert.Equal(t, tc.joined, verdicts[0].joined)
+		})
+	}
 }
 
 func judged(p *corev1.Pod, kills ...report.Kill) (got []string, processes []time.Time) {
