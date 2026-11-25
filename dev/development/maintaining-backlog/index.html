@@ -2897,7 +2897,8 @@ Every one of these is caught by a gate, and every one is cheaper to do up front 
    Rewrite them as a <strong>bare <code>QNNN</code></strong>, the form the Archive rows in <a href="../../plan/"><code>docs/plan/README.md</code></a> already use.
    Keep the prose; only the link goes.
    In an active plan's Status cell the de-link is gated rather than tidy: <code>make plan-index-check</code> requires a live row to be linked and a closed one to be bare, so the anchor dying is what puts the cell in front of someone (Q800).
-   Re-read the whole cell while you are there, since it is a rollup no individual row owns.</li>
+   Re-read the whole cell while you are there, since it is a rollup no individual row owns.
+   An untagged release plan's cell names no row, so there the edit is <a href="#cutting-a-release-the-scope-ledger">the ledger row</a> and nothing else.</li>
 <li><strong>Delete the roadmap bullet, continuation lines included.</strong> A forward-looking bullet exists because the row does (<a href="#a-gate-label-and-its-roadmap-bullet-are-two-commits-and-the-first-one-is-red">rule 7</a>), so it goes when the row does.
    Its indented follow-on lines are part of the same list item: leave one behind and Markdown attaches it to the <strong>previous</strong> bullet, whose word count then breaks the cap.
    <code>make roadmap-check</code> names the stray line and the bullet it landed on (rule 12), and reports the cap over the line span it actually counted, so a violation on a bullet you never touched no longer reads as a pre-existing failure.</li>
@@ -3538,7 +3539,8 @@ Sorting on "does it mention the path" answers neither question, and asking the o
 Re-enumerate the next phase from the reader's side rather than grepping again more carefully.</p>
 <h2 id="plan-level-status-lives-in-the-plan-index">Plan-level status lives in the plan index<a class="headerlink" href="#plan-level-status-lives-in-the-plan-index" title="Permanent link">&para;</a></h2>
 <p>The backlog table carried a <strong>Progress</strong> table above the Queue, one row per plan doc, and the store has no counterpart: <a href="../../plan/"><code>docs/plan/README.md</code></a> already carried per-plan Status cells with strictly more information, so Q889 deleted Progress rather than migrating it.
-Update a plan's Status cell when its overall status changes; most backlog edits touch no plan at all.</p>
+Update a plan's Status cell when its overall status changes; most backlog edits touch no plan at all.
+An untagged release plan's cell changes when the release does, not when a row closes, because <a href="#cutting-a-release-the-scope-ledger">it names no row</a>.</p>
 <p>When you close an item for a <strong>shipped user-facing capability</strong>, also check whether it graduates a bullet on the website <a href="../../roadmap/">roadmap.md</a> — an "In progress / near-term" item moving to "Available now" — and state its true maturity (GA vs. alpha) so the roadmap doesn't overclaim.
 <code>make roadmap-check</code> (in <code>make check</code>) catches the drift for you: each forward-looking roadmap bullet carries an invisible <code>&lt;!-- q:QN --&gt;</code> annotation, so deleting the item here fails the gate until the bullet moves.
 Deleting the item and the annotation without moving the bullet defeats it, which is the one case still on you.</p>
@@ -3668,6 +3670,12 @@ Everything from that decision to the tag is a backlog question, and this is its 
 </tbody>
 </table>
 <p>Link each ID to its item page while it is open; a shipped or punted item's link goes stale when the file is deleted, so drop it as the row's status flips — the Q-ID itself stays, and it is what git history is searchable by.</p>
+<p><strong>Everything per-item lives in the ledger or under its own heading, and the lines every PR shares name no item.</strong> Until the tag, a release plan's index cell and the text above its first heading point at the ledger, and why a row was added after scoping goes under a heading with its ID.
+<code>make plan-index-check</code> refuses a Q-ID on those two shared lines (invariant 7).
+They were the collision: in the 2.1 plan 12 of 15 commits rewrote the index cell and 12 edited the banner, so each merge left the next PR conflicted (Q1185).
+What still conflicts is two PRs ticking neighbouring ledger rows, or each adding a row or a reason at the end; ticks on rows apart from each other merge.</p>
+<p><strong>The ledger row is held to the store instead.</strong> <code>make release-ladder-check</code> fails a live item written bare or marked ✅, and a closed one still linked or reading as open, which is what the index cell's links used to force.
+A deferred item may be marked ✅, because a fixed flake's item stays while it is watched.</p>
 <p><strong>Delivered is a tick, not a narrative.</strong> A row flips to ✅ in the same change that deletes its Queue row — the plan-docs-stay-current discipline already owns that edit, so the ledger costs nothing extra to keep true.</p>
 <p><strong>The <code>Gates?</code> column and the labels are held to each other.</strong> <code>make release-ladder-check</code> reads each rung's plan off the <a href="../../plan/release-ladder/">release ladder</a> table and fails in both directions: an <code>X.Y-gate</code> row the rung's ledger does not mark <code>X.Y-gate</code>, and a ledger gating row whose item lacks the label (Q1087).
 So adding or dropping a gate label is an edit to the ledger too, and a rung gets a ledger before its first label.
@@ -3717,7 +3725,7 @@ Two gates (both in <code>make check</code>) enforce it so the omission can't shi
 </ul>
 <p><strong>A release plan is archived when its release is tagged, not when its last row closes.</strong> The last gate usually lands well before the candidate is cut and validated, and that remaining work runs through the candidate steps in <a href="../../operations/release/">release.md</a> rather than a Queue row, so a <code>release-X.Y.md</code> whose rows have all closed is still the open work.
 <code>make plan-index-check</code> exempts an untagged release plan from both rules above, and <code>check-queue-rules.py</code> rule 9 from the flip it would otherwise demand when the last gate row closes; both apply again once the tag resolves: ❌, 🔲 or 🚧 then fails invariant 4, ⚠️ needs a live row behind it again, and a ✅ referenced by nothing is due for the archive.
-Closing a release's last gate row therefore updates its README row and Status banner, and archives nothing.
+Closing a release's last gate row therefore ticks its ledger row, and archives nothing.
 Don't file a Queue row for the release itself to back the plan instead: once its gates landed it would read as ready work, and an orchestrator could dispatch it, while a release pauses other work and runs with a human in the loop.</p>
 <p>The same change should also keep the plan's <code>docs/plan/README.md</code> <strong>status text</strong> current: when you delete a Queue row that completes a plan, update that plan's README row in the same edit.
 For a <code>release-X.Y.md</code> row the text is gated rather than remembered: once that release is published, <code>make plan-index-check</code> rejects an open marker (❌, 🔲, 🚧) on it, because the tag settles the question the cell was still arguing (Q812).</p>

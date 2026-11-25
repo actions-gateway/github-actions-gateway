@@ -2831,7 +2831,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-2.1/">release-2.1.md</a></td>
 <td>The <code>v2.1.0</code> release: automatic recovery finished, from the dogfood readings detection and the out-of-memory class rest on to one more retry class and job-granular re-run</td>
-<td>❌ Scoped 2026-11-09: Q1236's, Q1317's, Q1318's and Q1382's readings are taken, and these rows still gate the tag: <a href="../queue/Q1316/">Q1316</a> and <a href="../queue/Q1403/">Q1403</a></td>
+<td>❌ Scoped 2026-11-09; the <a href="release-2.1/#scope-ledger">scope ledger</a> says what still gates the tag</td>
 </tr>
 <tr>
 <td><a href="v2beta1-retirement/">v2beta1-retirement.md</a></td>
@@ -3851,6 +3851,8 @@ The Q555 design (<a href="q555-automatic-recovery-design/">q555-automatic-recove
 <li>Link a backlog item that is still open as <code>[QNNN](../queue/QNNN.md)</code>, and write a closed one bare.
   Bare is the closed form, so the link is what makes the claim expire with the row: closing it kills the anchor, and <code>make plan-index-check</code> then reports the cell that summarizes work which has finished.
   The rollup only changes when a plan's last row closes, and the worker closing that row cannot tell it was the last one, which is how three cells went stale across 1.4 and 1.5 (Q800).</li>
+<li>A release plan whose release is not yet tagged names no item there, open or closed: its cell points at the plan's scope ledger.
+  Otherwise every PR that closes a gating item rewrites the one cell and leaves the next PR conflicted, so <code>make plan-index-check</code> fails it (Q1185).</li>
 <li>Column 3 only.
   A bare ID in the Scope column says what the plan was about and stays true after the row closes.</li>
 <li>A <code>release-X.Y.md</code> row cannot read as open (❌, 🔲, 🚧) once that release is published.

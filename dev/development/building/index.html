@@ -2803,11 +2803,12 @@
 <h1 id="agent-reference-building">Agent reference: Building<a class="headerlink" href="#agent-reference-building" title="Permanent link">&para;</a></h1>
 <p>All binaries are built into <code>.build/</code> at the repo root (gitignored).
 Use the root <code>Makefile</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>build<span class="w">        </span><span class="c1"># build all binaries → .build/agc, .build/gmc, .build/probe, .build/proxy</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>build<span class="w">        </span><span class="c1"># build all binaries → .build/agc, .build/gmc, .build/oomreporter, .build/probe, .build/proxy</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>build-agc<span class="w">    </span><span class="c1"># build only the AGC (Actions Gateway Controller)</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>make<span class="w"> </span>build-gmc<span class="w">    </span><span class="c1"># build only the GMC (Gateway Manager Controller)</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>make<span class="w"> </span>build-probe<span class="w">  </span><span class="c1"># build only the probe</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>make<span class="w"> </span>build-proxy<span class="w">  </span><span class="c1"># build only the egress proxy</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>make<span class="w"> </span>build-oomreporter<span class="w">  </span><span class="c1"># build only the out-of-memory kill reporter</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>make<span class="w"> </span>build-probe<span class="w">  </span><span class="c1"># build only the probe</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>make<span class="w"> </span>build-proxy<span class="w">  </span><span class="c1"># build only the egress proxy</span>
 </code></pre></div>
 <p><code>cmd/worker</code> is a workspace module but has no dedicated root-level build target — it is built into its container image only.</p>
 <p>Individual module Makefiles (e.g.
