@@ -508,6 +508,18 @@ func TestObserve_ClaimsNothingOfWhatWasDoneWhileItMightNotReadAPod(t *testing.T)
 	assert.NotContains(t, rises, burstableUID)
 }
 
+func TestObserve_ClaimsNothingOfAProcessKilledWhileItMightNotReadAPod(t *testing.T) {
+	var tr Tracker
+	single := func(e Events) Sample {
+		return one(Pod{Subtree: e, Containers: map[string]Events{runnerID: e}, Single: map[string]bool{runnerID: true}})
+	}
+	tr.Observe(single(Events{}), start)
+	tr.Observe(Sample{Refused: map[string]bool{burstableUID: true}}, start.Add(time.Second))
+	rises, _ := tr.Observe(single(Events{OOM: 1, OOMKill: 1}), start.Add(2*time.Second))
+	assert.True(t, rises[burstableUID].Late)
+	assert.Equal(t, uint64(1), rises[burstableUID].Singles)
+}
+
 // A refused pod keeps its base, so the counts above it since then are a neighbour's.
 func TestObserve_AKillAfterAPodIsOpenedIsCountedFromThen(t *testing.T) {
 	var tr Tracker

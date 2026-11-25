@@ -448,6 +448,19 @@ func TestGone(t *testing.T) {
 	assert.False(t, gone(errors.New("other")))
 }
 
+func TestPodEvents_ReadsAPodOfTheLastSampleAgain(t *testing.T) {
+	dirs := systemd("")
+	m := mount(dirs...)
+	tree, err := Open(m, "")
+	require.NoError(t, err)
+	m[path.Join(dirs[3], subtreeFile)] = eventsFile(Events{7, 8, 9})
+	got, err := tree.PodEvents(burstableUID)
+	require.NoError(t, err)
+	assert.Equal(t, Events{7, 8, 9}, got)
+	_, err = tree.PodEvents(staticUID)
+	require.ErrorIs(t, err, fs.ErrNotExist)
+}
+
 func TestPodFile_IsThatOfAPodOfTheLastSample(t *testing.T) {
 	dirs := systemd("")
 	m := mount(dirs...)

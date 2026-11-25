@@ -71,6 +71,7 @@ func TestWatcher_LeavesAPodThatIsGone(t *testing.T) {
 	}
 	assert.NotContains(t, w.paths, other)
 	assert.Len(t, w.uids, 1)
+	assert.Equal(t, []string{filepath.Join(dir, uid)}, w.fs.WatchList())
 
 	w.Follow(following(uid, other))
 	assert.Contains(t, w.paths, other)

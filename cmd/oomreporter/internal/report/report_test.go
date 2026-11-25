@@ -84,7 +84,9 @@ func TestLog_AFullLogIsAReport(t *testing.T) {
 		ids = append(ids, id(i))
 	}
 	for i := range MaxKills + 1 {
-		l.Add(whole(i, 1_800_000_000_000+i, ids...))
+		k := whole(i, 1_800_000_000_000+i, ids...)
+		k.Rise.Read = true
+		l.Add(k)
 	}
 	kills := l.Kills()
 	assert.False(t, kills[0].Rise.Read)

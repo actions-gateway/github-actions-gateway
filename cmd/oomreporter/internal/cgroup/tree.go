@@ -305,6 +305,15 @@ func (t *Tree) PodFile(uid string) (string, bool) {
 	return path.Join(dir, subtreeFile), ok
 }
 
+// PodEvents reads the counts of a pod of the last sample, and of all in it, again.
+func (t *Tree) PodEvents(uid string) (Events, error) {
+	name, ok := t.PodFile(uid)
+	if !ok {
+		return Events{}, fs.ErrNotExist
+	}
+	return readEvents(t.fsys, name)
+}
+
 // gone reports whether err is a cgroup's removal: ENOENT for its path, and ENODEV for a
 // file of it already open.
 func gone(err error) bool {

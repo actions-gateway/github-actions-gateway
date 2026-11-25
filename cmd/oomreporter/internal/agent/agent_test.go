@@ -31,6 +31,7 @@ type node struct {
 	changes []change
 	pods    map[string]cgroup.Pod
 	samples []time.Duration
+	reads   int
 }
 
 type change struct {
@@ -59,6 +60,22 @@ func (n *node) Sample() (cgroup.Sample, error) {
 		s.Pods[id] = p
 	}
 	return s, nil
+}
+
+func (n *node) PodEvents(id string) (cgroup.Events, error) {
+	n.reads++
+	p := cgroup.Pod{}
+	pods := map[string]cgroup.Pod{id: p}
+	for _, c := range n.changes {
+		if time.Since(n.start) < c.at {
+			break
+		}
+		if c.err != nil {
+			return cgroup.Events{}, c.err
+		}
+		c.do(pods)
+	}
+	return pods[id].Subtree, nil
 }
 
 // set has a pod's counts be e from at on.
@@ -140,12 +157,22 @@ func TestRun_ReportsAKillOnce(t *testing.T) {
 	})
 }
 
+// several is samples, one after another.
+type several []cgroup.Sample
+
+func (l *several) Sample() (cgroup.Sample, error) {
+	s := (*l)[0]
+	*l = (*l)[1:]
+	return s, nil
+}
+
 func TestRun_WarnsOnceOfAPodWithTwoCgroups(t *testing.T) {
 	var logged bytes.Buffer
-	a := &Agent{Log: slog.New(slog.NewTextHandler(&logged, nil))}
 	double := cgroup.Sample{Doubled: map[string]bool{uid: true}}
-	for _, s := range []cgroup.Sample{double, double, {}, double} {
-		a.warn(s)
+	a := &Agent{Log: slog.New(slog.NewTextHandler(&logged, nil)), Tree: &several{double, double, {}, double}}
+	for range 4 {
+		_, err := a.sample(time.Now())
+		require.NoError(t, err)
 	}
 	assert.Equal(t, 2, strings.Count(logged.String(), "two cgroups"))
 	assert.Contains(t, logged.String(), uid)
@@ -195,7 +222,9 @@ func TestRun_APodHasOneBurstAMinute(t *testing.T) {
 
 func TestRun_AKnownChangeIsSampledAtOnceAndOnceAMinute(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		n := &node{}
+		n := &node{changes: []change{
+			set(100*time.Millisecond, uid, cgroup.Events{OOM: 1}), set(620*time.Millisecond, uid, cgroup.Events{OOM: 2}),
+		}}
 		err := run(t, n, time.Second, func(changed chan<- string) {
 			time.Sleep(100 * time.Millisecond)
 			changed <- uid
@@ -205,6 +234,36 @@ func TestRun_AKnownChangeIsSampledAtOnceAndOnceAMinute(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, n.samples, 100*time.Millisecond)
 		assert.NotContains(t, n.samples, 620*time.Millisecond)
+	})
+}
+
+// A pod near its limit has its file change before any kill.
+func TestRun_ANoticeOfNoCountItKeepsSpendsNoBurst(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		n := &node{changes: []change{set(4100*time.Millisecond, uid, cgroup.Events{OOM: 1, OOMKill: 1, OOMGroupKill: 1})}}
+		err := run(t, n, 4200*time.Millisecond, func(changed chan<- string) {
+			time.Sleep(100 * time.Millisecond)
+			changed <- uid
+			changed <- "a pod it has not sampled"
+			time.Sleep(4 * time.Second)
+			changed <- uid
+		})
+		require.NoError(t, err)
+		assert.NotContains(t, n.samples, 100*time.Millisecond)
+		assert.Contains(t, n.samples, 4100*time.Millisecond)
+		assert.Equal(t, 2, n.reads)
+	})
+}
+
+func TestRun_ANoticeOfAPodItCannotReadIsLeftToThePoll(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		n := &node{changes: []change{{at: 90 * time.Millisecond, err: errors.New("gone")}}}
+		err := run(t, n, 200*time.Millisecond, func(changed chan<- string) {
+			time.Sleep(100 * time.Millisecond)
+			changed <- uid
+		})
+		require.NoError(t, err)
+		assert.Equal(t, []time.Duration{0}, n.samples)
 	})
 }
 
@@ -231,6 +290,10 @@ func TestRun_StopsWhereTheTreeCannotBeReadForLong(t *testing.T) {
 		assert.Equal(t, time.Second+(maxFailures-1)*poll, n.samples[len(n.samples)-1])
 	})
 }
+
+func (f *flaky) PodEvents(string) (cgroup.Events, error) { return cgroup.Events{}, nil }
+
+func (l *several) PodEvents(string) (cgroup.Events, error) { return cgroup.Events{}, nil }
 
 // flaky fails but for every tenth sample.
 type flaky struct{ n int }

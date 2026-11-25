@@ -24,6 +24,8 @@ const (
 // Tree is the node's cgroups.
 type Tree interface {
 	Sample() (cgroup.Sample, error)
+	// PodEvents reads one pod's counts.
+	PodEvents(uid string) (cgroup.Events, error)
 }
 
 // Agent samples Tree and hands Write the report's kills each time one is added.
@@ -33,7 +35,7 @@ type Agent struct {
 	Poll time.Duration
 	// Watch, if set, is told of each sample.
 	Watch func(cgroup.Sample)
-	// Changed is sent the UID of a pod whose counts are known to have changed.
+	// Changed is sent the UID of a pod whose counts may have changed.
 	Changed <-chan string
 	Write   func([]report.Kill)
 	Log     *slog.Logger
@@ -63,6 +65,17 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 }
 
+// moved reports whether uid's counts are not the last sample's. Its file changes with other counts
+// too, and with max before any kill at that limit (Linux v6.12, memcg_memory_event, read).
+func (a *Agent) moved(uid string) bool {
+	was, ok := a.counts[uid]
+	if !ok {
+		return false
+	}
+	now, err := a.Tree.PodEvents(uid)
+	return err == nil && now != was
+}
+
 // wait returns after d, or sooner where a pod's counts change that may have a burst, and reports
 // whether ctx is not done.
 func (a *Agent) wait(ctx context.Context, d time.Duration) bool {
@@ -75,7 +88,7 @@ func (a *Agent) wait(ctx context.Context, d time.Duration) bool {
 		case <-timer.C:
 			return true
 		case uid := <-a.Changed:
-			if a.burst(uid, time.Now()) {
+			if a.moved(uid) && a.burst(uid, time.Now()) {
 				return true
 			}
 		}
