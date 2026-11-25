@@ -1,6 +1,6 @@
 # A node reporter for out-of-memory kills: Q1403
 
-> **Status (2026-11-24): decided, D1 to D6 each as recommended.
+> **Status (2026-11-25): decided, D1 to D6 each as recommended.
 > [PRs 1 to 3](#build-size) are built: the reader and the rule, the two programs, and the chart; they have run together against an API server alone, and not on a node.**
 
 A container killed for memory reads `OOMKilled` with exit code 137 whichever limit ran out: its own, its pod's, the one all pods share, or the node's memory.
@@ -374,7 +374,7 @@ Kubernetes' `edit` role can mint a token for, and impersonate, any service accou
 Three, in the reporter's chart, with `failurePolicy: Fail`:
 
 1. **A report is written only by its own node's agent.** A report's name is a fixed prefix and then the node's name.
-   On create and update in the reporter's namespace, any writer but the controller is refused a name with that prefix whose rest is not its token's node claim, and the agent is refused every other name, since its `configmaps` update covers the namespace.
+   On create and update in the reporter's namespace, a name with that prefix is refused to any writer but the controller and the agent whose token's node claim is the rest of it, and the agent is refused every other name, since its `configmaps` update covers the namespace.
    Other ConfigMaps stay writable by others: the control plane itself keeps `kube-root-ca.crt` in every namespace, which both pods' token volumes mount (read, `rootcacertpublisher` and `serviceaccount/admission.go`).
    It also refuses the agent `immutable`, finalizers and owner references on its report: `immutable` would refuse its successor's writes until the node had had no agent for ten minutes (reasoned).
    The claim is `authentication.kubernetes.io/node-name`, which a projected token carries (read, `ServiceAccountTokenPodNodeInfo`, locked on since 1.32; this chart's floor is 1.35); a token without it is refused.
