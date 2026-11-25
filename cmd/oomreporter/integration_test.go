@@ -436,6 +436,29 @@ func TestPolicy_TheControllerChangesNothingOfAPodButItsConditions(t *testing.T) 
 	require.NoError(t, merge(`{"status":{"conditions":[{"$patch":"delete","type":"`+string(longest.Type)+`"}]}}`))
 	assert.Contains(t, refusal(merge(own(201, longest))), many)
 	require.NoError(t, merge(own(200, longest)))
+	// The merge that writes its own moves two of one type together, and that is refused.
+	for _, tc := range []struct {
+		types []corev1.PodConditionType
+		want  string
+	}{
+		{[]corev1.PodConditionType{corev1.PodInitialized, corev1.PodReady, corev1.PodReady}, ""},
+		{[]corev1.PodConditionType{corev1.PodReady, corev1.PodInitialized, corev1.PodReady}, conditions},
+	} {
+		got, err := c.admin.CoreV1().Pods(tenant).Get(ctx, p.Name, metav1.GetOptions{})
+		require.NoError(t, err)
+		got.Status.Conditions = nil
+		for _, of := range tc.types {
+			got.Status.Conditions = append(got.Status.Conditions, corev1.PodCondition{Type: of, Status: corev1.ConditionFalse})
+		}
+		_, err = c.admin.CoreV1().Pods(tenant).UpdateStatus(ctx, got, metav1.UpdateOptions{})
+		require.NoError(t, err)
+		err = merge(condition("oom.actions-gateway.com/dind", "True"))
+		if tc.want == "" {
+			require.NoError(t, err)
+			continue
+		}
+		assert.Contains(t, refusal(err), tc.want, "%v", err)
+	}
 	before, err := c.admin.CoreV1().Pods(tenant).Get(ctx, p.Name, metav1.GetOptions{})
 	require.NoError(t, err)
 	before.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionFalse}}

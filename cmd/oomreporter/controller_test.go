@@ -341,6 +341,18 @@ func TestController_EndsWhereItsCachesDoNotSync(t *testing.T) {
 	require.ErrorContains(t, ended(t, func() error { return o.run(context.WithoutCancel(t.Context()), cfg, noLog) }), "have not synced")
 }
 
+// A second beside it would write what it writes.
+func TestController_StartsNoOtherWhileItHasNotStopped(t *testing.T) {
+	var asked atomic.Int32
+	cfg, _ := api(t, func(r *http.Request) bool {
+		// Not as each looks, and then it can.
+		return strings.Contains(r.URL.Path, "/namespaces/team-b/") && asked.Add(1)%2 == 1
+	})
+	o := soon("team-a,team-b")
+	o.stoppedIn = 1
+	require.ErrorContains(t, ended(t, func() error { return o.run(t.Context(), cfg, noLog) }), "did not stop")
+}
+
 func TestController_EndsWhereAListIsNotAnswered(t *testing.T) {
 	cfg, _ := api(t, func(r *http.Request) bool {
 		if r.URL.Query().Get("limit") == "1" {

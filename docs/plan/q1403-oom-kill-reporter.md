@@ -385,7 +385,7 @@ Three, in the reporter's chart, with `failurePolicy: Fail`:
 2. **The controller may change only its own conditions.** `pods/status` is wider than its name: the API server resets the spec, the deletion timestamp and the owner references on such a write, and not labels, annotations or finalizers (read, `podStatusStrategy.PrepareForUpdate`).
    The AGC keeps its recovery marks in annotations, so an unguarded grant could forge "already handled" on any worker.
    The policy requires metadata unchanged but for `managedFields`, every other status field unchanged, the conditions outside the reporter's domain to be the same list in the same order, and those in it to be at most 200, with bounded reasons and messages, since a pod too large to store is one its kubelet cannot write to (reasoned).
-   A pod with two conditions of one type gets none of the reporter's, since the strategic merge patch changes such a list (measured).
+   A pod with two conditions of one type and another between them gets none of the reporter's: the strategic merge patch moves the two together, which is a change of their order (measured; the API server takes such a pod, and side by side they are no hindrance).
    A typed object's fields cannot be iterated, so it lists them; a test walks `PodStatus` and `ObjectMeta` and fails on a field the policy does not name, which is how a later release's field is caught.
 3. **The controller's Events carry only its own reasons.** It matches both Event API groups.
    The AGC's opt-in `AutoscalerVerdict` mode reads a `NotTriggerScaleUp` or `TriggeredScaleUp` Event by its reason and no other field (read, `classifyAutoscalerEvent`), so `events` create without this could gate or ungate a set's intake in every namespace it covers.
