@@ -2748,7 +2748,7 @@
 <blockquote>
 <p><strong>Status: scoped 2026-11-09; the ledger below says what has landed.</strong> The maintainer made flaky-job detection and automatic retry for more platform failures the <code>v2.1.0</code> headline on 2026-11-09.
 Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22), and Q1382's dogfood reading (2026-11-24); the ledger's open rows still gate the tag and nothing rides yet.
-Three of them are the readings' refutations, Q1374 to Q1376, gated on 2026-11-22 because each breaks a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the <code>trigger="other"</code> rate this release measures success by, biased in opposite directions.
+The readings' three refutations, Q1374 to Q1376, gated it from 2026-11-22 because each broke a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the <code>trigger="other"</code> rate this release measures success by, biased in opposite directions; all three are built.
 Q1381 gated it too, settled 2026-11-22, because its re-runs landed in merge-queue runs nothing reads and each spent a <code>maxEvictionRetries</code> slot, which is the opposite of what this release is for; it and Q1320 are built, and the case it leaves is Q1391.
 Q1389 gates it too: the out-of-memory class <code>v2.0.0</code> shipped can act on the wrong job where a worker dies before its pod names the job it ran, and Q1319 fixes only the re-run half of that, not the raised limit.
 The wrong-job half is read from source, so its first step is reproducing it.
@@ -2794,10 +2794,10 @@ This release finishes it: it measures what the shipped half rests on, then adds 
 <td>✅ landed: the run's job list tells a re-run from a job of the same name</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1374/">Q1374</a></td>
+<td>Q1374</td>
 <td>Record a job killed by <code>timeout-minutes</code>, which <code>JobCompleted</code> reports <code>canceled</code> (M1)</td>
 <td><code>2.1-gate</code></td>
-<td>🔲 open</td>
+<td>✅ landed: counted once its re-run passes and GitHub's annotation says it exceeded its limit; tested against a fake only</td>
 </tr>
 <tr>
 <td>Q1317</td>

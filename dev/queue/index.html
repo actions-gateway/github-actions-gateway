@@ -3216,14 +3216,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Since Q1232, the scale-set abandoned arm reads the run before force-cancelling.</td>
 </tr>
 <tr>
-<td><a href="Q1374/">Q1374</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">Detection drops timed-out jobs: JobCompleted reports them canceled</a></td>
-<td><code>bug</code> <code>2.1-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A job killed by its <code>timeout-minutes</code> completes <code>canceled</code> on the scale-set message queue, the same spelling as a user's cancel, and …</td>
-</tr>
-<tr>
 <td><a href="Q1319/">Q1319</a></td>
 <td><a href="../plan/q555-automatic-recovery-design/#what-the-readings-recommend">Re-run only the classified job, found by its runner's name</a></td>
 <td><code>feature</code> <code>2.1-gate</code></td>
