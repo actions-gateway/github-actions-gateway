@@ -709,6 +709,7 @@ A job GitHub cancelled is not another failure here, so a killed leg of a fail-fa
 Beside another failure the leg is re-run alone and those siblings wait for a re-run by hand.
 The list says `cancelled` for a fail-fast matrix's sibling, a job past its `timeout-minutes` and a job a concurrency group cancelled alike ([measured](../plan/q555-automatic-recovery-design.md#readings-for-a-cancelled-sibling-2026-11-24)), so the last two are re-run with the siblings.
 A run GitHub itself concludes `cancelled`, as it can one holding a timeout, is not re-run at all (`run_cancelled`).
+That includes the attempt a single-job re-run starts, where the killed leg passes, an aggregate is red again and the matrix's other legs are still cancelled, so a second killed leg's turn can end there ([Q1401](../queue/Q1401.md)).
 
 **The reservation follows the call.** A kill reserves its attempt's one slot when it fires, with scope `FailedJobs`, and later kills of the attempt merge into it.
 A release that re-runs one job narrows that record to the job, scope `Job`, in the write before the call, so each job that waits reserves a slot of its own at its turn, and a release that crashes before the call resumes the same job on the same slot.

@@ -23,6 +23,7 @@ The order inside the release is the design's: the measurements first, because ea
 ## What this release must NOT do
 
 **It must not re-run a genuine failure.** The boundary in [troubleshooting.md](../operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do) stands: every class retries only a cause GAG can observe on facts it owns (R9), arrives with a dogfood reproduction (R12), and is punted rather than shipped when no discriminator separates it from a tenant-caused shape.
+One known limit stays from `v2.0.0`: beside a memory kill, a job past its `timeout-minutes` is re-run with it where no job ended `failure` on its own, because GitHub's job list spells it as it does a fail-fast sibling ([how](../design/04-operational-flows.md#the-re-run-takes-only-the-killed-jobs-q1319), Q1399).
 
 **It must not ship a blanket opt-in retry.** `spec.flakyRetry` from [appendix G.17](../design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions) stays unscheduled; the direction is classified platform failures on the existing arms.
 

@@ -162,7 +162,8 @@ Only the killed job is re-run, found by the name of the runner that died, and a 
 Four things follow:
 
 - **Jobs that need it run again**, even ones that passed: GitHub re-runs a job's `needs:` dependents with it.
-- **The run stays `failure`** while a sibling's failure is not re-run, so read the job's own result.
+- **The run stays red** while a sibling's failure is not re-run, so read the job's own result.
+  GitHub concludes it `failure`, or `cancelled` where the sibling reports on a matrix whose cancelled legs are left, and a run it concludes `cancelled` is not re-run again.
 - **Several killed jobs of one run** are re-run together, on one slot, where every failed job of the run was killed for memory.
   Where another job failed on its own, they are re-run one after another, each once the attempt before it concludes and each on its own slot, until `maxEvictionRetries` is spent and the rest get `EvictionRetriesExhausted`.
   A job that reports on the others (`if: always()`, red when one it needs is) is another failed job here, because GitHub's job list does not say what needs what; raise `maxEvictionRetries` where such a workflow loses several jobs at once.

@@ -935,11 +935,17 @@ The jobs list gives `conclusion: cancelled` for every shape below; the failure-l
   Over the runs with two or more failed jobs (195 of the 600 listed again with `created` at or before 2026-11-24 22:40 UTC), taking the first to complete as the killed one, all 98 dependents started after it and so did 73 of the 612 others, in 19 runs: jobs that waited for a runner, a later stage that needed something else, an aggregate of other jobs.
   A killed job is listed as completed about 10 minutes after it died; a start 600 s later or more leaves 22 of the 73, in 3 runs.
 - **What a single-job re-run takes along is the sound fact**, by M6, and is [Q1401](../queue/Q1401.md).
+- **`rerun-failed-jobs` takes a cancelled job.** In 21 public runs whose second attempt re-ran the failed jobs (18 of them `rust-lang/cargo`'s), it ran every job the first had cancelled, 1 to 12 a run, and of the successful ones a single job, of `rust-lang/rust-analyzer` 43474205606 (not read why).
+- **A single-job re-run leaves a cancelled job cancelled**, carried with its old `completed_at` and `runner_name`, in both public runs found with one (`rust-lang/cargo` 40960902618 and 38222465819, 11 cancelled legs each).
+  Each re-ran the failed leg and `conclusion`, which needs it and was red again; 40960902618's third attempt then took the 11 and `conclusion`, and succeeded.
+- **GitHub concluded both of those second attempts `cancelled`**, though nobody cancelled them, so `run_cancelled` withholds whatever the AGC would do next.
+  In two more runs, a leg past its 6-hour limit beside a red `conclusion` was concluded `cancelled` too (43369863330 and 37671009459).
+  What decides between `failure` and `cancelled` for a run holding both is not established.
 - **This repository's matrices mostly set `fail-fast: false`**, so its 0 is not a rate for a tenant that leaves the default.
 - **Every count is of runs GitHub concluded `failure`.** It can conclude a run holding a failure and a timeout `cancelled` (`rust-lang/cargo` 43369863330), and that run is not re-run at all, whatever a cancelled job counts as.
 
 None of these runs lost a runner.
-Not read: a matrix whose failed leg lost its runner, which is taken to cancel its siblings as any failed leg does; `rerun-failed-jobs` on a cancelled sibling, which this repository has recorded as re-run without a reading; and how often a run the class acts on holds either shape, since every kill it has acted on was a probe's.
+Not read: a matrix whose failed leg lost its runner, which is taken to cancel its siblings as any failed leg does; and how often a run the class acts on holds either shape, since every kill it has acted on was a probe's.
 
 ### What the readings recommend
 
