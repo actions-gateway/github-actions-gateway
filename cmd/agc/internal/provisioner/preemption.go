@@ -76,8 +76,8 @@ func PreemptedByScheduler(pod *corev1.Pod) bool {
 // orphaned_scaleset.go).
 //
 // recoveryCauseOOM is the one a retry class owns rather than a disruption arm: the
-// runner was killed at its own memory limit, which is re-run only where the sizing
-// profile lets the next attempt have a strictly higher one (Q1183, oom_class.go).
+// runner was killed for memory, which is re-run only where the sizing profile lets the
+// next attempt have a strictly higher limit (Q1183, oom_class.go).
 const (
 	recoveryCauseEviction     = "eviction"
 	recoveryCausePreemption   = "preemption"

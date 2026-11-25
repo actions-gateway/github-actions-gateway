@@ -3,6 +3,7 @@ package provisioner
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,9 +17,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// oomKilled marks pod as the kubelet does when its runner container is killed at its
-// memory limit, which with restartPolicy Never fails the pod. The container ran, so it
-// carries an ID and start time and podEverStarted reads it as started.
+// oomKilled marks pod as the kubelet does when its runner container is killed for memory,
+// which with restartPolicy Never fails the pod. The container ran, so it carries an ID and
+// start time and podEverStarted reads it as started.
 func oomKilled(pod *corev1.Pod, limit string) *corev1.Pod {
 	pod.Spec.Containers[0].Resources.Limits = corev1.ResourceList{corev1.ResourceMemory: resource.MustParse(limit)}
 	pod.Status.Phase = corev1.PodFailed
@@ -102,8 +103,8 @@ func TestOOMKilledAwaitingRecovery(t *testing.T) {
 }
 
 // TestRecoverOOMKilled_RaisesTheLimitAndReruns is the class end to end: the runner of a
-// right-sized worker is killed at its limit, the job's next attempt is given a strictly
-// higher one in the ledger, and the run is re-run once on the scale-set budget under
+// right-sized worker is killed for memory, the job's next attempt is given a strictly
+// higher limit in the ledger, and the run is re-run once on the scale-set budget under
 // cause oom.
 func TestRecoverOOMKilled_RaisesTheLimitAndReruns(t *testing.T) {
 	ctx := context.Background()
@@ -164,7 +165,7 @@ func TestRecoverOOMKilled_NoBudgetPromisesNoRerun(t *testing.T) {
 }
 
 // TestRecoverOOMKilled_WithholdsWhatARerunRepeats: every shape whose next attempt
-// would get the limit that killed this one is withheld before any slot is spent.
+// would get the limit this one had is withheld before any slot is spent.
 func TestRecoverOOMKilled_WithholdsWhatARerunRepeats(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -203,6 +204,132 @@ func TestRecoverOOMKilled_WithholdsWhatARerunRepeats(t *testing.T) {
 	}
 }
 
+// oomKilledOn is oomKilled with the memory request and node a note has to name.
+func oomKilledOn(pod *corev1.Pod, node, request, limit string) *corev1.Pod {
+	oomKilled(pod, limit)
+	pod.Spec.NodeName = node
+	pod.Spec.Containers[0].Resources.Requests = corev1.ResourceList{corev1.ResourceMemory: resource.MustParse(request)}
+	return pod
+}
+
+// lastNote is the text of the last event target recorded under reason.
+func lastNote(t *testing.T, target *stubTarget, reason string) string {
+	t.Helper()
+	for i := len(target.events) - 1; i >= 0; i-- {
+		if target.events[i] == reason {
+			return target.messages[i]
+		}
+	}
+	require.Fail(t, "no "+reason+" event", "got %v", target.events)
+	return ""
+}
+
+// oomNotes runs each shape that writes a note about an out-of-memory kill and returns the
+// notes by shape, for workers named pod on node, running job.
+func oomNotes(t *testing.T, pod, node, job string) map[string]string {
+	t.Helper()
+	ctx := context.Background()
+	worker := func(name, runID, limit string) *corev1.Pod {
+		a := rightSizedAnnotations(runID)
+		a[annotationJobName] = job
+		return oomKilledOn(scaleSetWorkerPod(name, a), node, "1Gi", limit)
+	}
+	notes := map[string]string{}
+	recoverAll := func(policy *MemoryRetryPolicy, pods ...*corev1.Pod) *stubTarget {
+		p, target, _, _, _ := recoveryFixture(t, pods...)
+		target.spec.MemoryRetry = policy
+		for _, w := range pods {
+			done, err := p.RecoverDisruptedScaleSetWorker(ctx, target, w.DeepCopy())
+			require.NoError(t, err)
+			<-done
+		}
+		return target
+	}
+
+	notes["no profile"] = lastNote(t, recoverAll(nil, worker(pod, "4242", "2Gi")), "EvictionRerunWithheld")
+	notes["at the ceiling"] = lastNote(t, recoverAll(
+		&MemoryRetryPolicy{HeadroomPercent: 150, Ceiling: resource.MustParse("2Gi")}, worker(pod, "4242", "2Gi")), "EvictionRerunWithheld")
+	notes["raised"] = lastNote(t, recoverAll(throughputRetry(), worker(pod, "4242", "2Gi")), "MemoryLimitRaisedForRetry")
+	notes["killed again"] = lastNote(t, recoverAll(throughputRetry(),
+		worker(pod+"-first", "4242", "2Gi"), worker(pod, "4242", "2Gi")), "EvictionRerunWithheld")
+
+	var stampede []*corev1.Pod
+	for i := 0; i <= classBreakerRuns; i++ {
+		stampede = append(stampede, worker(fmt.Sprintf("runner-gpu-job%d", i), fmt.Sprint(5000+i), "2Gi"))
+	}
+	target := recoverAll(throughputRetry(), append(stampede, worker(pod, "4242", "2Gi"))...)
+	notes["paused"] = lastNote(t, target, "AutoRetryPaused")
+	notes["killed while paused"] = lastNote(t, target, "EvictionRerunWithheld")
+
+	f := newWaitFixture(t, func(killed *corev1.Pod) {
+		*killed = *oomKilledOn(killed, node, "1Gi", "2Gi")
+		killed.Name = pod
+		killed.Status.ContainerStatuses[0].State.Terminated.FinishedAt = metav1.NewTime(newTestClock().now())
+	})
+	f.scan(t)
+	f.clock.advance(startWait)
+	f.scan(t)
+	notes["job unknown"] = lastNote(t, f.target, "EvictionRecoveryIdentityUnknown")
+	return notes
+}
+
+// TestOOMNotes_NameWhatWasReadAndNoCause: a kill made above the container is expected to
+// leave the status a kill at its limit does, so every note gives what was read of the
+// worker and none says the runner reached its limit or that its job needs more (Q1400).
+func TestOOMNotes_NameWhatWasReadAndNoCause(t *testing.T) {
+	const facts = "killed for memory on node node-a, with a memory request of 1Gi and a limit of 2Gi; " +
+		"its termination reason does not say whether it reached that limit or memory ran out above it, as on a full node. "
+	const worker = "worker pod runner-gpu-job for run 4242 had its runner " + facts
+	want := map[string][]string{
+		"no profile": {worker, "No automatic re-run was requested", "a re-run may get the same one",
+			"If the runner reached it, raise it, or use the Binpack or Throughput sizing profile, which derives one once it has samples; then, in either case, re-run it by hand"},
+		"at the ceiling": {worker, "No automatic re-run was requested", "a re-run would get the same one",
+			"If the runner reached it, raise spec.sizing.maxRequests memory or reduce what the job uses; then, in either case, re-run it by hand"},
+		"raised": {worker, `Job "build" gets a limit of 3Gi on its next attempt, and is re-run automatically once the run concludes`},
+		"killed again": {worker, "No automatic re-run was requested",
+			`a job gets one raise and job "build" had its own after an earlier kill, from 2Gi to 3Gi, which lasts until `,
+			"If the runner reached its limit, look at what grew or raise it; then, in either case, re-run it by hand"},
+		"killed while paused": {worker, "No automatic re-run was requested", "out-of-memory retries on this set are paused"},
+		"paused":              {"out-of-memory retries are paused", "had a runner killed for memory within"},
+		"job unknown": {"worker pod runner-gpu-job had its runner gpu-1 " + facts,
+			"No job's start was recorded for it, so which job it was running is not known"},
+	}
+	notes := oomNotes(t, "runner-gpu-job", "node-a", "build")
+	require.Len(t, notes, len(want))
+	for name, parts := range want {
+		t.Run(name, func(t *testing.T) {
+			for _, part := range parts {
+				assert.Contains(t, notes[name], part)
+			}
+			for _, cause := range []string{"at its memory limit", "at its own memory limit", "needs more than"} {
+				assert.NotContains(t, notes[name], cause)
+			}
+		})
+	}
+}
+
+// TestOOMNotes_FitAnEvent: the API server refuses an Event whose note is over 1024
+// characters, and the refusal is the note's only trace.
+func TestOOMNotes_FitAnEvent(t *testing.T) {
+	for name, note := range oomNotes(t, strings.Repeat("p", 57), strings.Repeat("n", 63), strings.Repeat("j", 255)) {
+		assert.LessOrEqual(t, len(note), 1024, name)
+	}
+}
+
+func TestOOMKillFacts_NoRequest(t *testing.T) {
+	pod := oomKilled(scaleSetWorkerPod("w", map[string]string{}), "2Gi")
+	assert.Contains(t, oomKillFacts(pod), "with no memory request and a limit of 2Gi")
+}
+
+func TestOOMKillFacts_OfTheRunnerBehindASidecar(t *testing.T) {
+	pod := oomKilledOn(scaleSetWorkerPod("w", map[string]string{}), "node-a", "1Gi", "2Gi")
+	pod.Spec.Containers = append([]corev1.Container{{Name: "dind", Resources: corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("3Gi")},
+		Limits:   corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("8Gi")},
+	}}}, pod.Spec.Containers...)
+	assert.Contains(t, oomKillFacts(pod), "with a memory request of 1Gi and a limit of 2Gi")
+}
+
 // TestRecoverOOMKilled_SecondKillIsSameClassAgain: one bump per job, so a job that is
 // killed again at its raised limit is not re-run a second time.
 func TestRecoverOOMKilled_SecondKillIsSameClassAgain(t *testing.T) {
@@ -226,8 +353,10 @@ func TestRecoverOOMKilled_SecondKillIsSameClassAgain(t *testing.T) {
 		m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", recoveryCauseOOM, rerunWithheldReasonSameClassAgain)))
 	l, _, err := p.readRerunLedger(ctx, target)
 	require.NoError(t, err)
-	assert.Equal(t, "3Gi", l.MemoryFloors[failureKey("4242", "build")].Limit.String(),
-		"the second kill must not raise the limit again")
+	floor := l.MemoryFloors[failureKey("4242", "build")]
+	assert.Equal(t, "3Gi", floor.Limit.String(), "the second kill must not raise the limit again")
+	assert.Contains(t, lastNote(t, target, "EvictionRerunWithheld"),
+		"which lasts until "+floor.ExpiresAt.UTC().Format(time.RFC3339))
 }
 
 // TestRecoverOOMKilled_BreakerPausesAStampede: past classBreakerRuns distinct runs in

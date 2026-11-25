@@ -143,7 +143,7 @@ See [Evicted Worker Pods Exhausting Retry Budget](troubleshooting.md#evicted-wor
 ### ActionsGatewayRetryCauseMisclassified
 
 **Ticket.** More than half of GAG's re-runs for one cause on a set failed again over 7 days, counting at least 5, so re-running is not clearing what the cause names (Q1245).
-For `cause="oom"` the raised memory limit is not enough, or the jobs fail for something else after their limit was raised: read the jobs behind the `MemoryLimitRaisedForRetry` Events, and see [When a job runs out of memory](worker-rightsizing.md#when-a-job-runs-out-of-memory).
+For `cause="oom"` the raised memory limit is not enough, something above the runner ran out again ([how to tell](worker-rightsizing.md#which-limit-ran-out)), or the jobs fail for something else after their limit was raised: read the jobs behind the `MemoryLimitRaisedForRetry` Events, and see [When a job runs out of memory](worker-rightsizing.md#when-a-job-runs-out-of-memory).
 For a disruption cause, the re-runs are being disrupted again or the jobs fail on their own; see [Which Disruptions Auto-Re-Run a Job](troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 The per-job `same_class_again` withhold already stops one job being retried twice for memory; this alert is the same reading across jobs.
 

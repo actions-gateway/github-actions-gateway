@@ -14,8 +14,9 @@ import (
 // pod on a fresh node clears it. A pod that outgrows its OWN local-storage limit — the
 // pod's total ephemeral-storage limit, one container's limit, or an emptyDir sizeLimit —
 // is evicted by the same code path for a cause the tenant's job and template own, and a
-// re-run gets the same limit and fails the same way. That is the storage analogue of
-// OOMKilled, so it is withheld as own_limit before a budget slot is spent.
+// re-run gets the same limit and fails the same way, so it is withheld as own_limit before
+// a budget slot is spent. An OOMKilled runner shares the label where a re-run gets the same
+// limit, but not the evidence: its termination reason does not say which limit ran out (oom_class.go).
 //
 // Two independent kubelet signals separate them, measured on kind v1.35.5
 // (docs/design/04-operational-flows.md §4.2 has the capture):

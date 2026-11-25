@@ -47,7 +47,7 @@ func oomRetryable(pod *corev1.Pod) bool {
 	if _, disrupted := disruptionAwaitingRecovery(pod); disrupted {
 		return false
 	}
-	limit := containerMemoryLimit(pod, runnerContainer)
+	_, limit := containerMemory(pod, runnerContainer)
 	return oomKilledAwaitingRecovery(pod) && pod.Annotations[AnnotationSizingProfile] != "" &&
 		pod.Annotations[AnnotationRunnerName] != "" && !limit.IsZero()
 }
@@ -181,6 +181,6 @@ func (p *Provisioner) reportUnstartedKill(ctx context.Context, target Target, po
 		p.Metrics.EvictionRecoveryIdentityUnknown.WithLabelValues(key.Namespace, key.Name, recoveryCauseOOM).Inc()
 	}
 	target.RecordEvent(corev1.EventTypeWarning, "EvictionRecoveryIdentityUnknown", "RecoverEvictedWorker",
-		fmt.Sprintf("worker pod %s had its runner %s killed at its memory limit before the start of any job was recorded for it, so which job it was running is not known: no limit was raised and nothing was re-run, and a job it was running needs a manual re-run", pod.Name, runner))
+		fmt.Sprintf("worker pod %s had its runner %s %s. No job's start was recorded for it, so which job it was running is not known: no limit was raised and nothing was re-run, and a job it was running needs a manual re-run", pod.Name, runner, oomKillFacts(pod)))
 	return true
 }

@@ -61,6 +61,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [A timed-out job whose re-run passes counts as flaky](#a-timed-out-job-whose-re-run-passes-counts-as-flaky)
   - [Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run](#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run)
   - [Non-breaking: an out-of-memory retry waits for its job's start](#non-breaking-an-out-of-memory-retry-waits-for-its-jobs-start)
+  - [Non-breaking: an out-of-memory retry's Events no longer name the limit as the cause](#non-breaking-an-out-of-memory-retrys-events-no-longer-name-the-limit-as-the-cause)
   - [A disrupted job is not re-run while its set's workers cannot pull their image](#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image)
   - [A worker evicted for its own storage limit is no longer re-run](#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run)
   - [Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once](#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once)
@@ -1329,6 +1330,19 @@ The AGC now [waits for the message naming the job](worker-rightsizing.md#when-a-
 Where the message never comes, `actions_gateway_eviction_recovery_identity_unknown_total{cause="oom"}` increments and nothing is re-run.
 
 **Rolling back** acts at once again, on the job the pod names.
+
+### Non-breaking: an out-of-memory retry's Events no longer name the limit as the cause
+
+**Who is affected:** anyone who alerts on or parses the text of the out-of-memory Events on a `RunnerSet`.
+Nothing to do otherwise: what is re-run, raised and withheld is unchanged, and so are the Events' reasons and the metrics' labels.
+
+**What changed.** `MemoryLimitRaisedForRetry`, `AutoRetryPaused`, `EvictionRecoveryIdentityUnknown` and the `EvictionRerunWithheld` of most out-of-memory kills said the runner was killed at its memory limit.
+A node that ran out of memory is expected to leave the same status, so they now say it was killed for memory.
+All but `AutoRetryPaused`, which is about a set, also name the worker, its node, its memory request and its limit, and leave [which limit ran out](worker-rightsizing.md#which-limit-ran-out) to you (Q1400).
+
+**What you will see.** Longer Event text, which starts with the worker's name, except for `AutoRetryPaused`.
+
+**Rolling back** returns the old text.
 
 ### A disrupted job is not re-run while its set's workers cannot pull their image
 

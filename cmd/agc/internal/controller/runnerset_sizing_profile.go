@@ -112,7 +112,7 @@ func applySizingProfile(template corev1.PodTemplateSpec, sizing *v2.WorkerSizing
 // limits from history (Q1183): the same headroom over the killed limit that the
 // profile puts over an observed peak, capped at maxRequests like the profile's own
 // limit, so a retry never buys memory the profile's clamp would refuse. Nil for every
-// other profile, whose next pod gets the limit that killed the job.
+// other profile, whose next pod gets the limit the killed one had.
 func memoryRetryPolicy(sizing *v2.WorkerSizing) *provisioner.MemoryRetryPolicy {
 	if sizing == nil {
 		return nil

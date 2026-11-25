@@ -16,17 +16,22 @@ import (
 )
 
 // Classified platform retry on the scale-set tier (Q1183), and its first class: a runner
-// killed at its own memory limit on a set whose sizing profile derives limits from
-// history. A class is a failure shape GAG recognises from objects it owns and re-runs
-// on the disruption arms' path, with their recovery claim, futility checks and ledger
-// budget, once the shape's cause has cleared. This one clears by a value GAG
-// computes: the next attempt's memory limit, raised from the killed pod's own limit
-// rather than from the set's history, because the sampler records an out-of-memory
-// job's peak at or below the limit that killed it, so the history may never move. A
-// kill the next attempt would repeat is withheld before any slot is spent: no profile,
-// a limit at the profile's ceiling, or a second kill after a raise. A re-run that holds a
-// slot waits in the ledger until the run concludes (pending_rerun.go). The
-// operator-facing account is docs/design/04-operational-flows.md §4.2.
+// killed for memory on a set whose sizing profile derives limits from history. A class
+// is a failure shape GAG recognises from objects it owns and re-runs on the disruption
+// arms' path, with their recovery claim, futility checks and ledger budget, once the
+// shape's cause has cleared. This one clears by a value GAG computes: the next attempt's
+// memory limit, raised from the killed pod's own limit rather than from the set's
+// history, because the sampler records an out-of-memory job's peak at or below the limit
+// it ran under, so the history may never move. A kill is withheld before any slot is
+// spent where the next attempt could not get a higher limit, with no profile or at the
+// profile's ceiling, and where it already got one raise. A re-run that holds a slot waits
+// in the ledger until the run concludes (pending_rerun.go). The operator-facing account
+// is docs/design/04-operational-flows.md §4.2.
+//
+// No arm knows whether the runner reached its own limit: a kill for memory that ran out
+// above the container is expected to leave the same status, and nothing else the AGC can
+// read separates the two. So every arm acts on the limit the next attempt would get, and
+// no text it writes names the cause (oomKillFacts).
 //
 // Only a kill of the runner container is recognised. It is the one that ends the job
 // on the pod's terminal transition; a sidecar killed for memory leaves the runner to
@@ -39,7 +44,7 @@ const (
 )
 
 // containerReasonOOMKilled is the termination reason the kubelet reports for a
-// container killed at its memory limit.
+// container killed for memory.
 const containerReasonOOMKilled = "OOMKilled"
 
 // exitCodeSIGKILL is the exit code of a process killed by SIGKILL, as an out-of-memory
@@ -81,15 +86,29 @@ func oomKilledAwaitingRecovery(pod *corev1.Pod) bool {
 	return false
 }
 
-// containerMemoryLimit returns the named container's memory limit in pod's spec, zero
-// where it has none.
-func containerMemoryLimit(pod *corev1.Pod, name string) resource.Quantity {
+// containerMemory returns the named container's memory request and limit in pod's spec,
+// each zero where it has none.
+func containerMemory(pod *corev1.Pod, name string) (request, limit resource.Quantity) {
 	for i := range pod.Spec.Containers {
-		if pod.Spec.Containers[i].Name == name {
-			return pod.Spec.Containers[i].Resources.Limits[corev1.ResourceMemory]
+		if r := &pod.Spec.Containers[i].Resources; pod.Spec.Containers[i].Name == name {
+			return r.Requests[corev1.ResourceMemory], r.Limits[corev1.ResourceMemory]
 		}
 	}
-	return resource.Quantity{}
+	return resource.Quantity{}, resource.Quantity{}
+}
+
+// oomKillFacts says what is known of pod's killed runner, to follow "had its runner". The
+// request and the node are what an operator has to judge the cause by: the kubelet scores
+// a Burstable container's chance of a node-wide kill by its request (qos/policy.go,
+// v1.35.5), and a SystemOOM Event is on the node.
+func oomKillFacts(pod *corev1.Pod) string {
+	request, limit := containerMemory(pod, runnerContainer)
+	asked := "no memory request"
+	if !request.IsZero() {
+		asked = "a memory request of " + request.String()
+	}
+	return fmt.Sprintf("killed for memory on node %s, with %s and a limit of %s; its termination reason does not say whether it reached that limit or memory ran out above it, as on a full node",
+		pod.Spec.NodeName, asked, limit.String())
 }
 
 // nextMemoryLimit is the limit a retry gives the killed container: killed ×
@@ -111,35 +130,33 @@ func nextMemoryLimit(killed resource.Quantity, policy MemoryRetryPolicy) resourc
 // job's next attempt, and hands the re-run to the disruption arms' path.
 func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec *ResolvedSpec, pod *corev1.Pod, owner, repo, runID string, log *slog.Logger) <-chan struct{} {
 	job := pod.Annotations[annotationJobName]
-	killed := containerMemoryLimit(pod, runnerContainer)
+	_, killed := containerMemory(pod, runnerContainer)
 	switch {
 	case killed.IsZero():
-		// No limit of its own: the kernel killed it for the node's memory, a shape no
-		// class covers yet.
+		// No limit of its own to raise, a shape no class covers yet.
 		log.Info("runner was killed for memory with no memory limit of its own; no automatic re-run", "runID", runID)
 		return closedChan()
 	case job == "":
-		log.Warn("runner was killed at its memory limit but the worker names no job to raise the limit for; no automatic re-run",
+		log.Warn("runner was killed for memory but the worker names no job to raise the limit for; no automatic re-run",
 			"runID", runID)
 		return closedChan()
 	}
+	facts := fmt.Sprintf("worker pod %s for run %s had its runner %s", pod.Name, runID, oomKillFacts(pod))
 	if spec.MemoryRetry == nil || pod.Annotations[AnnotationSizingProfile] == "" {
-		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonOwnLimit, fmt.Sprintf("worker pod for run %s had its runner killed at its own memory limit (%s), so no automatic re-run was requested: the set's sizing profile did not derive that limit from history, so a re-run gets the same one. Raise the runner's memory limit, or select the Binpack or Throughput sizing profile, then re-run it by hand",
-			runID, killed.String()))
+		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonOwnLimit, facts+". No automatic re-run was requested, because the set's sizing profile did not derive that limit from history and a re-run may get the same one. If the runner reached it, raise it, or use the Binpack or Throughput sizing profile, which derives one once it has samples; then, in either case, re-run it by hand")
 		return closedChan()
 	}
 	next := nextMemoryLimit(killed, *spec.MemoryRetry)
 	if next.Cmp(killed) <= 0 {
-		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonOwnLimit, fmt.Sprintf("worker pod for run %s had its runner killed at its own memory limit (%s), which is already the most the sizing profile allows, so no automatic re-run was requested. Raise spec.sizing.maxRequests memory or reduce what the job uses, then re-run it by hand",
-			runID, killed.String()))
+		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonOwnLimit, facts+". No automatic re-run was requested, because that limit is already the most the sizing profile allows and a re-run would get the same one. If the runner reached it, raise spec.sizing.maxRequests memory or reduce what the job uses; then, in either case, re-run it by hand")
 		return closedChan()
 	}
 	breaker := classBreakerKey{set: target.Key(), cause: recoveryCauseOOM}
 	now := p.nowFn()
 	p.closeExpiredBreakers(now)
 	if p.classBreakers.open(breaker, now) {
-		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonBreakerOpen, fmt.Sprintf("worker pod for run %s had its runner killed at its memory limit, but out-of-memory retries on this set are paused: more than %d runs were re-run for memory within %s, which points at a shared cause rather than one job's growth. Retries resume %s after the pause began; re-run it by hand if this job needs it",
-			runID, classBreakerRuns, classBreakerWindow, classBreakerCooldown))
+		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonBreakerOpen, fmt.Sprintf("%s. No automatic re-run was requested, because out-of-memory retries on this set are paused: more than %d runs were re-run for memory within %s, which points at a shared cause rather than one job's growth. Retries resume %s after the pause began; re-run it by hand if this job needs it",
+			facts, classBreakerRuns, classBreakerWindow, classBreakerCooldown))
 		return closedChan()
 	}
 
@@ -154,8 +171,8 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 		p.recordRerunFailure(target, runID, recoveryCauseOOM, rerunFailureReasonBudgetUnrecorded, err)
 		return closedChan()
 	case prior != nil:
-		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonSameClassAgain, fmt.Sprintf("job %q of run %s was killed for memory again after an automatic re-run raised its limit from %s to %s, so no further re-run was requested: the job needs more than a retry gives it. Investigate its memory use or raise the limit, then re-run it by hand",
-			job, runID, prior.KilledLimit.String(), prior.Limit.String()))
+		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonSameClassAgain, fmt.Sprintf("%s. No automatic re-run was requested, because a job gets one raise and job %q had its own after an earlier kill, from %s to %s, which lasts until %s at the latest. If the runner reached its limit, look at what grew or raise it; then, in either case, re-run it by hand",
+			facts, job, prior.KilledLimit.String(), prior.Limit.String(), prior.ExpiresAt.UTC().Format(time.RFC3339)))
 		return closedChan()
 	}
 	// The breaker counts, and the Event promises, only a run that holds a slot: a
@@ -166,13 +183,13 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 			log.Warn("out-of-memory retries paused on this set: too many runs killed in a short window",
 				"runs", classBreakerRuns, "window", classBreakerWindow, "pause", classBreakerCooldown)
 			target.RecordEvent(corev1.EventTypeWarning, "AutoRetryPaused", "RetryEvictedJob",
-				fmt.Sprintf("out-of-memory retries are paused for %s: more than %d runs had a runner killed at its memory limit within %s, which points at a shared cause rather than one job's growth",
+				fmt.Sprintf("out-of-memory retries are paused for %s: more than %d runs had a runner killed for memory within %s, which points at a shared cause rather than one job's growth",
 					classBreakerCooldown, classBreakerRuns, classBreakerWindow))
 		}
 		log.Info("raising the job's memory limit for its re-run", "runID", runID, "job", job,
 			"container", runnerContainer, "killedLimit", killed.String(), "limit", next.String())
 		target.RecordEvent(corev1.EventTypeNormal, "MemoryLimitRaisedForRetry", "RetryEvictedJob",
-			fmt.Sprintf("job %q of run %s was killed at its memory limit of %s; its next attempt gets %s, and it is re-run automatically once the run concludes", job, runID, killed.String(), next.String()))
+			fmt.Sprintf("%s. Job %q gets a limit of %s on its next attempt, and is re-run automatically once the run concludes", facts, job, next.String()))
 	}
 	// Parked rather than re-run now: a job that outgrows its memory is often one of a long
 	// matrix, and GitHub refuses the re-run until every sibling has concluded.

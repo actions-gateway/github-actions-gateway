@@ -146,14 +146,15 @@ Safety rails, in all profiles:
 ### When a job runs out of memory
 
 A job killed at its memory limit is normally the job's to fix: a re-run gets the same limit and is killed the same way.
-Under `Binpack` and `Throughput` the AGC chose that limit, so on a scale-set `RunnerSet` it re-runs the job with a higher one (Q1183).
+Under `Binpack` and `Throughput` the AGC chose that limit, so on a scale-set `RunnerSet` it re-runs a job killed for memory with a higher one (Q1183).
+It does not check that the job reached the limit; [which limit ran out](#which-limit-ran-out) is yours to judge.
 The history alone cannot be relied on to raise it, because a job killed at its limit is sampled at or below that limit.
 
 **What it does.** When a worker the profile built has its runner container killed `OOMKilled`, the job's next attempt gets the killed limit times the profile's headroom (1.4 under `Binpack`, `limitHeadroomPercent / 100` under `Throughput`), rounded up to 64Mi and capped at `maxRequests.memory`, or at twice the killed limit where you set none.
 Under `Binpack` the memory request rises with it, and nothing checks that a node can hold the raised request.
 One that no node can hold leaves the re-run's worker `Pending` with `WorkersUnschedulable` set, until the AGC cancels the run; a later placement of any worker on the set then re-runs it into the same wait, on the same budget (measured on dogfood, 2026-11-24).
 So under `Binpack` set `maxRequests.memory` no higher than the memory an empty worker node has free after its DaemonSets, less what the pod's other containers request: the cap applies to each container, not to the pod.
-The job is then re-run automatically on the same per-run budget as every other recovery (`maxEvictionRetries`), and a Normal `MemoryLimitRaisedForRetry` Event on the `RunnerSet` names the job, the run and both limits.
+The job is then re-run automatically on the same per-run budget as every other recovery (`maxEvictionRetries`), and a Normal `MemoryLimitRaisedForRetry` Event on the `RunnerSet` names the worker, its node, the job, the run, the memory request and both limits.
 The re-run waits until GitHub concludes the run, because GitHub refuses one while any other job of the run is still going, so a long matrix is re-run only after its last job finishes.
 It waits up to 24 hours, then gives up with an `EvictionRerunFailed` Warning Event and `actions_gateway_eviction_rerun_failures_total{cause="oom",reason="run_never_concluded"}`; re-run it by hand then.
 An AGC restart does not lose the wait (Q1244).
@@ -182,24 +183,45 @@ Five things follow:
 Every failed job is re-run, as a disruption's recovery does, where the AGC cannot tell which jobs were killed: GitHub's job list cannot be read, the worker's pod names no runner and its job name is not unique, a disruption recovery is re-running the same attempt, or 16 or more workers of one attempt were killed.
 
 A run whose budget is already spent gets `EvictionRetriesExhausted` instead, with no `MemoryLimitRaisedForRetry`; the raised limit still applies if you re-run it by hand.
-The raised limit stays with that job of that run for 7 days, so a manual re-run gets it too; no other job is affected, and the next run of the workflow starts from the history again.
+The raised limit stays with that job of that run for up to 7 days, so a manual re-run gets it too; no other job is affected, and the next run of the workflow starts from the history again.
 
 **When it does not.** Each of these is withheld with a Normal `EvictionRerunWithheld` Event and counted in `actions_gateway_eviction_rerun_withheld_total{cause="oom"}`, with no budget slot spent unless the row says so:
 
 | `reason` | Why | What to do |
 |---|---|---|
-| `own_limit` | The set's profile is `Static` or `NodeShare`, the profile was still `AwaitingSamples` when the pod was built, or the killed limit is already at `maxRequests.memory` | Raise the runner's memory limit, or `maxRequests.memory`, and re-run by hand |
-| `same_class_again` | The job was killed again after a retry raised its limit: one raise per job | The job needs more than the headroom gives it; look at what grew |
+| `own_limit` | The set's profile is `Static` or `NodeShare`, the profile was still `AwaitingSamples` when the pod was built, or the killed limit is already at `maxRequests.memory` | If the runner [reached its limit](#which-limit-ran-out), raise the limit or `maxRequests.memory`; then, in either case, re-run by hand |
+| `same_class_again` | The job was killed again after a retry raised its limit: one raise per job | If the runner [reached its limit](#which-limit-ran-out), look at what grew or raise the limit; then, in either case, re-run by hand, which gets the raised limit for up to 7 days |
 | `job_not_found` | No failed job of the run ran on the killed worker's runner: the runner took no job, or its job ended before the kill. Decided after the run concludes, so this one has spent its slot | Nothing, unless a job was lost; find it in the run's other attempts and re-run it by hand |
 | `breaker_open` | More than 10 runs were re-run for memory within 10 minutes, so retries are paused for 30, with one Warning `AutoRetryPaused` Event | Look for a shared cause first: a dependency that grew every job, or nodes packed past their memory |
 
 A sidecar killed for memory, such as `dind`, is not retried: the runner survives it and reports the job's own result.
-Neither is a runner with no memory limit, which the kernel killed for the node's memory rather than its own.
+Neither is a runner with no memory limit, since there is none to raise; it gets no Event from the retry, and `PlatformFaultOnFailedJob` reports its job.
 
 **What it hides.** A change that doubles a job's memory gets the memory on its one retry instead of failing.
 Watch `actions_gateway_eviction_retries_total{cause="oom"}` and the `MemoryLimitRaisedForRetry` Events; `actions_gateway_eviction_rerun_outcomes_total{cause="oom"}` says how often the raised retry passed, and the `ActionsGatewayRetryCauseMisclassified` alert fires when more than half of them fail over 7 days (Q1245).
 `actions_gateway_auto_retry_paused{cause="oom"}` reads 1 while the breaker has retries paused.
 The re-run's worker pods carry `actions-gateway.com/rerun-cause: oom`, so [cost attribution](cost-attribution.md#the-labels-and-namespaces-to-query) can count what the retries cost.
+
+#### Which limit ran out
+
+`OOMKilled` says the runner was killed for memory, and a runner is expected to read that way too when its node ran out, or the pod reached a limit of its own (Q1400).
+The AGC cannot tell them apart, so its Events name no cause and give you the node, the memory request and the limit.
+
+- **The runner's own limit is likely** where the template sets no pod-level `spec.resources`, and either the request equals the limit, as `Binpack` sets them, or the pod's `status.qosClass` is `Guaranteed`.
+  Such a runner is late in line when its node runs out, which makes this likely and not proven.
+- **The pod's limit is possible** where the template sets a memory limit in its pod-level `spec.resources`: the kernel then chooses inside the pod, so the runner's request says nothing.
+  Raise that limit: the runner shares it with the pod's other containers.
+- **The node is likely** where it reports a `SystemOOM` Event at about the time of the kill, or where other pods on it were evicted or killed for memory then.
+  No `SystemOOM` Event proves nothing: the kubelet raises none when the pods together reach the limit set for all of them, and Events expire, after an hour by default.
+
+```sh
+# Node Events are in the default namespace. <node> is the one the Event names.
+kubectl get events -n default \
+  --field-selector involvedObject.kind=Node,involvedObject.name=<node>,reason=SystemOOM
+```
+
+Where the node ran out, raise the runner's memory request toward its limit (`minRequests.memory` under a profile) or pack the node less, and re-run the job by hand: it may pass on another node.
+A full node kills a runner sooner the less memory it requests.
 
 ### Getting Guaranteed QoS out of `NodeShare`
 

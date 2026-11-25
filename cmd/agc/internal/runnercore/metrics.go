@@ -28,7 +28,7 @@ type Metrics struct {
 	// Spot or preemptible nodes are reclaimed under running jobs (Q1179), and a climbing
 	// `abandoned` rate means workers are not being placed at all before
 	// pendingPodDeadline reaps them (Q691). A climbing `oom` rate (scale-set only, Q1183)
-	// means jobs are outgrowing the memory a sizing profile gave them. No diagnosis
+	// means runners a sizing profile sized are being killed for memory. No diagnosis
 	// applies to another. The retry budget is NOT split by cause: it stays one hard cap
 	// per run_id across every cause together.
 	EvictionRetries          *prometheus.CounterVec
@@ -61,8 +61,8 @@ type Metrics struct {
 	//   - own_limit (cause eviction, Q1177): the kubelet evicted the worker for exceeding
 	//     its own ephemeral-storage or emptyDir limit, which a re-run with the same limit
 	//     repeats. Decided at detection, so no slot is spent. With cause oom (scale-set
-	//     only, Q1183), the runner was killed at a memory limit no sizing profile can
-	//     raise.
+	//     only, Q1183), the runner was killed for memory and a re-run may get the
+	//     limit it had, whether or not it reached it.
 	//   - same_class_again, breaker_open (cause oom, scale-set only, Q1183): the job was
 	//     killed again after a retry raised its limit, or too many runs were re-run for
 	//     memory at once. No slot is spent.
@@ -178,7 +178,7 @@ func NewMetrics() *Metrics {
 
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_retries_total",
-			Help: "Jobs automatically re-queued after a worker pod disruption, by cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom). cause=vanished names a worker already gone when the AGC started. cause=oom is a runner killed at its memory limit, re-run with a higher limit under a right-sizing profile.",
+			Help: "Jobs automatically re-queued after a worker pod disruption, by cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom). cause=vanished names a worker already gone when the AGC started. cause=oom is a runner killed for memory, re-run with a higher limit under a right-sizing profile.",
 		}, []string{"namespace", "runner_group", "cause"}),
 
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -193,7 +193,7 @@ func NewMetrics() *Metrics {
 
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_rerun_withheld_total",
-			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom) and reason (run_cancelled: the run concluded cancelled by someone other than GAG, so a re-run would undo that cancel — Q1181, no operator action needed; own_limit: cause eviction, the kubelet evicted the worker for exceeding its own ephemeral-storage or emptyDir limit, which a re-run repeats — Q1177, with no slot spent, and the fix is a higher limit, or with cause oom, Q1183, a runner killed at a memory limit no sizing profile can raise; same_class_again, breaker_open: cause oom, Q1183, the job was killed again after a retry raised its limit, or more than 10 runs were re-run for it within 10 minutes; job_not_found: cause oom, Q1319, no failed job of the run ran on the killed worker's runner, so nothing is re-run, with its slot spent; attempt_limit, run_too_old, superseded: Q1181, decided before the budget is reserved so no slot is spent — the run is past GitHub's 50 re-runs, older than its 30-day re-run window, or a newer commit's run of the same workflow, event and branch has started, or for a merge_group run, one for another group of its pull request — Q1381, which seen after detection has spent its slot; already_rerun, run_succeeded, worker_unstartable: Q1320, decided there too — a later attempt already re-ran the job, the run concluded success, which GitHub refuses to re-run, or the set's workers are placed and fail to start, the one of the three needing action: fix the image or its pull credentials, then re-run by hand).",
+			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom) and reason (run_cancelled: the run concluded cancelled by someone other than GAG, so a re-run would undo that cancel — Q1181, no operator action needed; own_limit: cause eviction, the kubelet evicted the worker for exceeding its own ephemeral-storage or emptyDir limit, which a re-run repeats — Q1177, with no slot spent, and the fix is a higher limit, or with cause oom, Q1183, a runner killed for memory whose re-run may get the limit it had, whether or not it reached it; same_class_again, breaker_open: cause oom, Q1183, the job was killed again after a retry raised its limit, or more than 10 runs were re-run for it within 10 minutes; job_not_found: cause oom, Q1319, no failed job of the run ran on the killed worker's runner, so nothing is re-run, with its slot spent; attempt_limit, run_too_old, superseded: Q1181, decided before the budget is reserved so no slot is spent — the run is past GitHub's 50 re-runs, older than its 30-day re-run window, or a newer commit's run of the same workflow, event and branch has started, or for a merge_group run, one for another group of its pull request — Q1381, which seen after detection has spent its slot; already_rerun, run_succeeded, worker_unstartable: Q1320, decided there too — a later attempt already re-ran the job, the run concluded success, which GitHub refuses to re-run, or the set's workers are placed and fail to start, the one of the three needing action: fix the image or its pull credentials, then re-run by hand).",
 		}, []string{"namespace", "runner_group", "cause", "reason"}),
 
 		AutoRetryPaused: prometheus.NewGaugeVec(prometheus.GaugeOpts{
