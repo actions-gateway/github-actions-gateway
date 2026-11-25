@@ -5759,7 +5759,7 @@ The root <code>make generate</code> / <code>make manifests</code> now cover all 
    The one exemption today is the GMC-bundled <code>RunnerGroup</code> CRD, which is not GMC controller-gen output at all — <a href="#install-artifact-validation"><code>make chart-crds-check</code></a> holds it byte-identical to the AGC copy (Q73).</li>
 </ol>
 <p>It regenerates into a scratch tree, never into the working tree, so it detects drift in the <em>committed</em> output (and any uncommitted hand-edit), not merely whether a regen-in-place produced a git diff.
-Cost is six controller-gen runs over already-parsed packages plus one ~30 MB copy of the working tree, ~4 s, plus the one-time <code>.build/controller-gen</code> build.</p>
+Cost is six controller-gen runs over already-parsed packages plus one ~60 MB copy of the working tree, ~4 s, plus the one-time <code>.build/controller-gen</code> build.</p>
 <p><strong>When it fails</strong>, the remedy is <code>make generate</code> from the repo root — that regenerates both halves for the same three modules the gate checks, so running it is exactly what makes the gate pass.
 Then <code>make chart-crds</code> to carry a CRD change into the Helm chart, and commit both.
 <code>make manifests</code> alone covers only the manifests half.
@@ -5770,7 +5770,7 @@ That holds for a <em>changed</em> type and is false for an <em>added</em> one: <
 Nothing failed to compile and nothing failed CI; it was found incidentally, by someone running <code>make generate</code> for an unrelated change (<a href="../../queue/">Q477</a>).</p>
 <p><strong>The DeepCopy half regenerates into a copy of the working tree</strong>, not into a redirected output dir like the manifests half.
 The <code>object</code> generator writes <code>zz_generated.deepcopy.go</code> beside its source, and controller-gen's output rule for it joins every package onto one path, so two API version packages in one module would land on the same file and the second would win.
-So the gate copies the tree (skipping <code>.git</code>, <code>.build</code>, <code>.claude</code>, <code>tmp/</code>, and the two vendored trees, which no module's DeepCopy run reads: each module's <code>go.work.gen</code> is a single-module workspace, so the repo-root workspace <code>vendor/</code> never applies) and regenerates there.
+So the gate copies the tree (skipping the top-level entries git ignores, <code>.git</code>, <code>.claude</code>, <code>tmp/</code>, and the two vendored trees, which no module's DeepCopy run reads: each module's <code>go.work.gen</code> is a single-module workspace, so the repo-root workspace <code>vendor/</code> never applies) and regenerates there.
 It has to be the whole tree, not one module: <code>cmd/agc</code> and <code>cmd/gmc</code> reach their first-party dependencies through relative <code>replace … =&gt; ../../api</code> directives.
 Inside the copy each module's committed DeepCopy is deleted before its own run, so a file that survives is one controller-gen no longer produces — and <code>DEEPCOPY_MODULES</code> is therefore in dependency order, <code>api</code> first.</p>
 <p>Wired into <code>make check</code> and CI's <code>lint</code> job in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml"><code>unit-test.yml</code></a> — deliberately <strong>not</strong> <code>manifest-validate.yml</code>, whose <code>manifests</code> filter is scoped to the generated YAML by design.
