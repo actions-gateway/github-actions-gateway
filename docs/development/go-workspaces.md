@@ -8,15 +8,16 @@ The **Internal deps** column lists the other workspace modules each one imports 
 
 | Directory | Module path | Internal deps |
 |---|---|---|
-| `api/` | `github.com/actions-gateway/github-actions-gateway/api` | — |
-| `githubapp/` | `github.com/actions-gateway/github-actions-gateway/githubapp` | — |
+| `api/` | `github.com/actions-gateway/github-actions-gateway/api` | none |
+| `githubapp/` | `github.com/actions-gateway/github-actions-gateway/githubapp` | none |
 | `broker/` | `github.com/actions-gateway/github-actions-gateway/broker` | `githubapp` |
 | `scaleset/` | `github.com/actions-gateway/github-actions-gateway/scaleset` | `githubapp` |
 | `cmd/probe/` | `github.com/actions-gateway/github-actions-gateway/probe` | `broker`, `githubapp`, `scaleset` |
 | `cmd/agc/` | `github.com/actions-gateway/github-actions-gateway/agc` | `api`, `broker`, `githubapp` |
 | `cmd/gmc/` | `github.com/actions-gateway/github-actions-gateway/gmc` | `api`, `broker`, `githubapp`, `agc` |
-| `cmd/proxy/` | `github.com/actions-gateway/github-actions-gateway/proxy` | — |
-| `cmd/worker/` | `github.com/actions-gateway/github-actions-gateway/worker` | — |
+| `cmd/proxy/` | `github.com/actions-gateway/github-actions-gateway/proxy` | none |
+| `cmd/worker/` | `github.com/actions-gateway/github-actions-gateway/worker` | none |
+| `cmd/oomreporter/` | `github.com/actions-gateway/github-actions-gateway/oomreporter` | none |
 | `test/fakegithub/` | `github.com/actions-gateway/github-actions-gateway/fakegithub` | `broker` |
 
 The `api/` module holds the v2 (`actions-gateway.com`) API kinds shared by both controllers.
@@ -36,7 +37,7 @@ gmc ─► agc
 agc, gmc ─► api
 scaleset ─► githubapp
 
-proxy, worker   (standalone — no internal deps)
+proxy, worker, oomreporter   (standalone — no internal deps)
 ```
 
 `scaleset` (the GAG-owned runner-scale-set protocol client, Q264 Option E) is a `broker`-style leaf that depends only on `githubapp`; it has no importer yet — the AGC will import it in Q264 P3 when the scale-set acquisition tier lands.

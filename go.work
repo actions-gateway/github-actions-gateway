@@ -5,6 +5,7 @@ use (
 	./broker
 	./cmd/agc // Milestone 2
 	./cmd/gmc // Milestone 4
+	./cmd/oomreporter // Q1403: imports no other module here, and none imports it
 	./cmd/probe // Milestone 1
 	./cmd/proxy // Milestone 4
 	./cmd/worker
