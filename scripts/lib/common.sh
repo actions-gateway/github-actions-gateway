@@ -549,6 +549,14 @@ RENDER_DIGEST_ARGS=(
 	--set-string "wrapper.image.digest=$POLARIS_RENDER_DIGEST"
 )
 
+# The same for charts/oom-reporter, which also refuses to render without the
+# namespaces it writes to.
+# shellcheck disable=SC2034
+OOM_REPORTER_RENDER_ARGS=(
+	--set-string "image.digest=$POLARIS_RENDER_DIGEST"
+	--set "namespaces={team-a}"
+)
+
 # go_retry_transient CMD... — run a go command that fetches modules, re-running
 # it up to GO_FETCH_ATTEMPTS (default 3) times, GO_FETCH_RETRY_DELAY seconds
 # (default 5) apart, while its stderr carries a dropped HTTP/2 stream from the

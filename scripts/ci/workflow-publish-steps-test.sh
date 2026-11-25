@@ -69,8 +69,8 @@ REPORTS="$WORK/reports"
 : >"$REPORTS"
 fails=0
 
-# The 19 cases plus registry-complete. Bump it with the case you add.
-EXPECTED_REPORTS=20
+# The cases plus registry-complete. Bump it with the case you add.
+EXPECTED_REPORTS=22
 
 fail() {
 	printf 'FAIL %-38s %s\n' "$1" "$2" >&2
@@ -123,6 +123,7 @@ extract() {
 
 CHART_STEP="chart"
 CHART_CRDS_STEP="chart_crds_v2"
+CHART_OOM_STEP="chart_oom_reporter"
 COMPOSE_STEP="Compose and create the GitHub Release (prerelease-aware, Q293)"
 CRD_ASSET_STEP="Render, sign, and attach the v2 CRD manifest to the release (keyless, Q276)"
 MIGRATE_STEP="Build, sign, and attach the gag-migrate CLI binaries (keyless, Q306)"
@@ -130,6 +131,7 @@ PUBLISH_STEP="Publish the release now every asset is attached"
 
 CHART_BODY="$(extract "$CHART_STEP" chart)"
 CHART_CRDS_BODY="$(extract "$CHART_CRDS_STEP" chart-crds-v2)"
+CHART_OOM_BODY="$(extract "$CHART_OOM_STEP" chart-oom-reporter)"
 COMPOSE_BODY="$(extract "$COMPOSE_STEP" compose-release)"
 CRD_ASSET_BODY="$(extract "$CRD_ASSET_STEP" crd-asset)"
 MIGRATE_BODY="$(extract "$MIGRATE_STEP" migrate-binaries)"
@@ -141,6 +143,8 @@ grep -q 'helm push' "$CHART_BODY" ||
 	refuse "the chart step no longer runs \`helm push\`, so its cases assert about a step that has stopped acting"
 grep -q 'cosign sign' "$CHART_CRDS_BODY" ||
 	refuse "the v2 CRD chart step no longer runs \`cosign sign\`, so its cases assert about a step that has stopped acting"
+grep -q 'cosign sign' "$CHART_OOM_BODY" ||
+	refuse "the oom-reporter chart step no longer runs \`cosign sign\`, so its cases assert about a step that has stopped acting"
 grep -q 'gh release create' "$COMPOSE_BODY" ||
 	refuse "the compose step no longer runs \`gh release create\`, so its cases assert about a step that has stopped acting"
 grep -q 'gh release upload' "$CRD_ASSET_BODY" ||
@@ -164,7 +168,7 @@ new_sandbox() {
 	local dir="$WORK/sb-$1"
 	rm -rf "$dir"
 	mkdir -p "$dir/bin" "$dir/runner-temp" "$dir/scripts/fetch" "$dir/scripts/release" \
-		"$dir/charts/actions-gateway" "$dir/charts/actions-gateway-crds-v2"
+		"$dir/charts/actions-gateway" "$dir/charts/actions-gateway-crds-v2" "$dir/charts/oom-reporter"
 	: >"$dir/outputs"
 	: >"$dir/calls"
 	# The REAL retry wrapper, not a stub: the bodies route every registry call
@@ -334,7 +338,7 @@ CHART_DIGEST='sha256:11111111111111111111111111111111111111111111111111111111111
 INDEX_DIGEST='sha256:2222222222222222222222222222222222222222222222222222222222222222'
 
 # ============================================================================
-# `chart` / `chart_crds_v2` — the digest a signature binds to
+# `chart` / `chart_crds_v2` / `chart_oom_reporter` — the digest a signature binds to
 # ============================================================================
 #
 # `helm push` prints the pushed bytes' digest and the body awks it back out, so
@@ -389,6 +393,27 @@ if [[ -n "$dir" ]]; then
 		expect_stdout chart-crds-unparsed-signs-nothing "$dir" \
 			'could not parse pushed v2 CRD chart digest' &&
 		pass chart-crds-unparsed-signs-nothing 'the v2 CRD chart also signs nothing on an unparsed digest'
+fi
+
+dir="$(run_chart chart-oom-signs-pushed-digest "$CHART_OOM_BODY" "$CHART_DIGEST")"
+if [[ -n "$dir" ]]; then
+	expect_call chart-oom-signs-pushed-digest "$dir" \
+		"cosign sign --yes --new-bundle-format=false --use-signing-config=false ghcr.io/actions-gateway/charts/oom-reporter@$CHART_DIGEST" &&
+		expect_call chart-oom-signs-pushed-digest "$dir" 'helm package charts/oom-reporter' &&
+		expect_call chart-oom-signs-pushed-digest "$dir" \
+			"helm push $dir/runner-temp/oom-reporter-1.6.0.tgz oci://ghcr.io/actions-gateway/charts" &&
+		expect_call chart-oom-signs-pushed-digest "$dir" 'charts/oom-reporter/Chart.yaml' &&
+		expect_out_file chart-oom-signs-pushed-digest "$dir" \
+			"ref=ghcr.io/actions-gateway/charts/oom-reporter@$CHART_DIGEST" &&
+		pass chart-oom-signs-pushed-digest 'the oom-reporter chart is stamped, and signs its own pushed digest'
+fi
+
+dir="$(run_chart chart-oom-unparsed-signs-nothing "$CHART_OOM_BODY" '' 1)"
+if [[ -n "$dir" ]]; then
+	expect_no_call chart-oom-unparsed-signs-nothing "$dir" 'cosign sign' &&
+		expect_stdout chart-oom-unparsed-signs-nothing "$dir" \
+			'could not parse pushed oom-reporter chart digest' &&
+		pass chart-oom-unparsed-signs-nothing 'the oom-reporter chart also signs nothing on an unparsed digest'
 fi
 
 # --- the guard, deleted -----------------------------------------------------
@@ -683,6 +708,7 @@ step_registry() {
 	cat <<'EOF'
 chart|driven|packages, pushes and signs the main chart
 chart_crds_v2|driven|packages, pushes and signs the opt-in v2 CRD chart
+chart_oom_reporter|driven|packages, pushes and signs the oom-reporter chart
 Compose and create the GitHub Release (prerelease-aware, Q293)|driven|creates the draft Release and writes its notes
 Render, sign, and attach the v2 CRD manifest to the release (keyless, Q276)|driven|signs and attaches the rendered CRD manifest
 Build, sign, and attach the gag-migrate CLI binaries (keyless, Q306)|driven|signs and attaches the CLI binaries
@@ -780,7 +806,7 @@ fi
 # emits a variable number of verdicts: one per registry finding (an unclassified
 # step, a stale entry, or an entry whose live check fails) plus the summary line.
 # All three shapes measured separately, each giving 19 ok and 2 FAIL, so 21
-# against an EXPECTED_REPORTS of 20, which an unconditional check would call a
+# against an EXPECTED_REPORTS of 20 then, which an unconditional check would call a
 # lost case.
 count_fails
 if ((fails == 0)); then

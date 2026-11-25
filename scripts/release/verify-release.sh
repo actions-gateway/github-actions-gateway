@@ -3,7 +3,7 @@
 # Verify the keyless cosign signatures of a published release: the eight images
 # (gmc, agc, proxy, worker, wrapper, build-runner, cache-runner, oomreporter) at the version
 # tag, the SPDX SBOM attestation on each image's per-arch manifests (amd64 and
-# arm64 both required), both Helm chart OCI artifacts, and every
+# arm64 both required), the three Helm chart OCI artifacts, and every
 # `*.cosign.bundle` blob signature on the GitHub Release.
 # Backs `make verify-release VERSION=vX.Y.Z` and `make verify-release-compat`;
 # the identity/issuer constraints match what .github/workflows/publish.yml signs
@@ -152,6 +152,8 @@ printf '==> %-28s %s ... ' "chart" "$chart_ver"
 check verify "$repo/charts/actions-gateway:$chart_ver" || rc=1
 printf '==> %-28s %s ... ' "crds-v2 chart" "$chart_ver"
 check verify "$repo/charts/actions-gateway-crds-v2:$chart_ver" || rc=1
+printf '==> %-28s %s ... ' "oom-reporter chart" "$chart_ver"
+check verify "$repo/charts/oom-reporter:$chart_ver" || rc=1
 
 # Every blob signature on the Release: the v2 CRD manifest always, and the
 # gag-migrate SHA256SUMS while that asset ships. Each bundle signs the asset

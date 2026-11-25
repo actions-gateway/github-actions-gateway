@@ -69,7 +69,7 @@ One spelling across the tiers, but two filters underneath:
 |---|---|---|---|
 | `make test`, `make test-race` | `go test -run` | the Go test-function name | **fails** |
 | `make e2e` | `ginkgo --focus` | the spec's full text | **fails** |
-| `make test-integration`, `make -C cmd/agc\|cmd/gmc test-integration` | `go test -run` | the Go test-function name | **fails** |
+| `make -C cmd/agc\|cmd/gmc test-integration`, `make test-integration-oomreporter` | `go test -run` | the Go test-function name | **fails** |
 
 Both filters are regexes, so `RUN='TestMerge_'` selects a family and `RUN='provisions a worker pod'` selects one spec by its description.
 On `make e2e`, `RUN` composes with [`SUITE`](#end-to-end-tests): `SUITE` picks a labelled subset, `RUN` picks specs inside it.
@@ -81,7 +81,7 @@ make e2e SUITE=single-node RUN='E2E_GMC_ProxyServiceCreated'
 
 **A filter that matches nothing is a failure, not a pass.** Left alone, both tools report success on a miss: `go test -run` prints `[no tests to run]` and exits 0, and ginkgo exits 0 having run 0 specs.
 A mistyped name then reads exactly like the test passing, which is the knob's whole purpose inverted (Q680).
-`make test` therefore fails when no test ran in **any** module, the two `test-integration` targets fail when none ran in theirs (Q736), and `make e2e` passes `--fail-on-empty`, which also catches a `SUITE` that selects nothing:
+`make test` therefore fails when no test ran in **any** module, each module's `test-integration` target fails when none ran in it (Q736), and `make e2e` passes `--fail-on-empty`, which also catches a `SUITE` that selects nothing:
 
 ```
 ==> RUN='TestNoSuchThingAnywhere' matched no tests in any module — nothing ran
@@ -3057,15 +3057,17 @@ Hosted Linux runners also expose `/dev/kvm` if VM-level isolation (Kata, Firecra
 
 Integration tests use envtest and are gated by the `integration` build tag.
 They live under `internal/controller/integration/` in both `cmd/agc` and `cmd/gmc`.
+`cmd/oomreporter` has its own in package `main`, because they run its two programs: they load `charts/oom-reporter` as helm renders it, so they need `helm` on `PATH`, and hold its grants and admission policies with the tokens its pods would have.
 Use the dedicated Makefile targets — they set `KUBEBUILDER_ASSETS` automatically:
 
 ```bash
-make test-integration              # runs both cmd/agc and cmd/gmc integration tests
+make test-integration              # runs cmd/agc, cmd/gmc and cmd/oomreporter integration tests
 make -C cmd/agc test-integration   # AGC only
 make -C cmd/gmc test-integration   # GMC only
+make test-integration-oomreporter  # oomreporter only
 ```
 
-**In CI the two modules are a matrix, one job each,** so the tier costs the slower suite rather than their sum.
+**In CI the modules are a matrix, one job each,** so the tier costs the slower suite rather than their sum.
 They had shared a job, which serialized them at 308s (GMC) then 284s (AGC) inside a 617s job (measured 2026-08-12); as a matrix that is roughly 333s.
 Two consequences when reading a run: the check names are `integration-test (gmc)` and `integration-test (agc)` rather than a single `integration-test`, and `fail-fast` is off, so a failure in one still lets the other report.
 Whether a change broke one module or both is usually the first thing triage needs, and one aggregated red could not answer it.
@@ -3123,7 +3125,7 @@ So diff the harness's literal against `main.go` field by field rather than readi
 ### The envtest suite budget
 
 `go test -timeout` gives each suite a wall-clock budget.
-It is **10m**, single-sourced in [`scripts/go/go-test-integration.sh`](../../scripts/go/go-test-integration.sh), which both module Makefiles and the matrixed CI step run through.
+It is **10m**, single-sourced in [`scripts/go/go-test-integration.sh`](../../scripts/go/go-test-integration.sh), which every module's make target and the matrixed CI step run through.
 The budget is per test *binary*, so each module's suite gets its own.
 That is also why the CI job's own `timeout-minutes` is 20 rather than 30: one entry now carries one 10m budget plus setup and the `-race` build, and the job timeout has to stay above that or it kills a hung suite before the suite's own timeout can produce the goroutine dump.
 
@@ -4220,9 +4222,9 @@ On a `v*` release tag, the separate [`publish.yml`](../../.github/workflows/publ
 Operator-facing verification (`cosign verify`, SBOM retrieval) is documented in [security-operations.md § Image provenance](../operations/security-operations.md#image-provenance-signature--sbom-verification).
 The signing/attestation steps run only on publish, so PR CI does not exercise them.
 
-**polaris** — audits the Kubernetes security/best-practice posture of the **shipped install artifact**: it renders the [Helm chart](../../charts/actions-gateway) (digest-pinned, matching the production posture) and checks the rendered manifests.
+**polaris** — audits the Kubernetes security/best-practice posture of the **shipped install artifact**: it renders the [Helm chart](../../charts/actions-gateway) (digest-pinned, matching the production posture) and the [oom-reporter chart](../../charts/oom-reporter), and checks the rendered manifests.
 The gate **fails on `danger` findings only** (privileged container, host namespace, dangerous capabilities, missing `securityContext`, a floating `:latest` image tag) — a real posture regression in the chart cannot merge — while `warning`s are reported for visibility.
-False-positive warnings against a Helm-packaged operator chart are tuned to `ignore` in [`charts/actions-gateway/polaris.yaml`](../../charts/actions-gateway/polaris.yaml) (via `--merge-config`, so every default `danger` check stays active), each with a justifying comment.
+False-positive warnings against a Helm-packaged operator chart are tuned to `ignore`, for both, in [`charts/actions-gateway/polaris.yaml`](../../charts/actions-gateway/polaris.yaml) (via `--merge-config`, so every default `danger` check stays active), each with a justifying comment.
 Run it locally (requires `helm` and `polaris` on `PATH`) with:
 
 ```
@@ -4255,6 +4257,8 @@ It first runs the chart CRD/RBAC drift gates (`make chart-crds-check` + `make ch
 It also asserts that **no `ValidatingAdmissionPolicyBinding` carries `helm.sh/resource-policy: keep`**.
 A binding is what makes a policy enforce, so retaining one across `helm uninstall` would leave the guard active after the release is gone and make `admissionPolicy.enabled=false` a silent no-op.
 There is deliberately no matching assertion on the *policies*: retaining the `paramKind`-bearing policy was the first attempted fix for Q444 and it did not work, so asserting it here would re-freeze a wrong answer.
+
+The [oom-reporter chart](../../charts/oom-reporter) gets the same layers, and checks of its own: it must refuse to render without an image digest, without the namespaces it may write to, with a node label a kubelet may set on its own node, and with tolerations where taints are its placement; and its service accounts, role bindings and admission policies must name the same two accounts under a release name long enough to be cut.
 
 The tool versions are pinned in the workflow (`KUBECONFORM_VERSION`, `YAMLLINT_VERSION`); bump them deliberately, since a new kubeconform can change validation behaviour.
 CI persists kubeconform's downloaded JSON schemas in an `actions/cache` keyed on the validated Kubernetes version so runs do not re-fetch the schema set from GitHub.

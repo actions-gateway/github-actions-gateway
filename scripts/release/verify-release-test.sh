@@ -178,6 +178,7 @@ for img in gmc agc proxy worker wrapper build-runner cache-runner oomreporter; d
 done
 want_refs+='verify ghcr.io/actions-gateway/charts/actions-gateway:1.2.3
 verify ghcr.io/actions-gateway/charts/actions-gateway-crds-v2:1.2.3
+verify ghcr.io/actions-gateway/charts/oom-reporter:1.2.3
 verify-blob actions-gateway-crds-v2.yaml
 verify-blob SHA256SUMS'
 got_refs="$(awk '{ref = $NF; if ($1 == "verify-blob") sub(/.*\//, "", ref); print $1, ref}' "$COSIGN_LOG")"

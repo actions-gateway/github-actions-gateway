@@ -1,0 +1,163 @@
+{{- /* RBAC grants more than each of these lets through, so there is no value that turns them off. */}}
+{{- $agent := include "oom-reporter.username" (list . "oom-reporter.agentName") }}
+{{- $controller := include "oom-reporter.username" (list . "oom-reporter.controllerName") }}
+# The controller changes nothing of a pod but its own conditions. pods/status is
+# wider: it lets labels, annotations and finalizers through, and every other
+# status field. A typed object's fields cannot be iterated, so they are listed;
+# a test holds the lists to the types.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "oom-reporter.sharedName" . }}-pod-conditions
+  labels:
+    {{- include "oom-reporter.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["pods/status"]
+  matchConditions:
+    # Nothing more: it is evaluated for every write of a pod's status in the
+    # cluster, and an error in it would refuse the write.
+    - name: only-the-controller
+      expression: {{ printf "request.userInfo.username == '%s'" $controller | quote }}
+  variables:
+    - name: ours
+      expression: "'oom.actions-gateway.com/'"
+    - name: old
+      expression: "oldObject.?status.?conditions.orValue([]).filter(c, !c.type.startsWith(variables.ours))"
+    - name: mine
+      expression: "object.?status.?conditions.orValue([]).filter(c, c.type.startsWith(variables.ours))"
+    - name: new
+      expression: "object.?status.?conditions.orValue([]).filter(c, !c.type.startsWith(variables.ours))"
+  validations:
+    - expression: "variables.old == variables.new"
+      message: "the oom-reporter controller changes no pod condition outside oom.actions-gateway.com"
+      reason: Forbidden
+    # A pod that is too large to store is one its kubelet can write nothing to. The
+    # API server bounds a type.
+    - expression: "variables.mine.size() <= 200 && variables.mine.all(c, c.?reason.orValue('').size() <= 64 && c.?message.orValue('').size() <= 512)"
+      message: "the oom-reporter controller's conditions of a pod are too many or too long"
+      reason: Forbidden
+    {{- $metadata := list "name" "generateName" "namespace" "selfLink" "uid" "generation" "creationTimestamp" "deletionTimestamp" "deletionGracePeriodSeconds" "labels" "annotations" "ownerReferences" "finalizers" }}
+    {{- range $metadata }}
+    - expression: "object.metadata.?{{ . }} == oldObject.metadata.?{{ . }}"
+      message: "the oom-reporter controller changes no metadata.{{ . }} of a pod"
+      reason: Forbidden
+    {{- end }}
+    {{- $status := list "observedGeneration" "phase" "message" "reason" "nominatedNodeName" "hostIP" "hostIPs" "podIP" "podIPs" "startTime" "initContainerStatuses" "containerStatuses" "qosClass" "ephemeralContainerStatuses" "resize" "resourceClaimStatuses" "extendedResourceClaimStatus" "allocatedResources" "resources" "nodeAllocatableResourceClaimStatuses" "volumeHealth" }}
+    {{- range $status }}
+    - expression: "object.?status.?{{ . }} == oldObject.?status.?{{ . }}"
+      message: "the oom-reporter controller changes no status.{{ . }} of a pod"
+      reason: Forbidden
+    {{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "oom-reporter.sharedName" . }}-pod-conditions
+  labels:
+    {{- include "oom-reporter.labels" . | nindent 4 }}
+spec:
+  policyName: {{ include "oom-reporter.sharedName" . }}-pod-conditions
+  validationActions: [Deny]
+---
+# The controller's Events carry its own reasons. Others' are read for theirs: an
+# autoscaler's by the AGC, for one.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "oom-reporter.sharedName" . }}-event-reasons
+  labels:
+    {{- include "oom-reporter.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["", "events.k8s.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["events"]
+  matchConditions:
+    - name: only-the-controller
+      expression: {{ printf "request.userInfo.username == '%s'" $controller | quote }}
+  validations:
+    - expression: "object.?reason.orValue('') in ['OOMContainerLimit', 'OOMPodLimit', 'OOMPodsLimit', 'OOMAbovePods', 'OOMUnknown', 'OOMProcessKilled']"
+      message: "the oom-reporter controller writes Events of its own reasons alone"
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "oom-reporter.sharedName" . }}-event-reasons
+  labels:
+    {{- include "oom-reporter.labels" . | nindent 4 }}
+spec:
+  policyName: {{ include "oom-reporter.sharedName" . }}-event-reasons
+  validationActions: [Deny]
+---
+# A report is written by its own node's agent: the one whose token names the node
+# the report is named for. Neither component writes another ConfigMap, and those
+# stay writable by others, as kube-root-ca.crt is by its publisher.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ include "oom-reporter.sharedName" . }}-report-writer
+  labels:
+    {{- include "oom-reporter.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["configmaps"]
+  variables:
+    - name: isAgent
+      expression: {{ printf "request.userInfo.username == '%s'" $agent | quote }}
+    - name: isController
+      expression: {{ printf "request.userInfo.username == '%s'" $controller | quote }}
+    - name: isReport
+      expression: "object.metadata.name.startsWith('oom-report-')"
+    - name: nodes
+      expression: "request.userInfo.?extra[?'authentication.kubernetes.io/node-name'].orValue([])"
+  validations:
+    - expression: "!variables.isReport || variables.isController || (variables.isAgent && variables.nodes.size() == 1 && object.metadata.name == 'oom-report-' + variables.nodes[0])"
+      message: "an oom-report- ConfigMap is written only by the oom-reporter agent whose token names its node"
+      reason: Forbidden
+    # The controller does nothing until it has been refused with this message.
+    - expression: "!(variables.isAgent || variables.isController) || variables.isReport"
+      message: "the oom-reporter writes no ConfigMap but its reports"
+      reason: Forbidden
+    # Each would outlive the agent that set it, and the first refuses the next
+    # one's writes.
+    - expression: "!variables.isReport || (!object.?immutable.orValue(false) && object.metadata.?finalizers.orValue([]).size() == 0 && object.metadata.?ownerReferences.orValue([]).size() == 0)"
+      message: "an oom-report- ConfigMap has no immutable, finalizers or ownerReferences"
+      reason: Forbidden
+    # Other programs pick ConfigMaps of every namespace by these, and act on them.
+    - expression: "!variables.isReport || (object.metadata.?labels.orValue({}).size() == 0 && object.metadata.?annotations.orValue({}).size() == 0)"
+      message: "an oom-report- ConfigMap has no labels or annotations"
+      reason: Forbidden
+    - expression: "!variables.isReport || (object.?binaryData.orValue({}).size() == 0 && object.?data.orValue({}).all(k, k == 'report' && object.data[k].size() <= 262144))"
+      message: "an oom-report- ConfigMap holds a report and nothing else"
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ include "oom-reporter.sharedName" . }}-report-writer
+  labels:
+    {{- include "oom-reporter.labels" . | nindent 4 }}
+spec:
+  policyName: {{ include "oom-reporter.sharedName" . }}-report-writer
+  validationActions: [Deny]
+  matchResources:
+    # The API server sets this label on every write of a namespace, so it cannot
+    # be moved off.
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Release.Namespace }}

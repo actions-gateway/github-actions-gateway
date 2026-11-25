@@ -1,0 +1,322 @@
+# What charts/oom-reporter renders with a tenant's namespace and an image's digest, which a test holds
+# it to, so that a change of a grant, or of what a pod may do, is one here too. It leaves out each
+# object's own labels and the rules of the policies, which are held by what the API server refuses.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: oom-reporter-api-server-ports
+  namespace: oom-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: oom-reporter
+      app.kubernetes.io/instance: oom-reporter
+  policyTypes: ["Ingress", "Egress"]
+  egress:
+    - ports:
+        - port: 443
+          protocol: TCP
+        - port: 6443
+          protocol: TCP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: oom-reporter-agent
+  namespace: oom-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: oom-reporter-controller
+  namespace: oom-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: oom-reporter-agent
+  namespace: oom-system
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: oom-reporter-controller
+  namespace: oom-system
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: oom-system.oom-reporter-pods
+  namespace: team-a
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/status"]
+    verbs: ["patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: oom-reporter-agent
+  namespace: oom-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: oom-reporter-agent
+subjects:
+  - kind: ServiceAccount
+    name: oom-reporter-agent
+    namespace: oom-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: oom-reporter-controller
+  namespace: oom-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: oom-reporter-controller
+subjects:
+  - kind: ServiceAccount
+    name: oom-reporter-controller
+    namespace: oom-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: oom-system.oom-reporter-pods
+  namespace: team-a
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: oom-system.oom-reporter-pods
+subjects:
+  - kind: ServiceAccount
+    name: oom-reporter-controller
+    namespace: oom-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: oom-reporter-agent
+  namespace: oom-system
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oom-reporter
+      app.kubernetes.io/instance: oom-reporter
+      app.kubernetes.io/component: agent
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oom-reporter
+        app.kubernetes.io/instance: oom-reporter
+        app.kubernetes.io/component: agent
+    spec:
+      serviceAccountName: oom-reporter-agent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: agent
+        image: ghcr.io/actions-gateway/oomreporter@sha256:1111111111111111111111111111111111111111111111111111111111111111
+        imagePullPolicy: IfNotPresent
+        command: ["/oomreporter"]
+        args:
+        - agent
+        - -cgroup-mount=/host/sys/fs/cgroup
+        - -pods-root=kubepods.slice
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          limits:
+            memory: 128Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        volumeMounts:
+        - name: cgroup
+          mountPath: /host/sys/fs/cgroup
+          readOnly: true
+      volumes:
+      - name: cgroup
+        hostPath:
+          path: /sys/fs/cgroup
+          type: Directory
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+        - operator: Exists
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oom-reporter-controller
+  namespace: oom-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oom-reporter
+      app.kubernetes.io/instance: oom-reporter
+      app.kubernetes.io/component: controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oom-reporter
+        app.kubernetes.io/instance: oom-reporter
+        app.kubernetes.io/component: controller
+    spec:
+      serviceAccountName: oom-reporter-controller
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: controller
+        image: ghcr.io/actions-gateway/oomreporter@sha256:1111111111111111111111111111111111111111111111111111111111111111
+        imagePullPolicy: IfNotPresent
+        command: ["/oomreporter"]
+        args:
+        - controller
+        - -agents=app.kubernetes.io/name=oom-reporter,app.kubernetes.io/instance=oom-reporter,app.kubernetes.io/component=agent
+        - -namespaces=team-a
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 20m
+            memory: 64Mi
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-restriction.kubernetes.io/oom-reporter
+                operator: In
+                values: ["controller"]
+      nodeSelector:
+        kubernetes.io/os: linux
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: oom-system.oom-reporter-pod-conditions
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["UPDATE"]
+        resources: ["pods/status"]
+  matchConditions:
+    - name: only-the-controller
+      expression: "request.userInfo.username == 'system:serviceaccount:oom-system:oom-reporter-controller'"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: oom-system.oom-reporter-event-reasons
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["", "events.k8s.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["events"]
+  matchConditions:
+    - name: only-the-controller
+      expression: "request.userInfo.username == 'system:serviceaccount:oom-system:oom-reporter-controller'"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: oom-system.oom-reporter-report-writer
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["configmaps"]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: oom-system.oom-reporter-pod-conditions
+spec:
+  policyName: oom-system.oom-reporter-pod-conditions
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: oom-system.oom-reporter-event-reasons
+spec:
+  policyName: oom-system.oom-reporter-event-reasons
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: oom-system.oom-reporter-report-writer
+spec:
+  policyName: oom-system.oom-reporter-report-writer
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: oom-system

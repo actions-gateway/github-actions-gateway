@@ -44,6 +44,8 @@ chart="$REPO_ROOT/charts/actions-gateway"
 # large pod-template CRDs do not push the main chart's Helm release past the 1 MiB
 # limit (Q149). CRD-only: no images, no digest pinning.
 crds_v2_chart="$REPO_ROOT/charts/actions-gateway-crds-v2"
+# The node reporter for out-of-memory kills (Q1403), which stands alone.
+oom_chart="$REPO_ROOT/charts/oom-reporter"
 
 # kubeconform flags: -strict rejects unknown fields; -ignore-missing-schemas
 # skips resources whose schema is not in the upstream Kubernetes set —
@@ -85,7 +87,7 @@ kubeconform_flags="-strict -summary -kubernetes-version $MANIFEST_K8S_VERSION -i
 # deploy/gha-cache is the Q215 per-tenant cache server, the same class as
 # deploy/registry-mirror: kustomize files yamllint-only, its native kinds
 # kubeconformed via standalone_manifests below.
-yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/dogfood-metrics deploy/dragonfly-core deploy/dragonfly-node deploy/gha-cache deploy/kata-ci deploy/registry-mirror deploy/templates deploy/monitoring/prometheusrule.yaml"
+yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 charts/oom-reporter cmd/agc/config cmd/gmc/config deploy/dogfood-metrics deploy/dragonfly-core deploy/dragonfly-node deploy/gha-cache deploy/kata-ci deploy/registry-mirror deploy/templates deploy/monitoring/prometheusrule.yaml"
 
 # The shipped Grafana dashboards. Nothing parsed them before Q827, so a stray
 # comma survived to whoever imported the file. jq is required-tier already.
@@ -169,6 +171,63 @@ helm lint "$REPO_ROOT/deploy/dragonfly-core/ca-chart"
 helm template dragonfly-proxy-ca "$REPO_ROOT/deploy/dragonfly-core/ca-chart" >"$crds_v2_render_dir/dragonfly-ca.yaml"
 # shellcheck disable=SC2086
 kubeconform $kubeconform_flags "$crds_v2_render_dir/dragonfly-ca.yaml"
+
+echo "==> helm lint + kubeconform: oom-reporter"
+helm lint "$oom_chart" "${OOM_REPORTER_RENDER_ARGS[@]}"
+oom_renders=(
+	"--set controller.placement=Taints"
+	"--set networkPolicy.enabled=false"
+	"--set networkPolicy.apiServerCIDRs={192.0.2.1/32}"
+	"--set namespaces=null --set allNamespaces=true"
+	"--set image.digest= --set allowFloatingImageTags=true"
+	"--set agent.nodeSelector=null --set controller.nodeSelector=null"
+)
+for extra in "" "${oom_renders[@]}"; do
+	# shellcheck disable=SC2086
+	helm template oom "$oom_chart" "${OOM_REPORTER_RENDER_ARGS[@]}" $extra \
+		| kubeconform $kubeconform_flags
+done
+
+echo "==> helm template: oom-reporter refuses what its grants and placement rest on"
+oom_refuses() {
+	local want="$1" out
+	shift
+	if out="$(helm template oom "$oom_chart" "$@" 2>&1)"; then
+		echo "ERROR: oom-reporter rendered with $*" >&2
+		exit 1
+	elif ! grep -q -- "$want" <<<"$out"; then
+		echo "ERROR: oom-reporter's render with $* failed, and not with '$want':" >&2
+		echo "$out" >&2
+		exit 1
+	fi
+}
+oom_refuses "image must be pinned by digest" --set "namespaces={team-a}"
+oom_refuses "set namespaces to those" --set-string "image.digest=$POLARIS_RENDER_DIGEST"
+oom_refuses "not both" "${OOM_REPORTER_RENDER_ARGS[@]}" --set allNamespaces=true
+oom_refuses "must be empty under controller.placement=Taints" "${OOM_REPORTER_RENDER_ARGS[@]}" \
+	--set controller.placement=Taints --set "controller.tolerations[0].operator=Exists"
+# A label a kubelet may set on its own node keeps nothing off it.
+oom_refuses "nodeLabel" "${OOM_REPORTER_RENDER_ARGS[@]}" --set controller.nodeLabel.key=example.com/platform
+oom_refuses "namespaces holds the release's own" "${OOM_REPORTER_RENDER_ARGS[@]}" --namespace team-a --set "namespaces={team-a}"
+oom_refuses "names no port" "${OOM_REPORTER_RENDER_ARGS[@]}" --set networkPolicy.apiServerPorts=null
+oom_refuses "networkpolicy" "${OOM_REPORTER_RENDER_ARGS[@]}" --set networkpolicy.enabled=true
+oom_refuses "podsRoot" "${OOM_REPORTER_RENDER_ARGS[@]}" --set agent.podsRoot=
+
+echo "==> helm template: oom-reporter's policies name the accounts its grants do, however long the names"
+oom_render="$(helm template "a-release-of-forty-seven-characters-in-all-12345" "$oom_chart" \
+	--namespace oom-render-ns "${OOM_REPORTER_RENDER_ARGS[@]}")"
+oom_accounts="$(awk '/^kind:/ { k = $2 } k == "ServiceAccount" && /^  name:/ { print "system:serviceaccount:oom-render-ns:" $2 }' <<<"$oom_render" | sort -u)"
+oom_named="$(grep -oE "system:serviceaccount:[A-Za-z0-9_.:-]+" <<<"$oom_render" | sort -u)"
+oom_bound="$(awk '/^kind:/ { k = $2 } k == "RoleBinding" && /^    name:/ { print "system:serviceaccount:oom-render-ns:" $2 }' <<<"$oom_render" | sort -u)"
+if [[ "$(wc -l <<<"$oom_accounts")" -ne 2 || "$oom_named" != "$oom_accounts" || "$oom_bound" != "$oom_accounts" ]]; then
+	printf "ERROR: oom-reporter's accounts, its policies' and its bindings' differ:\n%s\n--\n%s\n--\n%s\n" \
+		"$oom_accounts" "$oom_named" "$oom_bound" >&2
+	exit 1
+fi
+if grep -q "helm.sh/resource-policy" <<<"$oom_render"; then
+	echo "ERROR: an oom-reporter object survives uninstall; a binding that does keeps its policy in force" >&2
+	exit 1
+fi
 
 echo "==> helm lint (digest-pinned: default values must not render — checked next)"
 helm lint "$chart" "${RENDER_DIGEST_ARGS[@]}"

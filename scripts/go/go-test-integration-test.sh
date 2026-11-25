@@ -205,6 +205,13 @@ expect_output budget-override stdout 'of its 3m budget' yes
 run_gate fast 0 -- cmd/agc ./internal/controller/integration/suite_test.go
 expect_argv explicit-args 'suite_test.go' yes
 
+# Each module has its own default.
+run_gate fast 0
+expect_argv default-pattern ' ./internal/controller/integration/...' yes
+run_gate fast 0 -- cmd/oomreporter
+expect_argv default-pattern-oomreporter ' .' yes
+expect_argv default-pattern-oomreporter './internal' no
+
 # A module the tier does not have is a usage error, not a run.
 run_gate fast 0 -- cmd/proxy
 expect_status unknown-module 2

@@ -252,6 +252,7 @@ new_literals() {
 CHART_VALUES=(
 	"charts/actions-gateway/values.yaml"
 	"charts/actions-gateway-crds-v2/values.yaml"
+	"charts/oom-reporter/values.yaml"
 )
 
 # chart_values_at REV — every key path in REV's values files, as dotted paths.

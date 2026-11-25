@@ -75,6 +75,7 @@ CHECK_FAST_GATES := roadmap-check \
                     registry-mirror-catalog-deny-check \
                     webhook-versions-check \
                     chart-values-docs-check \
+                    oomreporter-imports-check \
                     webhook-selectors-check \
                     gate-needs-check \
                     gha-cache-render-check
@@ -337,4 +338,5 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  ci/check-gate-needs-test \
                  agent/record-launch-guard-test \
                  lib/retry-test \
-                 manifest/check-gha-cache-render-test
+                 manifest/check-gha-cache-render-test \
+                 go/check-oomreporter-imports-test

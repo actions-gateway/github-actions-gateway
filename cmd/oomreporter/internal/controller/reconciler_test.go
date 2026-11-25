@@ -668,6 +668,19 @@ func TestReconcile_ARefusedWriteIsTriedAgainAndHoldsUpNoOther(t *testing.T) {
 	}
 }
 
+func TestReconcile_ARefusedWriteKeepsNoOthersAnswerWaiting(t *testing.T) {
+	second := pod(dead("runner", 2, killedAt))
+	second.Name, second.UID = "worker-2", "6fa459ea-ee8a-3ca4-894e-db77e160355e"
+	other := above(killedAt, 2)
+	other.Pod = string(second.UID)
+	for left, want := range map[time.Duration]time.Duration{hold: retryEvery, time.Second: time.Second} {
+		w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a", own(killedAt, 1), other), pod(dead("runner", 1, killedAt)), second)
+		w.now = killedAt.Add(hold - left)
+		w.failing("patch pod/status", errors.New("refused"))
+		assert.Equal(t, want, w.reconcile(t, "node-a").RequeueAfter)
+	}
+}
+
 func TestReconcile_WhatCannotBeReadIsTriedAgainAndWritesNothing(t *testing.T) {
 	refused := apierrors.NewForbidden(schema.GroupResource{}, "", errors.New("no grant"))
 	for name, funcs := range map[string]interceptor.Funcs{

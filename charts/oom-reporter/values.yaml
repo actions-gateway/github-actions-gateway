@@ -1,0 +1,83 @@
+# namespaces lists the namespaces whose pods get a condition and an Event. The
+# controller reads pods, patches their status and creates Events there, and has
+# no such grant elsewhere. Set this or allNamespaces; neither renders nothing.
+namespaces: []
+
+# allNamespaces gives the controller those grants in every namespace instead, by
+# a ClusterRole. Whoever takes over the controller can then read every pod spec
+# in the cluster.
+allNamespaces: false
+
+# image is the one image both modes run, pinned by digest.
+image:
+  repository: ghcr.io/actions-gateway/oomreporter
+  # Ignored when digest is set.
+  tag: ""
+  # Required: sha256:<64 hex digits>.
+  digest: ""
+imagePullPolicy: IfNotPresent
+
+# imagePullSecrets are the names of pull Secrets in the release's namespace.
+imagePullSecrets: []
+
+# allowFloatingImageTags is DEV/TEST ONLY: it renders image.tag where no digest
+# is set.
+allowFloatingImageTags: false
+
+# agent is the DaemonSet that reads each node's cgroup counters.
+agent:
+  # podsRoot is the kubelet's cgroup of all pods, below /sys/fs/cgroup. Fixed
+  # rather than found, since a job with the host's view of the cgroup tree can
+  # make a second one:
+  #   kubepods.slice                        the systemd cgroup driver
+  #   kubepods                              the cgroupfs driver
+  #   kubelet.slice/kubelet-kubepods.slice  kind
+  podsRoot: kubepods.slice
+  nodeSelector: {}
+  # A node the agent is not on gets no answer, so it tolerates every taint.
+  tolerations:
+    - operator: Exists
+  affinity: {}
+  priorityClassName: ""
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+# controller is the Deployment that writes to pods.
+controller:
+  # placement is what keeps the controller's token off nodes that run tenants'
+  # jobs, where a job that escapes its sandbox could take it:
+  #   NodeLabel  a required node affinity on nodeLabel, which a kubelet may not
+  #              set on its own node.
+  #   Taints     nothing here. Every pool that runs tenants' jobs has a taint
+  #              this pod does not tolerate, and the operator sees to that.
+  placement: NodeLabel
+  nodeLabel:
+    # In the node-restriction.kubernetes.io namespace, since outside it a label
+    # is the kubelet's to set.
+    key: node-restriction.kubernetes.io/oom-reporter
+    value: controller
+  nodeSelector: {}
+  # Refused under placement: Taints.
+  tolerations: []
+  priorityClassName: ""
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+# networkPolicy refuses all ingress to both, and egress but to the API server's
+# ports. Needs a CNI that enforces NetworkPolicy.
+networkPolicy:
+  enabled: true
+  # apiServerCIDRs narrows that egress to the API server's addresses. Empty
+  # leaves any address on those ports, since an address is matched after the
+  # Service's is rewritten and differs by provider.
+  apiServerCIDRs: []
+  # apiServerPorts are the API server's, before and after that.
+  apiServerPorts: [443, 6443]

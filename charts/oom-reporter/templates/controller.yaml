@@ -1,0 +1,76 @@
+{{- if and (eq .Values.controller.placement "Taints") .Values.controller.tolerations }}
+{{- fail "controller.tolerations must be empty under controller.placement=Taints: the taints are what keep the controller off nodes that run tenants' jobs" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "oom-reporter.controllerName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "oom-reporter.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "oom-reporter.selectorLabels" (list . "controller") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "oom-reporter.selectorLabels" (list . "controller") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "oom-reporter.controllerName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: controller
+        image: {{ include "oom-reporter.image" . }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        command: ["/oomreporter"]
+        args:
+        - controller
+        - -agents=app.kubernetes.io/name={{ .Chart.Name }},app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=agent
+        {{- if .Values.allNamespaces }}
+        - -all-namespaces
+        {{- else }}
+        - -namespaces={{ join "," .Values.namespaces }}
+        {{- end }}
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          {{- toYaml .Values.controller.resources | nindent 10 }}
+      {{- if eq .Values.controller.placement "NodeLabel" }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: {{ .Values.controller.nodeLabel.key }}
+                operator: In
+                values: [{{ .Values.controller.nodeLabel.value | quote }}]
+      {{- end }}
+      nodeSelector:
+        {{- toYaml (merge (dict "kubernetes.io/os" "linux") (default dict .Values.controller.nodeSelector)) | nindent 8 }}
+      {{- with .Values.controller.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controller.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}

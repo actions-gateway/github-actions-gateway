@@ -2,14 +2,16 @@
 #
 # Run one module's envtest-backed integration suite, and report the suite's own
 # wall clock against the budget `-timeout` gives it.
-# Backs `make -C cmd/agc test-integration`, `make -C cmd/gmc test-integration`
-# and the matrixed `go test` step in .github/workflows/integration-test.yml,
-# which runs one entry per module so the two suites overlap instead of queueing.
+# Backs `make -C cmd/agc test-integration`, `make -C cmd/gmc test-integration`,
+# `make test-integration-oomreporter` and the matrixed `go test` step in
+# .github/workflows/integration-test.yml, which runs one entry per module so the
+# suites overlap instead of queueing.
 #
 # Usage: scripts/go/go-test-integration.sh <module-dir> [go test args...]
-#   <module-dir>  a go.work module holding an envtest suite: cmd/agc | cmd/gmc.
+#   <module-dir>  a go.work module holding an envtest suite:
+#                 cmd/agc | cmd/gmc | cmd/oomreporter.
 #   Extra args are appended to `go test`; the package pattern defaults to
-#   ./internal/controller/integration/... when none is given.
+#   ./internal/controller/integration/... (cmd/oomreporter: .) when none is given.
 #   A `-run` filter that matches nothing FAILS the run: `go test -run` exits 0
 #   with "[no tests to run]", so a mistyped name otherwise reports a green suite
 #   — the knob's whole purpose inverted (Q680 on the unit tier, Q736 here).
@@ -59,9 +61,10 @@ WARN_PERCENT="${INTEGRATION_BUDGET_WARN:-80}"
 
 module="${1:-}"
 case "$module" in
-	cmd/agc | cmd/gmc) shift ;;
+	cmd/agc | cmd/gmc) packages=./internal/controller/integration/... && shift ;;
+	cmd/oomreporter) packages=. && shift ;;
 	"") echo "usage: $0 <module-dir> [go test args...]" >&2; exit 2 ;;
-	*) echo "$0: unknown module '$module' (want cmd/agc or cmd/gmc)" >&2; exit 2 ;;
+	*) echo "$0: unknown module '$module' (want cmd/agc, cmd/gmc or cmd/oomreporter)" >&2; exit 2 ;;
 esac
 
 # Serialize against a concurrent heavy build on this machine (a no-op on
@@ -75,7 +78,7 @@ serialize_heavy_build "$module" "$@"
 init_throttle
 
 args=("$@")
-((${#args[@]} == 0)) && args=(./internal/controller/integration/...)
+((${#args[@]} == 0)) && args=("$packages")
 
 # The `-run` filter, in both spellings `go test` accepts. -v emits the `=== RUN`
 # marker the zero-match guard at the bottom reads, and -count=1 keeps the run

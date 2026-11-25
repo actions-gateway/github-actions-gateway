@@ -83,7 +83,7 @@ Before the cut, the ones whose findings change an artifact:
 
 - **`main` green, the vulnerability policy met, and the version chosen**: every tag.
 - **API surface review**: a rename decided after publication costs a new candidate.
-- **Both chart READMEs against the tree being tagged** (`charts/actions-gateway/README.md`, `charts/actions-gateway-crds-v2/README.md`): they ship inside the tarballs, so a fix after the cut costs a candidate.
+- **The three chart READMEs against the tree being tagged** (`charts/actions-gateway/README.md`, `charts/actions-gateway-crds-v2/README.md`, `charts/oom-reporter/README.md`): they ship inside the tarballs, so a fix after the cut costs a candidate.
   Every `values.yaml` key has a table row, and the install and upgrade commands, the Kubernetes floor, and links into `docs/operations/` still hold.
   No gate checks the table yet, and none can check the prose; at `v2.0.0-rc.1`'s target six top-level keys had no row.
 - **The notes draft, interrogated** through `verify-claims`: the discovery step, not a formatting pass.
@@ -132,7 +132,7 @@ make verify-release-compat VERSION=vX.Y.Z-rc.N > tmp/verify-compat.log 2>&1; ech
 
 The second line verifies with cosign v2, which operators run; the first uses the signer's own cosign and passes a candidate only v3 can read.
 A compat failure blocks the promote.
-Both check the image signatures, every per-arch SBOM attestation, both charts, and the Release's blob bundles.
+Both check the image signatures, every per-arch SBOM attestation, the charts, and the Release's blob bundles.
 
 **The check that discriminates is the provenance digest**, not the signatures.
 Signatures prove who built it; only the digest proves *what* was built, and it is the one check that would have caught the stale-commit candidate while all seven signatures passed:

@@ -469,8 +469,8 @@ If your cluster runs a policy engine (Kyverno / OPA Gatekeeper), see [admission-
 
 ### Manifest posture — polaris (automated, in CI)
 
-[polaris](https://polaris.docs.fairwinds.com/) audits the Kubernetes security/best-practice posture of the **shipped install artifact**: the CI `polaris` job (in [`.github/workflows/security-scan.yml`](../../.github/workflows/security-scan.yml)) renders the [Helm chart](../../charts/actions-gateway) and checks the rendered manifests.
-It runs on every PR that touches the chart or the `Makefile`, and on every push to `main`.
+[polaris](https://polaris.docs.fairwinds.com/) audits the Kubernetes security/best-practice posture of the **shipped install artifact**: the CI `polaris` job (in [`.github/workflows/security-scan.yml`](../../.github/workflows/security-scan.yml)) renders the [Helm chart](../../charts/actions-gateway), and the [oom-reporter chart](../../charts/oom-reporter) beside it, and checks the rendered manifests.
+It runs on every PR that touches a chart or the `Makefile`, and on every push to `main`.
 
 - **What it gates.** The scan fails the PR on any `danger` finding — a privileged container, a host namespace, dangerous capabilities, a missing `securityContext`, a floating `:latest` image tag, and similar real regressions.
   A change that weakens the chart's hardened defaults cannot merge.

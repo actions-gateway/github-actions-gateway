@@ -59,7 +59,7 @@ func TestDecode_RefusesWhatNoAgentWrites(t *testing.T) {
 		"no JSON":                     {"version 1", "not a report"},
 		"a newer version":             {`{"version":2,"kills":[]}`, "version 2"},
 		"no version":                  {`{"kills":[]}`, "version 0"},
-		"too big":                     {`{"version":1}` + strings.Repeat(" ", maxSize), "bytes"},
+		"too big":                     {`{"version":1}` + strings.Repeat(" ", MaxSize), "bytes"},
 		"too many kills":              {`{"version":1,"kills":[` + strings.Repeat("{},", MaxKills) + `{}]}`, "129 kills"},
 		"a name for a UID":            {kill(`"pod":"runner",` + rise), "no pod's UID"},
 		"neither":                     {kill(`"pod":"` + uid(1) + `"`), "not one of"},

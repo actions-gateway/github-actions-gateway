@@ -98,6 +98,8 @@ jobs:
               # `worker` stage FROM line, so a Dockerfile-only edit can break a
               # unit test.
               - 'Dockerfile'
+              # cmd/oomreporter's unit tests read its chart's admission policies.
+              - 'charts/oom-reporter/templates/**'
               - '.golangci.yml'
               - 'Makefile'
               # Every backend of this job's gates lives in scripts/go/ (Q571), so
@@ -298,6 +300,9 @@ jobs:
       # `make check` went green over a suite CI failed.
       - name: Out-of-module test reads (make test-cache-inputs-check)
         run: make test-cache-inputs-check
+      # cmd/oomreporter stays movable to a repository of its own (Q1403).
+      - name: cmd/oomreporter imports no other module, nor they it (make oomreporter-imports-check)
+        run: make oomreporter-imports-check
       # Compile + vet the build-tagged (integration/e2e/load) Go files (Q404).
       # `make lint` above and the unit-test job both build with the DEFAULT tag
       # set, so a compile break in an envtest/e2e/load package used to reach only

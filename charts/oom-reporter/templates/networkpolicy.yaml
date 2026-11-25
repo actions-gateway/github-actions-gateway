@@ -1,0 +1,31 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- if not .Values.networkPolicy.apiServerPorts }}
+{{- fail "networkPolicy.apiServerPorts names no port, which lets egress go to all of them" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "oom-reporter.fullname" . }}-api-server-ports
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "oom-reporter.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Chart.Name }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: ["Ingress", "Egress"]
+  egress:
+    - ports:
+        {{- range .Values.networkPolicy.apiServerPorts }}
+        - port: {{ . }}
+          protocol: TCP
+        {{- end }}
+      {{- with .Values.networkPolicy.apiServerCIDRs }}
+      to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+{{- end }}
