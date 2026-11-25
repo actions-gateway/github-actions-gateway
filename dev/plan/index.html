@@ -2831,7 +2831,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-2.1/">release-2.1.md</a></td>
 <td>The <code>v2.1.0</code> release: automatic recovery finished, from the dogfood readings detection and the out-of-memory class rest on to one more retry class and job-granular re-run</td>
-<td>❌ Scoped 2026-11-09: Q1236's, Q1317's, Q1318's and Q1382's readings are taken, and this row still gates the tag: <a href="../queue/Q1316/">Q1316</a></td>
+<td>❌ Scoped 2026-11-09: Q1236's, Q1317's, Q1318's and Q1382's readings are taken, and these rows still gate the tag: <a href="../queue/Q1316/">Q1316</a> and <a href="../queue/Q1403/">Q1403</a></td>
 </tr>
 <tr>
 <td><a href="v2beta1-retirement/">v2beta1-retirement.md</a></td>
@@ -3046,6 +3046,11 @@ Each has inline ✓ markers per item.</p>
 <td><a href="q555-automatic-recovery-design/">q555-automatic-recovery-design.md</a></td>
 <td>The design for the Q555 draft: a per-set failure ledger that pairs failed jobs with later attempts, one run read that enforces a restart-proof budget of GAG's own re-runs and the futility checks, retry classes that wait on how their cause clears behind a breaker, a per-job memory floor for out-of-memory under right-sizing, and labelled proxy outcome metrics</td>
 <td>ⓘ Proposed, 2026-10-10, decisions recorded 2026-10-12. Q1182 built the ledger store and moved the scale-set budget onto it; four protocol and kill-shape facts the rest rests on are unmeasured</td>
+</tr>
+<tr>
+<td><a href="q1403-oom-kill-reporter/">q1403-oom-kill-reporter.md</a></td>
+<td>A tool that says which limit ran out when a container is killed for memory: cgroup counters read by an unprivileged node agent, a controller that writes a pod condition and an Event, who could forge each, and what the AGC would do with the answer</td>
+<td>❌ Decided; the first of six PRs is built (<a href="../queue/Q1403/">Q1403</a>, <a href="../queue/Q1406/">Q1406</a>, <a href="../queue/Q1407/">Q1407</a>, <a href="../queue/Q1408/">Q1408</a>)</td>
 </tr>
 <tr>
 <td><a href="q501-cancel-relay/">q501-cancel-relay.md</a></td>

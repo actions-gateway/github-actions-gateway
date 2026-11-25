@@ -417,6 +417,10 @@
          <lastmod>2026-11-25</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/plan/q1403-oom-kill-reporter/</loc>
+         <lastmod>2026-11-25</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/plan/q215-worker-cache/</loc>
          <lastmod>2026-11-25</lastmod>
     </url>
@@ -1797,11 +1801,27 @@
          <lastmod>2026-11-25</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/queue/Q1403/</loc>
+         <lastmod>2026-11-25</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/queue/Q1404/</loc>
          <lastmod>2026-11-25</lastmod>
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q1405/</loc>
+         <lastmod>2026-11-25</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q1406/</loc>
+         <lastmod>2026-11-25</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q1407/</loc>
+         <lastmod>2026-11-25</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q1408/</loc>
          <lastmod>2026-11-25</lastmod>
     </url>
     <url>

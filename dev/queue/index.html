@@ -4711,6 +4711,38 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>S</td>
 <td><code>TestV2_RunnerSet_ThroughputCPULimitInjectionIsReported</code> can get a worker pod built without the sizing profile it waited for, and fail …</td>
 </tr>
+<tr>
+<td><a href="Q1403/">Q1403</a></td>
+<td><a href="../plan/q1403-oom-kill-reporter/">Tell a node's out-of-memory kill from a job's with a node reporter</a></td>
+<td><code>feature</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>L</td>
+<td>Nothing the AGC reads says which limit ran out when a runner is killed for memory, so Q1400's Events name no cause.</td>
+</tr>
+<tr>
+<td><a href="Q1406/">Q1406</a></td>
+<td><a href="../plan/q1403-oom-kill-reporter/#what-the-agc-does-with-it">Act on the limit a killed runner's condition names</a></td>
+<td><code>feature</code></td>
+<td>🚫</td>
+<td>M</td>
+<td>Blocked on <a href="Q1403/">Q1403</a>'s PRs 2 and 6, which write the condition and give the AGC an edge to see it by.</td>
+</tr>
+<tr>
+<td><a href="Q1407/">Q1407</a></td>
+<td><a href="../plan/q1403-oom-kill-reporter/#the-kernel-log-as-an-option">Read the kernel log beside the counters, as a reporter option</a></td>
+<td><code>feature</code></td>
+<td>🚫</td>
+<td>L</td>
+<td>Blocked on <a href="Q1403/">Q1403</a>'s PRs 5 and 6: the e2e lane it extends and the record it adds words to.</td>
+</tr>
+<tr>
+<td><a href="Q1408/">Q1408</a></td>
+<td><a href="../plan/q1403-oom-kill-reporter/#the-re-run-class-a-follow-up">Re-run a job killed at the limit all pods share, with no tenant cause</a></td>
+<td><code>feature</code></td>
+<td>🚫</td>
+<td>M</td>
+<td>Blocked on <a href="Q1406/">Q1406</a>, on v2.1.0 shipping, and on a dogfood reproduction of its own (reading 9 of Q1403's design): Q1316's victims …</td>
+</tr>
 </tbody>
 </table>
 

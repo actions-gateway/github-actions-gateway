@@ -2758,13 +2758,14 @@
 <h1 id="release-21-milestone-definition">Release 2.1 Milestone Definition<a class="headerlink" href="#release-21-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status: scoped 2026-11-09; the ledger below says what has landed.</strong> The maintainer made flaky-job detection and automatic retry for more platform failures the <code>v2.1.0</code> headline on 2026-11-09.
-Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22), and Q1382's dogfood reading (2026-11-24); the ledger's open rows still gate the tag and nothing rides yet.
+Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22), and Q1382's dogfood reading (2026-11-24); the ledger's open rows still gate the tag, except Q1406 and Q1407, which ride.
 The readings' three refutations, Q1374 to Q1376, gated it from 2026-11-22 because each broke a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the <code>trigger="other"</code> rate this release measures success by, biased in opposite directions; all three are built.
 Q1381 gated it too, settled 2026-11-22, because its re-runs landed in merge-queue runs nothing reads and each spent a <code>maxEvictionRetries</code> slot, which is the opposite of what this release is for; it and Q1320 are built, and the case it leaves is Q1391.
 Q1389 gated it too: the out-of-memory class <code>v2.0.0</code> shipped could act on the wrong job where a worker died before its pod named the job it ran, reproduced in a unit-test probe and fixed on 2026-11-24.
 Q1395 gates it too, settled 2026-11-24: detection could name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
 Q1400 gated it too, settled 2026-11-24, for the same reason in the out-of-memory class <code>v2.0.0</code> shipped: its Events named the runner's own limit as the cause of a kill the node could have made.
 They name no cause now, and what the class re-runs, raises and withholds is unchanged; no node kill of a runner has been reproduced.
+Q1403 gates it, because naming no cause leaves the operator without one; <a href="../q1403-oom-kill-reporter/">its design</a> reads which limit ran out on the node.
 Q1401 gated it too: job-granular re-run (Q1319) recovered less than <code>v2.0.0</code> on a fail-fast matrix behind an aggregate job, and recovering less is the opposite of what this release is for.
 What it still recovers less of is <a href="../../operations/upgrade/#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run">in the upgrade notes</a>.
 Nothing here is a commitment to a date.</p>
@@ -2887,6 +2888,24 @@ One known limit stays from <code>v2.0.0</code>: beside a memory kill, a job past
 <td>✅ landed as text: the Events name the worker, its node, its memory request and its limit, and no cause; nothing the AGC reads separates the two (<a href="../../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">what each fact says</a>)</td>
 </tr>
 <tr>
+<td><a href="../../queue/Q1403/">Q1403</a></td>
+<td>Tell a node's out-of-memory kill from a job's own, with a node reporter</td>
+<td><code>2.1-gate</code></td>
+<td>🔲 open: <a href="../q1403-oom-kill-reporter/">a design</a>, decided, the first of its six PRs built; the other five and its dogfood reading are open; replaces the text Q1400 leaves with an answer</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1406/">Q1406</a></td>
+<td>Act on the limit a killed runner's condition names</td>
+<td>rides</td>
+<td>🔲 open</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1407/">Q1407</a></td>
+<td>Read the kernel log beside the counters, as a reporter option</td>
+<td>rides</td>
+<td>🔲 open</td>
+</tr>
+<tr>
 <td>-</td>
 <td>RC validated on dogfood</td>
 <td>gates</td>
@@ -2894,7 +2913,8 @@ One known limit stays from <code>v2.0.0</code>: beside a memory kill, a job past
 </tr>
 </tbody>
 </table>
-<p><strong>Scoped 2026-11-09, and nothing rides yet: the <code>rides</code> cell on Q1315 marks a punted row.</strong> <code>v2.1.0</code> follows <code>v2.0.0</code>, so nothing here waits on anything but its own row and the 2.0 tag.
+<p><strong>Scoped 2026-11-09.
+Q1406 and Q1407 ride; the <code>rides</code> cell on Q1315 marks a punted row.</strong> <code>v2.1.0</code> follows <code>v2.0.0</code>, so nothing here waits on anything but its own row and the 2.0 tag.
 The ledger takes a row for each item that merges onto the released surface before the tag.</p>
 <h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
 <table>

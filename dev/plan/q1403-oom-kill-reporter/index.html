@@ -1,0 +1,4437 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/q1403-oom-kill-reporter/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>A node reporter for out-of-memory kills: Q1403 - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/devassets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/devassets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/devassets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/dev",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/dev"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/dev",
+    "logo": "https://actions-gateway.com/devassets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#a-node-reporter-for-out-of-memory-kills-q1403" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v2.0.1 is here.</strong>
+      A gateway created with the GMC finalizer can no longer take another tenant's scale-set name, and an IPv6 cluster's AGC reaches the API server directly.
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
+    <a href="../../queue/">See the working backlog.</a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              A node reporter for out-of-memory kills: Q1403
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../worker-isolation/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Worker isolation
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_20" id="__nav_10_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_11" id="__nav_11_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-reads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it reads
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What it reads">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#two-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two sources
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-kernel-log-as-an-option" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The kernel log, as an option
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The rule
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The rule">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-container-that-has-gone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The container that has gone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-it-names-the-wrong-limit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where it names the wrong limit
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#watching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Watching
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-writes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it writes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#who-holds-what" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who holds what
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Who holds what">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#two-components-d2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two components (D2)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-least-each-needs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The least each needs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#admission-policies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Admission policies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#who-could-forge-the-answer-r9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who could forge the answer (R9)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-agc-does-with-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the AGC does with it
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What the AGC does with it">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#reading-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#timing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Timing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#by-reason" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        By reason
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d3-the-re-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D3: the re-run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-re-run-class-a-follow-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The re-run class: a follow-up
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-covers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it covers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#on-by-default-d4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On by default? (D4)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-it-lives-d5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where it lives (D5)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#state-through-five-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State, through five cases
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-measure-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to measure first
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#build-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build size
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Build size">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-smallest-set-for-21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The smallest set for 2.1
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="a-node-reporter-for-out-of-memory-kills-q1403">A node reporter for out-of-memory kills: Q1403<a class="headerlink" href="#a-node-reporter-for-out-of-memory-kills-q1403" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Status (2026-11-24): decided, D1 to D6 each as recommended.
+<a href="#build-size">PR 1</a>, the reader and the rule, is built; nothing here has run in the shape proposed.</strong></p>
+</blockquote>
+<p>A container killed for memory reads <code>OOMKilled</code> with exit code 137 whichever limit ran out: its own, its pod's, the one all pods share, or the node's memory.
+The AGC therefore names no cause (Q1400), and neither does anything else in the Kubernetes API that a tenant's operator can read on the pod.
+This is the design of a small tool that says which limit ran out, on the pod, for anyone debugging such a kill, and of what the Actions Gateway Controller (AGC) would do with the answer.</p>
+<p><strong>How claims are marked.</strong> <em>(read)</em> is source at a pinned version: Kubernetes <code>v1.35.5</code>, Linux <code>v6.12</code>, or this repository at <code>274ca688f</code>, where the functions cited were compared with an earlier reading.
+<em>(measured)</em> names where; <em>(reported)</em> is a reading another session took for this design, none of it re-run here and none on GKE, all on kernel 6.12.76: eighteen kills in six runs in one local container with its own <code>kubepods.slice</code> and no kubelet, recorded in Q1316's plan (on its branch, not on <code>main</code>).
+<em>(recall)</em> is neither.
+A GKE node of Q1316's run is on <code>6.8.0-1064-gke</code> (reported).
+Of the kernel functions cited here for the counters, the kill and its line, each is the same at <code>v6.8</code>, but for the cgroup v1 half of <code>mem_cgroup_oom</code> and an argument in <code>memory_max_write</code>; <code>check_syslog_permissions</code> also takes <code>CAP_SYS_ADMIN</code> there (read, compared function by function, without <code>___ratelimit</code>, <code>cgroup_mkdir</code> and what else prints to the log, and not in Ubuntu's own tree).
+<a href="#what-to-measure-first">What to measure first</a> lists the ones the mechanism rests on; D2 rests on reading alone: what a token can list, and what an escaped job already holds.
+A sentence about the proposal itself carries no mark.</p>
+<h2 id="decisions">Decisions<a class="headerlink" href="#decisions" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Decision</th>
+<th>Decided</th>
+<th>What it costs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D1</td>
+<td>What it reads</td>
+<td>Cgroup counters, by a process that is not root and not privileged; and the kernel log beside them as <a href="#the-kernel-log-as-an-option">an option</a>, off by default</td>
+<td>Off: some kills come back <code>Unknown</code>, how many is not measured. On: a container per node at uid 0 with <code>CAP_SYSLOG</code>, and PR 9</td>
+</tr>
+<tr>
+<td>D2</td>
+<td>One component or two</td>
+<td>A node agent that cannot read or change pods, and one controller that can</td>
+<td>One more image mode and about one more PR than a single DaemonSet; and a node label a kubelet may not set, which is not read to be possible on an autoscaled GKE pool</td>
+</tr>
+<tr>
+<td>D3</td>
+<td>What the AGC does on a kill made above the pod</td>
+<td>No raise and no re-run: the Event says what ran out, and the operator re-runs by hand. No re-run class in this design; it is <a href="#the-re-run-class-a-follow-up">a follow-up after 2.1</a></td>
+<td>Such a job needs a manual re-run, where today it gets one by accident with a raise attached</td>
+</tr>
+<tr>
+<td>D4</td>
+<td>On by default?</td>
+<td>No: its own chart, not installed by the gateway's, and an AGC setting, off, for acting on the answer. The record of it (PR 6) needs no setting, <a href="#reading-it">within limits</a></td>
+<td>Operators who do not install it keep Q1400's text. Where anything else writes the condition, a failed job's record repeats it, attributed, on a kill the kubelet reported</td>
+</tr>
+<tr>
+<td>D5</td>
+<td>Where it lives</td>
+<td>This repository: its own module, image and chart, importing nothing of the gateway's</td>
+<td>A general tool under a gateway's release cadence</td>
+</tr>
+<tr>
+<td>D6</td>
+<td>What gates 2.1</td>
+<td>The tool and the AGC's record of its answer, <a href="#the-smallest-set-for-21">six PRs</a>, and reading 8 on GKE. The AGC acting on it (D3) rides 2.1 where it is ready and can follow</td>
+<td>Until the AGC acts on it, it still raises on a kill made above the pod, beside a record that says so</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-it-reads">What it reads<a class="headerlink" href="#what-it-reads" title="Permanent link">&para;</a></h2>
+<h3 id="two-sources">Two sources<a class="headerlink" href="#two-sources" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Cgroup v2 counters</th>
+<th>Kernel log</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>What</td>
+<td><code>memory.events</code> and <code>memory.events.local</code> of each pod, its containers, the QoS slices and the pods' root (<code>kubepods.slice</code>)</td>
+<td>The <code>oom-kill:constraint=</code> line, which names the limit's cgroup (<code>oom_memcg</code>, or <code>global_oom</code>) and the victim's (<code>task_memcg</code>)</td>
+</tr>
+<tr>
+<td>Says which limit</td>
+<td>By inference from which counter rose</td>
+<td>Outright</td>
+</tr>
+<tr>
+<td>Access</td>
+<td><code>/sys/fs/cgroup</code> by <code>hostPath</code>, read-only</td>
+<td><code>syslog(2)</code>, with <code>CAP_SYSLOG</code> and no mount or device (<a href="#the-kernel-log-as-an-option">below</a>); <code>/dev/kmsg</code>, which refused uid 65534 with <code>dmesg_restrict</code> 1 and opened as root (reported), and is expected to need a privileged container as a device (recall); or the journal's files, with a group that can read every system log on the node (recall)</td>
+</tr>
+<tr>
+<td>Privilege</td>
+<td>Not root, no capabilities, not privileged: uid 65534 opened all three files in each of eight cgroups, and <code>memory.events</code> is root's and mode 0444 (reported); not on GKE</td>
+<td>uid 0 and one capability by <code>syslog(2)</code>; privileged, or the node's whole system log, by the others</td>
+</tr>
+<tr>
+<td>Discloses, if the reader is taken over</td>
+<td>Pod and container identifiers, and how much memory each uses</td>
+<td>Every kernel message, or every system service's log</td>
+</tr>
+<tr>
+<td>Survives a missed moment</td>
+<td>The pod's counters outlive the container's cgroup (measured, local 6.12.76), and go with the pod's</td>
+<td>Until the ring buffer wraps (recall); the line itself is rate-limited, so a stampede loses some (read, <code>oom_kill.c</code>), where the counters lose none</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Counters (D1).</strong> The kernel log names the limit outright and is a worse thing to hand a process on every node.
+It stays the reference the counters are checked against, in the dogfood run and in kind, by a container that is privileged already.</p>
+<p>Pod Security's <code>baseline</code> forbids <code>hostPath</code>, so the agent's namespace is <code>privileged</code> level whichever source it reads (read, <code>docs/design/05-security.md</code>).
+What the counters buy is the container's own privilege, not the namespace's label.</p>
+<h3 id="the-kernel-log-as-an-option">The kernel log, as an option<a class="headerlink" href="#the-kernel-log-as-an-option" title="Permanent link">&para;</a></h3>
+<p>Off by default, behind its own value in the reporter's chart.
+Nothing else in this design depends on it.</p>
+<p><strong>Are the counters good enough without it?</strong> For a kill the agent was watching, they are expected to be, and the check so far is eighteen kills in a local container, where they and the kernel's line agreed every time (reported).
+How often they would answer <code>Unknown</code> on a real node is not measured.
+Reading 8 compares the two on GKE, and if they differ there, D1 is open again and the log is the better source.</p>
+<p>The log is not more complete, it is complete about different things:</p>
+<table>
+<thead>
+<tr>
+<th>Where</th>
+<th>Counters</th>
+<th>With the log</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The agent started after the kill, or missed it</td>
+<td><code>Unknown</code></td>
+<td>Named, while the line is still in the kernel's buffer and the pod is still in the API</td>
+</tr>
+<tr>
+<td>Two kills in one sample</td>
+<td><code>Unknown</code></td>
+<td>Each line names its own limit and its own victim</td>
+</tr>
+<tr>
+<td>Which of two containers it was</td>
+<td><code>Unknown</code></td>
+<td>Named: <code>task_memcg</code> is the victim's cgroup</td>
+</tr>
+<tr>
+<td>The pod's cgroup went before it was read</td>
+<td>Nothing</td>
+<td>Named, as the first row</td>
+</tr>
+<tr>
+<td>A <code>memory_localevents</code> node</td>
+<td>Nothing</td>
+<td>Named, by the log alone</td>
+</tr>
+<tr>
+<td>A <code>singleProcessOOMKill</code> node</td>
+<td><code>Unknown</code></td>
+<td>Still <code>Unknown</code>: the line names a process, and not whether its container ended by it</td>
+</tr>
+<tr>
+<td><code>AbovePods</code></td>
+<td>One reason for the node's memory and for a slice above the pods</td>
+<td>The same reason, and the message says which: a slice, all of the node's memory, or one set of its memory nodes, which the line's <code>constraint</code> tells apart (read, <code>constrained_alloc</code>)</td>
+</tr>
+<tr>
+<td>More than ten kills on the node in five seconds</td>
+<td>Unaffected</td>
+<td>The rest have no line. The limit is one for the whole node, so a job that loops can drop a neighbour's, and a line is dropped too where two kills contend for it (read, <code>oom_kill_process</code> and <code>___ratelimit</code>)</td>
+</tr>
+<tr>
+<td>Another CPU prints between the pieces of a line</td>
+<td>Unaffected</td>
+<td>That line is refused, as a split one: a piece joins its line only where the last record is the same caller's (read, <code>vprintk_store</code>). How often is not measured</td>
+</tr>
+<tr>
+<td>A kill in a Kata guest</td>
+<td>Nothing</td>
+<td>Nothing: it is the guest's log</td>
+</tr>
+</tbody>
+</table>
+<p>How long a line lasts is not measured: on kind the buffer still held everything since the virtual machine's boot, 4,891 lines, with nothing lost.
+A node-wide kill prints every process on the node first (read, <code>dump_tasks</code>), so a few of them on a crowded node may push older lines out.</p>
+<p><strong>Two witnesses, one answer.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Counters</th>
+<th>Log</th>
+<th>Reason written</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A reason</td>
+<td>The same, or no line</td>
+<td>The counters'</td>
+</tr>
+<tr>
+<td>A reason</td>
+<td>Another</td>
+<td>The counters'; the message and the Event say what the line names</td>
+</tr>
+<tr>
+<td><code>Unknown</code>, or nothing</td>
+<td>A reason</td>
+<td><code>LogContainerLimit</code>, <code>LogPodLimit</code>, <code>LogPodsLimit</code> or <code>LogAbovePods</code></td>
+</tr>
+<tr>
+<td><code>Unknown</code>, or nothing</td>
+<td>No line</td>
+<td>As with the option off</td>
+</tr>
+</tbody>
+</table>
+<p>The log adds words and never takes an answer away.
+<code>Unknown</code> in the second row would: PR 7 raises and re-runs on it, so a line a job forged about its own pod would give it back the raise D3 withholds.
+The third row is where the option adds an answer, and it has names of its own so that a reader can tell.
+<strong>The AGC never acts on a <code>Log</code> reason.</strong> To PR 7 it is no condition at all, and it does not end <a href="#timing">the wait</a>, since a forged line can be there before the counters' answer.
+A counters' reason replaces a <code>Log</code> one for the same container ID, and a <code>Log</code> one replaces nothing but <code>Unknown</code>.
+PR 6's record can say it, with four more sets of words.
+A reader that does not know the names takes them as <code>Unknown</code>, as it does any other, and PR 7's wait ends on the counters' five names alone.</p>
+<p><strong>Both witnesses go through <a href="#the-rule">the rule</a>.</strong> The kernel names a cgroup, and the limit it stands for is a question for the pod's spec: for every one-container worker it is expected to name the pod's slice (read, <code>ResourceConfigForPod</code>), which is <code>ContainerLimit</code> there and <code>PodLimit</code> only where the spec sets one.
+So the reader sends the cgroup's level (in the pod, the pod's own, the QoS slice or the pods' root, above them), and the controller applies the same rows to it.
+The container must be the one the line's <code>task_memcg</code> is in, <code>OOMKilled</code> with exit 137, and named by the kernel's <code>Tasks in … are going to be killed due to memory.oom.group set</code>, which is outside the rate limit (read, <code>mem_cgroup_print_oom_group</code>), so a nested kill writes no <code>Log</code> reason either.</p>
+<p><strong>How it reads.</strong> A second container in the agent's pod: uid 0, every capability dropped but <code>SYSLOG</code>, <code>allowPrivilegeEscalation: false</code>, <code>RuntimeDefault</code> seccomp, no <code>hostPath</code>, no device, not privileged, and the pod's <code>shareProcessNamespace</code> off.</p>
+<ul>
+<li><code>SYSLOG_ACTION_READ_ALL</code> needs <code>CAP_SYSLOG</code> where <code>dmesg_restrict</code> is 1, and no capability where it is 0 (read, <code>check_syslog_permissions</code>).</li>
+<li>containerd's default seccomp profile allows the call where the container has that capability (read, containerd v2.1.0 <code>seccomp_default.go</code>).</li>
+<li>The capability must be held in the host's user namespace (read, <code>capable</code>), so not under <code>hostUsers: false</code>.</li>
+<li>A security module can refuse the call as well (read, <code>check_syslog_permissions</code>), and the option then reports nothing.</li>
+<li>uid 0, because an unprivileged uid keeps a capability over <code>exec</code> only from an ambient set or a file's, and <code>no_new_privs</code> takes the file's back (read, <code>cap_bprm_creds_from_file</code>); that Kubernetes sets no ambient one is recall.</li>
+<li><code>READ_ALL</code> takes no line from anyone, where <code>SYSLOG_ACTION_READ</code> shares one position with every <code>/proc/kmsg</code> reader (read, <code>syslog_seq</code>) and is not used.</li>
+</ul>
+<p>It has no service-account token: the pod mounts none by default, and the agent's is projected into the agent's container alone.
+It hands the agent numbers over a socket the two share, a pod UID, a container ID, the level of the cgroup that ran out, a time, and never text.
+The report marks them as the log's, so a taken-over reader can make a <code>Log</code> reason, or a sentence beside a counters' reason, for its own node's pods, and take neither away.
+It reads at start, when a counter rises, and every few seconds, which is what finds a kill no counter showed.</p>
+<p><code>/dev/kmsg</code> would be the better stream: it numbers its records, so a lost one shows, and escapes a newline inside one, where <code>syslog(2)</code> gives neither (read, <code>msg_add_ext_text</code> and <code>record_print_text</code>).
+It costs a privileged container (recall), and the agent's counters already notice a kill the log lost.</p>
+<p><strong>What it reaches, taken over.</strong> The whole kernel log, which holds the name and size of every process in each kill's dump, any tenant's.
+It can clear that log for later <code>syslog(2)</code> readers, take lines from a <code>/proc/kmsg</code> reader, and turn console logging off (read, <code>do_syslog</code>).
+Where <code>kptr_restrict</code> is 1 or 0, <code>/proc/kallsyms</code> shows it the kernel's addresses (read, <code>kallsyms_show_value</code>), which makes a kernel exploit easier to write.
+It holds no credential, sees no pod's memory, and has the pod's network, the API server alone.
+It is the host's uid 0, where the agent is not, so a fault in the container runtime or the kernel that lets it out leaves it root on the node.
+A cluster policy that refuses added capabilities refuses the option.</p>
+<p><strong>Who can falsify a line.</strong> A process that writes to <code>/dev/kmsg</code> cannot claim the kernel's facility (read, <code>devkmsg_write</code>), and <code>syslog(2)</code> prints the facility before each line, so any other is dropped.
+Two ways are left:</p>
+<ul>
+<li><strong>By name.</strong> The line prints, raw and in this order, the cgroup name of the task that was allocating, the limit's path, the victim's path, and the victim's process name (read, <code>dump_oom_victim</code> and the three it calls).
+  A cgroup's name may hold a comma and an equals sign, and not a newline (read, <code>cgroup_mkdir</code>) or a slash.
+  So a job that can make nested cgroups can put a key in the first name, with no path after it, and a key with a path in either of its own paths.
+  It cannot remove the real fields, but a path can be as long as it likes, and a piece that does not fit its record starts another (read, <code>vprintk_store</code>), so a line can be made to end where the job chose and look whole.
+  It cannot change how a path of its own starts: with its pod, or, for an unsandboxed <code>privileged-dind</code> job with <code>--cgroup-parent</code>, with whatever slice it named.
+  <strong>The reader matches the line against its full form, and refuses one</strong></li>
+<li>whose prefix is not the kernel's facility at the priority the kernel prints a kill with, <code>&lt;6&gt;</code>;</li>
+<li>where a key appears twice, or <code>global_oom</code> and <code>oom_memcg</code> both do;</li>
+<li>where <code>constraint=CONSTRAINT_MEMCG</code> and an <code>oom_memcg</code> do not come together (read, <code>constrained_alloc</code>);</li>
+<li>that does not end in <code>,task=…,pid=…,uid=…</code>, or prints a path as <code>(name too long)</code> or without a leading <code>/</code>;</li>
+<li>whose victim is not inside the cgroup whose limit it names, which is where the kernel takes a victim from.</li>
+</ul>
+<p>A refused line is no line, so the counters stand, and each refusal has a fixture.
+  What is left is a false line about the job's own pod, or from such a privileged job about any pod.
+  The first name is the allocating task's and not the victim's, so a job can also blank a neighbour's line where its own task was the one allocating.
+  That name can also start a record, where another CPU prints between the pieces, and begin with the byte and digit that set a record's priority (read, <code>vprintk_store</code> and <code>printk_parse_prefix</code>).
+  The priority check does not cover that, and the leading <code>/</code> does, since a name holds none.
+- <strong>By newline.</strong> <code>syslog(2)</code> gives each line of a record its own prefix and escapes nothing (read, <code>record_print_text</code>), so a kernel message that prints a user's string with a newline in it would start a line that looks whole.
+  A job can reach one such message: running a file that asks for an executable stack prints four components of its path, unescaped, once a boot (read, <code>setup_arg_pages</code> and <code>dentry_name</code>).
+  It prints at priority 4, so the priority check refuses it.
+  A segfault prints the process's name, 15 bytes, and one component of a path at priority 6 (read, <code>show_signal_msg</code>, x86), and a component holds no <code>/</code>, so the leading <code>/</code> refuses that.
+  <code>logfc</code> prints a mount's error text unescaped too (read); the kernel is expected to have split that text at commas first (recall).
+  No full search was made for others.
+  A privileged job can print what it likes (a module, reasoned).</p>
+<p>So a wholly false line is not excluded, and that is the reason for the rule above: beside a counters' reason it adds a sentence, and alone it makes a <code>Log</code> reason, which nothing acts on.</p>
+<h3 id="the-rule">The rule<a class="headerlink" href="#the-rule" title="Permanent link">&para;</a></h3>
+<p>Two facts about the counters carry it, both read (<code>mm/memcontrol.c</code>, and <code>memcg_memory_event</code> in <code>include/linux/memcontrol.h</code>) and both true of every kill reported:</p>
+<ul>
+<li><code>oom</code> is raised on the cgroup that refused the charge, before anything is killed, and then on its ancestors.</li>
+<li><code>.local</code> counts only a cgroup's own.</li>
+</ul>
+<p>And one about the kubelet (read, <code>ResourceConfigForPod</code>): <strong>it caps the pod's own cgroup at the sum of its containers' limits</strong> where the pod is <code>Guaranteed</code>, or where every container has a memory limit, with no pod-level limit in the spec.
+For a one-container pod that cap is the container's limit, and the pause container's memory is charged to it too, so the pod's cap goes first (measured on kind, <code>Burstable</code> and <code>Guaranteed</code>).
+Under a pod-level limit, a container with no limit of its own is capped at the pod's (read, <code>getMemoryLimit</code>); the kernel named the pod's cgroup there too (measured on kind, both classes).
+So the pod's <code>.local</code> alone does not mean a pod-level limit, and only the pod's spec says which it is.</p>
+<p>The agent therefore sends numbers, and the controller, which has the spec, applies this when a pod's <code>oom_group_kill</code> rises:</p>
+<table>
+<thead>
+<tr>
+<th>Rose with it</th>
+<th>Reason written</th>
+<th>Means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The killed container's own <code>.local</code> <code>oom</code>, or an <code>oom</code> inside the pod where that file had gone (<a href="#the-container-that-has-gone">below</a>)</td>
+<td><code>ContainerLimit</code></td>
+<td>Its own limit ran out</td>
+</tr>
+<tr>
+<td>The pod's <code>.local</code> <code>oom</code>, and <code>spec.resources</code> sets no memory limit</td>
+<td><code>ContainerLimit</code></td>
+<td>The containers' limits together, which for one container is its own</td>
+</tr>
+<tr>
+<td>The pod's <code>.local</code> <code>oom</code>, and <code>spec.resources</code> sets one</td>
+<td><code>PodLimit</code></td>
+<td>The pod-level limit</td>
+</tr>
+<tr>
+<td>Neither; <code>.local</code> <code>oom</code> of its QoS slice or the pods' root</td>
+<td><code>PodsLimit</code></td>
+<td>The limit all pods share: the node's capacity less its reservations, a little above allocatable (read, <code>getNodeAllocatableInternalAbsolute</code>)</td>
+</tr>
+<tr>
+<td>None of these, and no <code>oom</code> inside the pod that the kill could be for</td>
+<td><code>AbovePods</code></td>
+<td>Something above the pods; on an ordinary node, the node's memory</td>
+</tr>
+<tr>
+<td>More than one, or a first read later than the kill</td>
+<td><code>Unknown</code></td>
+<td>Nothing is claimed</td>
+</tr>
+</tbody>
+</table>
+<p>Readings behind it (kind's measured for this design, the others reported):</p>
+<table>
+<thead>
+<tr>
+<th>Limit that ran out</th>
+<th>Container <code>.local</code> <code>oom</code></th>
+<th>Pod <code>.local</code> <code>oom</code></th>
+<th>QoS slice, then <code>kubepods</code>, <code>.local</code> <code>oom</code></th>
+<th>The kernel's <code>oom_memcg</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The container's, under a roomier pod cgroup</td>
+<td>1</td>
+<td>0</td>
+<td>0, 0</td>
+<td>The container</td>
+</tr>
+<tr>
+<td>The container's, in a one-container pod, on kind</td>
+<td>0</td>
+<td>1</td>
+<td>0, 0</td>
+<td>The pod</td>
+</tr>
+<tr>
+<td>The container's, one of two, on kind</td>
+<td>Gone before it was read in two of three; 1 in the third</td>
+<td>0, and 1 inside it</td>
+<td>0, 0</td>
+<td>The container</td>
+</tr>
+<tr>
+<td>The pod's</td>
+<td>0</td>
+<td>1</td>
+<td>0, 0</td>
+<td>The pod</td>
+</tr>
+<tr>
+<td><code>kubepods</code>'</td>
+<td>0</td>
+<td>0</td>
+<td>0, 1</td>
+<td><code>kubepods</code></td>
+</tr>
+<tr>
+<td><code>kubepods</code>', on kind</td>
+<td>0</td>
+<td>0</td>
+<td>0, and 2 or 3 for each of three kills</td>
+<td><code>kubepods</code></td>
+</tr>
+<tr>
+<td>A slice above <code>kubepods</code>, on kind</td>
+<td>0</td>
+<td>0</td>
+<td>0, 0</td>
+<td>That slice</td>
+</tr>
+</tbody>
+</table>
+<p>The last is one reading, of a limit put on the slice above the pods' root for a few seconds.
+Nothing has filled a node.
+Q1316's R2 would.
+Its R8 cannot show the second row, because <code>privileged-dind</code>'s pod cap has room above the runner's limit (computed, not run).</p>
+<p><strong>Which container.</strong> A pod-level rise does not say, and containerd marks a container <code>OOMKilled</code> for an earlier nested kill too (measured on local nodes, Q1395), so a status alone would give a later SIGKILL the nested kill's answer.
+Two things narrow it:</p>
+<ul>
+<li><strong><code>oom_group_kill</code>, not <code>oom_kill</code>, is what the condition needs.</strong> It rises where the kernel kills a whole cgroup that asks for it, looked for from the victim up to the limit that ran out and no further (read, <code>mem_cgroup_get_oom_group</code>), and the kubelet asks for it on a container unless <code>singleProcessOOMKill</code> is set (read).
+  So a nested kill with no such setting of its own raises <code>oom_kill</code> alone, and a container's own death raises both (measured on kind).
+  <strong>The setting is read for each container, and a container without it is <code>Unknown</code>.</strong> It is not the same for every container of a node: on GKE every container started before containerd's first restart on a new node read 0, and after it 1 (reported; kubelet v1.35.8-gke.1796000, containerd 2.2.7; the cause was not read).
+  A <code>singleProcessOOMKill</code> node is the same case.</li>
+<li><strong>The container is the one whose own <code>.local</code> <code>oom_group_kill</code> was seen to rise</strong>, or, where its cgroup went unread, the only one whose status ended <code>OOMKilled</code> with exit 137 within a bound of the rise, which reading 3 sets.
+  Otherwise <code>Unknown</code>.
+  A container that ended with 137 and another reason counts among those it may be of, and nothing is written on it.</li>
+</ul>
+<p>A nested group that does ask for it, such as a nested kind node inside a job, can still be taken for the container, and only beside a container that died of SIGKILL at the same time.</p>
+<p>Twelve constraints keep the inference from claiming too much:</p>
+<ul>
+<li><strong>A rise in the pod's host-side count is required.</strong> <code>AbovePods</code> is reached by elimination, so without this a kill the node never made would read as the node's.
+  Under Kata the kill happens in the guest (recall), where every host counter stays still; that kill gets no condition.</li>
+<li><strong><code>AbovePods</code> is not called "node memory".</strong> A limit on a slice above the pods' root would read the same.
+  The kubelet's own <code>SystemOOM</code> Event on the Node corroborates it: that Event is raised only where the parsed line gave the limit's cgroup as <code>/</code>, which is the parser's value for a line with no <code>oom_memcg</code> (read, <code>oom_watcher_linux.go</code> and cAdvisor's <code>oomparser.go</code>).</li>
+<li><strong>A zero is conclusive without a baseline; a one is not.</strong> The counters are cumulative from the pod's start, so a pod <code>oom</code> of 0 says no limit of it or inside it ever ran out, whenever the agent started, and not which one above it did.
+  A 1 may be an earlier nested kill, so only a rise across the kill counts.
+  For an agent that started after a kill the answer is <code>Unknown</code>, and the message carries the zero.</li>
+<li><strong>The victim's files are read before its ancestors', and both reasons above the pod need the sample after the one that shows the kill.</strong> <code>oom</code> rises before <code>oom_kill</code>, and one file prints them in that order too (read, <code>__memory_events_show</code>), so the other order, or one read that straddles the kill, sees a kill with no limit beside it.
+  What stands above the pod is taken from the first of the two samples, since more by the second is a neighbour's.</li>
+<li><strong>A pod's counts are taken from before an allocation that may still kill.</strong> The kernel prints its report between the allocation and the kill, so a sample can fall between them, and counts that started there would miss the limit.
+  So the agent keeps the earlier sample until the kill shows, or for 5 seconds (a guess, for reading 3 to set).
+  A kill with no limit beside it, within a minute of one given up on, is <code>Unknown</code> and not <code>AbovePods</code>.
+  So is one at the pod's limit or the pods', within a minute of an allocation left out that may have met the pod's own limit or a container's: that container's kill may be this one.
+  The allocation behind a kill already answered is left out too, so a pod's second kill within a minute, at its own or the pods' limit, is <code>Unknown</code>.
+  A worker's runner does not restart, so this costs a sidecar's kill and other pods'.
+  A nested limit's allocation is not such a one where every container's file was there to read.</li>
+<li><strong>A limit is named only where it has as many <code>oom</code> as there were kills to account for</strong>, other pods' included for the limit all pods share, since each whole kill at a limit follows at least one there (read, <code>mem_cgroup_oom</code>).</li>
+<li><strong>A limit below a container is not the container's.</strong> It raises the pod's <code>oom</code> and kills no container whole, since the kernel looks for a group to kill no further up than the limit (read, <code>mem_cgroup_get_oom_group</code>).
+  So the pod's <code>oom</code> from inside it accounts for nothing once the killed containers' own files were read: those do.</li>
+<li><strong>A node whose cgroup tree is mounted <code>memory_localevents</code> is refused.</strong> No event then reaches an ancestor (read, <code>memcg_memory_event</code>), so a container's kill raises neither the pod's <code>oom</code> nor its <code>oom_group_kill</code>, and would go unseen.
+  The agent reads the mount's options and reports nothing on such a node.</li>
+<li><strong>A pod's counts start again when it can be read again.</strong> Counts from before a time its files were refused would span all of it, and a neighbour's spare <code>oom</code> at the pods' limit with them.
+  So what happened while it was shut is <code>Unknown</code>, and the next kill is counted from the first sample after (PR 2's; PR 1 keeps the older base).</li>
+<li><strong>A pod with two cgroup directories is not judged.</strong> The kubelet makes one for a UID, and a job with the host's view of the tree can make another in a different class, with a cgroup named as the victim's container in it.
+  Read in its place, that copy's counts would name any limit it chose.
+  The copy can outlive the pod's own, so a pod that has had two is not judged again while any directory of its UID is there, and one whose directory went is not judged when another comes within 15 seconds (PR 2's).
+  Nor is one whose directory another took the place of between two samples, which its inode tells (that the kernel does not soon use one again is recall).
+  An agent that restarts forgets all three.</li>
+<li><strong>A kill counts for a container only within 5 seconds before to 6 after its end</strong> (the bound is a guess, for reading 3 to set), and two kills of one container with different limits are <code>Unknown</code>.
+  Once the kubelet has removed the pod's own directory, this is what keeps a copy the agent has no memory against from a later say.</li>
+<li><strong>An answer that rests on the time of a container's end is held for 10 seconds after it</strong> (PR 2's).
+  The kill may be another container's, and that of this one in the node's next report, which is written at most 8 seconds after the one before.
+  The times are the node's and the controller's: a controller ahead of the node holds for less, and one over 10 seconds behind it not at all.
+  Where a container's own counts show the kill, the answer waits for nothing.</li>
+<li><strong>A limit lowered below use raises <code>oom</code> with no charge failing</strong> (read, <code>memory_max_write</code>), as an in-place resize can; the kill that follows is that limit's, and reads so.</li>
+</ul>
+<h4 id="the-container-that-has-gone">The container that has gone<a class="headerlink" href="#the-container-that-has-gone" title="Permanent link">&para;</a></h4>
+<p>Where a pod keeps running beside the container killed at its own limit, that container's cgroup was gone 5 to 20 ms after the kill: of three kills, a reader on inotify read the file in one and a 50 ms poll in none (measured on kind).
+A rule that needed its file would answer <code>Unknown</code> for most kills at a container's own limit.
+So an <code>oom</code> inside the pod is also taken as the killed container's where five things hold:</p>
+<ul>
+<li>one whole kill, and no container's file that shows it;</li>
+<li>one container gone since the count began, and no more;</li>
+<li>more <code>oom</code> inside the pod than the containers still there account for;</li>
+<li>no container of the pod ever sampled with a cgroup below it, which is <code>cgroup.stat</code>'s <code>nr_descendants</code> and <code>nr_dying_descendants</code> (read, <code>cgroup_stat_show</code>; not measured);</li>
+<li>no cgroup of the pod ever sampled that is not named as the runtime names a container's under that node's cgroup driver, which is what a container in <a href="#who-could-forge-the-answer-r9">another tenant's job</a> can put there.</li>
+</ul>
+<p>The last two keep a nested limit from being taken for the container's.
+CRI-O can put a container's monitor beside it, named <code>crio-conmon-</code> (recall), and that name is let through.
+A name alone is not proof: under cgroupfs a Docker container's cgroup has the same bare ID as the runtime's, and a job that can write the host's cgroup tree can use any name.
+The controller has the pod's status, so it counts the containers the agent reported against the one sandbox and those the status has running at the kill, and takes a pod with more as nested (PR 2's).
+One that ended over 6 seconds before, or started in the kill's second or later, is not counted, since it would make room for another's cgroup.
+An ordinary runner cannot make a cgroup (recall), unless containerd's <code>CgroupWritable</code> is on (reported, v2.3.1).
+<code>privileged-dind</code>'s are outside its pod (<a href="#what-it-covers">above</a>), so its pod does not count as nested.</p>
+<h4 id="where-it-names-the-wrong-limit">Where it names the wrong limit<a class="headerlink" href="#where-it-names-the-wrong-limit" title="Permanent link">&para;</a></h4>
+<p>A sample cannot tell an allocation that waits for its own kill from one behind the kill it sees, and one kill can have several (2 or 3 at the pods' limit, for each of three kills on kind).
+Each shape below needs a second limit to run out at the same moment, or a spare count left from a moment before.</p>
+<table>
+<thead>
+<tr>
+<th>What happened</th>
+<th>Named</th>
+<th>What PR 7 does</th>
+<th>What is right</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Killed above the pods, while another pod's allocation at the pods' limit waits for its own kill, or is spare</td>
+<td><code>PodsLimit</code></td>
+<td>No raise, no re-run</td>
+<td>The same</td>
+</tr>
+<tr>
+<td>The same, and the other pod's directory went between two samples</td>
+<td><code>PodsLimit</code></td>
+<td>No raise, no re-run</td>
+<td>The same</td>
+</tr>
+<tr>
+<td>Killed above the pod, while another container's allocation at the pod's own limit waits, and a limit in its spec</td>
+<td><code>PodLimit</code></td>
+<td>No raise, no re-run</td>
+<td>The same</td>
+</tr>
+<tr>
+<td>The same, and no pod-level limit in its spec</td>
+<td><code>ContainerLimit</code></td>
+<td><strong>Raise and re-run, as today</strong></td>
+<td>No raise</td>
+</tr>
+<tr>
+<td>Killed above the pod, while an allocation at the same container's own limit waits</td>
+<td><code>ContainerLimit</code></td>
+<td><strong>Raise and re-run, as today</strong></td>
+<td>No raise</td>
+</tr>
+<tr>
+<td>Killed at its own limit more than a minute after the allocation, with one at its pod's or the pods' limit beside it</td>
+<td><code>PodLimit</code> or <code>PodsLimit</code></td>
+<td><strong>No raise, no re-run</strong></td>
+<td>Raise and re-run</td>
+</tr>
+<tr>
+<td>Killed above the pod, its file gone, just after a limit ran out in a cgroup of the pod, its own or one another tenant's job put there, that came and went between two samples</td>
+<td><code>ContainerLimit</code></td>
+<td><strong>Raise and re-run, as today</strong></td>
+<td>No raise</td>
+</tr>
+<tr>
+<td>Killed in a way the agent did not see, and within 6 seconds the kubelet removes the pod's cgroups, the agent restarts, and a job with the host's view of the tree has a kill in a copy of them</td>
+<td>Whichever limit it filled</td>
+<td>Follows that</td>
+<td>Nothing to go on (reasoned, not run)</td>
+</tr>
+<tr>
+<td>Killed at its own limit within 6 seconds of another container's kill above the pod, whose end the status no longer names, and reported more than 10 seconds after its own end</td>
+<td><code>AbovePods</code></td>
+<td><strong>No raise, no re-run</strong></td>
+<td>Raise and re-run</td>
+</tr>
+<tr>
+<td>Killed at its own limit, its <code>oom</code> raised between the read of the container's file and the read of the pod's in one sample, its file then gone, with one at the pods' limit beside it</td>
+<td><code>PodsLimit</code></td>
+<td><strong>No raise, no re-run</strong></td>
+<td>Raise and re-run</td>
+</tr>
+</tbody>
+</table>
+<p>So of the shapes known, four can withhold a raise and a re-run that were right.
+One needs an allocation to wait more than a minute for its kill, one a sample to straddle it by the time between two reads, expected to be microseconds (read, not measured), one a job that forges cgroups as the agent restarts, in the seconds after the pod's are removed, and one a container that ended twice in those seconds beside a report that is late.
+The others at worst leave a raise that was not right, which is what the AGC does now.
+Other orders of two limits were tried against the rule on fakes and read the right limit or <code>Unknown</code>; none was tried on a kernel.
+A re-run class that trusted <code>PodsLimit</code> would have to answer the first two (<a href="../../queue/Q1408/">Q1408</a>).</p>
+<h3 id="watching">Watching<a class="headerlink" href="#watching" title="Permanent link">&para;</a></h3>
+<p>The agent would keep the last sample of each pod in memory and take a new one where an inotify event for the pod's <code>memory.events</code> finds its <code>oom</code> or a kill count risen, with a 250 ms poll behind it.
+The file changes for <code>low</code>, <code>high</code> and <code>max</code> too, and for <code>max</code> before any kill at that limit (read, <code>memcg_memory_event</code> and <code>try_charge_memcg</code>), so on an event the agent reads that one file first: a pod near its limit must not spend its watch on them.
+Only the pod's file is watched: a container's counts reach it too, so one watch for each pod tells of any of its containers.
+A rise starts a burst of closer samples, at most one a minute for a pod, so a job that kills its children in a loop cannot hold the agent in one.
+A 50 ms poll of two files for each of 110 pods would be 4,400 reads a second on every node (computed).
+Inotify saw each rise 1 to 50 ms before a 50 ms poll, and gave no delete event for any of twelve removed cgroups; a file held open across the removal read <code>ENODEV</code> (reported).
+So the poll, or a watch on the parent directory (recall), is what notices a removal, and the last values are whatever was read before it.</p>
+<p>It races two removals.
+The container's cgroup goes first, and the limit is read off the pod's, which stays.
+The pod's goes after its final status is set and its volumes are unmounted, with no bound on either side (read, <code>SyncTerminatedPod</code>).
+On kind the container's went 5 to 20 ms after a kill at its own or its pod's limit and 80 to 220 ms after one above the pod, and the pod's 2 to 2.8 s after its last container was killed (measured, a few kills of each on a busy laptop).
+The reader and its tracker alone, with 110 pods on the node, took 3.7 to 5.5% of one CPU at a 250 ms poll and 16 to 23% at 50 ms (measured on kind, before the container's two extra files; no report, no API client).</p>
+<p>Only the kubelet's own tree is parsed, at the depths the kubelet makes, so a cgroup a job creates with a pod-like name under its own is not taken for a pod.
+Its root is found by name, the shallowest one, and two at the same depth are refused unless the operator names one: kind sets a <code>cgroupRoot</code>, which puts it one level down (kind v0.32.0 <code>config.go</code>, reported).</p>
+<h2 id="what-it-writes">What it writes<a class="headerlink" href="#what-it-writes" title="Permanent link">&para;</a></h2>
+<p>Both, on the pod, in the pod's namespace:</p>
+<ul>
+<li><strong>A pod condition per container</strong>, of type <code>oom.actions-gateway.com/&lt;container name&gt;</code>, where the name is the killed container's.
+  A condition has no container field and a worker has two that can die, so a single type would let the sidecar's kill overwrite the runner's.
+  The API server requires a qualified name (read, <code>validatePodConditions</code>), whose name part and a container's name are both at most 63 characters (recall).
+  <code>status: "True"</code> with the reason above, or <code>"Unknown"</code>.
+  Written once the pod's status shows that container <code>OOMKilled</code>, so a counter alone never marks a pod.
+  It says what the <strong>last</strong> kill was: nothing clears it, a container that restarts keeps it, and a second kill with the same reason leaves <code>lastTransitionTime</code> where it was.
+  So the message carries the time that container ended and its ID, which is what a reader compares.
+  Both are the pod's status's, so a report's clock is in neither, and a kill reported again changes nothing.
+  One condition is written at most three times a minute, so an agent that changes its mind cannot keep the controller from other nodes' pods.
+  For 110 pods with one killed container each that is at most 5.5 writes a second from one agent (computed), and the controller's client has no limit of its own for that to fill (PR 2's).
+  The AGC <a href="#timing">acts on the first answer</a>; a later one changes what a person reads.
+  A kill the agent was late for, or too far from that end to be its, claims nothing and takes back no answer already written for that container ID.</li>
+<li><strong>An Event</strong> with the same words, for people, whose reason is <code>OOM</code> and the condition's reason, or <code>OOMProcessKilled</code> for a kill that ended no container.
+  It outlives the pod, and it covers a kill that ended no container, such as a build's child process, where a condition would mislead.
+  At most one for each end of a container, by its status, and reason, and one a minute for a pod's kills that ended none, so neither a job that makes its children die in a loop nor a report with many times in it writes a flood.</li>
+</ul>
+<p>The kubelet keeps a condition it does not own, through the pod's terminal update too (read, <code>mergePodStatus</code>).</p>
+<h2 id="who-holds-what">Who holds what<a class="headerlink" href="#who-holds-what" title="Permanent link">&para;</a></h2>
+<h3 id="two-components-d2">Two components (D2)<a class="headerlink" href="#two-components-d2" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a> each worker node                         platform node
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>┌──────────────────────┐   one report   ┌───────────────────────┐
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│ agent                │   object per   │ controller            │
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│  not root            │   node         │  pods: get/list/watch │
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│  /sys/fs/cgroup: ro  ├───────────────►│  pods/status: patch   │
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│  no pod access       │                │  events: create       │
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>└──────────────────────┘                └───────────────────────┘
+</code></pre></div>
+<p><strong>The agent</strong> learns pod UIDs and container IDs from cgroup paths, which carry the first (read, <code>pkg/kubelet/cm</code>) and the second (recall; the runtime names it).
+It writes them, with counter values and times, into one ConfigMap named for its node behind a fixed prefix, in the reporter's own namespace.
+It needs <code>update</code> there and nothing else.</p>
+<p><strong>The controller</strong> maps UID to pod (a static pod's cgroup has another UID than its mirror pod's (recall), so its kills are dropped), <strong>drops and logs any whose <code>spec.nodeName</code> is not the node in the report's name</strong>, which is what holds an agent to its own node's pods, decides the reason, writes the condition and the Event, and copies no string from a report into either: beyond the identifiers it looks up, a report is numbers.
+It creates each node's ConfigMap and deletes it when the node has no agent, which it learns from the agents' pods in its own namespace, so it needs no read of Nodes.
+A ConfigMap and not a custom resource, because a CRD is a cluster-wide install and the controller checks the shape either way.
+It runs where tenants' jobs do not, and the chart has to make that so: it requires node affinity on a label of the <code>node-restriction.kubernetes.io/</code> namespace, which a kubelet may not set on its own node (read, <code>noderestriction/admission.go</code>).
+An ordinary node-pool label is not enough: outside the <code>kubernetes.io</code> and <code>k8s.io</code> namespaces a label is the kubelet's to set (read, <code>getForbiddenLabels</code>), so an escaped job could set one on its node and draw the controller's token there.
+Whether GKE can put such a label on the nodes of an autoscaled pool is not read.
+Where it cannot, the alternative is a taint on every pool that runs tenants' jobs that the controller does not tolerate, which a kubelet may not change either (read, the same file).</p>
+<p><strong>Why not one DaemonSet that patches pods itself.</strong> Its token would sit on every node that runs tenants' jobs, with <code>list</code> on pods, since RBAC cannot narrow a list to one node: a rule matches verb, group, resource and name (read, <code>RuleAllows</code>).
+Every pod's spec in the cluster would then be one escape away.
+An admission policy can hold its writes to its own node and cannot hold its reads at all.
+Today the same escape gets the kubelet's credentials, which reach that node's own pods (read, <code>authorizePod</code> in <code>node_authorizer.go</code>).
+So one DaemonSet is a step down for every cluster that runs <code>privileged-dind</code> without Kata, and two components are not.</p>
+<h3 id="the-least-each-needs">The least each needs<a class="headerlink" href="#the-least-each-needs" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Agent</th>
+<th>Controller</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Runs as</td>
+<td>Non-root, read-only root filesystem, all capabilities dropped, <code>RuntimeDefault</code> seccomp</td>
+<td>The same, and no <code>hostPath</code></td>
+</tr>
+<tr>
+<td>API</td>
+<td><code>configmaps</code> update in its namespace</td>
+<td><code>pods</code> get/list/watch, <code>pods/status</code> patch, <code>events</code> create, in the namespaces the chart's values list; <code>configmaps</code> get/list/watch/create/delete and <code>pods</code> get/list/watch in its own</td>
+</tr>
+<tr>
+<td>Cluster-wide grant</td>
+<td>None</td>
+<td>None, unless the operator lists no namespaces and says so</td>
+</tr>
+<tr>
+<td>Network</td>
+<td>The API server only</td>
+<td>The API server only</td>
+</tr>
+</tbody>
+</table>
+<p>The option's container is neither: its privilege is <a href="#the-kernel-log-as-an-option">above</a>, and it has no API access.</p>
+<p>The service accounts live in a platform namespace.
+Kubernetes' <code>edit</code> role can mint a token for, and impersonate, any service account in its own namespace (read, <code>bootstrappolicy/policy.go</code>), so one in a tenant's namespace would belong to the tenant.</p>
+<h3 id="admission-policies">Admission policies<a class="headerlink" href="#admission-policies" title="Permanent link">&para;</a></h3>
+<p>Three, in the reporter's chart, with <code>failurePolicy: Fail</code>:</p>
+<ol>
+<li><strong>A report is written only by its own node's agent.</strong> A report's name is a fixed prefix and then the node's name.
+   On create and update in the reporter's namespace, any writer but the controller is refused a name with that prefix whose rest is not its token's node claim, and the agent is refused every other name, since its <code>configmaps</code> update covers the namespace.
+   Other ConfigMaps stay writable by others: the control plane itself keeps <code>kube-root-ca.crt</code> in every namespace, which both pods' token volumes mount (read, <code>rootcacertpublisher</code> and <code>serviceaccount/admission.go</code>).
+   It also refuses the agent <code>immutable</code>, finalizers and owner references on its report: <code>immutable</code> would refuse its successor's writes until the node had had no agent for ten minutes (reasoned).
+   The claim is <code>authentication.kubernetes.io/node-name</code>, which a projected token carries (read, <code>ServiceAccountTokenPodNodeInfo</code>, locked on since 1.32; this chart's floor is 1.35); a token without it is refused.</li>
+<li><strong>The controller may change only its own conditions.</strong> <code>pods/status</code> is wider than its name: the API server resets the spec, the deletion timestamp and the owner references on such a write, and not labels, annotations or finalizers (read, <code>podStatusStrategy.PrepareForUpdate</code>).
+   The AGC keeps its recovery marks in annotations, so an unguarded grant could forge "already handled" on any worker.
+   The policy requires metadata unchanged but for <code>managedFields</code>, every other status field unchanged, every changed condition to be of the reporter's domain, and no more conditions outside it than before.
+   A typed object's fields cannot be iterated, so it lists them; a test walks <code>PodStatus</code> and <code>ObjectMeta</code> and fails on a field the policy does not name, which is how a later release's field is caught.</li>
+<li><strong>The controller's Events carry only its own reasons.</strong> It matches both Event API groups.
+   The AGC's opt-in <code>AutoscalerVerdict</code> mode reads a <code>NotTriggerScaleUp</code> or <code>TriggeredScaleUp</code> Event by its reason and no other field (read, <code>classifyAutoscalerEvent</code>), so <code>events</code> create without this could gate or ungate a set's intake in every namespace it covers.
+   <code>edit</code> can do that today in its own.</li>
+</ol>
+<p>Policies 2 and 3 each have one match condition, that <code>request.userInfo.username</code> equals the controller's, so a defect in a rule's body reaches no other writer.
+That condition itself is evaluated for every <code>pods/status</code> write and every Event in the cluster, a kubelet's included, and an error in it denies the write under <code>Fail</code>, as a fault in finding a policy's parameters does before it (read, <code>matchconditions/matcher.go</code> and the policy's <code>dispatcher.go</code>).
+So it is that one equality and nothing more, neither policy has a <code>paramKind</code>, and neither's binding has a namespace selector, which would leave namespaces unjudged.
+Policy 1's binding selects its namespace by <code>kubernetes.io/metadata.name</code>, which the API server resets on every write (read, the namespace strategy and defaults), so the label cannot be moved off.
+A selector that names the wrong namespace judges nothing, so reading 5 loads the bindings the chart renders.
+Its rule reads the node claim for a name with the prefix and no other, since the publisher of <code>kube-root-ca.crt</code> has none.
+RBAC and policy take the name from one value, with a test.</p>
+<p>RBAC alone would let an agent write any node's report, so the chart has no way to install without them.
+None is written in the chart.
+A draft of the first two exists, and no run of it is cited here; that the language reaches each check within its cost limit, and each refusal, are to be shown in envtest before the rest is built (reading 5).</p>
+<h3 id="who-could-forge-the-answer-r9">Who could forge the answer (R9)<a class="headerlink" href="#who-could-forge-the-answer-r9" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Who</th>
+<th>Event</th>
+<th>Condition</th>
+<th>Report</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A job in a worker pod</td>
+<td>No: the AGC builds workers with no service-account token (read, <code>pod.go</code>). An unsandboxed <code>privileged-dind</code> job can <strong>cause</strong> one on another pod, below</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr>
+<td>A person or workload with <code>edit</code> in the tenant's namespace</td>
+<td><strong>Yes</strong> (read)</td>
+<td>No: <code>edit</code> and <code>admin</code> only read <code>pods/status</code> (read)</td>
+<td>No</td>
+</tr>
+<tr>
+<td>A person with <code>pods/status</code> from a role the platform added. On GKE <code>roles/container.developer</code> is one: it includes <code>container.pods.updateStatus</code> (<a href="https://docs.cloud.google.com/iam/docs/roles-permissions/container">Google's role reference</a>, 2026-11-24), and no Kubernetes role shows it</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>No</td>
+</tr>
+<tr>
+<td>A job that has escaped onto its node: the kubelet's credentials create Events and patch its own pods' status (read, <code>NodeRules</code> and <code>noderestriction</code>)</td>
+<td>Yes, on any pod</td>
+<td>Yes, for that node's pods</td>
+<td>Yes, its node's</td>
+</tr>
+<tr>
+<td>A taken-over agent</td>
+<td>Through a report, for its node's pods</td>
+<td>The same</td>
+<td>Its node's</td>
+</tr>
+<tr>
+<td>A taken-over log reader, with the option on</td>
+<td>A sentence, or a <code>Log</code> reason's, for its node's pods</td>
+<td>A <code>Log</code> reason for its node's pods, over <code>Unknown</code> or nothing</td>
+<td>What the agent takes from its socket</td>
+</tr>
+<tr>
+<td>A taken-over controller</td>
+<td>Yes, with its own reasons</td>
+<td>Yes, for any pod in its namespaces, and only its domain</td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table>
+<p>So the AGC acts on the condition and never on the Event, repeats it only as <a href="#reading-it">attributed words</a>, and R9 holds where no tenant has <code>pods/status</code>, which the operator's page has to name, with the GKE permission.
+That GKE role includes all of <code>container.pods.*</code> (the same page), so whoever has it can change the pod itself too.
+A fourth policy could refuse a condition of this domain from anyone but the controller.
+It would run on every kubelet's status write, where a defect stops pod status cluster-wide, so it is not proposed here.
+The escape row is no wider than today: such a job already holds the kubelet that writes the status the AGC acts on.</p>
+<p><strong>What a job can cause rather than forge.</strong> It can make its own pod's <code>oom</code> rise, with a nested limit, at the moment a neighbour fills the node, or up to a minute before; the answer can then be <code>Unknown</code>, which gets it what it gets today.
+So can a job with a writable cgroup by clearing its own container's <code>memory.oom.group</code>, which the kernel lets a delegated cgroup do (reported, <code>NS_DELEGATABLE</code>).
+An unsandboxed <code>privileged-dind</code> job can go further with no escape, since its daemon has the host's view of the cgroup tree (Q1396): <code>docker run --cgroup-parent</code> can name a slice outside its pod (reasoned from that reading, not run).
+Under another pod, a nested kill there raises that pod's <code>oom</code> (read, <code>memcg_memory_event</code>) and not its <code>oom_group_kill</code> (read, <code>mem_cgroup_get_oom_group</code>), so on its own it would write an Event and no condition (reasoned from both).
+Beside a kill made above that pod it can change the condition too: to <code>Unknown</code> where the agent sampled the cgroup, and to <code>ContainerLimit</code> where it came and went between two samples, or passed for a container's, and the killed container's own file had gone (<a href="#where-it-names-the-wrong-limit">the table</a>).
+That is a false cause on another tenant's pod, and the raise that pod gets today, so it undoes D3's withhold for that pod.
+A copy of the whole pod directory beside it silences that pod for as long as either is there, which then gets what it gets today, and the agent logs it.
+One made after the kubelet removed the pod's own, as the agent restarts, is <a href="#where-it-names-the-wrong-limit">the one that could withhold</a>.
+It can probably also lower the victim's real limits, which is a true kill at a true limit (reasoned).
+A second pods' root, or a shallower one, stops an agent that has to find it or misleads it as it starts, so the chart sets <code>-pods-root</code>.
+So the Event says that a process in the pod's cgroup was killed, and not whose it was, and that pod's <code>oom</code> of 0 is no longer conclusive.
+Filling another pod's pod-level limit, where that pod's spec has one, makes a true <code>PodLimit</code>: no raise and no re-run, where today has both (reasoned, not run).
+Under the pods' root it fills the pods' limit from no pod, which is one reason there is <a href="#the-re-run-class-a-follow-up">no re-run class here</a>.
+It can drive its own pod over its request until the pods' shared limit runs out, and be the victim; that is real, and its answer is no raise and no re-run.
+And it can time an allocation of its own against a kill made above its pod, which can read <code>ContainerLimit</code> (<a href="#where-it-names-the-wrong-limit">the table</a>): a raise and a re-run it would have got today, for its own runner.</p>
+<h2 id="what-the-agc-does-with-it">What the AGC does with it<a class="headerlink" href="#what-the-agc-does-with-it" title="Permanent link">&para;</a></h2>
+<h3 id="reading-it">Reading it<a class="headerlink" href="#reading-it" title="Permanent link">&para;</a></h3>
+<p>No new grant: conditions arrive on the pod watch it has, where Events do not (read, <code>charts/actions-gateway/files/agc-tenant-role-rules.yaml</code>: one pod's Events are listed, by choice with no watch).</p>
+<p>The watch reaches the cache and not the reconciler: <code>workerPodPhaseChangePredicate</code> drops an update that changes only a condition (read), so the condition needs an edge of its own.
+For the record it passes a condition of the reporter's domain that appears on any <code>Failed</code> worker, one whose recovery is already claimed included.
+A worker update also starts recovery and queues a reconcile (read, <code>workerPodHandler</code>), so this edge hands the snapshot store the reason and does neither; PR 7 widens it for a kill that waits, as Q1389's start has.</p>
+<p><strong>It has to keep the answer, not only read it.</strong> A worker is deleted 5 minutes after it ends by default (<code>DefaultCompletedPodTTL</code>, read), and GitHub concluded a killed job about 10 minutes after it started (measured, <a href="#timing">below</a>), so by default the pod and its condition are gone before the job is red.
+Nor does the failure record have it: its snapshot is taken as the pod turns <code>Failed</code>, before the condition comes, and the predicate drops what follows (read, <code>workerSnapshots.put</code> and the predicate).
+With the edge, the reason is added to the snapshot already stored, and the failed job's record and its <code>PlatformFaultOnFailedJob</code> Event carry it when the job concludes.
+That Event calls the kill a platform fault, which reads against a container's own limit named beside it; PR 6 settles the wording.
+It stores no second snapshot: that would read the egress proxy's readiness again, after the pod ended (read, <code>SnapshotScaleSetWorker</code>), and could report a fault the job never met.
+That changes no action, and needs no setting within these limits, each with a test in PR 6, since a condition's reason is free text to whoever can write <code>pods/status</code> (read, <code>validatePodConditions</code> checks types):</p>
+<ul>
+<li><strong>It only adds words to a fault that is there.</strong> Any entry in the record's faults raises a Warning Event (read, <code>reportFailedJob</code>), so the condition never makes one: it qualifies <code>container &lt;name&gt; OOMKilled</code>, which the kubelet's status gave (with exit code 137, for any container but the runner; read, <code>oomKilled</code> at <code>be309274d</code>), for the container its type names.</li>
+<li><strong>The words are the AGC's own</strong>, one set for each reason, the counters' five and PR 9's four, and say that a pod condition reported it.
+  Any other reason is ignored, and the condition's message is never copied.</li>
+<li><strong>Not on a container that restarted</strong>, whose condition may be an earlier kill's.
+  The runner never restarts, since the AGC builds workers with <code>restartPolicy: Never</code> (read, <code>pod.go</code>); a restartable sidecar can, and its kill is then recorded as today.</li>
+<li><strong>The first reason for a container's ID stands</strong>, so a condition that flaps changes nothing after it, with two exceptions: a <code>Log</code> reason replaces <code>Unknown</code>, and a counters' reason other than <code>Unknown</code> replaces either.
+  Whoever writes first fixes the words, which is all it fixes.
+  The snapshot holds no container ID today, so PR 6 adds it.</li>
+<li><strong>Under the store's lock, and only while the store still holds the snapshot</strong>, since another goroutine may have taken it and be encoding it.</li>
+<li><strong>The words are no part of the fault.</strong> A record amended when its worker ends compares faults as text (read, <code>amendFailedJob</code>), and a fault that gained words there would be reported twice.</li>
+</ul>
+<p>The record's JSON holds the type and reason of every condition its snapshot saw, as written (read, <code>snapshotOf</code>), in a log line and the ledger; of them only <code>DisruptionTarget</code>'s reason reaches an Event (read, <code>faultsBy</code>).
+Two losses stay: an AGC restart drops a snapshot whose job has not concluded, and a condition that comes after the completion is not recorded.</p>
+<p>For acting on it, a setting, off by default, says that a reporter is installed.
+It bounds the wait below and is required for any change of action, so a cluster that happens to carry one changes what a record says and nothing the AGC does.</p>
+<h3 id="timing">Timing<a class="headerlink" href="#timing" title="Permanent link">&para;</a></h3>
+<p>The class decides when the pod is <code>Failed</code> and the job's start is recorded.
+With the setting on, it would also wait until a condition with one of the counters' five reasons is there or 30 seconds have passed since the pod ended, whichever is first, then do what it does today.</p>
+<ul>
+<li><strong>The re-run loses nothing.</strong> It already waits for the run to conclude, and GitHub concluded a killed job 10 minutes after it started (measured, three kills, each in the job's first 17 s; <code>oom_start_wait.go</code>).</li>
+<li><strong>The hold exists.</strong> Q1389's start wait keeps such a pod for 15 minutes, and this wait would run beside it, from the pod's own end, so a restart of the AGC does not extend it.</li>
+<li><strong>It needs widening to two arms.</strong> <code>oomRetryable</code> (read) also asks for a memory limit and the sizing profile's annotation, so neither a runner with no limit nor a <code>Static</code>, <code>NodeShare</code> or <code>AwaitingSamples</code> worker is held today; the second is withheld at once as <code>own_limit</code>.</li>
+</ul>
+<p>The 30 seconds is a guess at several times the agent's and controller's delay, of which 10 are <a href="#the-rule">the hold</a> of an answer that rests on time.
+The agent's part was under 0.1 s on kind, from the first rise it read to its answer (measured); the rest waits for PR 2.</p>
+<h3 id="by-reason">By reason<a class="headerlink" href="#by-reason" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Reason</th>
+<th>Today</th>
+<th>With the condition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ContainerLimit</code></td>
+<td>Raise and re-run, or a withhold, naming no cause</td>
+<td>The same actions, and the text says the limit ran out</td>
+</tr>
+<tr>
+<td><code>PodLimit</code></td>
+<td>The same; a raise past the pod's limit builds a refused pod (<a href="../../queue/Q1402/">Q1402</a>)</td>
+<td>No raise, no re-run; the Event says the pod's limit</td>
+</tr>
+<tr>
+<td><code>PodsLimit</code>, <code>AbovePods</code></td>
+<td>Raise and re-run, or <code>own_limit</code>; the kill can open the set's breaker</td>
+<td>No raise, not counted by the breaker, and D3</td>
+</tr>
+<tr>
+<td><code>Unknown</code>, a <code>Log</code> reason, or none in time</td>
+<td>Today's</td>
+<td>Today's, with Q1400's text</td>
+</tr>
+<tr>
+<td>Any, on a runner with no limit</td>
+<td>A log line, no Event</td>
+<td>An Event that names the reason</td>
+</tr>
+</tbody>
+</table>
+<p>A raise after a kill made above the pod costs twice: it is kept up to 7 days, and under <code>Throughput</code> it lifts the limit and not the request, which makes an overcommitted node more so.
+That is why the raise goes at once, and the re-run is a separate question.</p>
+<h3 id="d3-the-re-run">D3: the re-run<a class="headerlink" href="#d3-the-re-run" title="Permanent link">&para;</a></h3>
+<p>For <code>PodsLimit</code> and <code>AbovePods</code>, three options:</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it leaves</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>No raise, no re-run</strong> (decided)</td>
+<td>A job killed by its node waits for a manual re-run, and its Event says why. Nothing is re-run whose cause could be the tenant's own</td>
+</tr>
+<tr>
+<td>No raise, re-run at the same limits</td>
+<td>Keeps the recovery such a job gets today. It is a new class without R12's evidence, and R10 fails for one shape below</td>
+</tr>
+<tr>
+<td>As today: raise and re-run</td>
+<td>No change to what is re-run; the raise is the wrong one and the text then contradicts it</td>
+</tr>
+</tbody>
+</table>
+<p>Withholding needs none of what follows, since it only does less.</p>
+<h3 id="the-re-run-class-a-follow-up">The re-run class: a follow-up<a class="headerlink" href="#the-re-run-class-a-follow-up" title="Permanent link">&para;</a></h3>
+<p>A re-run on <code>PodsLimit</code> is <strong>not part of this design</strong>, and belongs after 2.1 with a grant of its own.
+The plan carries what is known so that a later one starts from it.</p>
+<p><strong>R10: whose doing it is.</strong> Being killed above the pod does not mean the tenant did not cause it:</p>
+<table>
+<thead>
+<tr>
+<th>Shape</th>
+<th>Reason</th>
+<th>The tenant's doing?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A neighbour over its request fills the pods' limit; this pod is within its request</td>
+<td><code>PodsLimit</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td>This pod, over its own request, fills it</td>
+<td><code>PodsLimit</code></td>
+<td>Yes, or its sizing profile's</td>
+</tr>
+<tr>
+<td>Another pod of the same tenant, over its request, fills it</td>
+<td><code>PodsLimit</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>The job's own Docker containers, outside its pod's cgroup, fill the node (Q1396, measured on <code>kindest/node:v1.35.5</code>)</td>
+<td><code>AbovePods</code>: by default they do not count against the pods' limit</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>The same, started with <code>--cgroup-parent</code> under the pods' root</td>
+<td><code>PodsLimit</code>, with every pod within its request (reasoned, not run)</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>A system daemon, or the node sized too small</td>
+<td><code>AbovePods</code></td>
+<td>No, and nothing tells it from a job's containers</td>
+</tr>
+</tbody>
+</table>
+<p>So <code>AbovePods</code> could never qualify, and <code>PodsLimit</code> would need at least:</p>
+<ul>
+<li><strong>No tenant pod on the node that fails Pod Security <code>baseline</code></strong>, unless its runtime class is on an operator's list of sandboxes.
+  A <code>hostPath</code> on the cgroup tree or <code>hostPID</code> gives the same reach with no privileged container, and a runtime class's name proves nothing (reasoned).
+  Tenant namespaces only, since system DaemonSets are privileged on every node.
+  So such a class could reach <code>plain</code> and <code>kata-dind</code> sets and never a <code>privileged-dind</code> one.</li>
+<li><strong>The victim's pod within its memory request</strong>, by construction where every limit equals its request, as <code>Binpack</code> sizes the runner, or by <code>memory.peak</code> (kernel 5.19 and later, recall), which counts page cache and so errs toward no.</li>
+<li><strong>No other pod of the same tenant ever over its own</strong>, by <code>memory.peak</code> too, since <code>memory.current</code> is a sample a job can time around.
+  A tenant can have more than one namespace, and nothing here says which are whose.</li>
+</ul>
+<p>A <code>Throughput</code> runner over its request is the profile's choice and no tenant's or neighbour's; the answer there may be to raise the request, which is the sizing profile's business.</p>
+<p><strong>R11.</strong> A fresh pod can land on the same node, because the scheduler counts requests and not a neighbour's use, so it would take the set-wide breaker.</p>
+<p><strong>R12.</strong> Q1316's run does not supply it: its victims are <code>privileged-dind</code>.
+That run settles whether the counters hold on GKE, which is what 2.1 needs of it; the class needs an R3 of its own (reading 9).</p>
+<h2 id="what-it-covers">What it covers<a class="headerlink" href="#what-it-covers" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Workload</th>
+<th>What it would say</th>
+<th>Standing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>baseline</code> or <code>restricted</code> runner, <code>Burstable</code> or <code>Guaranteed</code></td>
+<td>Any reason</td>
+<td>Rule unmeasured on GKE</td>
+</tr>
+<tr>
+<td><code>privileged-dind</code>, job's own containers</td>
+<td>Nothing when one of those is killed at its own limit: it is outside every pod (Q1396). When they fill the node, the runner's kill reads <code>AbovePods</code>, or <code>PodsLimit</code> under a <code>--cgroup-parent</code></td>
+<td>Location measured on kind</td>
+</tr>
+<tr>
+<td><code>privileged-dind</code>, the sidecar killed</td>
+<td>Its own condition; the runner's is untouched</td>
+<td>To be read</td>
+</tr>
+<tr>
+<td>A GPU runner with no memory limit (<code>BestEffort</code>)</td>
+<td><code>PodsLimit</code> or <code>AbovePods</code>; the first thing to say anything about it. Never <code>ContainerLimit</code>, since it has none</td>
+<td>By the rule</td>
+</tr>
+<tr>
+<td>A pod-level limit</td>
+<td><code>PodLimit</code></td>
+<td>Read on kind</td>
+</tr>
+<tr>
+<td>Kata</td>
+<td>Nothing for a kill in the guest; the virtual machine itself killed by the host reads as any other</td>
+<td>Recall; Q1316's R7</td>
+</tr>
+<tr>
+<td>gVisor</td>
+<td><code>ContainerLimit</code> or above, by pod; which container is expected to be unclear, since the sandbox is one process tree</td>
+<td>Recall; not planned</td>
+</tr>
+<tr>
+<td>Cgroup v1 node</td>
+<td>Unsupported. The kubelet refuses to start on one by default (read, <code>FailCgroupV1</code>)</td>
+<td></td>
+</tr>
+<tr>
+<td>GKE Autopilot</td>
+<td>Expected not to admit the <code>hostPath</code> (recall), so Q1400's text stands</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="on-by-default-d4">On by default? (D4)<a class="headerlink" href="#on-by-default-d4" title="Permanent link">&para;</a></h2>
+<p>No. It adds a <code>hostPath</code> pod on every worker node, a namespace at <code>privileged</code> level, and write access to pods' status.
+Each is contained above and none is there today, so the operator opts in by installing a chart, and to the AGC acting on it by one setting more.
+The gateway's chart neither contains nor depends on it.</p>
+<h2 id="where-it-lives-d5">Where it lives (D5)<a class="headerlink" href="#where-it-lives-d5" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>This repository, own module and chart</th>
+<th>The gateway's chart, behind a value</th>
+<th>Its own repository</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Useful without the gateway</td>
+<td>Yes: its chart installs alone</td>
+<td>No</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>New release work</td>
+<td>One image and one chart on the existing pipeline</td>
+<td>One image</td>
+<td>The whole pipeline: builds, signing, SBOMs, scans, verification, a release process</td>
+</tr>
+<tr>
+<td>Privilege in the gateway's chart</td>
+<td>None</td>
+<td>The namespace and grants above</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Cadence</td>
+<td>The gateway's</td>
+<td>The gateway's</td>
+<td>Its own</td>
+</tr>
+<tr>
+<td>Cost of changing later</td>
+<td>A move, if nothing imports across</td>
+<td>A chart migration for operators</td>
+<td>None</td>
+</tr>
+</tbody>
+</table>
+<p>The first, with a gate that fails if the module imports a gateway module or the reverse.
+The AGC would know one string, the condition's domain.</p>
+<p><strong>What exists already.</strong> <code>sapcc/kubernetes-oomkill-exporter</code> reads the kernel log and the containerd socket from a privileged container, and publishes a count per pod (read, its example manifest, 2026-11-24).
+It does not say which limit ran out, and it holds more than either component here. cAdvisor's <code>container_oom_events_total</code>, which the kubelet serves already, counts against the victim's cgroup and not the limit's, or against <code>/</code> for a node-wide kill, whose line names no limit's cgroup (read: <code>getContainerName</code> takes <code>task_memcg</code> as <code>ContainerName</code>, which is the name counted).
+So it tells a node-wide kill from the rest, and not <code>ContainerLimit</code> from <code>PodsLimit</code>. node-problem-detector raises an Event on the Node and not the pod (recall).
+No wider search than one query of the web and one of GitHub was made.</p>
+<h2 id="state-through-five-cases">State, through five cases<a class="headerlink" href="#state-through-five-cases" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Restart</th>
+<th>Rollout</th>
+<th>Rollback</th>
+<th>Concurrent writers</th>
+<th>A human between</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent's last samples, in memory</td>
+<td>Lost: kills across the gap are <code>Unknown</code></td>
+<td>One node at a time; two agents on one node would write the same object, so the DaemonSet never surges</td>
+<td>The older agent overwrites the object whole</td>
+<td>One object per node, one writer by policy</td>
+<td>Deleting the object loses kills not yet read; the controller recreates it</td>
+</tr>
+<tr>
+<td>Report object, a bounded list of recent kills</td>
+<td>Kept</td>
+<td>The shape carries a version; an unknown one is skipped and logged</td>
+<td>As rollout</td>
+<td>Controller reads only</td>
+<td>As above</td>
+</tr>
+<tr>
+<td>Condition on the pod</td>
+<td>Kept, and written again only if it differs</td>
+<td>Same type and reasons, or a new domain</td>
+<td>Older readers take an unknown reason as <code>Unknown</code>, but for PR 7's wait, which it does not end</td>
+<td>Controller, kubelet: a strategic merge by condition type, which the kubelet's own write preserves (read). Two controllers write the same value</td>
+<td>A deleted pod loses it; the Event stays. <code>edit</code> cannot remove it</td>
+</tr>
+<tr>
+<td>Option: the log reader's place</td>
+<td>Kept nowhere: it reads the buffer again, and a line already reported writes the same condition, or nothing where a counters' reason stands</td>
+<td>Off and on by value; an agent without the reader ignores its socket</td>
+<td>As the option off</td>
+<td>One reader per node</td>
+<td>Clearing the kernel's log loses lines not yet read</td>
+</tr>
+<tr>
+<td>AGC's wait</td>
+<td>Runs from the pod's end, so it is not extended</td>
+<td>An older AGC ignores the condition</td>
+<td>The same</td>
+<td>The class's claim is unchanged</td>
+<td>A manual re-run meets the same claim as today</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-to-measure-first">What to measure first<a class="headerlink" href="#what-to-measure-first" title="Permanent link">&para;</a></h2>
+<p>Readings 1 to 4 and 10 were taken on one throwaway kind cluster, in part, on 2026-11-24 (kubelet v1.35.5, containerd 2.3.1, kernel 6.12.76, all nodes one virtual machine).
+None is granted on a cloud node.
+<strong>kind</strong> answers the mechanism; <strong>dogfood</strong> answers whether GKE's node image agrees.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Reading</th>
+<th>Venue</th>
+<th>What it decides</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>A non-root, unprivileged pod reads every pod's <code>memory.events</code>, <code>.local</code> and <code>memory.peak</code>; one made after it started appears</td>
+<td>kind, dogfood; a local container has</td>
+<td>D1</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Each row of the rule against the kernel's own line: one container, two limited, one limited beside one unlimited, and a pod-level limit, <code>Burstable</code> and <code>Guaranteed</code></td>
+<td>kind</td>
+<td>The rule</td>
+</tr>
+<tr>
+<td>3</td>
+<td>From the kill: first rise seen, by inotify and by poll; container's and pod's directory gone; <code>Failed</code> arrived; the status's <code>finishedAt</code> against the rise; the agent's CPU at 250 and 50 ms with a full node of pods</td>
+<td>kind, dogfood</td>
+<td>The watch, the poll, the bound that names the container, and the 30 seconds</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Two kills in one sample, a nested one and one at the pods' limit; a nested kill, then a SIGKILL of the same container, with and without a group of its own</td>
+<td>kind</td>
+<td><code>Unknown</code>, and which container</td>
+</tr>
+<tr>
+<td>5</td>
+<td>The three admission policies, with the bindings the chart renders, refuse what they should, in envtest, with the cost limit, and <code>kube-root-ca.crt</code> is still written: by its publisher's service account, since envtest runs no controller manager</td>
+<td>envtest</td>
+<td>D2</td>
+</tr>
+<tr>
+<td>6</td>
+<td>A <code>pods/status</code> patch on a <code>Failed</code> pod, kept across the kubelet's last write</td>
+<td>kind</td>
+<td>The condition</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Kata: host counters still while the guest kills</td>
+<td>dogfood, Q1316's R7</td>
+<td>That row</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Q1316's R2, R3, R8 with the kernel's line and every pod's use beside its request</td>
+<td>dogfood</td>
+<td>The raise, on GKE</td>
+</tr>
+<tr>
+<td>9</td>
+<td>R3 on a set whose node has no tenant pod past <code>baseline</code>, and <code>--cgroup-parent</code> under the pods' root from one that has</td>
+<td>dogfood, after 2.1</td>
+<td>The re-run class alone</td>
+</tr>
+<tr>
+<td>10</td>
+<td>A container as the option's reads a kill's line by <code>syslog(2)</code>; refused without <code>SYSLOG</code>, at uid 65534 with it, and under <code>hostUsers: false</code>; no token in it; each line the parser must refuse, made by a job that names its cgroups; how long a line lasts; <code>dmesg_restrict</code> and <code>kptr_restrict</code></td>
+<td>kind (PR 9's lane in CI is one), then dogfood</td>
+<td>The option</td>
+</tr>
+</tbody>
+</table>
+<p>What the kind run read, beside what the sections above cite:</p>
+<ul>
+<li><strong>1.</strong> A pod at uid 65534 with no capability read every pod's files through a read-only <code>hostPath</code>, those of pods made after it among them, and found the pods' root two levels down.</li>
+<li><strong>2.</strong> Every row but the node's own memory: thirteen kills of whole containers, the rule and the kernel's line agreeing on twelve.
+  The other came 1.4 s after a nested kill and read <code>Unknown</code>, as it should.
+  At the pods' limit there were 2 or 3 <code>oom</code> for each of three kills.
+  PR 1's tests replay the readings; <code>cgroup.stat</code> was not among them.</li>
+<li><strong>3.</strong> The watch and the removals.
+  The status's <code>finishedAt</code> has whole seconds, so it was not compared with the rise, and when <code>Failed</code> arrived was not timed.</li>
+<li><strong>4.</strong> A nested kill alone raised the pod's <code>oom</code> and no whole kill.
+  A nested kill 2.05 s before one at the pods' limit read <code>PodsLimit</code>.
+  A container whose process ended by itself on SIGTERM after a nested kill was marked <code>OOMKilled</code> with exit <strong>143</strong>: with no whole kill it would get no condition.
+  Not read: a nested group of its own, a SIGKILL of the container after a nested kill, and two containers killed in one sample.</li>
+<li><strong>10.</strong> uid 0 with <code>SYSLOG</code>, <code>RuntimeDefault</code> and no token read the buffer by <code>syslog(2)</code>, with the victim's line at <code>&lt;6&gt;</code> and the line that names its group.
+  <code>EPERM</code> without <code>SYSLOG</code>, at uid 65534 with it, and under <code>hostUsers: false</code>, where the capability was in the effective set, so that refusal is the kernel's (read: the seccomp profile allows the call with it).
+  The other two were not told apart.
+  <code>dmesg_restrict</code> was 1 and <code>kptr_restrict</code> 0: with <code>dmesg_restrict</code> at 0 the kernel lets an unprivileged reader do this (read, <code>check_syslog_permissions</code>), so the two refusals that had <code>SYSLOG</code> in the spec cannot be counted on there; without it the runtime's default seccomp profile still refuses (reported, containerd v2.2.0).
+  Not read: the lines the parser must refuse.</li>
+</ul>
+<p>Not run: two containers killed at once, several threads or pods at the pods' limit together, and a cluster whose containers have no <code>memory.oom.group</code>.</p>
+<p>Q1316's plan takes readings 1, 3, 7 and 8 in its runs as its branch had them on 2026-11-24, but for reading 3's CPU, which needs the agent built; its non-root reader is a container of the job's own Docker for R2 and R8, and a pod in R3, R3t, R4 and on the Kata node.
+It prints <code>oom_group_kill</code> and each container's own rise beside the pod's, so R8, with two containers in the pod, reads the join as well as the limit.
+It does not read whether a non-root pod could open <code>/dev/kmsg</code> or the journal through a <code>hostPath</code>, which would be another way to the log.
+Nor reading 10, since the job's own privileged container opens <code>/dev/kmsg</code>; on GKE that is one more pod on a node the run already has, if the run's plan takes it.
+Nor does it run a one-container pod or a pod-level limit: either answer to the first is <code>ContainerLimit</code> by the rule, and what decides both is the kubelet's cap and the kernel, which a local node reads.</p>
+<h2 id="build-size">Build size<a class="headerlink" href="#build-size" title="Permanent link">&para;</a></h2>
+<p>Sizes are estimates.
+PRs 1 to 6 are <a href="../../queue/Q1403/">Q1403</a>, which gates 2.1; the three that do not gate it have rows of their own, so that its label does not hold the tag for them.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>PR</th>
+<th>Size</th>
+<th>Needed for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>The counter reader and the rule, tested on figures a local container gave, and on a kubelet's files once there are any; finding the pods' root</td>
+<td>M</td>
+<td>The tool</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Agent, report ConfigMap, controller; condition and Event</td>
+<td>M</td>
+<td>The tool</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Chart: RBAC, the admission policies and their envtest, the node affinity, NetworkPolicy; the no-import gate. From PR 2's review: policy 1 refuses the agent <code>immutable</code>, finalizers and owner references, the chart sets <code>-pods-root</code>, and a test holds a condition's writes and the Events to their limits against a real API server</td>
+<td>M</td>
+<td>The tool</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Image and publish: a <code>Dockerfile</code> stage, <code>docker-bake.hcl</code>, the <code>publish.yml</code> matrix (seven images become eight) and a third chart, SBOM, Trivy, <code>verify-release.sh</code> and the docs that count seven</td>
+<td>M</td>
+<td>The tool, outside a source build</td>
+</tr>
+<tr>
+<td>5</td>
+<td>kind e2e: one kill per reason, the condition and the Event; the operator's page</td>
+<td>M</td>
+<td>The tool, trusted</td>
+</tr>
+<tr>
+<td>6</td>
+<td>AGC, the record: the edge, and the reason in the failed job's record and Event, with a test for each of <a href="#reading-it">its limits</a></td>
+<td>S</td>
+<td>The answer outliving the worker</td>
+</tr>
+<tr>
+<td>7</td>
+<td>(<a href="../../queue/Q1406/">Q1406</a>) AGC, the action: the setting through the GMC, the wait, text by reason, no raise and no re-run above the container; its e2e and docs</td>
+<td>M</td>
+<td>D3</td>
+</tr>
+<tr>
+<td>8</td>
+<td>(<a href="../../queue/Q1408/">Q1408</a>) The re-run class</td>
+<td>M, and a dogfood run</td>
+<td>After 2.1</td>
+</tr>
+<tr>
+<td>9</td>
+<td>(<a href="../../queue/Q1407/">Q1407</a>) The kernel-log option: the second container and its chart value, the parser and its fixtures, the two-witness table in the controller, its words in PR 6's record, an e2e lane with it on (reading 10) and its part of the operator's page</td>
+<td>L</td>
+<td>D1's option</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Order.</strong> 1, then 2 and 4 together, 3, 5; 6 any time after 2 fixes the condition's type, and 7 after 6.
+9 after 5 and 6.
+PRs 1 to 5 have no gateway code and can run beside the 2.1 stream; 6 needs the edge Q1389 landed in the same predicate, and 7 the text Q1400 did.
+PR 1 starts from files a local container gives.
+A kubelet's are the kind run's, which PR 1 carries as its test data.
+For scale of PR 4: the newest image, <code>cache-runner</code>, is named in 16 files outside <code>docs/plan</code>, <code>docs/queue</code>, past release notes and the dogfood runner (<code>git grep -l</code>, 2026-11-24), some of them about that image's own use.</p>
+<h3 id="the-smallest-set-for-21">The smallest set for 2.1<a class="headerlink" href="#the-smallest-set-for-21" title="Permanent link">&para;</a></h3>
+<p>What it has to do is let somebody tell one root cause of an out-of-memory kill from another.</p>
+<table>
+<thead>
+<tr>
+<th>Set</th>
+<th>PRs</th>
+<th>What it lands</th>
+<th>What it leaves</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tool alone</td>
+<td>1 to 5</td>
+<td>The condition and the Event on any pod</td>
+<td>For the gateway's own workers little more than the Event: the pod is gone before the job is red</td>
+</tr>
+<tr>
+<td><strong>Tool and record</strong> (the gate)</td>
+<td>1 to 6, and reading 8</td>
+<td>The reason in the failed job's record and Event, when the job concludes</td>
+<td>The AGC still raises on a kill made above the pod, beside a record that says so</td>
+</tr>
+<tr>
+<td>Tool, record and action</td>
+<td>1 to 7, and reading 8</td>
+<td>No raise and no re-run above the container, and text by reason</td>
+<td>The re-run class</td>
+</tr>
+<tr>
+<td>Event only</td>
+<td>1 to 5, each smaller</td>
+<td>The Event, with no <code>pods/status</code> grant, no policy 2 and no condition</td>
+<td>An answer that expires with Events, after an hour by default, that <code>edit</code> can forge, and that the AGC could neither keep nor act on</td>
+</tr>
+</tbody>
+</table>
+<p>Beside today, this set makes nothing worse in action where it is installed, and nothing at all where it is not.
+Reading 8 is Q1316's dogfood run, which is the only test of the rule on GKE: without it the tool says on its page that GKE has not been read.
+PR 4 cannot follow a release that claims the tool, since an unpublished image is a source build.
+PR 5 could, and then the rule ships with nothing that kills a container on purpose behind it.
+D2's single DaemonSet would save the report ConfigMap, one policy and about a third of 2 and 3.</p>
+<p><strong>Where PR 9 sits</strong>, for any of these sets:</p>
+<table>
+<thead>
+<tr>
+<th>Choice</th>
+<th>What it leaves</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Rides 2.1 where it is ready, and does not gate it</strong> (decided)</td>
+<td>2.1 may ship with the counters alone. Reading 8 says how often that matters, and nothing the AGC does depends on PR 9</td>
+</tr>
+<tr>
+<td>Gates 2.1</td>
+<td>Seven PRs, and reading 10 on kind at least; unread on GKE unless Q1316's run takes it</td>
+</tr>
+<tr>
+<td>After 2.1</td>
+<td>The gaps in the table above stay <code>Unknown</code> in 2.1</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>

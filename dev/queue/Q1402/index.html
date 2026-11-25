@@ -2706,7 +2706,7 @@
 <h1 id="an-out-of-memory-raise-past-a-pod-level-limit-builds-a-refused-pod">An out-of-memory raise past a pod-level limit builds a refused pod<a class="headerlink" href="#an-out-of-memory-raise-past-a-pod-level-limit-builds-a-refused-pod" title="Permanent link">&para;</a></h1>
 <p>A template may set a pod-level memory limit (<code>spec.podTemplate.spec.resources</code>, which the CRD carries), and the out-of-memory class raises the runner's limit without reading it.
 A raise past it builds a pod the API server refuses: each container's limit must be at or below the pod's (<code>validatePodResourceConsistency</code>, Kubernetes v1.35.5, read).
-The raise is recorded for 7 days and the re-run spends a slot of the run's budget, for a job that cannot then be provisioned.
+The raise is recorded for up to 7 days and the re-run spends a slot of the run's budget, for a job that cannot then be provisioned.
 Read from source and not run: no non-test code in <code>cmd/agc</code> reads a pod-level <code>spec.resources</code> (<code>git grep</code>, 2026-11-24).</p>
 <p>What the operator sees is a <code>WorkerPodCreateFailed</code> Event carrying the API server's message (<code>createPodWithQuotaRetry</code>, <code>cmd/agc/internal/provisioner/capacity.go</code>), which does not say that the raise is the reason.
 What the listener does next with the job it was offered has not been read.</p>
