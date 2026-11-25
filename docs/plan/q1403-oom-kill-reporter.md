@@ -1,7 +1,7 @@
 # A node reporter for out-of-memory kills: Q1403
 
 > **Status (2026-11-24): decided, D1 to D6 each as recommended.
-> [PR 1](#build-size), the reader and the rule, is built; nothing here has run in the shape proposed.**
+> [PRs 1 to 3](#build-size) are built: the reader and the rule, the two programs, and the chart; they have run together against an API server alone, and not on a node.**
 
 A container killed for memory reads `OOMKilled` with exit code 137 whichever limit ran out: its own, its pod's, the one all pods share, or the node's memory.
 The AGC therefore names no cause (Q1400), and neither does anything else in the Kubernetes API that a tenant's operator can read on the pod.
@@ -234,6 +234,7 @@ Twelve constraints keep the inference from claiming too much:
 - **An answer that rests on the time of a container's end is held for 10 seconds after it** (PR 2's).
   The kill may be another container's, and that of this one in the node's next report, which is written at most 8 seconds after the one before.
   The times are the node's and the controller's: a controller ahead of the node holds for less, and one over 10 seconds behind it not at all.
+  Holding from when the controller first sees the end would need no agreement of clocks; it has not been tried.
   Where a container's own counts show the kill, the answer waits for nothing.
 - **A limit lowered below use raises `oom` with no charge failing** (read, `memory_max_write`), as an in-place resize can; the kill that follows is that limit's, and reads so.
 
@@ -272,11 +273,11 @@ Each shape below needs a second limit to run out at the same moment, or a spare 
 | Killed at its own limit more than a minute after the allocation, with one at its pod's or the pods' limit beside it | `PodLimit` or `PodsLimit` | **No raise, no re-run** | Raise and re-run |
 | Killed above the pod, its file gone, just after a limit ran out in a cgroup of the pod, its own or one another tenant's job put there, that came and went between two samples | `ContainerLimit` | **Raise and re-run, as today** | No raise |
 | Killed in a way the agent did not see, and within 6 seconds the kubelet removes the pod's cgroups, the agent restarts, and a job with the host's view of the tree has a kill in a copy of them | Whichever limit it filled | Follows that | Nothing to go on (reasoned, not run) |
-| Killed at its own limit within 6 seconds of another container's kill above the pod, whose end the status no longer names, and reported more than 10 seconds after its own end | `AbovePods` | **No raise, no re-run** | Raise and re-run |
+| Killed at its own limit within 6 seconds of another container's kill above the pod, whose end the status no longer names, and reported more than 10 seconds after its own end, or never | `AbovePods` | **No raise, no re-run** | Raise and re-run |
 | Killed at its own limit, its `oom` raised between the read of the container's file and the read of the pod's in one sample, its file then gone, with one at the pods' limit beside it | `PodsLimit` | **No raise, no re-run** | Raise and re-run |
 
 So of the shapes known, four can withhold a raise and a re-run that were right.
-One needs an allocation to wait more than a minute for its kill, one a sample to straddle it by the time between two reads, expected to be microseconds (read, not measured), one a job that forges cgroups as the agent restarts, in the seconds after the pod's are removed, and one a container that ended twice in those seconds beside a report that is late.
+One needs an allocation to wait more than a minute for its kill, one a sample to straddle it by the time between two reads, expected to be microseconds (read, not measured), one a job that forges cgroups as the agent restarts, in the seconds after the pod's are removed, where the job can probably cause the restart by filling the agent's own memory limit (reasoned, not run), and one a container that ended twice in those seconds beside a report that is late.
 The others at worst leave a raise that was not right, which is what the AGC does now.
 Other orders of two limits were tried against the rule on fakes and read the right limit or `Unknown`; none was tried on a kernel.
 A re-run class that trusted `PodsLimit` would have to answer the first two ([Q1408](../queue/Q1408.md)).
@@ -395,7 +396,8 @@ RBAC and policy take the name from one value, with a test.
 
 RBAC alone would let an agent write any node's report, so the chart has no way to install without them.
 None is written in the chart.
-A draft of the first two exists, and no run of it is cited here; that the language reaches each check within its cost limit, and each refusal, are to be shown in envtest before the rest is built (reading 5).
+Reading 5 has been taken: on an API server of 1.35.0 the three, with the bindings the chart renders, load within the cost limit and refuse what is listed here, to the tokens the two components' pods would have, and `kube-root-ca.crt` is still written.
+A field a later API server adds to a pod's status is the controller's to change until the chart names it; its test sees it when this repository takes that API.
 
 ### Who could forge the answer (R9)
 
@@ -593,7 +595,7 @@ None is granted on a cloud node.
 |---|---|---|---|
 | 1 | A non-root, unprivileged pod reads every pod's `memory.events`, `.local` and `memory.peak`; one made after it started appears | kind, dogfood; a local container has | D1 |
 | 2 | Each row of the rule against the kernel's own line: one container, two limited, one limited beside one unlimited, and a pod-level limit, `Burstable` and `Guaranteed` | kind | The rule |
-| 3 | From the kill: first rise seen, by inotify and by poll; container's and pod's directory gone; `Failed` arrived; the status's `finishedAt` against the rise; the agent's CPU at 250 and 50 ms with a full node of pods | kind, dogfood | The watch, the poll, the bound that names the container, and the 30 seconds |
+| 3 | From the kill: first rise seen, by inotify and by poll; container's and pod's directory gone; `Failed` arrived; the status's `finishedAt` against the rise; the agent's CPU at 250 and 50 ms with a full node of pods, some of them reclaiming at their limit, where a notice is one read of the pod's file and the kernel spaces them 10 ms apart | kind, dogfood | The watch, the poll, the bound that names the container, and the 30 seconds |
 | 4 | Two kills in one sample, a nested one and one at the pods' limit; a nested kill, then a SIGKILL of the same container, with and without a group of its own | kind | `Unknown`, and which container |
 | 5 | The three admission policies, with the bindings the chart renders, refuse what they should, in envtest, with the cost limit, and `kube-root-ca.crt` is still written: by its publisher's service account, since envtest runs no controller manager | envtest | D2 |
 | 6 | A `pods/status` patch on a `Failed` pod, kept across the kubelet's last write | kind | The condition |
