@@ -59,7 +59,7 @@ The agent exits and says so where it is not there.
 helm install oom-reporter oci://ghcr.io/actions-gateway/charts/oom-reporter --version <version> \
   --namespace oom-reporter \
   --set "namespaces={team-a,team-b}" \
-  --set image.digest=sha256:<digest of the release's oom-reporter image>
+  --set image.digest=sha256:<digest of the release's oomreporter image>
 ```
 
 The chart requires Kubernetes ≥ 1.35 and cgroup v2.
@@ -74,7 +74,7 @@ Delete the `oom-report-` ConfigMaps before it, and the controller makes them aga
 |---|---|---|
 | `namespaces` | `[]` | Namespaces whose pods are read and written to. Required, unless `allNamespaces` is set. |
 | `allNamespaces` | `false` | Every namespace instead, by a ClusterRole. Whoever takes over the controller can then read every pod spec in the cluster. |
-| `image.{repository,tag,digest}` | `ghcr.io/actions-gateway/oom-reporter`, `""`, `""` | The one image both run. Rendering fails without the digest, unless `allowFloatingImageTags=true`. |
+| `image.{repository,tag,digest}` | `ghcr.io/actions-gateway/oomreporter`, `""`, `""` | The one image both run. Rendering fails without the digest, unless `allowFloatingImageTags=true`. |
 | `imagePullPolicy` | `IfNotPresent` | Pull policy of both. |
 | `imagePullSecrets` | `[]` | Pull Secrets in the release's namespace. |
 | `allowFloatingImageTags` | `false` | Dev and test only: render `image.tag` where no digest is set. |

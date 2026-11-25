@@ -177,12 +177,15 @@ func (c *cluster) grant(t *testing.T, ns, account string, rules ...rbacv1.Policy
 	t.Helper()
 	role, err := c.admin.RbacV1().Roles(ns).Create(t.Context(), &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{GenerateName: "more-"}, Rules: rules}, metav1.CreateOptions{})
 	require.NoError(t, err)
-	_, err = c.admin.RbacV1().RoleBindings(ns).Create(t.Context(), &rbacv1.RoleBinding{
+	binding, err := c.admin.RbacV1().RoleBindings(ns).Create(t.Context(), &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{GenerateName: "more-"},
 		RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: role.Name},
 		Subjects:   []rbacv1.Subject{{Kind: "ServiceAccount", Name: account, Namespace: reporter}},
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, c.admin.RbacV1().RoleBindings(ns).Delete(context.WithoutCancel(t.Context()), binding.Name, metav1.DeleteOptions{}))
+	})
 }
 
 // dry is for what is tried until it is refused, since one let through would leave nothing to refuse.

@@ -10,7 +10,7 @@ allNamespaces: false
 
 # image is the one image both modes run, pinned by digest.
 image:
-  repository: ghcr.io/actions-gateway/oom-reporter
+  repository: ghcr.io/actions-gateway/oomreporter
   # Ignored when digest is set.
   tag: ""
   # Required: sha256:<64 hex digits>.
