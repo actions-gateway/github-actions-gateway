@@ -142,8 +142,8 @@ The node reporter's design rests on five facts, and R8, R2 and R3 read them with
   It is an unprivileged container of the job's own Docker, so it is under Docker's default seccomp profile; the plain pod of R3, R3t and R4, which is a pod as a reporter would be, makes the same opens once before it fills.
   Each also tries `/dev/kmsg` and prints `kernel.dmesg_restrict`; the pod has no such device, so only the job's reader tests that.
 - **How long the facts last.** It prints, to the millisecond, the first rise of `oom` or `oom_kill` in a cgroup and the cgroup's removal, once from inotify and once from a 50 ms poll.
-  Locally (kernel 6.12, fifteen kills in five runs, five each by the container's own limit, its pod's and `kubepods`') inotify saw each rise 1 to 50 ms before the poll.
-  It gave no delete event for any of ten removed cgroups, and a file held open across the removal read `ENODEV`; so only the poll times a removal, and the last values are whatever was read before it.
+  Locally (kernel 6.12, eighteen kills in six runs, six each by the container's own limit, its pod's and `kubepods`') inotify saw each rise 1 to 50 ms before the poll.
+  It gave no delete event for any of twelve removed cgroups, and a file held open across the removal read `ENODEV`; so only the poll times a removal, and the last values are whatever was read before it.
 - **Whether `Failed` arrives first.** That is the stamped watch against the removals of the container's and the pod's cgroups.
   The two clocks are the node's and the client's, so `sntp time.google.com` is read on the client beside each reading, its offset taken out of every arrival, and its error kept.
   The node's own error against the same source is assumed under 100 ms and not read.
@@ -152,7 +152,8 @@ The node reporter's design rests on five facts, and R8, R2 and R3 read them with
 - **Which counter names the limit.** Expected `oom` in `memory.events.local`, for the container, its pod, its QoS slice and `kubepods.slice`: 1, 0, 0, 0 for R8; 0, 0, 0 and a rise for R3; and no rise in any for R2.
   A pod's own limit (`spec.resources`) is the fourth shape and is not run: locally it read 0 for the container and 1 for the pod.
   The kernel's line is the answer each is checked against.
-- **What the host sees of a kill in a Kata guest.** One more plain pod, `q1316-read`, in the shape and with the mounts of step 3's and no fill, runs the reader on the Kata worker's node and prints every cgroup's counters at its end.
+- **What the host sees of a kill in a Kata guest.** One more plain pod, `q1316-read`, in the shape and with the mounts of step 3's and no fill, runs the reader on the Kata worker's node.
+  It prints a cgroup's counters when it first sees it, at each rise, when it goes, and at its end for every one still there, so R7b's pod is read from its `new`, `rise` and `gone` lines and is likely not in the `end` ones.
   Expected: no rise of `oom` or `oom_kill` in the sandbox pod's cgroups, whose UID `kubectl` gives, while the guest's sidecar reads `OOMKilled`.
   It starts once R7a's worker has a node, which can be after R7a's own kill, so R7b's is the kill it is for; where R7b lands on another node that is not read, and is not repeated.
   Only `kubepods.slice` is read, so a virtual machine Kata keeps in a cgroup outside it is not seen, and where Kata keeps it is not read here.
@@ -167,7 +168,8 @@ The node reporter's design rests on five facts, and R8, R2 and R3 read them with
 | The counters and the kernel's line name the same limit in R8, R2 and R3 | The counters are enough for those three |
 | A kill has no line, or `/dev/kmsg` does not open | The counters are unchecked for that kill. The kernel prints at most ten such reports in 5 seconds for the node and none for a group kill's other processes (`oom_kill.c`, v6.12, read); the sampler says where lines were lost |
 | They differ in any | The counters are not, and the kernel's log is the reporter's source |
-| R7b's kill raises nothing in the sandbox pod's counters | A host reporter of the pods' cgroups cannot see a Kata job's kill |
+| R7b's kill raises nothing in the sandbox pod's counters, where the log has a `new` line with counters for that pod's UID before the kill, and the poll's `gone` for it or an `end` line after | A host reporter of the pods' cgroups cannot see a Kata job's kill |
+| Any of those lines is missing, or the kill's time is not between them | Not read |
 | It raises one | The limit that rose says whether the guest itself was killed at the pod's limit, which is a different kill from the sidecar's |
 
 Not read: whether a non-root pod could read `/dev/kmsg` or the node's journal, since each needs another `hostPath`; a worker on the Guaranteed or BestEffort path; and a pod's own limit on GKE.
@@ -185,9 +187,9 @@ The values are the runbook's ([gke-dogfood.md](gke-dogfood.md#variables)) and ar
 | 1 | `E2E_VARIANT=dind E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | System pool to its running size, which brings up the always-on gateways; the `dind` overlay (namespace labels, template, open egress policy, gateway); registry mirrors up |
 | 2 | `git push origin HEAD:claude/q1316-probe-run`, one push per reading | One workflow run of the file below; the e2e pool scales 0 to 1 |
 | 3 | `kubectl --context $CTX -n gag-dogfood-e2e create configmap q1316-fill --from-file=fill.py --from-file=reader.py`, once, then `apply -f hog.yaml` with `NODE` set, per R3, R3t and R4 | One ConfigMap, and one non-root, unprivileged pod with the host's `/sys/fs/cgroup` mounted read-only, which is how it sees a worker die |
-| 4 | `kubectl --context $CTX -n gag-dogfood-e2e delete pod/q1316-hog` after each, `pod/q1316-read` once its log has its `end` lines, 15 minutes after it starts, then `configmap/q1316-fill` | Removes them |
+| 4 | `kubectl --context $CTX -n gag-dogfood-e2e delete pod/q1316-hog` after each, `pod/q1316-read` once its log has its `end` lines, 15 minutes after it starts, or once it is dead, its log read first, then `configmap/q1316-fill` | Removes them |
 | 5 | `E2E_VARIANT=kata E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | Back to the `kata` overlay, and deletes the open egress policy |
-| 5a | `kubectl --context $CTX -n gag-dogfood-e2e apply -f read.yaml` with `NODE` set, once, when R7a's worker is on a node | One non-root, unprivileged pod on that node, with step 3's two mounts and no fill; its own deadline ends it at 16 minutes |
+| 5a | `kubectl --context $CTX -n gag-dogfood-e2e apply -f read.yaml` with `NODE` set, once, when R7a's worker is on a node | One non-root, unprivileged pod on that node, with step 3's two mounts and no fill; its own deadline ends it 20 minutes after the kubelet takes it, image pull included |
 | 6 | `GAG_ROUTE_VARS=0 scripts/dogfood/e2e-stop.sh` | Drains, deletes the gateway, scales mirrors to 0, system pool to its running size |
 | 7 | `GAG_ROUTE_VARS=0 scripts/dogfood/stop.sh`, only where the system pool read 0 before step 1 | Drains every tenant's workers, then system pool to 0 |
 | 8 | `kubectl --context $CTX delete clusterrunnertemplate privileged-dind`, only where it was absent before step 1 | Removes the template step 1 created |
@@ -195,7 +197,7 @@ The values are the runbook's ([gke-dogfood.md](gke-dogfood.md#variables)) and ar
 | 10 | [Release the lease](#the-lease) | Deletes the Lease |
 
 Step 5a's pod is admitted as step 3's is: both overlays give the namespace the `privileged` Pod Security level, which a `hostPath` needs (`deploy/dogfood-e2e/overlays/kata/kustomization.yaml`, read), and no admission policy of the chart matches pods (read).
-The namespace's quota is six pods, and it is read before steps 3 and 5a: two workers and the plain pod need three of it, and a Kata worker and its reader two.
+The namespace's quota is six pods, and it is read before steps 3 and 5a: with the gateway's one AGC pod and no proxy pool in the overlays (`shared_agc_deployment.go` and `deploy/dogfood-e2e`, read), R3 uses four and step 5a three, and an AGC rollout one more of each.
 `start.sh` is not used: it dispatches unit and integration runs onto the cluster, and `e2e-start.sh` resizes the system pool and waits for the GMC itself.
 A system pool brought up from 0 runs the always-on gateways, so a job already queued for them would be served.
 No repository variable, Secret, CRD, chart or AGC image changes.
@@ -309,7 +311,7 @@ The cluster's own fee is paid either way.
 The commit pushed to `claude/q1316-probe-run` adds one file, `.github/workflows/q1316-probe.yml`, and its message is `[q1316-probe] <ID>`, with ` solo` after the ID for R1, R6 and R7.
 R6 is `R6a` and `R6b`, and R7 is `R7a` and `R7b`.
 `bash -n`, `shellcheck -S warning` and `actionlint` pass on it but for the runner label it does not know and info notes that single quotes do not expand, which is meant.
-`sample.py` and `reader.py` ran locally over a `kubepods.slice` made in one container, five times, while `reader.py` gained its counters at the end (from the fourth) and its profile (the fifth).
+`sample.py` and `reader.py` ran locally over a `kubepods.slice` made in one container, six times, while `reader.py` gained its counters at the end (from the fourth), its profile (the fifth) and the first and last values on its `new` and `gone` lines (the sixth).
 It has not run on GitHub.
 
 ```yaml
@@ -511,7 +513,7 @@ def loop(tag, tick):
                 fd = attempt(d + "/memory.events") if d not in held else -1
                 if fd != -1:
                     held[d] = [fd, attempt(d + "/memory.events.local"), read(fd) if isinstance(fd, int) else fd]
-                    say(tag, "new", d[3:], fd if isinstance(fd, str) else "")
+                    say(tag, "new", d[3:], held[d][2])
                     if watch and isinstance(fd, int):
                         watch(d)
         tick()
@@ -520,7 +522,7 @@ def loop(tag, tick):
                 continue
             now = read(fd)
             if not os.path.isdir(d):
-                say(tag, "gone", d[3:], "held open:", now)
+                say(tag, "gone", d[3:], "held open:", now, "| last", was)
                 os.close(fd)
                 held[d][0] = "gone"
             elif now.partition(" oom ")[2] != was.partition(" oom ")[2]:
@@ -614,7 +616,7 @@ metadata:
   namespace: gag-dogfood-e2e
 spec:
   restartPolicy: Never
-  activeDeadlineSeconds: 960
+  activeDeadlineSeconds: 1200
   automountServiceAccountToken: false
   nodeSelector:
     kubernetes.io/hostname: NODE # the Kata worker's node
