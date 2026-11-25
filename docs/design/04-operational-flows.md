@@ -658,7 +658,7 @@ That is the shape a memory kill leaves on cgroup v2, which kills the whole conta
 A sidecar killed for memory is not covered: the runner survives it to report the job's own result, so the pod's terminal transition says nothing about whether the job failed.
 
 **It does not know which limit ran out** (Q1400).
-A kill made above the container is expected to leave the same status: by the node running out, by `kubepods`' limit, or by a limit on the pod (read from source; no such kill of a runner is on record).
+A kill made above the container leaves the same status: at `kubepods`' limit that is measured, four kills of a runner on GKE (kubelet v1.35.8-gke.1796000, kernel 6.8.0-1064-gke, 2026-11-25, [the readings](../plan/q1316-dogfood-reproduction.md#the-second-run)); by the node running out, or by a limit on the pod, it is read from source.
 Nothing the AGC reads tells them apart:
 
 | Fact | What it points at | Where it misleads |

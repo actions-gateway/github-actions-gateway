@@ -3137,9 +3137,9 @@ kubectl get configmap -n <namespace> scaleset-failures-<runnerset> -o jsonpath='
 At its own limit, the job needs more memory than the worker template gives it.
 Nothing GAG reads separates the two yet ([how to tell](worker-rightsizing.md#which-limit-ran-out)).
 On a sidecar it means the sidecar was killed with that reason, usually for its own memory limit.
-A sidecar that runs the job's containers in its own cgroup, as `kata-dind`'s does, is also marked `OOMKilled` when one of them passes its own `docker run -m` limit (measured with runc, not under Kata), so one killed later for another reason, such as the SIGKILL that ends its grace period, reads the same; check the job's log for a container that exited 137 before raising the sidecar's limit.
+A sidecar that runs the job's containers in its own cgroup, as `kata-dind`'s does, is also marked `OOMKilled` when one of them passes its own `docker run -m` limit (measured with runc, and under Kata on GKE on 2026-11-25), so one killed later for another reason, such as the SIGKILL that ends its grace period, reads the same; check the job's log for a container that exited 137 before raising the sidecar's limit.
 A sidecar marked that way which then exits with any code but 137 is taken to have survived the kill, so it raises no Warning, and the record's `context` still shows the reason beside the exit code (Q1395).
-Under Kata that includes a kill at the sidecar's own limit that took one of the job's containers and left the daemon running (read from source, not run).
+Under Kata that includes a kill at the sidecar's own limit that took one of the job's containers and left the daemon running (the status was read once on GKE, on 2026-11-25; the rule has not run there).
 A `DisruptionTarget` condition or a `Failed` pod means the node or the scheduler removed the worker, which the [disruption arms](#which-disruptions-auto-re-run-a-job-and-which-never-do) recover on their own.
 A fault that came after the job's completion, such as a node drain while the runner shut down, stays in the context and raises no Warning.
 `EgressProxy <name> has no ready replicas` means no proxy pod could carry the job's egress when the job completed, or when the worker finished if that came first.

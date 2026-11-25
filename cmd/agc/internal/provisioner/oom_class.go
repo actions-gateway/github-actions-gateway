@@ -28,8 +28,9 @@ import (
 // in the ledger until the run concludes (pending_rerun.go). The operator-facing account
 // is docs/design/04-operational-flows.md §4.2.
 //
-// No arm knows whether the runner reached its own limit: a kill for memory that ran out
-// above the container is expected to leave the same status, and nothing else the AGC can
+// No arm knows whether the runner reached its own limit: a kill at kubepods.slice's limit
+// left the same status (kubelet v1.35.8-gke.1796000, kernel 6.8.0-1064-gke, 2026-11-25),
+// one made by a full node or a pod's limit is expected to, and nothing else the AGC can
 // read separates the two. So every arm acts on the limit the next attempt would get, and
 // no text it writes names the cause (oomKillFacts).
 //
