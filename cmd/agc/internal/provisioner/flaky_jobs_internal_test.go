@@ -410,6 +410,47 @@ func TestFlakyJobs_AnUnreadyColocatedProxyIsAPlatformFault(t *testing.T) {
 	}
 }
 
+// TestFlakyJobs_AStartOnAFailedWorkerKeepsItsProxyReading: the start of a job whose runner
+// was killed first snapshots its Failed worker again (Q1389), and what became of the proxy
+// in between did not fail the job.
+func TestFlakyJobs_AStartOnAFailedWorkerKeepsItsProxyReading(t *testing.T) {
+	reading := func(ready string) staticProxy {
+		return staticProxy{&ProxySnapshot{Name: "ep", Mode: ProxyModeColocated, Ready: ready, Reason: "PodsUnavailable"}}
+	}
+	const notReady = "EgressProxy ep not Ready PodsUnavailable"
+	for _, tc := range []struct {
+		name               string
+		atFailure, atStart EgressProxyReader
+		want               []string
+	}{
+		{"went down between", reading("True"), reading("False"), []string{"pod Failed"}},
+		{"came up between", reading("False"), reading("True"), []string{"pod Failed", notReady}},
+		{"down throughout", reading("False"), reading("False"), []string{"pod Failed", notReady}},
+		{"referenced since", staticProxy{}, reading("False"), []string{"pod Failed"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			_, p, target := flakyFixture(t)
+			pod := scaleSetWorker("runner-1", corev1.PodFailed, "")
+			p.SnapshotScaleSetWorker(ctx, tc.atFailure, pod, false)
+			started := pod.DeepCopy()
+			started.Annotations[AnnotationStartedJobID] = "job-1"
+			p.SnapshotScaleSetWorker(ctx, tc.atStart, started, false)
+			completeJob(ctx, t, p, target, buildJob(1), "failed")
+			var snap workerSnapshot
+			require.NoError(t, json.Unmarshal(readFailures(t, p, target)["900/build"].Context, &snap))
+			assert.Equal(t, tc.want, snap.faults())
+		})
+	}
+
+	_, p, _ := flakyFixture(t)
+	pod := scaleSetWorker("runner-1", corev1.PodFailed, "")
+	p.SnapshotScaleSetWorker(context.Background(), reading("True"), pod, false)
+	pod.Name = "another-worker"
+	p.SnapshotScaleSetWorker(context.Background(), reading("False"), pod, false)
+	assert.Contains(t, p.workerSnapshots.take("team-a/runner-1").faults(), notReady, "another pod's reading is its own")
+}
+
 // TestFlakyJobs_ACompletionWithNoIdentityTakesThePods: the run and job come from the
 // worker's annotations where the completion carries neither.
 func TestFlakyJobs_ACompletionWithNoIdentityTakesThePods(t *testing.T) {

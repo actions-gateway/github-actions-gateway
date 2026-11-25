@@ -62,6 +62,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run](#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run)
   - [Non-breaking: an out-of-memory retry waits for its job's start](#non-breaking-an-out-of-memory-retry-waits-for-its-jobs-start)
   - [Non-breaking: an out-of-memory retry's Events no longer name the limit as the cause](#non-breaking-an-out-of-memory-retrys-events-no-longer-name-the-limit-as-the-cause)
+  - [Non-breaking: the text of `PlatformFaultOnFailedJob`](#non-breaking-the-text-of-platformfaultonfailedjob)
   - [A disrupted job is not re-run while its set's workers cannot pull their image](#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image)
   - [A worker evicted for its own storage limit is no longer re-run](#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run)
   - [Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once](#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once)
@@ -1343,6 +1344,16 @@ All but `AutoRetryPaused`, which is about a set, also name the worker, its node,
 **What you will see.** Longer Event text, which starts with the worker's name, except for `AutoRetryPaused`.
 
 **Rolling back** returns the old text.
+
+### Non-breaking: the text of `PlatformFaultOnFailedJob`
+
+**Who is affected:** anyone who alerts on or parses the text of `PlatformFaultOnFailedJob`.
+
+**What changed.** The text said the job failed `on worker <pod> with a platform fault: <faults>`, and now says `on worker <pod>, with: <faults>`, since a container killed at its own memory limit is not the platform's fault.
+The Event's reason, when it is raised and the AGC's log message are unchanged.
+Where a pod condition names the limit that ran out, the fault of that container goes on `(a pod condition says …)`, in the Event and in the log line's `faults`, and the record's `context` holds it as `oomReason` ([which limit ran out](worker-rightsizing.md#which-limit-ran-out), Q1403).
+
+**Rolling back** returns the old text, and an older AGC keeps the `oomReason` of a record it rewrites.
 
 ### A disrupted job is not re-run while its set's workers cannot pull their image
 

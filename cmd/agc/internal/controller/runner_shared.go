@@ -205,10 +205,10 @@ func reconcileRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
 // workerPodPhaseChangePredicate restricts a worker-Pod watch to this project's
 // worker pods (those carrying labelKey) and to the events that carry new status
 // for the owning CR: Create, Delete, phase-changing Updates, and the Updates where a
-// pod newly becomes a scheduler-preemption victim, restarts a container, or is stamped
-// with its job's start after it failed. Generic
-// events and every other Update are dropped (status heartbeats don't change observable
-// state). labelKey is LabelRunnerGroup (v1) or LabelRunnerSet (v2).
+// pod newly becomes a scheduler-preemption victim, restarts a container, is stamped
+// with its job's start after it failed, or is told by a pod condition which limit its kill
+// for memory was at. Generic events and every other Update are dropped (status heartbeats
+// don't change observable state). labelKey is LabelRunnerGroup (v1) or LabelRunnerSet (v2).
 //
 // The preemption edge exists because that disruption changes no phase (Q497). The
 // scheduler stamps a DisruptionTarget condition and deletes the victim, which can leave
@@ -224,6 +224,10 @@ func reconcileRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
 //
 // The start edge exists because a kill waiting for its job's start changes nothing but an
 // annotation when that start arrives (Q1389). A start on a running worker is not one.
+//
+// The reason edge exists because a reporter's condition follows the worker's failure
+// (Q1403). It is for the failed job's record alone, and the handler gives it no recovery
+// and no reconcile.
 func workerPodPhaseChangePredicate(labelKey string) predicate.Predicate {
 	hasLabel := func(obj client.Object) bool {
 		_, ok := obj.GetLabels()[labelKey]
@@ -242,18 +246,24 @@ func workerPodPhaseChangePredicate(labelKey string) predicate.Predicate {
 			if !ok1 || !ok2 {
 				return false
 			}
-			if oldPod.Status.Phase != newPod.Status.Phase {
-				return true
-			}
-			if restarts(newPod) > restarts(oldPod) {
-				return true
-			}
-			if provisioner.StartedAfterFailure(oldPod, newPod) {
-				return true
-			}
-			return !provisioner.PreemptedByScheduler(oldPod) && provisioner.PreemptedByScheduler(newPod)
+			return workerPodChanged(oldPod, newPod) || provisioner.OOMReasonAppeared(oldPod, newPod)
 		},
 	}
+}
+
+// workerPodChanged reports an update that recovery and the reconcile are for: every edge
+// workerPodPhaseChangePredicate passes but the reason's.
+func workerPodChanged(oldPod, newPod *corev1.Pod) bool {
+	if oldPod.Status.Phase != newPod.Status.Phase {
+		return true
+	}
+	if restarts(newPod) > restarts(oldPod) {
+		return true
+	}
+	if provisioner.StartedAfterFailure(oldPod, newPod) {
+		return true
+	}
+	return !provisioner.PreemptedByScheduler(oldPod) && provisioner.PreemptedByScheduler(newPod)
 }
 
 // restarts is how many times the pod's containers have restarted, sidecars included.

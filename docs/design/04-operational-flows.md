@@ -670,6 +670,7 @@ Nothing the AGC reads tells them apart:
 | A `SystemOOM` Event on the node | The node | The AGC has no grant on Node Events; the Event names a process and not a pod, and the kubelet raises none for a kill at `kubepods`' limit (`pkg/kubelet/oom/oom_watcher_linux.go`, v1.35.5) |
 
 So the class acts on the limit the next attempt would get, and its Events give the worker, its node, its request and its limit, and name no cause.
+Where an out-of-memory reporter's condition is on the pod, the failed job's record and Event say what it names ([below](#the-limit-a-pod-condition-names-q1403)), and the class does not act on it.
 For a runner killed because its node ran out, that has a cost.
 Withheld as `own_limit`, it is not re-run where a fresh node might have passed it.
 Raised, it gets memory it did not need: under `Binpack` a request no node may hold, under `Throughput` a limit that overcommits nodes further.
@@ -841,6 +842,7 @@ The record carries the worker's state at its terminal transition, which the pod 
 A worker whose completion has already been handled is not snapshotted, since nothing would take it; a record with neither a snapshot nor a pod has no context.
 A restart loses the snapshots waiting for a completion and the failures waiting for a worker, and the latter keep the running pod's context.
 The snapshot also carries the set's egress proxy pool as `proxy`, read from the AGC's cache: a colocated pool's `Ready` condition and `readyReplicas`, or `mode: shared` alone for a pool in another namespace, which that cache cannot see (Q1237).
+It is read once: a `Failed` worker snapshotted again as its job's start is recorded keeps the readiness read as it failed.
 The cause a recovery claim names for the job is recorded with it, so a disrupted job is not read as flaky, with two exceptions: a runner killed for memory whose [start never came](#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183), and any other worker claimed before its start was recorded, where it ran a job other than the one it was created for ([Q1398](../queue/Q1398.md)).
 
 A later completion of the same key with a new job ID is the job's next attempt or another job with its `name:`, which GitHub allows in one run, and the completion carries no attempt number to tell them apart.
@@ -875,6 +877,25 @@ The annotations are the job's own output too, so an answered body is never logge
 Reading them needs the App's `Checks` permission on a private repository, which stays optional: a refusal raises a Normal `CancelledJobUnread` Event.
 
 Failure records are evicted oldest first once the ledger passes half its 512 KiB cap, and budget records never are: `v1.10.0` writes the same object, keeps failure records it does not know, cannot evict them, and refuses a write past the cap, so records allowed to fill it would withhold that version's every reservation during a rollout or after a rollback.
+
+#### The limit a pod condition names (Q1403)
+
+An [out-of-memory reporter](../plan/q1403-oom-kill-reporter.md) says which limit ran out in a pod condition of type `oom.actions-gateway.com/<container>`.
+The condition follows the worker's failure, and the pod is usually gone before its job is red, so the pod watch passes a condition that appears on a `Failed` worker and adds its reason to the snapshot that waits for the completion.
+That event starts no recovery and queues no reconcile, and the snapshot's other readings stay those of the failure.
+A condition the pod already has when it fails, or when a completion reads it, is in the snapshot.
+
+The reason is `oomReason` beside the container in the record, and words of the AGC's in the Event and the log line.
+Whoever can write `pods/status` can write such a condition, so it changes no action, and what it can change in a record is bounded:
+
+- It adds words to a fault that is there: the container its type names, `OOMKilled` in the pod's status, and for any container but the runner with exit code 137.
+  Whoever can write `pods/status` can write that too, as they could before this.
+  It raises no Event of its own.
+- The words are the AGC's, one set for each of `ContainerLimit`, `PodLimit`, `PodsLimit`, `AbovePods` and `Unknown`, and say that a pod condition reported it.
+  Any other reason is ignored, as is the condition's message.
+- A container that restarted is recorded as without one, since its condition may be an earlier kill's.
+- The first reason read for a container's ID stands, except that any other replaces `Unknown`.
+- A condition that comes after the completion is not recorded, nor one whose update reaches the AGC in one event with the pod's deletion, and an AGC restart drops the snapshots that wait.
 
 #### Why preemption *deletes* rather than *evicts*, and what that costs us
 

@@ -1020,6 +1020,9 @@ func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 			enqueue.Create(ctx, e, q)
 		},
 		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			if r.addOOMReasons(e) {
+				return
+			}
 			r.snapshotWorkerPod(ctx, e.ObjectNew, false)
 			r.recoverDisruptedWorkerPod(ctx, e.ObjectNew)
 			enqueue.Update(ctx, e, q)
@@ -1031,6 +1034,20 @@ func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 		},
 		GenericFunc: enqueue.Generic,
 	}
+}
+
+// addOOMReasons hands an update that passed only for a reporter's condition to the
+// provisioner's snapshot store, and reports whether e was one.
+func (r *RunnerSetReconciler) addOOMReasons(e event.UpdateEvent) bool {
+	oldPod, ok1 := e.ObjectOld.(*corev1.Pod)
+	newPod, ok2 := e.ObjectNew.(*corev1.Pod)
+	if !ok1 || !ok2 || workerPodChanged(oldPod, newPod) || !provisioner.OOMReasonAppeared(oldPod, newPod) {
+		return false
+	}
+	if r.Provisioner != nil {
+		r.Provisioner.AddOOMReasons(newPod)
+	}
+	return true
 }
 
 // snapshotWorkerPod hands a worker pod from a watch event to the provisioner's
