@@ -23,7 +23,8 @@ const (
 // memory limit: the kubelet caps a pod's cgroup without one too, at the sum of its
 // containers' limits.
 //
-// Every whole kill at a limit follows at least one allocation counted there, so a count
+// A kill of one process ends a container or does not, so nothing is claimed for it. Every
+// whole kill at a limit follows at least one allocation counted there, so a count
 // smaller than the kills leaves one that met some other limit. A limit below a container
 // kills no container whole, so what was counted there says nothing once the containers'
 // own files have.
@@ -33,7 +34,7 @@ func Decide(r cgroup.Rise, podLimit bool) Reason {
 		inside = r.Own
 	}
 	switch {
-	case r.Late || r.Torn:
+	case r.Late || r.Torn || r.Singles > 0:
 		return Unknown
 	case r.Pod+r.Pods == 0 && r.Own > 0 && r.Own == r.GroupKills:
 		return ContainerLimit

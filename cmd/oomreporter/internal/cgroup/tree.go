@@ -142,6 +142,10 @@ type Pod struct {
 	Torn bool
 	// Containers is each container's local events by container ID, the sandbox's included.
 	Containers map[string]Events
+	// Single is the containers of which the kernel kills one process and not all: those
+	// the kubelet was told to make so, and on GKE those older than containerd's last start
+	// (6.8.0-1064-gke, containerd 2.2.7, Q1316).
+	Single map[string]bool
 }
 
 // Sample is every pod's counters, and the local events of the cgroups above them.
@@ -201,7 +205,7 @@ func (t *Tree) samplePod(dir string) (Pod, error) {
 	if err != nil {
 		return Pod{}, err
 	}
-	pod := Pod{Containers: map[string]Events{}}
+	pod := Pod{Containers: map[string]Events{}, Single: map[string]bool{}}
 	for _, name := range names {
 		id := containerID.FindStringSubmatch(name)
 		if id == nil {
@@ -214,7 +218,17 @@ func (t *Tree) samplePod(dir string) (Pod, error) {
 		if err != nil {
 			return Pod{}, err
 		}
+		group, err := fs.ReadFile(t.fsys, path.Join(dir, name, groupFile))
+		if gone(err) {
+			continue
+		}
+		if err != nil {
+			return Pod{}, err
+		}
 		pod.Containers[id[1]] = e
+		if strings.TrimSpace(string(group)) != "1" {
+			pod.Single[id[1]] = true
+		}
 	}
 	if pod.Subtree, err = readEvents(t.fsys, path.Join(dir, subtreeFile)); err != nil {
 		return Pod{}, err

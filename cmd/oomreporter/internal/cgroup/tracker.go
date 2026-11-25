@@ -33,8 +33,9 @@ type Rise struct {
 	// Recent: the counts leave out an allocation that met a limit within the last minute.
 	Recent bool
 
-	// GroupKills is how many of the pod's cgroups were killed whole.
-	GroupKills uint64
+	// GroupKills is how many of the pod's cgroups were killed whole, and Singles how many
+	// processes of containers that are not.
+	GroupKills, Singles uint64
 	// Inside, Pod and Pods count the allocations that met a limit inside the pod, the pod's
 	// own, and that of its QoS cgroup or the pods' root.
 	Inside, Pod, Pods uint64
@@ -42,24 +43,25 @@ type Rise struct {
 	Own uint64
 	// Read: every whole kill is of a container whose own file was read at the last sample.
 	Read bool
-	// Peers is the whole kills in other pods over the same time.
+	// Peers is the kills of either kind in other pods over the same time.
 	Peers uint64
-	// Containers is the containers killed whole, by ID. One whose cgroup went before its
-	// kill was read is not among them.
+	// Containers is the containers with a kill of either kind, by ID. One whose cgroup went
+	// before its kill was read is not among them.
 	Containers []string
 }
 
 // Tracker turns successive samples of a Tree into rises.
 type Tracker struct {
 	pods map[string]*tracked
-	// whole counts the whole kills seen in any pod.
-	whole uint64
+	// kills counts those of either kind seen in any pod.
+	kills uint64
 }
 
-// mark is a pod's counters, and what stood above and beside it, at one sample.
+// mark is a pod's counters, and what stood above and beside it, at one sample. mine counts
+// the pod's own part of kills.
 type mark struct {
-	pod          Pod
-	above, whole uint64
+	pod                Pod
+	above, kills, mine uint64
 }
 
 // tracked is a pod's newest mark and the one its rise is counted from. base stays behind
@@ -69,7 +71,7 @@ type tracked struct {
 	// pending is when such an allocation was first seen, killed when a process's kill was
 	// first seen after it, and absorbed when base last moved past one.
 	pending, killed, absorbed time.Time
-	// shown is how many samples have shown a whole kill not yet returned, and above what
+	// shown is how many samples have shown a kill not yet returned, and above what
 	// stood above the pod at the first.
 	shown int
 	above uint64
@@ -82,18 +84,30 @@ type tracked struct {
 // after the one that shows it, which holds every allocation that led to it.
 func (t *Tracker) Observe(s Sample, at time.Time) (rises map[string]Rise, again bool) {
 	rises = t.forget(s)
-	t.countWhole(s)
+	if t.pods == nil {
+		t.pods = map[string]*tracked{}
+	}
+	mine := map[string]uint64{}
 	for uid, now := range s.Pods {
-		m := mark{pod: now, above: s.Root.OOM + s.QoS[now.QoS].OOM, whole: t.whole}
+		was := Pod{}
+		if p := t.pods[uid]; p != nil {
+			was = p.last.pod
+		}
+		mine[uid] = killsOf(was, now)
+		t.kills += mine[uid]
+	}
+	for uid, now := range s.Pods {
+		m := mark{pod: now, above: s.Root.OOM + s.QoS[now.QoS].OOM, kills: t.kills}
 		p := t.pods[uid]
 		if p == nil {
 			t.pods[uid] = &tracked{base: m, last: m}
-			if _, left := rises[uid]; !left && now.Subtree.OOMGroupKill > 0 {
+			if _, left := rises[uid]; !left && killsOf(Pod{}, now) > 0 {
 				rises[uid] = lateRise(now)
 			}
 			continue
 		}
-		m.pod.Containers, p.gone = carry(p.last.pod, m.pod)
+		m.mine = p.last.mine + mine[uid]
+		m.pod, p.gone = carry(p.last.pod, now)
 		p.last = m
 		r, done, more := p.step(at)
 		if done {
@@ -104,16 +118,21 @@ func (t *Tracker) Observe(s Sample, at time.Time) (rises map[string]Rise, again 
 	return rises, again
 }
 
-// carry returns now's containers with those of was that now lacks, and which those are.
-func carry(was, now Pod) (all map[string]Events, gone map[string]bool) {
-	all, gone = map[string]Events{}, map[string]bool{}
+// carry returns now with those of was's containers that it lacks, and which those are.
+func carry(was, now Pod) (Pod, map[string]bool) {
+	all, single, gone := map[string]Events{}, map[string]bool{}, map[string]bool{}
 	maps.Copy(all, now.Containers)
+	maps.Copy(single, now.Single)
 	for id, e := range was.Containers {
 		if _, ok := all[id]; !ok {
 			all[id], gone[id] = e, true
+			if was.Single[id] {
+				single[id] = true
+			}
 		}
 	}
-	return all, gone
+	now.Containers, now.Single = all, single
+	return now, gone
 }
 
 // forget drops the pods s does not continue, and returns the rises it leaves unconfirmed.
@@ -131,25 +150,19 @@ func (t *Tracker) forget(s Sample) map[string]Rise {
 	return left
 }
 
-// countWhole adds the whole kills since the last sample. The first has none before it to
-// count from.
-func (t *Tracker) countWhole(s Sample) {
-	if t.pods == nil {
-		t.pods = map[string]*tracked{}
-		return
+// killsOf counts now's kills since was.
+func killsOf(was, now Pod) uint64 {
+	n := now.Subtree.OOMGroupKill - was.Subtree.OOMGroupKill
+	for id := range now.Single {
+		n += now.Containers[id].OOMKill - was.Containers[id].OOMKill
 	}
-	for uid, now := range s.Pods {
-		t.whole += now.Subtree.OOMGroupKill
-		if p := t.pods[uid]; p != nil {
-			t.whole -= p.last.pod.Subtree.OOMGroupKill
-		}
-	}
+	return n
 }
 
 // step returns the rise p's newest mark completes, if it does, and moves base.
 func (p *tracked) step(at time.Time) (r Rise, done, again bool) {
 	r = p.rise()
-	if r.GroupKills == 0 {
+	if r.GroupKills+r.Singles == 0 {
 		if p.settled(r, at) {
 			p.advance(r, at)
 		}
@@ -167,7 +180,7 @@ func (p *tracked) step(at time.Time) (r Rise, done, again bool) {
 	return r, true, false
 }
 
-// settled reports whether base may move past r, which has no whole kill: no allocation in
+// settled reports whether base may move past r, which has no kill to return: no allocation in
 // it can still lead to one, or it has been waited for long enough.
 func (p *tracked) settled(r Rise, at time.Time) bool {
 	own := r.Inside + r.Pod
@@ -193,6 +206,7 @@ func (p *tracked) advance(r Rise, at time.Time) {
 	}
 	for id := range p.gone {
 		delete(p.last.pod.Containers, id)
+		delete(p.last.pod.Single, id)
 	}
 	p.base, p.shown = p.last, 0
 	p.pending, p.killed = time.Time{}, time.Time{}
@@ -210,7 +224,7 @@ func (p *tracked) rise() Rise {
 		GroupKills: now.Subtree.OOMGroupKill - was.Subtree.OOMGroupKill,
 		Pods:       above - p.base.above,
 	}
-	r.Peers = p.last.whole - p.base.whole - r.GroupKills
+	r.Peers = p.last.kills - p.base.kills - (p.last.mine - p.base.mine)
 	r.count(was, now)
 	r.Read = r.Read && !slices.ContainsFunc(r.Containers, func(id string) bool { return p.gone[id] })
 	return r
@@ -230,11 +244,16 @@ func (r *Rise) count(was, now Pod) {
 	var kills uint64
 	for _, id := range slices.Sorted(maps.Keys(now.Containers)) {
 		old, e := was.Containers[id], now.Containers[id]
-		if k := e.OOMGroupKill - old.OOMGroupKill; k > 0 {
-			r.Containers = append(r.Containers, id)
-			r.Own += min(k, e.OOM-old.OOM)
-			kills += k
+		whole, single := e.OOMGroupKill-old.OOMGroupKill, uint64(0)
+		if now.Single[id] {
+			single = e.OOMKill - old.OOMKill
 		}
+		if whole+single > 0 {
+			r.Containers = append(r.Containers, id)
+		}
+		r.Own += min(whole, e.OOM-old.OOM)
+		r.Singles += single
+		kills += whole
 	}
 	r.Read = kills == r.GroupKills
 }

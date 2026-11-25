@@ -109,6 +109,56 @@ func TestObserve_AContainerThatGoesIsCountedAsLastRead(t *testing.T) {
 	}
 }
 
+func TestObserve_ReturnsAProcessKilledInAContainerThatIsNot(t *testing.T) {
+	single := func(kills uint64) Pod {
+		return Pod{
+			Subtree:    Events{OOM: 1, OOMKill: kills},
+			Local:      Events{OOM: 1},
+			Containers: map[string]Events{runnerID: {OOMKill: kills}},
+			Single:     map[string]bool{runnerID: true},
+		}
+	}
+	gone := single(5)
+	gone.Containers, gone.Single = nil, nil
+	for name, last := range map[string]Pod{"read": single(5), "gone": gone} {
+		t.Run(name, func(t *testing.T) {
+			var tr Tracker
+			s := one(single(3))
+			s.Pods[guaranteedUID] = Pod{}
+			rises, _ := tr.Observe(s, start)
+			assert.True(t, rises[burstableUID].Late)
+
+			s.Pods[burstableUID] = single(5)
+			rises, again := tr.Observe(s, start)
+			assert.Empty(t, rises)
+			assert.True(t, again)
+
+			s.Pods[burstableUID] = last
+			rises, _ = tr.Observe(s, start)
+			assert.Equal(t, map[string]Rise{burstableUID: {Confirmed: true, Singles: 2, Read: name == "read", Containers: []string{runnerID}}}, rises)
+
+			assert.Len(t, tr.pods[burstableUID].base.pod.Single, len(last.Single))
+
+			s.Pods[guaranteedUID] = dead()
+			tr.Observe(s, start)
+			rises, _ = tr.Observe(s, start)
+			assert.Zero(t, rises[guaranteedUID].Peers)
+		})
+	}
+}
+
+func TestObserve_AProcessKilledElsewhereIsAPeers(t *testing.T) {
+	var tr Tracker
+	s := one(Pod{})
+	s.Pods[guaranteedUID] = Pod{Containers: map[string]Events{runnerID: {}}, Single: map[string]bool{runnerID: true}}
+	tr.Observe(s, start)
+	s.Pods[burstableUID] = dead()
+	s.Pods[guaranteedUID] = Pod{Containers: map[string]Events{runnerID: {OOMKill: 2}}, Single: map[string]bool{runnerID: true}}
+	tr.Observe(s, start)
+	rises, _ := tr.Observe(s, start)
+	assert.Equal(t, uint64(2), rises[burstableUID].Peers)
+}
+
 func TestObserve_AKillBelowAContainerIsNoContainers(t *testing.T) {
 	var tr Tracker
 	tr.Observe(one(Pod{}), start)

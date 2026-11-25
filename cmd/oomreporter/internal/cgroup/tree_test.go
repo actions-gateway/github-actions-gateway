@@ -36,6 +36,7 @@ func mount(dirs ...string) fstest.MapFS {
 		n := uint64(i + 1)
 		m[path.Join(dir, subtreeFile)] = eventsFile(Events{n, n, n})
 		m[path.Join(dir, localFile)] = eventsFile(Events{n, n, n})
+		m[path.Join(dir, groupFile)] = &fstest.MapFile{Data: []byte("1\n")}
 	}
 	return m
 }
@@ -73,9 +74,9 @@ func TestSample_ReadsTheKubeletsTree(t *testing.T) {
 		Pods: map[string]Pod{
 			burstableUID: {
 				QoS: "burstable", Subtree: n(4), Local: n(4),
-				Containers: map[string]Events{runnerID: n(5), sandboxID: n(6)},
+				Containers: map[string]Events{runnerID: n(5), sandboxID: n(6)}, Single: map[string]bool{},
 			},
-			guaranteedUID: {Subtree: n(7), Local: n(7), Containers: map[string]Events{}},
+			guaranteedUID: {Subtree: n(7), Local: n(7), Containers: map[string]Events{}, Single: map[string]bool{}},
 		},
 		QoS:  map[string]Events{"burstable": n(2), "besteffort": n(3)},
 		Root: n(1),
@@ -174,35 +175,52 @@ func (h *hookFS) Open(name string) (fs.File, error) {
 func TestSample_LeavesOutWhatGoesAsItIsRead(t *testing.T) {
 	dirs := systemd("")
 	for name, gone := range map[string]error{"path": fs.ErrNotExist, "open file": syscall.ENODEV} {
-		t.Run(name, func(t *testing.T) {
-			h := &hookFS{FS: mount(dirs...), open: func(string) error { return nil }}
-			tree, err := Open(h, "")
-			require.NoError(t, err)
+		for _, file := range []string{localFile, groupFile} {
+			t.Run(name+" of "+file, func(t *testing.T) {
+				h := &hookFS{FS: mount(dirs...), open: func(string) error { return nil }}
+				tree, err := Open(h, "")
+				require.NoError(t, err)
 
-			h.open = func(n string) error {
-				if n == path.Join(dirs[4], localFile) || n == path.Join(dirs[6], subtreeFile) {
-					return gone
+				h.open = func(n string) error {
+					if n == path.Join(dirs[4], file) || n == path.Join(dirs[6], subtreeFile) {
+						return gone
+					}
+					return nil
 				}
-				return nil
-			}
-			got, err := tree.Sample()
-			require.NoError(t, err)
-			assert.NotContains(t, got.Pods, guaranteedUID)
-			assert.NotContains(t, got.Pods[burstableUID].Containers, runnerID)
-			assert.Contains(t, got.Pods[burstableUID].Containers, sandboxID)
-		})
+				got, err := tree.Sample()
+				require.NoError(t, err)
+				assert.NotContains(t, got.Pods, guaranteedUID)
+				assert.NotContains(t, got.Pods[burstableUID].Containers, runnerID)
+				assert.Contains(t, got.Pods[burstableUID].Containers, sandboxID)
+			})
+		}
 	}
+}
+
+func TestSample_MarksAContainerNotKilledWhole(t *testing.T) {
+	dirs := systemd("")
+	m := mount(dirs...)
+	m[path.Join(dirs[4], groupFile)] = &fstest.MapFile{Data: []byte("0\n")}
+	tree, err := Open(m, "")
+	require.NoError(t, err)
+	got, err := tree.Sample()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]bool{runnerID: true}, got.Pods[burstableUID].Single)
 }
 
 func TestSample_FailsWhereItMayNotRead(t *testing.T) {
 	dirs := systemd("")
+	files := []string{path.Join(dirs[4], groupFile)}
 	for _, dir := range dirs {
-		t.Run(dir, func(t *testing.T) {
+		files = append(files, path.Join(dir, localFile))
+	}
+	for _, file := range files {
+		t.Run(file, func(t *testing.T) {
 			h := &hookFS{FS: mount(dirs...), open: func(string) error { return nil }}
 			tree, err := Open(h, "")
 			require.NoError(t, err)
 			h.open = func(n string) error {
-				if n == path.Join(dir, localFile) {
+				if n == file {
 					return fs.ErrPermission
 				}
 				return nil

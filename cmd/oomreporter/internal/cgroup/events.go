@@ -23,6 +23,7 @@ type Events struct {
 const (
 	subtreeFile = "memory.events"
 	localFile   = "memory.events.local"
+	groupFile   = "memory.oom.group"
 )
 
 func readEvents(fsys fs.FS, name string) (Events, error) {

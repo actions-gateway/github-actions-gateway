@@ -19,6 +19,8 @@ import (
 const (
 	pod, peer       = "pod", "peer"
 	runner, sidecar = "runner", "sidecar"
+	// old is a container the kernel kills one process of.
+	old = "old"
 )
 
 // node counts as memcg_memory_event does (Linux v6.12, read): on the cgroup itself in its
@@ -31,8 +33,8 @@ type node struct {
 
 func newNode() *node {
 	return &node{pods: map[string]cgroup.Pod{
-		pod:  {QoS: "burstable", Containers: map[string]cgroup.Events{runner: {}, sidecar: {}}},
-		peer: {QoS: "burstable", Containers: map[string]cgroup.Events{runner: {}}},
+		pod:  {QoS: "burstable", Containers: map[string]cgroup.Events{runner: {}, sidecar: {}, old: {}}, Single: map[string]bool{old: true}},
+		peer: {QoS: "burstable", Containers: map[string]cgroup.Events{runner: {}, old: {}}, Single: map[string]bool{old: true}},
 	}}
 }
 
@@ -236,6 +238,12 @@ func TestDecide_TwoLimitsAtOnceIsNeverTheWrongOne(t *testing.T) {
 		"one container's limit met twice, the other at the node's": {
 			then(death(pod, runner, containerOOM(pod, runner), containerOOM(pod, runner)), death(pod, sidecar)), time.Millisecond, 0,
 			map[string]Reason{runner: ContainerLimit, sidecar: AbovePods}},
+		"a process of an old container's at the pod's, then this at the node's": {
+			then([]event{podOOM(pod), killed(pod, old)}, death(pod, runner)), 100 * time.Millisecond, 0,
+			map[string]Reason{runner: AbovePods}},
+		"a neighbour's at the shared limit, then this at the node's, one process": {
+			then([]event{podsOOM, killed(peer, old)}, death(pod, runner)), 100 * time.Millisecond, 0,
+			map[string]Reason{runner: AbovePods}},
 		"a nested kill, then this at the shared limit": {
 			then(nested, death(pod, runner, podsOOM)), 100 * time.Millisecond, 0,
 			map[string]Reason{runner: PodsLimit}},
@@ -296,6 +304,7 @@ func TestDecide_ClaimsNothing(t *testing.T) {
 	for name, r := range map[string]cgroup.Rise{
 		"of a pod first seen after":             {Late: true, GroupKills: 1, Pod: 1, Confirmed: true},
 		"of files not of one moment":            {Torn: true, GroupKills: 1, Pod: 1, Confirmed: true},
+		"of one process":                        {GroupKills: 1, Singles: 1, Pod: 2, Confirmed: true, Read: true},
 		"of two limits":                         {GroupKills: 2, Inside: 1, Own: 1, Read: true, Pod: 1, Confirmed: true},
 		"of more kills than allocations inside": {GroupKills: 2, Inside: 1, Own: 1, Read: true, Confirmed: true},
 		"of a container not read":               {GroupKills: 1, Inside: 1, Confirmed: true},
@@ -333,6 +342,7 @@ func TestDecide_AgreesWithTheKernelOnTheRecordedKills(t *testing.T) {
 	}
 	for _, dir := range dirs {
 		m[dir+"/memory.events"], m[dir+"/"+local] = events(0, 0), events(0, 0)
+		m[dir+"/memory.oom.group"] = &fstest.MapFile{Data: []byte("1\n")}
 	}
 	tree, err := cgroup.Open(m, "")
 	require.NoError(t, err)
