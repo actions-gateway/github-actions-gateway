@@ -118,6 +118,26 @@ func TestRun_ReportsAProcessKilledWithNoContainer(t *testing.T) {
 	})
 }
 
+// One process of a container that is not killed whole is in its rise, and not in a second kill.
+func TestRun_ReportsAKillOnce(t *testing.T) {
+	const id = "0000000000000000000000000000000000000000000000000000000000000001"
+	single := func(at time.Duration, e cgroup.Events) change {
+		return change{at: at, do: func(pods map[string]cgroup.Pod) {
+			pods[uid] = cgroup.Pod{Subtree: e, Containers: map[string]cgroup.Events{id: e}, Single: map[string]bool{id: true}}
+		}}
+	}
+	synctest.Test(t, func(t *testing.T) {
+		n := &node{changes: []change{single(0, cgroup.Events{}), single(2*time.Second, cgroup.Events{OOM: 1, OOMKill: 1})}}
+		var got []report.Kill
+		ctx, cancel := context.WithTimeout(t.Context(), 6*time.Second)
+		defer cancel()
+		a := &Agent{Tree: n, Poll: poll, Log: quietLog, Write: func(k []report.Kill) { got = k }}
+		require.NoError(t, a.Run(ctx))
+		require.Len(t, got, 1)
+		assert.Equal(t, uint64(1), got[0].Rise.Singles)
+	})
+}
+
 // bursts is how many samples came sooner than a poll after the one before.
 func bursts(samples []time.Duration) (n int) {
 	for i := 1; i < len(samples); i++ {

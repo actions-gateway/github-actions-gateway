@@ -52,7 +52,11 @@ func run(ctx context.Context, args []string, env func(string) string, config fun
 	default:
 		return fmt.Errorf("%w, not %q", errUsage, args[0])
 	}
-	if err := flags.Parse(args[1:]); err != nil {
+	if err := flags.Parse(args[1:]); errors.Is(err, flag.ErrHelp) {
+		flags.SetOutput(os.Stderr)
+		flags.Usage()
+		return nil
+	} else if err != nil {
 		return err
 	}
 	if flags.NArg() > 0 {

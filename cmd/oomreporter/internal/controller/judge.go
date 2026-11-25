@@ -28,8 +28,6 @@ type verdict struct {
 	ended  ended
 	reason rule.Reason
 	at     time.Time
-	// seen: the container's own counts showed the kill.
-	seen bool
 	// none: no limit of the pod or inside it ran out with the kill.
 	none bool
 }
@@ -80,7 +78,7 @@ func judge(pod *corev1.Pod, kills []report.Kill) (verdicts []verdict, processes 
 		}
 		for _, e := range of {
 			v := v
-			v.ended, v.seen = e, true
+			v.ended = e
 			by[e.name] = v
 		}
 		// Those of single processes are among Containers too.

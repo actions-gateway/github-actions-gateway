@@ -195,6 +195,38 @@ func TestReconcile_AConditionThatDiffersIsWrittenAgain(t *testing.T) {
 	}
 }
 
+func TestReconcile_AConditionOfOursThatAnotherChangedIsWrittenAgain(t *testing.T) {
+	for name, change := range map[string]func(c *corev1.PodCondition){
+		"its status":  func(c *corev1.PodCondition) { c.Status = corev1.ConditionFalse },
+		"its reason":  func(c *corev1.PodCondition) { c.Reason = "AbovePods" },
+		"its message": func(c *corev1.PodCondition) { c.Message = "the node's" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a", own(killedAt, 1)), pod(dead("runner", 1, killedAt)))
+			w.reconcile(t, "node-a")
+			p := w.podNow(t)
+			want := p.Status.Conditions[0]
+			change(&p.Status.Conditions[0])
+			require.NoError(t, w.Status().Update(t.Context(), p))
+			w.reconcile(t, "node-a")
+			got := w.podNow(t).Status.Conditions
+			require.Len(t, got, 1)
+			assert.Equal(t, []string{string(want.Status), want.Reason, want.Message}, []string{string(got[0].Status), got[0].Reason, got[0].Message})
+		})
+	}
+}
+
+func TestReconcile_EachContainerHasItsCondition(t *testing.T) {
+	w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a", own(killedAt, 1), own(killedAt, 2)),
+		pod(dead("runner", 1, killedAt), dead("dind", 2, killedAt)))
+	w.reconcile(t, "node-a")
+	var types []string
+	for _, c := range w.podNow(t).Status.Conditions {
+		types = append(types, string(c.Type))
+	}
+	assert.ElementsMatch(t, []string{"oom.actions-gateway.com/runner", "oom.actions-gateway.com/dind"}, types)
+}
+
 // An agent is held to its own node's pods.
 func TestReconcile_DropsAKillOfAPodThatIsOnAnotherNode(t *testing.T) {
 	w := newWorld(t, agentOn("node-b"), reportOf(t, "node-b", own(killedAt, 1), report.Kill{Pod: podUID, At: killedAt.UnixMilli(), Processes: 1}),
@@ -236,6 +268,16 @@ func TestReconcile_MakesAReportForANodeWithAnAgent(t *testing.T) {
 	assert.Equal(t, []string{"oom-report-node-a"}, w.reports(t))
 	w.reconcile(t, "node-b")
 	assert.Equal(t, []string{"oom-report-node-a"}, w.reports(t))
+}
+
+func TestReconcile_AnAgentIsInTheControllersNamespaceUnderItsLabels(t *testing.T) {
+	foreign, plain := agentOn("node-a"), agentOn("node-b")
+	foreign.Namespace = "team-a"
+	plain.Labels = nil
+	w := newWorld(t, foreign, plain)
+	w.reconcile(t, "node-a")
+	w.reconcile(t, "node-b")
+	assert.Empty(t, w.reports(t))
 }
 
 func TestReconcile_TakesAReportMadeAMomentAgoForMade(t *testing.T) {

@@ -36,6 +36,7 @@ func TestRun_RefusesWhatItCannotRunWith(t *testing.T) {
 		"a controller with no namespace":   {[]string{"controller", agents, "-all-namespaces"}, "want -namespace"},
 		"a controller with no agents":      {[]string{"controller", "-namespace=oom", "-all-namespaces"}, "want -agents"},
 		"a controller with a range of one": {[]string{"controller", "-namespace=oom", "-agents=app in (a,b)", "-all-namespaces"}, "want -agents"},
+		"a controller with a range too":    {[]string{"controller", "-namespace=oom", "-agents=app=a,b in (c)", "-all-namespaces"}, "want -agents"},
 		"a controller with half a label":   {[]string{"controller", "-namespace=oom", "-agents=app=a=b", "-all-namespaces"}, "-agents:"},
 		"a controller with nowhere":        {[]string{"controller", "-namespace=oom", agents}, "want one of -namespaces"},
 		"a controller with only commas":    {[]string{"controller", "-namespace=oom", agents, "-namespaces= ,"}, "want one of -namespaces"},
@@ -45,6 +46,10 @@ func TestRun_RefusesWhatItCannotRunWith(t *testing.T) {
 			require.ErrorContains(t, tried(nil, tc.args...), tc.want)
 		})
 	}
+}
+
+func TestRun_HelpIsNoFailure(t *testing.T) {
+	require.NoError(t, tried(nil, "agent", "-h"))
 }
 
 func TestRun_TakesItsPlaceFromTheEnvironment(t *testing.T) {
