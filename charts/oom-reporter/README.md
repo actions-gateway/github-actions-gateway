@@ -18,6 +18,8 @@ A condition of type `oom.actions-gateway.com/<container>`, and an Event with the
 | `AbovePods` | Memory above the node's pods: on an ordinary node, the node's |
 | `Unknown` | Not known from the counters. The condition's status is `Unknown` |
 
+The reason names the limit, and not whose memory it was: a job and its neighbours can each fill the limit all pods share, or the node.
+
 A kill that ended no container, such as a build's child process, gets the Event `OOMProcessKilled` alone.
 
 ## What runs, and what each may do
