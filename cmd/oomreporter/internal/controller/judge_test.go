@@ -106,6 +106,13 @@ func TestJudge_NamesTheContainer(t *testing.T) {
 				s.State.Terminated.Reason = "Error"
 				return s
 			}()), []report.Kill{above(killedAt.Add(-2*time.Second), 1)}, []string{"runner Unknown"}},
+		"nor where another was made again since, and that it may be of": {
+			pod(dead("runner", 1, killedAt), func() corev1.ContainerStatus {
+				s := dead("dind", 3, killedAt.Add(time.Second))
+				s.State.Terminated.ExitCode, s.State.Terminated.Reason = 0, "Completed"
+				s.LastTerminationState.Terminated = over(2, killedAt.Add(-2*time.Second))
+				return s
+			}()), []report.Kill{above(killedAt.Add(-2*time.Second), 1)}, []string{"runner Unknown"}},
 		"nor of one that another's file showed": {
 			pod(dead("runner", 1, killedAt), func() corev1.ContainerStatus {
 				s := dead("dind", 2, killedAt)

@@ -34,13 +34,13 @@ type verdict struct {
 	weak bool
 }
 
-// ended is a container's last end.
+// ended is an end of a container.
 type ended struct {
 	name, id string
 	field    string
 	code     int32
 	at       time.Time
-	// oom: it ended as OOMKilled.
+	// oom: it is the container's last, as OOMKilled.
 	oom bool
 }
 
@@ -132,6 +132,9 @@ func judge(pod *corev1.Pod, kills []report.Kill) (verdicts []verdict, processes 
 		}
 	}
 	for _, e := range all {
+		if !e.oom {
+			continue
+		}
 		if v, ok := by[e.name]; ok {
 			verdicts = append(verdicts, v)
 		} else if v, ok := weak[e.name]; ok {
@@ -146,8 +149,7 @@ func near(kill, end time.Time) bool {
 	return d >= -endedWithin && d <= endedWithin+time.Second
 }
 
-// containers returns the last end of each of pod's containers that has had one, and the life of
-// each its status still names.
+// containers returns the ends of pod's containers, and their lives, that its status still names.
 func containers(pod *corev1.Pod) (all []ended, lives []life) {
 	for _, g := range []struct {
 		field    string
@@ -158,27 +160,19 @@ func containers(pod *corev1.Pod) (all []ended, lives []life) {
 		{"spec.ephemeralContainers", pod.Status.EphemeralContainerStatuses},
 	} {
 		for _, s := range g.statuses {
-			last := s.State.Terminated
-			if was := s.LastTerminationState.Terminated; was != nil {
-				lives = append(lives, life{was.StartedAt.Time, was.FinishedAt.Time})
-				if last == nil {
-					last = was
-				}
-			}
-			switch {
-			case s.State.Terminated != nil:
-				lives = append(lives, life{last.StartedAt.Time, last.FinishedAt.Time})
-			case s.State.Running != nil:
+			if s.State.Running != nil {
 				lives = append(lives, life{start: s.State.Running.StartedAt.Time})
 			}
-			if last == nil {
-				continue
+			ends := slices.DeleteFunc([]*corev1.ContainerStateTerminated{s.LastTerminationState.Terminated, s.State.Terminated},
+				func(end *corev1.ContainerStateTerminated) bool { return end == nil })
+			for i, end := range ends {
+				lives = append(lives, life{end.StartedAt.Time, end.FinishedAt.Time})
+				_, id, _ := strings.Cut(end.ContainerID, "://")
+				all = append(all, ended{
+					name: s.Name, id: id, field: fmt.Sprintf("%s{%s}", g.field, s.Name), code: end.ExitCode, at: end.FinishedAt.Time,
+					oom: i == len(ends)-1 && end.Reason == reasonOOMKilled,
+				})
 			}
-			_, id, _ := strings.Cut(last.ContainerID, "://")
-			all = append(all, ended{
-				name: s.Name, id: id, field: fmt.Sprintf("%s{%s}", g.field, s.Name),
-				code: last.ExitCode, at: last.FinishedAt.Time, oom: last.Reason == reasonOOMKilled,
-			})
 		}
 	}
 	return all, lives
