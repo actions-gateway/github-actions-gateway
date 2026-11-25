@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -325,6 +326,19 @@ func TestReconcile_LeavesAReportThatIsMadeAgain(t *testing.T) {
 	assert.Equal(t, types.UID("report"), *opts.Preconditions.UID)
 }
 
+func TestReconcile_AReportThatIsGoneIsDeleted(t *testing.T) {
+	w := newWorld(t, reportOf(t, "node-a"))
+	w.reconcile(t, "node-a")
+	w.now = w.now.Add(idleFor)
+	w.Client = interceptor.NewClient(w.Client.(client.WithWatch), interceptor.Funcs{
+		Delete: func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
+			return apierrors.NewNotFound(schema.GroupResource{Resource: "configmaps"}, "oom-report-node-a")
+		},
+	})
+	assert.Zero(t, w.reconcile(t, "node-a").RequeueAfter)
+	assert.Empty(t, w.idle)
+}
+
 func TestWriteEvent_OneAMinuteForAContainerAndOneForNone(t *testing.T) {
 	stray := func(at time.Time) report.Kill { return report.Kill{Pod: podUID, At: at.UnixMilli(), Processes: 1} }
 	w := newWorld(t, agentOn("node-a"),
@@ -487,6 +501,25 @@ func TestReconcile_WaitsForTheNextReportWhereOnlyTheTimeTells(t *testing.T) {
 	}
 }
 
+func TestWriteConditions_ThreeAMinuteOfEachPod(t *testing.T) {
+	objects := []client.Object{agentOn("node-a")}
+	var kills []report.Kill
+	for i := range conditionWrites + 1 {
+		p := pod(dead("runner", 1, killedAt))
+		p.Name, p.UID = fmt.Sprintf("worker-%d", i), types.UID(fmt.Sprintf("%s%d", podUID[:len(podUID)-1], i))
+		k := own(killedAt, 1)
+		k.Pod = string(p.UID)
+		objects, kills = append(objects, p), append(kills, k)
+	}
+	w := newWorld(t, append(objects, reportOf(t, "node-a", kills...))...)
+	assert.Zero(t, w.reconcile(t, "node-a"))
+	for _, o := range objects[1:] {
+		var p corev1.Pod
+		require.NoError(t, w.Get(t.Context(), client.ObjectKeyFromObject(o), &p))
+		assert.Len(t, p.Status.Conditions, 1)
+	}
+}
+
 func TestSooner(t *testing.T) {
 	for _, tc := range [][3]time.Duration{{0, 0, 0}, {0, 2, 2}, {2, 0, 2}, {1, 2, 1}, {2, 1, 1}} {
 		assert.Equal(t, tc[2], sooner(tc[0], tc[1]))
@@ -516,6 +549,17 @@ func TestReconcile_AnAnswerStandsAgainstAKillThatSaysNothing(t *testing.T) {
 			w.reconcile(t, "node-a")
 			assert.Equal(t, tc.want, w.podNow(t).Status.Conditions[0].Reason)
 		})
+	}
+}
+
+func TestWriteEvent_OneAMinuteForNoContainerAcrossARestart(t *testing.T) {
+	w := newWorld(t, agentOn("node-a"), reportOf(t, "node-a"), pod(alive("runner", 1)))
+	for i, want := range []int{1, 1, 2} {
+		w.events, w.written = nil, nil
+		k := report.Kill{Pod: podUID, At: killedAt.Add(time.Duration(i) * 30 * time.Second).UnixMilli(), Processes: 1}
+		require.NoError(t, w.Update(t.Context(), reportOf(t, "node-a", k)))
+		w.reconcile(t, "node-a")
+		assert.Len(t, w.eventsNow(t), want)
 	}
 }
 
