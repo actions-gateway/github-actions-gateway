@@ -3380,7 +3380,35 @@ The 31 job assignments inside that window were all from this work's own probe ru
 An operator prevents it with <code>maxRequests.memory</code>, which caps the raise container by container, so a pod's sidecars need room beside it (from source; not run here).
 Why GitHub withdrew two assignments and kept the third was not measured, and this is one run.</p>
 <p><strong>The class fired before the job's <code>JobStarted</code> was handled</strong> (run 45324839276): the first at 04:16:24, the second at 04:16:35, 30 s after the job started.
-Until that message the pod names the job it was provisioned for, which need not be the job its runner took; here the two were the same (<a href="../../queue/Q1389/">Q1389</a>).</p>
+Until that message the pod names the job it was provisioned for, which need not be the job its runner took; here the two were the same.
+The class now waits for that message (<a href="../../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">as built</a>, Q1389).
+A probe of the class without the wait, run as a unit test against a fake GitHub on <code>3048c2c3c</code>, gave for a worker created for <code>lint</code> of run 4242 and killed unstamped while its runner held another job:</p>
+<table>
+<thead>
+<tr>
+<th>The runner held</th>
+<th>Limit raised for</th>
+<th>Slot spent of</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>build</code> of run 4242</td>
+<td><code>4242/lint</code></td>
+<td>4242</td>
+</tr>
+<tr>
+<td>The same, with <code>lint</code> already started by another worker</td>
+<td>none, with no Event</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>build</code> of run 9999</td>
+<td><code>4242/lint</code></td>
+<td>4242</td>
+</tr>
+</tbody>
+</table>
 <h3 id="readings-from-githubs-api-2026-11-22">Readings from GitHub's API, 2026-11-22<a class="headerlink" href="#readings-from-githubs-api-2026-11-22" title="Permanent link">&para;</a></h3>
 <p>M5 and the merge-group question beside it were read from GitHub's REST API rather than on dogfood, since the queries the <code>superseded</code> check sends can be put to any public repository.
 This repository has no <code>pull_request</code> run whose branch is <code>main</code> (<code>?branch=main&amp;event=pull_request</code> returns 0), so the fork readings are from <code>github/docs</code>, which has many.

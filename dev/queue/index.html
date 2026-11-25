@@ -3224,14 +3224,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The out-of-memory retry re-runs the killed job alone where another job of its run also failed (<code>POST …/jobs/{id}/rerun</code>, Q1319).</td>
 </tr>
 <tr>
-<td><a href="Q1389/">Q1389</a></td>
-<td><a href="../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">The out-of-memory class can fire before the pod names the job it ran</a></td>
-<td><code>bug</code> <code>2.1-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>GitHub gives a scale-set job to whichever runner asks first, so a worker often runs a job other than the one it was provisioned for …</td>
-</tr>
-<tr>
 <td><a href="Q1399/">Q1399</a></td>
 <td><a href="../plan/q555-automatic-recovery-design/#readings-for-a-cancelled-sibling-2026-11-24">Tell a kill's fail-fast siblings from a timed-out job</a></td>
 <td><code>feature</code></td>
@@ -3262,6 +3254,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>A job that fails because its Docker-in-Docker sidecar crashed is a platform failure, and today it needs a manual re-run.</td>
+</tr>
+<tr>
+<td><a href="Q1398/">Q1398</a></td>
+<td><a href="../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">A disruption before its worker's start re-runs the wrong job's run</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Until GitHub's <code>JobStarted</code> is handled, a scale-set worker's pod names the job it was created for, and 2 of 16 and 4 of 19 workers on …</td>
 </tr>
 <tr>
 <td><a href="Q1388/">Q1388</a></td>

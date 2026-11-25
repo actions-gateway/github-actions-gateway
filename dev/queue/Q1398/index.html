@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1389/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1398/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>The out-of-memory class can fire before the pod names the job it ran - GitHub Actions Gateway</title>
+        <title>A disruption before its worker's start re-runs the wrong job's run - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#the-out-of-memory-class-can-fire-before-the-pod-names-the-job-it-ran" class="md-skip">
+        <a href="#a-disruption-before-its-workers-start-re-runs-the-wrong-jobs-run" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              The out-of-memory class can fire before the pod names the job it ran
+              A disruption before its worker's start re-runs the wrong job's run
             
           </span>
         </div>
@@ -2703,22 +2703,16 @@
   
 
 
-<h1 id="the-out-of-memory-class-can-fire-before-the-pod-names-the-job-it-ran">The out-of-memory class can fire before the pod names the job it ran<a class="headerlink" href="#the-out-of-memory-class-can-fire-before-the-pod-names-the-job-it-ran" title="Permanent link">&para;</a></h1>
-<p>GitHub gives a scale-set job to whichever runner asks first, so a worker often runs a job other than the one it was provisioned for; <code>JobStarted</code> is what moves the pod's <code>run-id</code> and <code>job-name</code> annotations to the job it really runs (Q1152), and it is never written to a terminal pod.
-The out-of-memory class reads those annotations when the pod turns <code>Failed</code>, for the job whose floor it raises and the run it re-runs.</p>
-<p>Measured on dogfood on 2026-11-24 (run 45324839276): the runner was killed at 04:16:17, the class fired at 04:16:24, and the job's <code>JobStarted</code> was handled at 04:16:35, 30 s after the job started.
-In two other runs that day 2 of 16 and 4 of 19 workers ran the job they were provisioned for, so the two usually differ when jobs are assigned together.
-There the runner and its job happened to be the same.</p>
-<p>What follows is read from source and not reproduced: a runner killed before its <code>JobStarted</code> is handled raises the floor, and re-runs the run, of the job it was provisioned for.
-The <code>startedElsewhere</code> check in <code>recoverDisruptedScaleSetWorker</code> withholds where another worker started that job, which loses the recovery of the job that died; where no worker has, the class acts on the wrong one.
-The window is a job killed within its first half minute or so, and it applies to every arm that reads an unstamped worker, though the out-of-memory class alone raises a limit by the job's name; the re-run ledger records the name and other arms read it too.</p>
-<p>A candidate is to defer the class by a short grace while the pod is unstamped, or to ask GitHub which job the runner held: the jobs API names it by <code>runner_name</code>.
-First reproduce it, by provisioning two jobs together and killing one at once; that needs the dogfood cluster, and it may show the wrong job is never acted on.</p>
-<p>Gated on 2.1 (<a href="../../plan/release-2.1/">release-2.1.md</a>): the class has shipped since <code>v2.0.0</code>, and it can raise the limit of a job other than the one that died, and re-run that job's run.
-Q1319 fixes only the re-run half: finding the job by its runner's name re-runs the right job, or nothing where the pod names another run, while the raised limit stays keyed by the job name on the pod.
-Only a worker whose pod still names another job when it dies is affected.
-Measured: the class firing before <code>JobStarted</code> is handled, and how often a worker's job is not the one it was provisioned for.
-Read from source: the wrong raise and the wrong re-run.</p>
+<h1 id="a-disruption-before-its-workers-start-re-runs-the-wrong-jobs-run">A disruption before its worker's start re-runs the wrong job's run<a class="headerlink" href="#a-disruption-before-its-workers-start-re-runs-the-wrong-jobs-run" title="Permanent link">&para;</a></h1>
+<p>Until GitHub's <code>JobStarted</code> is handled, a scale-set worker's pod names the job it was created for, and 2 of 16 and 4 of 19 workers on dogfood ran that job (2026-11-24).
+The out-of-memory class waits for the start since Q1389; the disruption arms do not.</p>
+<p>Read from source, not run: an eviction, preemption, node shutdown or drain of a worker in its first seconds reserves a slot of the created-for job's run and re-runs that run's failed jobs, and where another worker has started that job it withholds with no Event.
+The job the runner held is then not re-run.
+No limit is raised, so it costs less than the out-of-memory case did.</p>
+<p>A kill the out-of-memory class does not wait for, because its runner had no memory limit or no sizing profile built its pod, is claimed with no job ID.
+That claim covers the created-for job for an hour: a restarted AGC's orphan scan counts it as recovered, and its own failure is recorded with cause <code>oom</code>, though nothing was recovered.</p>
+<p>Not the same wait: those arms re-run from 5 seconds by default (<code>evictionRetryDelay</code>) and within a 15-minute window, so a wait delays the recovery it is for, and a drained pod is usually gone before a start could be stamped on it.
+One candidate is to key the recovery on the runner's name instead, and let a start that arrives for a pod already claimed correct the parked re-run; the first step is measuring how long after a kill a start arrives.</p>
 
 
 

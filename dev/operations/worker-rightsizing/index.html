@@ -3202,6 +3202,9 @@ The job is then re-run automatically on the same per-run budget as every other r
 The re-run waits until GitHub concludes the run, because GitHub refuses one while any other job of the run is still going, so a long matrix is re-run only after its last job finishes.
 It waits up to 24 hours, then gives up with an <code>EvictionRerunFailed</code> Warning Event and <code>actions_gateway_eviction_rerun_failures_total{cause="oom",reason="run_never_concluded"}</code>; re-run it by hand then.
 An AGC restart does not lose the wait (Q1244).</p>
+<p><strong>A job killed in its first seconds</strong> can die before GitHub's message saying which runner took it is handled.
+The AGC then waits for that message, up to 15 minutes, before it raises any limit, and keeps the <code>Failed</code> pod until it has acted (Q1389).
+Without one it raises nothing and re-runs nothing, and reports a Warning <code>EvictionRecoveryIdentityUnknown</code> Event and <code>actions_gateway_eviction_recovery_identity_unknown_total{cause="oom"}</code>; <a href="../troubleshooting/#a-runner-killed-for-memory-whose-job-is-unknown">find the job and re-run it by hand</a>.</p>
 <p>Only the killed job is re-run, found by the name of the runner that died, and a sibling that failed on its own stays failed (Q1319).
 Four things follow:</p>
 <ul>

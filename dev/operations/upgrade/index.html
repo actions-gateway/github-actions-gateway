@@ -2247,6 +2247,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-an-out-of-memory-retry-waits-for-its-jobs-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: an out-of-memory retry waits for its job's start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4639,6 +4650,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-an-out-of-memory-retry-waits-for-its-jobs-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: an out-of-memory retry waits for its job's start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5489,6 +5511,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically">Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically</a></li>
 <li><a href="#a-timed-out-job-whose-re-run-passes-counts-as-flaky">A timed-out job whose re-run passes counts as flaky</a></li>
 <li><a href="#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run">Non-breaking: an out-of-memory retry re-runs the killed job, not every failed job of its run</a></li>
+<li><a href="#non-breaking-an-out-of-memory-retry-waits-for-its-jobs-start">Non-breaking: an out-of-memory retry waits for its job's start</a></li>
 <li><a href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image">A disrupted job is not re-run while its set's workers cannot pull their image</a></li>
 <li><a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run</a></li>
 <li><a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once">Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once</a></li>
@@ -6474,6 +6497,14 @@ Where two sets each lost a job of one run, the sets go one after the other.
 Where such jobs are legs of one <code>fail-fast: true</code> matrix that a red job reports on, only the first may be re-run: GitHub can conclude its attempt <code>cancelled</code>, which ends the retry with <code>EvictionRerunWithheld</code> and <code>reason="run_cancelled"</code> (Q1401).
 <code>actions_gateway_eviction_rerun_withheld_total</code> can carry <code>reason="job_not_found"</code>.</p>
 <p><strong>Rolling back</strong> returns the retry to <code>rerun-failed-jobs</code>, for the re-runs still waiting too.</p>
+<h3 id="non-breaking-an-out-of-memory-retry-waits-for-its-jobs-start">Non-breaking: an out-of-memory retry waits for its job's start<a class="headerlink" href="#non-breaking-an-out-of-memory-retry-waits-for-its-jobs-start" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> a tenant with a <code>Binpack</code> or <code>Throughput</code> <code>RunnerSet</code>.
+Nothing to do.</p>
+<p><strong>What changed.</strong> A runner killed for memory within seconds of taking a job could have the wrong job's limit raised and the wrong run's budget spent, because its pod still named the job it was created for.
+The AGC now <a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">waits for the message naming the job</a> first, up to 15 minutes (Q1389).</p>
+<p><strong>What you will see.</strong> A worker killed that early stays <code>Failed</code> past <code>completedPodTTL</code> until the AGC has acted.
+Where the message never comes, <code>actions_gateway_eviction_recovery_identity_unknown_total{cause="oom"}</code> increments and nothing is re-run.</p>
+<p><strong>Rolling back</strong> acts at once again, on the job the pod names.</p>
 <h3 id="a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image">A disrupted job is not re-run while its set's workers cannot pull their image<a class="headerlink" href="#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> a tenant whose scale-set workers are stuck in <code>ImagePullBackOff</code> when another of the set's jobs loses its worker.</p>
 <p><strong>What changed.</strong> The re-run of a disrupted job used to fire anyway, and its worker would fail to start too, spending a slot of <code>maxEvictionRetries</code>.

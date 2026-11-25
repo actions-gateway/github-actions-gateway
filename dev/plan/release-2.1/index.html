@@ -2761,8 +2761,7 @@
 Q1236's and Q1317's dogfood readings and Q1318's API readings are taken (2026-11-22), and Q1382's dogfood reading (2026-11-24); the ledger's open rows still gate the tag and nothing rides yet.
 The readings' three refutations, Q1374 to Q1376, gated it from 2026-11-22 because each broke a premise the rest builds on: Q1376 the context Q1315 and Q1316 recognise their classes from, and Q1374 and Q1375 the <code>trigger="other"</code> rate this release measures success by, biased in opposite directions; all three are built.
 Q1381 gated it too, settled 2026-11-22, because its re-runs landed in merge-queue runs nothing reads and each spent a <code>maxEvictionRetries</code> slot, which is the opposite of what this release is for; it and Q1320 are built, and the case it leaves is Q1391.
-Q1389 gates it too: the out-of-memory class <code>v2.0.0</code> shipped can act on the wrong job where a worker dies before its pod names the job it ran, and Q1319 fixes only the re-run half of that, not the raised limit.
-The wrong-job half is read from source, so its first step is reproducing it.
+Q1389 gated it too: the out-of-memory class <code>v2.0.0</code> shipped could act on the wrong job where a worker died before its pod named the job it ran, reproduced in a unit-test probe and fixed on 2026-11-24.
 Q1395 gates it too, settled 2026-11-24: detection could name a platform fault that did not happen, in the release whose headline is telling platform failures from a job's own.
 Q1400 gates it too, settled 2026-11-24, for the same reason in the out-of-memory class <code>v2.0.0</code> shipped: it reads a runner killed for its node's memory as one killed at its own limit, so the Event and the raised limit name a cause it did not check.
 That is read from source, so its first step is reproducing it.
@@ -2827,10 +2826,10 @@ One known limit stays from <code>v2.0.0</code>: beside a memory kill, a job past
 <td>✅ reproduced 2026-11-24: the request rises with the limit and the re-run succeeds; a raise no node can hold is filed as Q1388</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1389/">Q1389</a></td>
+<td>Q1389</td>
 <td>Keep the out-of-memory class from acting before the pod names the job it ran</td>
 <td><code>2.1-gate</code></td>
-<td>🔲 open: reproduce first, since the wrong-job half is read from source</td>
+<td>✅ landed: the class waits up to 15 minutes for the job's start, and gives up with no raise and no re-run</td>
 </tr>
 <tr>
 <td>Q1320</td>
