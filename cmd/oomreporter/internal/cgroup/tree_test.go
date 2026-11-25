@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"testing"
 	"testing/fstest"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -74,19 +73,6 @@ func cgroupfs(prefix string) []string {
 
 func TestSample_ReadsTheKubeletsTree(t *testing.T) {
 	n := func(i uint64) Events { return Events{i, i, i} }
-	want := Sample{
-		Pods: map[string]Pod{
-			burstableUID: {
-				QoS: "burstable", Subtree: n(4), Local: n(4),
-				Containers: map[string]Events{runnerID: n(5), sandboxID: n(6)}, Single: map[string]bool{}, Refused: map[string]bool{},
-			},
-			guaranteedUID: {Subtree: n(7), Local: n(7), Containers: map[string]Events{}, Single: map[string]bool{}, Refused: map[string]bool{}},
-		},
-		QoS:     map[string]Events{"burstable": n(2), "besteffort": n(3)},
-		Root:    n(1),
-		Refused: map[string]bool{},
-		Doubled: map[string]bool{},
-	}
 	for name, dirs := range map[string][]string{
 		"systemd":                       systemd(""),
 		"systemd under cgroupRoot":      systemd("kubelet-"),
@@ -95,6 +81,19 @@ func TestSample_ReadsTheKubeletsTree(t *testing.T) {
 		"cgroupfs as deep as it may be": cgroupfs("a/b"),
 	} {
 		t.Run(name, func(t *testing.T) {
+			want := Sample{
+				Pods: map[string]Pod{
+					burstableUID: {
+						Cgroup: dirs[3], QoS: "burstable", Subtree: n(4), Local: n(4),
+						Containers: map[string]Events{runnerID: n(5), sandboxID: n(6)}, Single: map[string]bool{}, Refused: map[string]bool{},
+					},
+					guaranteedUID: {Cgroup: dirs[6], Subtree: n(7), Local: n(7), Containers: map[string]Events{}, Single: map[string]bool{}, Refused: map[string]bool{}},
+				},
+				QoS:     map[string]Events{"burstable": n(2), "besteffort": n(3)},
+				Root:    n(1),
+				Refused: map[string]bool{},
+				Doubled: map[string]bool{},
+			}
 			tree, err := Open(mount(dirs...), "")
 			require.NoError(t, err)
 			got, err := tree.Sample()
@@ -336,37 +335,6 @@ func TestSample_LeavesOutAPodWithADirectoryItMayNotRead(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{guaranteedUID}, slices.Collect(maps.Keys(got.Pods)))
 	assert.True(t, got.Refused[burstableUID] && got.Doubled[burstableUID])
-}
-
-// What is done while there are two is not judged, and what is done after is.
-func TestSample_APodWithOneDirectoryAgainIsCountedFromThen(t *testing.T) {
-	dirs := systemd("")
-	m := mount(dirs...)
-	tree, err := Open(m, "")
-	require.NoError(t, err)
-	var tr Tracker
-	observe := func(after time.Duration) Rise {
-		s, err := tree.Sample()
-		require.NoError(t, err)
-		rises, _ := tr.Observe(s, start.Add(after))
-		return rises[burstableUID]
-	}
-	count := func(dir string, n uint64) {
-		m[path.Join(dir, subtreeFile)], m[path.Join(dir, localFile)] = eventsFile(Events{n, n, n}), eventsFile(Events{n, n, n})
-	}
-	observe(0)
-	copied := "kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-pod" + strings.ReplaceAll(burstableUID, "-", "_") + ".slice"
-	m[path.Join(copied, subtreeFile)], m[path.Join(copied, localFile)] = eventsFile(Events{90, 90, 90}), eventsFile(Events{90, 90, 90})
-	assert.Zero(t, observe(time.Second))
-	assert.Zero(t, observe(2*time.Second))
-	delete(m, path.Join(copied, subtreeFile))
-	delete(m, path.Join(copied, localFile))
-	assert.Zero(t, observe(3*time.Second))
-	count(dirs[3], 5)
-	observe(4 * time.Second)
-	r := observe(4 * time.Second)
-	assert.Equal(t, uint64(1), r.GroupKills)
-	assert.False(t, r.Late)
 }
 
 func TestSample_LeavesOutAContainerItMayNotRead(t *testing.T) {

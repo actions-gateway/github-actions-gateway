@@ -145,6 +145,8 @@ func (t *Tree) podUIDOf(class, name string) (string, bool) {
 
 // Pod is one pod's counters.
 type Pod struct {
+	// Cgroup is the pod's: the path of its directory, and its inode.
+	Cgroup string
 	// QoS is the class whose cgroup the pod is in, empty for a Guaranteed pod.
 	QoS            string
 	Subtree, Local Events
@@ -242,7 +244,14 @@ func (t *Tree) samplePod(dir string) (Pod, error) {
 	if err != nil {
 		return Pod{}, err
 	}
-	pod := Pod{Containers: map[string]Events{}, Single: map[string]bool{}, Refused: map[string]bool{}}
+	info, err := fs.Stat(t.fsys, dir)
+	if err != nil {
+		return Pod{}, err
+	}
+	pod := Pod{Cgroup: dir, Containers: map[string]Events{}, Single: map[string]bool{}, Refused: map[string]bool{}}
+	if st, ok := info.Sys().(*syscall.Stat_t); ok {
+		pod.Cgroup = fmt.Sprintf("%s#%d", dir, st.Ino)
+	}
 	containerName := cgroupName
 	if t.systemdPrefix() != "" {
 		containerName = scopeName

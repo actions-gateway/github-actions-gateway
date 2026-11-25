@@ -40,6 +40,7 @@ type Agent struct {
 	Write   func([]report.Kill)
 	Log     *slog.Logger
 
+	guard   cgroup.Guard
 	tracker cgroup.Tracker
 	strays  cgroup.Strays
 	kills   report.Log
@@ -113,10 +114,11 @@ func (a *Agent) sample(now time.Time) (time.Duration, error) {
 	if err != nil {
 		return a.Poll, err
 	}
+	a.warn(s)
+	s = a.guard.Filter(s, now)
 	rises, again := a.tracker.Observe(s, now)
 	lost := a.strays.Observe(s, rises, now)
 	a.record(rises, lost, now)
-	a.warn(s)
 	a.compare(s, now)
 	if a.Watch != nil {
 		a.Watch(s)
@@ -134,7 +136,7 @@ func (a *Agent) sample(now time.Time) (time.Duration, error) {
 func (a *Agent) warn(s cgroup.Sample) {
 	for uid := range s.Doubled {
 		if !a.doubled[uid] {
-			a.Log.Warn("a pod has two cgroups, and a kill of it is not judged; a container may have made one", "pod", uid)
+			a.Log.Warn("a pod has two cgroups, and is not judged again; a container may have made one", "pod", uid)
 		}
 	}
 	a.doubled = s.Doubled

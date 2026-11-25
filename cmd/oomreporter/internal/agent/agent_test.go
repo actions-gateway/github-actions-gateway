@@ -178,6 +178,36 @@ func TestRun_WarnsOnceOfAPodWithTwoCgroups(t *testing.T) {
 	assert.Contains(t, logged.String(), uid)
 }
 
+func TestRun_AKillInACopyOfAPodsCgroupIsNotReported(t *testing.T) {
+	counts := func(cgroupOf string, n uint64) cgroup.Sample {
+		e := cgroup.Events{OOM: n, OOMKill: n, OOMGroupKill: n}
+		return cgroup.Sample{Pods: map[string]cgroup.Pod{uid: {Cgroup: cgroupOf, Subtree: e, Local: cgroup.Events{OOM: n}}}}
+	}
+	both := cgroup.Sample{Refused: map[string]bool{uid: true}, Doubled: map[string]bool{uid: true}}
+	for name, tc := range map[string]struct {
+		samples several
+		reports int
+	}{
+		"the pod's own is":                    {several{counts("own", 0), counts("own", 1), counts("own", 1)}, 1},
+		"one made beside it":                  {several{counts("own", 0), both, counts("copy", 0), counts("copy", 1), counts("copy", 1)}, 0},
+		"one made between two samples":        {several{counts("own", 0), counts("copy", 0), counts("copy", 1), counts("copy", 1)}, 0},
+		"one made after it went":              {several{counts("own", 0), {}, counts("copy", 1), counts("copy", 2), counts("copy", 2)}, 0},
+		"one there with it before the first":  {several{both, counts("copy", 0), counts("copy", 1), counts("copy", 1)}, 0},
+		"a restart of the agent forgets that": {several{counts("copy", 0), counts("copy", 1), counts("copy", 1)}, 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var got []report.Kill
+			a := &Agent{Log: quietLog, Tree: &tc.samples, Write: func(k []report.Kill) { got = k }}
+			at := time.Now()
+			for i := range len(tc.samples) {
+				_, err := a.sample(at.Add(time.Duration(i) * poll))
+				require.NoError(t, err)
+			}
+			assert.Len(t, got, tc.reports)
+		})
+	}
+}
+
 // bursts is how many samples came sooner than a poll after the one before.
 func bursts(samples []time.Duration) (n int) {
 	for i := 1; i < len(samples); i++ {
