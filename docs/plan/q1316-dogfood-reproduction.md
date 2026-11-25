@@ -7,13 +7,13 @@
 
 Q1316's retry class needs a fact that separates a platform's crash of the Docker-in-Docker sidecar from the job's own, and a platform cause that leaves the runner alive to fail the job.
 From the kernel's scoring, at the shipped requests the runner is expected to go first and the class to have no memory case (computed below); the run confirms or refutes that.
-The local readings leave four questions only the dogfood cluster answers:
+The local readings leave five questions only the dogfood cluster answers:
 
 1. When a node runs out of memory, does the kernel kill the sidecar, or the runner first?
 2. Where the sidecar is killed, do the kernel's counters separate a neighbour from the job?
 3. Do the API server's statuses match the kubelet's, under `privileged-dind` and under Kata?
 4. Does the out-of-memory class read a node-killed runner as an own-limit kill ([Q1400](../queue/Q1400.md))?
-5. Can an unprivileged reader on the node say which limit ran out before the cgroups that say so are removed (Q1403, the node reporter)?
+5. Can an unprivileged reader on the node say which limit ran out before the cgroups that say so are removed (Q1403, the node reporter, whose row is on `claude/q1400-oom-cause-text` and not on `main` yet)?
 
 One platform cause is already out: locally, restarting containerd or the kubelet and killing containerd left the sidecar and the runner running, and killing the pod's shim ended both.
 Those readings are one run each, and nothing here repeats them.
@@ -22,8 +22,9 @@ Those readings are one run each, and nothing here repeats them.
 
 Every node fact this needs is readable from inside a `privileged-dind` job: its daemon sees the host's cgroup tree, so `docker run --privileged -v /sys/fs/cgroup:/h:ro` reads any pod's `memory.events` (measured on a kind node, not on GKE).
 Statuses, Node Events and the AGC's log come from read-only `kubectl`.
-The same job container opens `/dev/kmsg` (measured on Docker's `--privileged`, not on GKE), and prints from it only the `oom-kill:constraint=` line of each kill, which names the cgroup whose limit was hit, the victim's cgroup and the process.
+The same job container opens `/dev/kmsg` (measured on Docker's `--privileged`, not on GKE), and prints from it only the `oom-kill:constraint=` line the kernel prints for a kill, which names the cgroup whose limit was hit, the victim's cgroup and the process.
 That is what the counters are checked against, and no other line of the node's log is printed.
+The repository is public, so the job's log shows anyone each kill's cgroup paths, which hold pod UIDs and container ids, and the killed process's name, pid and uid, for any pod on that node; the samples already show the paths.
 A debug pod would add the node's process list; the container statuses, the line and each container's own counters name the container, which is the question asked.
 The trade is that the privilege stays the one this tenant already has.
 Where the statuses and the counters do not name the victim, the reading is reported as unresolved rather than widened to a debug pod.
@@ -135,31 +136,41 @@ Not read: a raise under `Binpack` or `Throughput`, which starts from the same tw
 
 ## What it decides for Q1403
 
-The node reporter's design rests on five facts, and R8, R2 and R3 read them with no further change to the cluster.
+The node reporter's design rests on five facts, and R8, R2 and R3 read them with no further change to the cluster; a sixth, under Kata, takes one more pod.
 
-- **Whether it may read.** The second reader opens every pod's and container's `memory.events`, `memory.events.local` and `memory.peak`, and prints each refusal's errno, one file's owner and mode, and each cgroup that appears after it started.
+- **Whether it may read.** The second reader opens every pod's and container's `memory.events`, `memory.events.local` and `memory.peak`, and prints each refusal's errno, its own AppArmor profile, one file's owner and mode, and each cgroup that appears after it started.
   It is an unprivileged container of the job's own Docker, so it is under Docker's default seccomp profile; the plain pod of R3, R3t and R4, which is a pod as a reporter would be, makes the same opens once before it fills.
   Each also tries `/dev/kmsg` and prints `kernel.dmesg_restrict`; the pod has no such device, so only the job's reader tests that.
 - **How long the facts last.** It prints, to the millisecond, the first rise of `oom` or `oom_kill` in a cgroup and the cgroup's removal, once from inotify and once from a 50 ms poll.
-  Locally (kernel 6.12, nine kills in three runs, three each by the container's own limit, its pod's and `kubepods`') inotify saw each rise 6 to 50 ms before the poll.
-  It gave no delete event for any of six removed cgroups, and a file held open across the removal read `ENODEV`; so only the poll times a removal, and the last values are whatever was read before it.
+  Locally (kernel 6.12, fifteen kills in five runs, five each by the container's own limit, its pod's and `kubepods`') inotify saw each rise 1 to 50 ms before the poll.
+  It gave no delete event for any of ten removed cgroups, and a file held open across the removal read `ENODEV`; so only the poll times a removal, and the last values are whatever was read before it.
 - **Whether `Failed` arrives first.** That is the stamped watch against the removals of the container's and the pod's cgroups.
-  The two clocks are the node's and the client's; in R3 the plain pod's log is followed and stamped too, and its first line's arrival less the time it prints bounds how far the client's clock is ahead.
+  The two clocks are the node's and the client's, so `sntp time.google.com` is read on the client beside each reading, its offset taken out of every arrival, and its error kept.
+  The node's own error against the same source is assumed under 100 ms and not read.
+  In R3 the plain pod's log is followed and stamped too: its first line's arrival less the time it prints is the most the client can be ahead, and nothing bounds it being behind but `sntp`.
+  A margin, either way, inside the two errors together is reported as unresolved.
 - **Which counter names the limit.** Expected `oom` in `memory.events.local`, for the container, its pod, its QoS slice and `kubepods.slice`: 1, 0, 0, 0 for R8; 0, 0, 0 and a rise for R3; and no rise in any for R2.
   A pod's own limit (`spec.resources`) is the fourth shape and is not run: locally it read 0 for the container and 1 for the pod.
   The kernel's line is the answer each is checked against.
+- **What the host sees of a kill in a Kata guest.** One more plain pod, `q1316-read`, in the shape and with the mounts of step 3's and no fill, runs the reader on the Kata worker's node and prints every cgroup's counters at its end.
+  Expected: no rise of `oom` or `oom_kill` in the sandbox pod's cgroups, whose UID `kubectl` gives, while the guest's sidecar reads `OOMKilled`.
+  It starts once R7a's worker has a node, which can be after R7a's own kill, so R7b's is the kill it is for; where R7b lands on another node that is not read, and is not repeated.
+  Only `kubepods.slice` is read, so a virtual machine Kata keeps in a cgroup outside it is not seen, and where Kata keeps it is not read here.
 - **Who was over its request.** Every pod's `memory.current` in the sample before the kill, beside its requested memory from R0 by UID, and the plain pod's 12Gi.
 
 | Outcome | Conclusion |
 |---|---|
 | The reader and the plain pod open every file | A reporter of the counters needs no privileged container, and its `hostPath` alone decides its namespace's level |
-| Either is refused | The errno says by what; a reporter needs more than the row's cost names |
-| The pod's cgroup outlives the arrival of `Failed` in every run, and by how much | The shortest is the bound a reporter has, from these few kills on one node image |
-| It is gone first in any run | A reporter has to read as the kill happens, not after the pod fails |
+| Either is refused | `EACCES` is a file mode or an AppArmor profile, so the owner, mode and profile are read with it; a reporter needs more than the row's cost names |
+| The pod's cgroup outlives the arrival of `Failed` in every run, by more than the clocks' error | The shortest margin, less that error, is the bound a reporter has, from these few kills on one node image |
+| It is gone first in any run, by more than the clocks' error | A reporter has to read as the kill happens, not after the pod fails |
 | The counters and the kernel's line name the same limit in R8, R2 and R3 | The counters are enough for those three |
+| A kill has no line, or `/dev/kmsg` does not open | The counters are unchecked for that kill. The kernel prints at most ten such reports in 5 seconds for the node and none for a group kill's other processes (`oom_kill.c`, v6.12, read); the sampler says where lines were lost |
 | They differ in any | The counters are not, and the kernel's log is the reporter's source |
+| R7b's kill raises nothing in the sandbox pod's counters | A host reporter of the pods' cgroups cannot see a Kata job's kill |
+| It raises one | The limit that rose says whether the guest itself was killed at the pod's limit, which is a different kill from the sidecar's |
 
-Not read, since each needs a pod or a mount this run does not make: the host's counters beside a kill in a Kata guest, and whether a non-root pod could read `/dev/kmsg` or the node's journal through a `hostPath`.
+Not read: whether a non-root pod could read `/dev/kmsg` or the node's journal, since each needs another `hostPath`; a worker on the Guaranteed or BestEffort path; and a pod's own limit on GKE.
 
 ## Mutations
 
@@ -174,14 +185,17 @@ The values are the runbook's ([gke-dogfood.md](gke-dogfood.md#variables)) and ar
 | 1 | `E2E_VARIANT=dind E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | System pool to its running size, which brings up the always-on gateways; the `dind` overlay (namespace labels, template, open egress policy, gateway); registry mirrors up |
 | 2 | `git push origin HEAD:claude/q1316-probe-run`, one push per reading | One workflow run of the file below; the e2e pool scales 0 to 1 |
 | 3 | `kubectl --context $CTX -n gag-dogfood-e2e create configmap q1316-fill --from-file=fill.py --from-file=reader.py`, once, then `apply -f hog.yaml` with `NODE` set, per R3, R3t and R4 | One ConfigMap, and one non-root, unprivileged pod with the host's `/sys/fs/cgroup` mounted read-only, which is how it sees a worker die |
-| 4 | `kubectl --context $CTX -n gag-dogfood-e2e delete pod/q1316-hog` after each, `configmap/q1316-fill` after the last | Removes them |
+| 4 | `kubectl --context $CTX -n gag-dogfood-e2e delete pod/q1316-hog` after each, `pod/q1316-read` once its log has its `end` lines, 15 minutes after it starts, then `configmap/q1316-fill` | Removes them |
 | 5 | `E2E_VARIANT=kata E2E_ROUTE_VAR=0 scripts/dogfood/e2e-start.sh` | Back to the `kata` overlay, and deletes the open egress policy |
+| 5a | `kubectl --context $CTX -n gag-dogfood-e2e apply -f read.yaml` with `NODE` set, once, when R7a's worker is on a node | One non-root, unprivileged pod on that node, with step 3's two mounts and no fill; its own deadline ends it at 16 minutes |
 | 6 | `GAG_ROUTE_VARS=0 scripts/dogfood/e2e-stop.sh` | Drains, deletes the gateway, scales mirrors to 0, system pool to its running size |
 | 7 | `GAG_ROUTE_VARS=0 scripts/dogfood/stop.sh`, only where the system pool read 0 before step 1 | Drains every tenant's workers, then system pool to 0 |
 | 8 | `kubectl --context $CTX delete clusterrunnertemplate privileged-dind`, only where it was absent before step 1 | Removes the template step 1 created |
 | 9 | `git push origin --delete claude/q1316-probe-run` | Removes the branch |
 | 10 | [Release the lease](#the-lease) | Deletes the Lease |
 
+Step 5a's pod is admitted as step 3's is: both overlays give the namespace the `privileged` Pod Security level, which a `hostPath` needs (`deploy/dogfood-e2e/overlays/kata/kustomization.yaml`, read), and no admission policy of the chart matches pods (read).
+The namespace's quota is six pods, and it is read before steps 3 and 5a: two workers and the plain pod need three of it, and a Kata worker and its reader two.
 `start.sh` is not used: it dispatches unit and integration runs onto the cluster, and `e2e-start.sh` resizes the system pool and waits for the GMC itself.
 A system pool brought up from 0 runs the always-on gateways, so a job already queued for them would be served.
 No repository variable, Secret, CRD, chart or AGC image changes.
@@ -191,7 +205,7 @@ The App Secret in the namespace is used by the AGC as it is, and is not read.
 Any lease, worker or queued run there means the cluster is taken: stop, with nothing taken.
 After 0b the pods and the queued runs are read once more, since something can start between; a stop there runs step 10 and nothing else.
 
-prod-guard, the hook that checks an agent session's commands, refuses a direct mutating `kubectl` on this cluster, which steps 0b, 3, 4, 8 and 10 and the restore's NetworkPolicy deletion are and the scripts are not.
+prod-guard, the hook that checks an agent session's commands, refuses a direct mutating `kubectl` on this cluster, which steps 0b, 3, 4, 5a, 8 and 10 and the restore's NetworkPolicy deletion are and the scripts are not.
 The documented way through is a `PROD_GUARD_OVERRIDE=<reason>` prefix on each ([kind-iteration.md](../development/kind-iteration.md#verify-the-resolved-target-before-any-mutating-command)), so the grant has to name it, or a maintainer runs those commands by hand.
 
 ### The lease
@@ -240,7 +254,7 @@ kubectl --context "$CTX" -n default patch lease actions-gateway-release-gate --t
 Where the delete fails after the patch, the block cannot be run again, because its test now fails: once the holder reads `q1316-released`, delete the Lease by name.
 
 The lease stops a gate, and not a hand-run `e2e-start.sh`, `start.sh` or `stop.sh`, nor a run dispatched to `gag-ci-e2e`, none of which read it.
-So before each of steps 1, 2, 3 and 5 the pods in `gag-dogfood-e2e`, each pool's node count and the runs queued on `gag-ci-e2e` are read as well, and anything this run did not make is an abort.
+So before each of steps 1, 2, 3, 5 and 5a the pods in `gag-dogfood-e2e`, each pool's node count and the runs queued on `gag-ci-e2e` are read as well, and anything this run did not make is an abort.
 A gate started in the window refuses, and a candidate tagged in it fails its validation and needs a re-run.
 
 ## Abort
@@ -248,7 +262,7 @@ A gate started in the window refuses, and a candidate tagged in it fails its val
 Stop, run the restore, and report what was read, on any of:
 
 - another session's job reaches the e2e set, or the lease is gone or another's;
-- the e2e node is `NotReady` for 5 minutes, or a pod other than the two workers, the plain pod or a DaemonSet's is on it;
+- the e2e node is `NotReady` for 5 minutes, or a pod other than the workers, the two plain pods of steps 3 and 5a or a DaemonSet's is on it;
 - a container on any other node restarts during a reading;
 - Spot preemption twice;
 - 4 hours from step 1, which leaves the restore inside 4.5.
@@ -260,7 +274,7 @@ The system pool is a different pool.
 
 ## Restore
 
-1. Delete the plain pod and its ConfigMap, and cancel any probe run.
+1. Delete the plain pods and their ConfigMap, and cancel any probe run.
    Where the lease reads another holder, stop here and report: the cluster is that holder's, and the rest would tear down what it is using.
    Where there is no lease, take it again; if that fails, the same.
 2. Step 5, which leaves the tenant on its default overlay, then step 6.
@@ -275,7 +289,7 @@ The system pool is a different pool.
 
 ## Time and cost
 
-Estimated at 2 hours 45 minutes to 3 hours 15 with the cluster held: 25 minutes to start and read the baseline, 30 for R0, R1 and R6, R8 and 5 fills at about 12 minutes each, 2 more if R4 and R5 run, 20 for the switch to Kata and R7, 20 to restore.
+Estimated at 2 hours 55 minutes to 3 hours 25 with the cluster held: 25 minutes to start and read the baseline, 30 for R0, R1 and R6, R8 and 5 fills at about 12 minutes each, 2 more if R4 and R5 run, 30 for the switch to Kata and R7 with its reader, 20 to restore.
 A fill is 12 because a runner that dies holds its job about 10 minutes, until the lock lapses ([M1](q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22)), each uses both worker slots, and none overlaps another.
 
 Estimated from third-party price listings read on 2026-11-24 (Google's own page was not read), over 4.5 hours, the abort limit and the restore:
@@ -287,6 +301,7 @@ Estimated from third-party price listings read on 2026-11-24 (Google's own page 
 | Boot disks and one 100Gi volume for the Kata worker | not priced | cents, unverified |
 
 So under $2, and about $4.10 at the on-demand rate, with nothing priced for disks.
+Step 5a's pod adds no node, and ten minutes of the same ones.
 The cluster's own fee is paid either way.
 
 ## The probe
@@ -294,7 +309,7 @@ The cluster's own fee is paid either way.
 The commit pushed to `claude/q1316-probe-run` adds one file, `.github/workflows/q1316-probe.yml`, and its message is `[q1316-probe] <ID>`, with ` solo` after the ID for R1, R6 and R7.
 R6 is `R6a` and `R6b`, and R7 is `R7a` and `R7b`.
 `bash -n`, `shellcheck -S warning` and `actionlint` pass on it but for the runner label it does not know and info notes that single quotes do not expand, which is meant.
-`sample.py` and `reader.py` ran locally over a `kubepods.slice` made in one container, three times.
+`sample.py` and `reader.py` ran locally over a `kubepods.slice` made in one container, five times, while `reader.py` gained its counters at the end (from the fourth) and its profile (the fifth).
 It has not run on GitHub.
 
 ```yaml
@@ -391,6 +406,7 @@ def kernel():
         try:
             line = os.read(log, 8192).decode(errors="replace").split("\n")[0]
         except BrokenPipeError:
+            print("K lines lost")
             continue
         except OSError:
             return
@@ -510,6 +526,9 @@ def loop(tag, tick):
             elif now.partition(" oom ")[2] != was.partition(" oom ")[2]:
                 say(tag, "rise", d[3:], now, "| local", read(local) if isinstance(local, int) else local)
             held[d][2] = now
+    for d, (fd, local, was) in held.items():
+        if tag == "poll" and isinstance(fd, int):
+            say("end", d[3:], read(fd), "| local", read(local) if isinstance(local, int) else local)
 
 if not os.path.isdir("/h/kubepods.slice"):
     sys.exit("no kubepods.slice: a Kata guest")
@@ -523,6 +542,8 @@ for d in dirs():
             os.close(fd)
 s = os.stat("/h/kubepods.slice/memory.events")
 say("uid", os.getuid(), "owner", s.st_uid, "mode", stat.filemode(s.st_mode), dict(seen))
+fd = attempt("/proc/self/attr/current")
+say("confined by", read(fd) if isinstance(fd, int) else fd)
 k = attempt("/dev/kmsg")
 say("kmsg", k if isinstance(k, str) else "opened", "dmesg_restrict", open("/proc/sys/kernel/dmesg_restrict").read().strip())
 
@@ -574,6 +595,37 @@ spec:
       image: ghcr.io/actions-gateway/dogfood-e2e-runner:2.338.2-1
       command: [sh, -c, "python3 /f/reader.py 0 once; exec python3 /f/fill.py 7 4096 5"]
       resources: { requests: { memory: 12Gi } }
+      securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
+      volumeMounts:
+        - { name: fill, mountPath: /f, readOnly: true }
+        - { name: cgroup, mountPath: /h, readOnly: true }
+  volumes:
+    - { name: fill, configMap: { name: q1316-fill } }
+    - { name: cgroup, hostPath: { path: /sys/fs/cgroup, type: Directory } }
+```
+
+`read.yaml` is step 5a's pod:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: q1316-read
+  namespace: gag-dogfood-e2e
+spec:
+  restartPolicy: Never
+  activeDeadlineSeconds: 960
+  automountServiceAccountToken: false
+  nodeSelector:
+    kubernetes.io/hostname: NODE # the Kata worker's node
+  tolerations:
+    - { key: dedicated, value: e2e, effect: NoSchedule }
+  securityContext: { runAsNonRoot: true, runAsUser: 1001, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: read
+      image: ghcr.io/actions-gateway/dogfood-e2e-runner:2.338.2-1
+      command: [python3, /f/reader.py, "900"]
+      resources: { requests: { memory: 64Mi } }
       securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] }, readOnlyRootFilesystem: true }
       volumeMounts:
         - { name: fill, mountPath: /f, readOnly: true }
