@@ -273,6 +273,7 @@ nav:
           - "Logging & tracing": operations/observability-logging.md
       - "Cost attribution": operations/cost-attribution.md
       - "Worker right-sizing": operations/worker-rightsizing.md
+      - "Which memory limit killed a container": operations/oom-reporter.md
       - "Node shutdown budgets": operations/node-shutdown-budgets.md
       - Runbook: operations/runbook.md
       - Backup & restore: operations/backup-restore.md
