@@ -1446,6 +1446,8 @@
       
         
       
+        
+      
     
     
     
@@ -2309,6 +2311,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/oom-reporter/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Which memory limit killed a container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
         
   
@@ -3041,7 +3071,8 @@
 <h1 id="a-node-reporter-for-out-of-memory-kills-q1403">A node reporter for out-of-memory kills: Q1403<a class="headerlink" href="#a-node-reporter-for-out-of-memory-kills-q1403" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status (2026-11-25): decided, D1 to D6 each as recommended.
-<a href="#build-size">PRs 1 to 4</a> are built: the reader and the rule, the two programs, the chart, and the image; they have run together against an API server alone, and not on a node.</strong></p>
+<a href="#build-size">PRs 1 to 4 and 6</a> are built: the reader and the rule, the two programs, the chart, the image, and the AGC's record; of PR 5, the operator's page and GKE's readings are, and the kind e2e lane is not.
+They have run together against an API server alone, and not on a node.</strong></p>
 </blockquote>
 <p>A container killed for memory reads <code>OOMKilled</code> with exit code 137 whichever limit ran out: its own, its pod's, the one all pods share, or the node's memory.
 The AGC therefore names no cause (Q1400), and neither does anything else in the Kubernetes API that a tenant's operator can read on the pod.
@@ -4207,6 +4238,20 @@ None is granted on a cloud node.
   Not read: the lines the parser must refuse.</li>
 </ul>
 <p>Not run: two containers killed at once, several threads or pods at the pods' limit together, and a cluster whose containers have no <code>memory.oom.group</code>.</p>
+<p>What GKE read, as reading 8 (Q1316's R3, R3t and R8; kernel 6.8.0-1064-gke):</p>
+<ul>
+<li><strong>8.</strong> Thirteen kills on five nodes: twelve at <code>kubepods</code>' limit, three on each of four filled nodes, and R8's runner at its own.
+  Each filled node's three were the metrics collector's two containers and then the runner: a kill at the pods' limit takes another pod's processes.
+  PR 5's tests replay each recording, an inotify watch's and a poll's apart.
+  On the watch's, the rule answered twelve: the runner's five with the kernel's limit, and the collector's eight as six <code>Unknown</code>, one <code>PodsLimit</code> and one not at all: the config reloader of R3t's second run, whose counts neither recording shows rising, though the container outlived its kill by 42 s.
+  It named no other limit than the kernel's on either.
+  <code>memory.oom.group</code> was read on one node, the first run's, where R8 ran: 0 on every container started before containerd was restarted, 1 after.
+  It was not read on any node R3 or R3t ran on, so the replay infers it, taking <code>oom_kill</code> 1 with <code>oom_group_kill</code> 0 in a container's last counts to mean it was 0 there; without that, 6 of the test's 10 cases fail, since a container read as a group that never group-killed shows no kill.
+  It takes every container's <code>cgroup.stat</code> as showing nothing below it, which was not read.
+  The pods' use beside their requests was read in one sample, before R3's first kill, and not in the others.
+  The agent did not run there: the counters were recorded, and the rule replayed them.
+  Not shown on GKE: a node filling up, a pod-level limit, and a one-container pod's cap.</li>
+</ul>
 <p>Q1316's plan takes readings 1, 3, 7 and 8 in its runs as its branch had them on 2026-11-24, but for reading 3's CPU, which needs the agent built; its non-root reader is a container of the job's own Docker for R2 and R8, and a pod in R3, R3t, R4 and on the Kata node.
 It prints <code>oom_group_kill</code> and each container's own rise beside the pod's, so R8, with two containers in the pod, reads the join as well as the limit.
 It does not read whether a non-root pod could open <code>/dev/kmsg</code> or the journal through a <code>hostPath</code>, which would be another way to the log.
@@ -4326,7 +4371,7 @@ For scale of PR 4: the newest image, <code>cache-runner</code>, is named in 16 f
 </tbody>
 </table>
 <p>Beside today, this set makes nothing worse in action where it is installed, and nothing at all where it is not.
-Reading 8 is Q1316's dogfood run, which is the only test of the rule on GKE: without it the tool says on its page that GKE has not been read.
+Reading 8 is Q1316's dogfood run, which is the only test of the rule on GKE; the operator's page says which limits it showed and which it did not.
 PR 4 cannot follow a release that claims the tool, since an unpublished image is a source build.
 PR 5 could, and then the rule ships with nothing that kills a container on purpose behind it, and the image signed with nothing that has started it.
 D2's single DaemonSet would save the report ConfigMap, one policy and about a third of 2 and 3.</p>
