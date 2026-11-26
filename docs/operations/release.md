@@ -1389,6 +1389,8 @@ The leg does two jobs, and they want different trees:
   This is the half only the dogfood gate can observe, and it wants `main`'s newest instruments.
 - **It tests whatever source it was dispatched on.** The job builds every image from `github.sha` into kind and runs the suite, the chart checks and the released-chart upgrade check against that build, so on a patch this half tests `main`, not the patch.
 
+The dispatch also runs `oomreporter`, the oom-reporter's kind lane, on a hosted runner whichever runner the gate names, so the leg fails when that lane does even with `e2e / e2e` green; its log names the limit whose kill read the wrong reason, as `--- FAIL: TestE2E_SaysWhichLimitRanOut/<limit>`.
+
 That second half leaves a gap: the e2e job runs only on a push to `main`, the merge queue (which only `main` has) and a dispatch, so a patch line's own source goes through e2e nowhere.
 Dispatching the gate at the tag instead is not the fix: besides losing the probes above, the released-chart check upgrades from the highest stable tag, which on a patch below the newest minor is a downgrade.
 Closing the gap is [Q1143](../queue/Q1143.md), a separate e2e run on the patch's source; until it lands, a patch's e2e evidence is about its runners, not its code.
