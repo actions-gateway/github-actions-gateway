@@ -1,7 +1,8 @@
 # A node reporter for out-of-memory kills: Q1403
 
 > **Status (2026-11-25): decided, D1 to D6 each as recommended.
-> [PRs 1 to 4](#build-size) are built: the reader and the rule, the two programs, the chart, and the image; they have run together against an API server alone, and not on a node.**
+> [PRs 1 to 4 and 6](#build-size) are built: the reader and the rule, the two programs, the chart, the image, and the AGC's record; of PR 5, the operator's page and GKE's readings are, and the kind e2e lane is not.
+> They have run together against an API server alone, and not on a node.**
 
 A container killed for memory reads `OOMKilled` with exit code 137 whichever limit ran out: its own, its pod's, the one all pods share, or the node's memory.
 The AGC therefore names no cause (Q1400), and neither does anything else in the Kubernetes API that a tenant's operator can read on the pod.
