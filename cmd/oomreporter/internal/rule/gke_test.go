@@ -90,8 +90,8 @@ func replayGKE(t *testing.T, run, stream string) (kernel, got []Reason) {
 }
 
 // singles is the containers that killed a process and never the group, whose memory.oom.group
-// was therefore 0. The runs did not read it, but on the first node read it was 0 on every
-// container started before containerd was restarted, and 1 on each after.
+// was therefore 0. It was not read on the nodes of these kills; on the one node it was read,
+// R8's, it was 0 on every container started before containerd was restarted, and 1 on each after.
 func singles(t *testing.T, lines []string) map[string]bool {
 	last := map[string]reading{}
 	for _, line := range lines {

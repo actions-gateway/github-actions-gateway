@@ -645,8 +645,8 @@ What GKE read, as reading 8 (Q1316's R3, R3t and R8; kernel 6.8.0-1064-gke):
   PR 5's tests replay each recording, an inotify watch's and a poll's apart.
   On the watch's, the rule answered twelve: the runner's five with the kernel's limit, and the collector's eight as six `Unknown`, one `PodsLimit` and one not at all: the config reloader of R3t's second run, whose counts neither recording shows rising, though the container outlived its kill by 42 s.
   It named no other limit than the kernel's on either.
-  `memory.oom.group` was read on one node, R3's first: 0 on every container started before containerd was restarted, 1 after.
-  On the others the replay infers it, taking `oom_kill` 1 with `oom_group_kill` 0 in a container's last counts to mean it was 0 there; without that, 7 of the test's 10 cases fail, since a container read as a group that never group-killed shows no kill.
+  `memory.oom.group` was read on one node, the first run's, where R8 ran: 0 on every container started before containerd was restarted, 1 after.
+  It was not read on any node R3 or R3t ran on, so the replay infers it, taking `oom_kill` 1 with `oom_group_kill` 0 in a container's last counts to mean it was 0 there; without that, 6 of the test's 10 cases fail, since a container read as a group that never group-killed shows no kill.
   It takes every container's `cgroup.stat` as showing nothing below it, which was not read.
   The pods' use beside their requests was read in one sample, before R3's first kill, and not in the others.
   The agent did not run there: the counters were recorded, and the rule replayed them.
