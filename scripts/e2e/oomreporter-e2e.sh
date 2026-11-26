@@ -56,6 +56,8 @@ cleanup() {
 }
 
 mkdir -p "$WORK/hog"
+# A kubeconfig left by an earlier run names a cluster this one has not made.
+rm -f "$KUBECONFIG_FILE"
 if kind get clusters | grep -qx "$CLUSTER"; then
   die "a cluster named ${CLUSTER} exists already; delete it, or set OOM_E2E_CLUSTER"
 fi

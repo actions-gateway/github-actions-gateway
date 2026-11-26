@@ -116,10 +116,16 @@ func waitForCondition(t *testing.T, kube kubernetes.Interface, p *corev1.Pod) co
 	var got corev1.PodCondition
 	var now *corev1.Pod
 	err := wait.PollUntilContextTimeout(t.Context(), time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
-		var err error
-		now, err = kube.CoreV1().Pods(p.Namespace).Get(ctx, p.Name, metav1.GetOptions{})
+		read, err := kube.CoreV1().Pods(p.Namespace).Get(ctx, p.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
+		}
+		now = read
+		for _, c := range now.Status.ContainerStatuses {
+			if term := c.State.Terminated; c.Name == "hog" && term != nil && term.Reason != "OOMKilled" {
+				// The reporter answers only a container that ended OOMKilled.
+				return false, fmt.Errorf("the hog ended %s %d, which the runtime did not call OOMKilled", term.Reason, term.ExitCode)
+			}
 		}
 		for _, c := range now.Status.Conditions {
 			if c.Type == controller.Domain+"/hog" {
