@@ -44,6 +44,8 @@ cleanup() {
     kubectl --kubeconfig "$KUBECONFIG_FILE" -n "$RELEASE_NS" logs -l app.kubernetes.io/name=oom-reporter \
       --all-containers --prefix --tail=200 || true
     kubectl --kubeconfig "$KUBECONFIG_FILE" -n "$TENANT_NS" get pods,events -o wide || true
+    echo "==> the agents' reports"
+    kubectl --kubeconfig "$KUBECONFIG_FILE" -n "$RELEASE_NS" get configmaps -o yaml || true
   fi
   if [[ "${OOM_E2E_KEEP:-}" == "1" ]]; then
     echo "==> keeping cluster ${CLUSTER} (OOM_E2E_KEEP=1)"

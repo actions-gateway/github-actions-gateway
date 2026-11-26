@@ -114,8 +114,10 @@ func memory(q string) corev1.ResourceList {
 func waitForCondition(t *testing.T, kube kubernetes.Interface, p *corev1.Pod) corev1.PodCondition {
 	t.Helper()
 	var got corev1.PodCondition
+	var now *corev1.Pod
 	err := wait.PollUntilContextTimeout(t.Context(), time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
-		now, err := kube.CoreV1().Pods(p.Namespace).Get(ctx, p.Name, metav1.GetOptions{})
+		var err error
+		now, err = kube.CoreV1().Pods(p.Namespace).Get(ctx, p.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -127,8 +129,24 @@ func waitForCondition(t *testing.T, kube kubernetes.Interface, p *corev1.Pod) co
 		}
 		return false, nil
 	})
-	require.NoError(t, err, "no condition on %s", p.Name)
+	require.NoError(t, err, "no condition on %s; its containers: %s", p.Name, states(now))
 	return got
+}
+
+// states says how each of pod's containers ended, or that it has not.
+func states(pod *corev1.Pod) string {
+	if pod == nil {
+		return "unread"
+	}
+	var out []string
+	for _, c := range pod.Status.ContainerStatuses {
+		if term := c.State.Terminated; term != nil {
+			out = append(out, fmt.Sprintf("%s %s %d at %s", c.Name, term.Reason, term.ExitCode, term.FinishedAt.UTC().Format(time.RFC3339)))
+		} else {
+			out = append(out, c.Name+" running")
+		}
+	}
+	return strings.Join(out, ", ")
 }
 
 func waitForEvent(t *testing.T, kube kubernetes.Interface, p *corev1.Pod, reason string) {
