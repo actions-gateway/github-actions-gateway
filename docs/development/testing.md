@@ -4176,6 +4176,16 @@ The check passes if either adoption or a successful fetch's save supplies the ow
   Calico still gets a 60-minute timeout vs. the kindnet leg's 45 for rollout headroom.
   `CALICO_VERSION` is pinned in both the root `Makefile` and `scripts/ci/pins.env`; updatecli bumps them together.
 
+#### The oom-reporter e2e lane
+
+- **`e2e-test.yml`'s `oomreporter` job** runs [`scripts/e2e/oomreporter-e2e.sh`](../../scripts/e2e/oomreporter-e2e.sh) (`make e2e-oomreporter`): a kind cluster of its own, the `oom-reporter` chart installed as an operator would, and one kill at each of four limits, the container's, the pod's, the one the node's pods share and one above them (Q1403).
+  `cmd/oomreporter/e2e_test.go` requires the condition and the `OOM<reason>` Event for each.
+  The worker reserves all but 1 GiB of the host for the system, so a pod taking 2 GiB is killed at the pods' limit rather than the host's; the kill above them is a limit the test writes to the worker's `kubelet.slice` and takes off again, checking the kubelet and containerd outlive it.
+
+  **When it runs:** at merge-queue time, on push to main, and on dispatch, when the diff touches the reporter's module, chart, image stage or the script; `e2e-gate` requires it, so a skip passes and a failure blocks.
+  It is hosted only, since it fills a worker's memory limits.
+  Locally it took 2 minutes with Docker's build cache warm (2026-11-26), and it deletes its cluster however it ends; `OOM_E2E_KEEP=1` keeps it.
+
 ### The Dockerfile-lint gate
 
 [`.github/workflows/dockerfile-lint.yml`](../../.github/workflows/dockerfile-lint.yml) runs `hadolint` over the root `Dockerfile` (one leg; it holds every first-party image as a named stage — `gmc`, `agc`, `proxy`, `worker`, `wrapper`, `fakegithub`) and `scripts/dogfood/runner/Dockerfile` (a dev/reference image, not a shipped one), path-gated on `**/Dockerfile`.
