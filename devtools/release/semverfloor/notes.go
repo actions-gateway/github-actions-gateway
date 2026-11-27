@@ -23,10 +23,17 @@ const operatorDocs = "docs/operations"
 // commits. That is the property the reconciliation rests on — a commit cannot
 // leave one list without arriving in the other — so Total is printed beside
 // them rather than recomputed by the reader.
+//
+// Unweighted is the third list: commits of any other type that change a
+// released artifact, a base-image bump above all. They are kept apart from
+// Ships because Ships is the list the floor is taken from, and because the
+// notes curate them differently, as dependencies rather than as changes.
+// Ships and Unweighted together account for every commit that ships.
 type Notes struct {
-	Ships   []Verdict
-	Residue []ResidueItem
-	Total   int
+	Ships      []Verdict
+	Unweighted []Verdict
+	Residue    []ResidueItem
+	Total      int
 }
 
 // ResidueItem is one commit the notes leave out, carrying why it was left out
@@ -48,7 +55,7 @@ func (r ResidueItem) Operator() bool { return len(r.Added)+len(r.Edited) > 0 }
 // else those types produced, which is the list release.md tells a human to read
 // rather than trust.
 func EnumerateNotes(r Result, pages OperatorPager) Notes {
-	n := Notes{Ships: r.Raising}
+	n := Notes{Ships: r.Raising, Unweighted: r.Unweighted}
 	add := func(vs []Verdict, commentOnly bool) {
 		for _, v := range vs {
 			item := ResidueItem{Verdict: v, CommentOnly: commentOnly}
@@ -173,6 +180,14 @@ func reportNotes(w io.Writer, from, to string, commits []Commit, surface Surface
 		_, _ = fmt.Fprintf(w, "  %-5s%-1s %s %s\n", v.Commit.Type, mark, v.Commit.SHA[:8], stripPrefix(v.Commit.Subject))
 	}
 
+	_, _ = fmt.Fprintf(w, "\n== Also ships, no semver weight (%d) — dependencies and refactors\n", len(n.Unweighted))
+	_, _ = fmt.Fprintln(w, "   Commits of any other type whose change reaches a released artifact, such as a")
+	_, _ = fmt.Fprintln(w, "   build(deps) base-image bump. They never raise the floor; the notes still owe each a line.")
+	for _, v := range n.Unweighted {
+		_, _ = fmt.Fprintf(w, "  %-8s %s %s\n", v.Commit.Type, v.Commit.SHA[:8], v.Commit.Subject)
+		_, _ = fmt.Fprintf(w, "           via %s\n", strings.Join(trim(v.Shipped, 3), ", "))
+	}
+
 	_, _ = fmt.Fprintf(w, "\n== Residue (%d of %d) — read it, never assume it is all tooling\n", len(n.Residue), n.Total)
 	_, _ = fmt.Fprintln(w, "   Every feat/fix/perf commit reaching no released artifact. A release also publishes")
 	_, _ = fmt.Fprintf(w, "   things no image and no chart carries, and this is where they hide: v1.4.0's runner\n")
@@ -206,9 +221,9 @@ func reportNotes(w io.Writer, from, to string, commits []Commit, surface Surface
 		_, _ = fmt.Fprintf(w, "  %s\n", residueSubject(item))
 	}
 
-	_, _ = fmt.Fprintf(w, "\n%d ships + %d residue = %d feat/fix/perf commits in the window.\n",
-		len(n.Ships), len(n.Residue), n.Total)
-	_, _ = fmt.Fprintln(w, "Both lists are yours to read. The residue is the half a scope allow-list used to drop")
+	_, _ = fmt.Fprintf(w, "\n%d ships + %d residue = %d feat/fix/perf commits in the window; %d more ship with no semver weight.\n",
+		len(n.Ships), len(n.Residue), n.Total, len(n.Unweighted))
+	_, _ = fmt.Fprintln(w, "All three lists are yours to read. The residue is the half a scope allow-list used to drop")
 	_, _ = fmt.Fprintln(w, "silently — release.md § Writing the curated notes.")
 }
 

@@ -29,9 +29,10 @@
 // # Two readings of one classification
 //
 // -notes emits the same classification as the release notes need it: the
-// shipping commits to curate, and the residue that reaches no released
-// artifact. It replaces a hand-written scope allow-list in release.md that
-// admitted commits by their scope string, which fails in both directions —
+// shipping commits to curate, the commits of other types that ship with no
+// semver weight, and the residue that reaches no released artifact. It
+// replaces a hand-written scope allow-list in release.md that admitted commits
+// by their scope string, which fails in both directions —
 // across v1.2.0..v1.3.0 it dropped seven shipping fixes whose scopes nobody had
 // listed, and at v1.4.0 it dropped the scopeless `feat:` carrying Q166 while
 // keeping a `feat(metrics)` that touched only the usage tooling.
@@ -151,7 +152,7 @@ func runShips(from, to string) error {
 // directory whole, so a _test.go beside shipped code reads as shipping, while the
 // toolchain never compiles one into a released binary.
 func shipsBytes(surface Surface, p string) bool {
-	return surface.Ships(p) && !strings.HasSuffix(p, "_test.go")
+	return surface.Ships(p) && !isGoTest(p)
 }
 
 func run(from, to string, checkSources, notes bool) error {

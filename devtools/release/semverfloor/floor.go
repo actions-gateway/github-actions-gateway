@@ -76,6 +76,20 @@ func (s Surface) ShippedFiles(c Commit) []string {
 	return out
 }
 
+// isGoTest reports whether a path is a Go test file, which the toolchain never
+// compiles into a released binary.
+func isGoTest(p string) bool { return strings.HasSuffix(p, "_test.go") }
+
+func withoutGoTests(files []string) []string {
+	var out []string
+	for _, f := range files {
+		if !isGoTest(f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // levelFor is the semver weight of a commit that has already been shown to
 // touch the released surface.
 //
@@ -121,6 +135,12 @@ type Result struct {
 	// major the tool cannot confirm or dismiss; a commit here may also appear
 	// in Raising, since its type still carries a floor of its own.
 	Unresolved []Verdict
+	// Unweighted holds commits whose type carries no level but whose change
+	// reaches a released artifact: a `build(deps)` base-image bump, a refactor of
+	// shipped code. They never raise the floor, and the release notes still owe
+	// them a line. A change narrowed to comments and whitespace is not here, since
+	// its artifact is byte-identical.
+	Unweighted []Verdict
 	// NonConventional holds subjects with no readable type. Each is a commit
 	// whose weight was not assessed.
 	NonConventional []Commit
@@ -147,6 +167,17 @@ func Classify(commits []Commit, surface Surface, n Narrower) Result {
 			r.Unresolved = append(r.Unresolved, v)
 		}
 		if lvl == LevelNone {
+			// A test file never compiles into a released binary, so a test-only
+			// commit changes no artifact.
+			v.Shipped = withoutGoTests(shipped)
+			if len(v.Shipped) > 0 {
+				if n != nil {
+					v.Shipped = n.Substantive(c, v.Shipped)
+				}
+				if len(v.Shipped) > 0 {
+					r.Unweighted = append(r.Unweighted, v)
+				}
+			}
 			continue
 		}
 		if len(shipped) == 0 {
