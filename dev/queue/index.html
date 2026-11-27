@@ -3806,6 +3806,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The only measurement of the shipped acquisition tier is <code>TestScaleSetPerListenerMemory</code> (<code>make scaleset-mem-profile</code>): 200 parked scale-set …</td>
 </tr>
 <tr>
+<td><a href="Q1422/">Q1422</a></td>
+<td>Retire v1alpha1 narration from api/ comments that never reach a CRD</td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The Go comments under <code>api/</code> that controller-gen never copies into a CRD still describe <code>v2</code> by comparison with the <code>v1alpha1</code> API that …</td>
+</tr>
+<tr>
 <td><a href="Q1302/">Q1302</a></td>
 <td>Shipped CRD descriptions and a PSA Event still name the removed API</td>
 <td><code>debt</code> <code>docs</code></td>
