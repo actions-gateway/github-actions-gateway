@@ -242,6 +242,9 @@ func TestPodLevelMemoryRoom(t *testing.T) {
 		// request to its limit; the plain init container runs before the runner.
 		{"the pod's request less the other running containers'", &corev1.ResourceRequirements{Requests: mem("4Gi")}, true, "3328Mi"},
 		{"the lower of the two", &corev1.ResourceRequirements{Requests: mem("4Gi"), Limits: mem("3Gi")}, true, "3Gi"},
+		// No pod request: the API server defaults one to the containers' sum, which must
+		// then be at or below the pod's limit.
+		{"the pod's limit less the other running containers' where requests follow", &corev1.ResourceRequirements{Limits: mem("3Gi")}, true, "2304Mi"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -278,7 +281,8 @@ func TestRecoverOOMKilled_HoldsTheRaiseToThePodLevelRoom(t *testing.T) {
 	f := l.MemoryFloors[failureKey("4242", "build")]
 	require.NotNil(t, f)
 	assert.Equal(t, "2560Mi", f.Limit.String(), "the pod's limit, not the 3Gi the headroom asks for")
-	assert.Contains(t, lastNote(t, target, "MemoryLimitRaisedForRetry"), "gets a limit of 2560Mi")
+	assert.Contains(t, lastNote(t, target, "MemoryLimitRaisedForRetry"),
+		"gets a limit of 2560Mi, the most the template's pod-level spec.resources leave the runner, on its next attempt")
 
 	// Binpack's request follows the limit, so the pod's request bounds it too.
 	pod = oomKilled(scaleSetWorkerPod("runner-gpu-job1", rightSizedAnnotations("4242")), "2Gi")
@@ -354,6 +358,17 @@ func oomNotes(t *testing.T, pod, node, job string) map[string]string {
 		<-done
 		return lastNote(t, target, "EvictionRerunWithheld")
 	}()
+	notes["raised to the pod's limit"] = func() string {
+		w := worker(pod, "4242", "2Gi")
+		p, target, _, _, _ := recoveryFixture(t, w)
+		target.spec.MemoryRetry = throughputRetry()
+		target.spec.PodTemplate = podLevelTemplate(&corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("2560Mi")}})
+		done, err := p.RecoverDisruptedScaleSetWorker(ctx, target, w.DeepCopy())
+		require.NoError(t, err)
+		<-done
+		return lastNote(t, target, "MemoryLimitRaisedForRetry")
+	}()
 	notes["raised"] = lastNote(t, recoverAll(throughputRetry(), worker(pod, "4242", "2Gi")), "MemoryLimitRaisedForRetry")
 	notes["killed again"] = lastNote(t, recoverAll(throughputRetry(),
 		worker(pod+"-first", "4242", "2Gi"), worker(pod, "4242", "2Gi")), "EvictionRerunWithheld")
@@ -392,6 +407,8 @@ func TestOOMNotes_NameWhatWasReadAndNoCause(t *testing.T) {
 			"If the runner reached it, raise spec.sizing.maxRequests memory or reduce what the job uses; then, in either case, re-run it by hand"},
 		"at the pod's limit": {worker, "No automatic re-run was requested", "a re-run would get the same one",
 			"If the runner reached it, raise the pod-level memory limit or request in the RunnerTemplate, or reduce what the job uses; then, in either case, re-run it by hand"},
+		"raised to the pod's limit": {worker,
+			`Job "build" gets a limit of 2560Mi, the most the template's pod-level spec.resources leave the runner, on its next attempt`},
 		"raised": {worker, `Job "build" gets a limit of 3Gi on its next attempt, and is re-run automatically once the run concludes`},
 		"killed again": {worker, "No automatic re-run was requested",
 			`a job gets one raise and job "build" had its own after an earlier kill, from 2Gi to 3Gi, which lasts until `,

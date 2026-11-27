@@ -131,16 +131,24 @@ func nextMemoryLimit(killed resource.Quantity, policy MemoryRetryPolicy) resourc
 // for container: the pod's limit, since each container's must be at or below it, and,
 // where the request follows the limit, the pod's request less every other running
 // container's, since their requests together must be at or below it (Kubernetes
-// v1.35.5, validatePodResourceConsistency). It reads the template, not a pod the API
-// server returned, whose pod request is defaulted to the containers' own. ok is false
-// where neither bounds it.
+// v1.35.5, validatePodResourceConsistency). A template with a pod limit and no pod
+// request gets one defaulted to the containers' sum, which must be at or below that
+// limit, so the limit stands in for it. It reads the template, not a pod the API
+// server returned, whose pod request is that default. ok is false where neither
+// bounds it.
 func podLevelMemoryRoom(spec *corev1.PodSpec, container string, requestsFollow bool) (room resource.Quantity, ok bool) {
 	if spec.Resources == nil {
 		return resource.Quantity{}, false
 	}
 	room, ok = spec.Resources.Limits[corev1.ResourceMemory]
+	if !requestsFollow {
+		return room, ok
+	}
 	podRequest, set := spec.Resources.Requests[corev1.ResourceMemory]
-	if !requestsFollow || !set {
+	if !set {
+		podRequest, set = room, ok
+	}
+	if !set {
 		return room, ok
 	}
 	left := podRequest.DeepCopy()
@@ -189,8 +197,9 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 		return closedChan()
 	}
 	next := nextMemoryLimit(killed, *spec.MemoryRetry)
+	held := ""
 	if room, ok := podLevelMemoryRoom(&spec.PodTemplate.Spec, runnerContainer, spec.MemoryRetry.RequestsFollow); ok && next.Cmp(room) > 0 {
-		next = room
+		next, held = room, ", the most the template's pod-level spec.resources leave the runner,"
 		if next.Cmp(killed) <= 0 {
 			p.withholdOOMRerun(target, runID, log, rerunWithheldReasonOwnLimit, facts+". No automatic re-run was requested, because that limit is already the most the template's pod-level spec.resources leaves the runner, and a re-run would get the same one. If the runner reached it, raise the pod-level memory limit or request in the RunnerTemplate, or reduce what the job uses; then, in either case, re-run it by hand")
 			return closedChan()
@@ -238,7 +247,7 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 		log.Info("raising the job's memory limit for its re-run", "runID", runID, "job", job,
 			"container", runnerContainer, "killedLimit", killed.String(), "limit", next.String())
 		target.RecordEvent(corev1.EventTypeNormal, "MemoryLimitRaisedForRetry", "RetryEvictedJob",
-			fmt.Sprintf("%s. Job %q gets a limit of %s on its next attempt, and is re-run automatically once the run concludes", facts, job, next.String()))
+			fmt.Sprintf("%s. Job %q gets a limit of %s%s on its next attempt, and is re-run automatically once the run concludes", facts, job, next.String(), held))
 	}
 	// Parked rather than re-run now: a job that outgrows its memory is often one of a long
 	// matrix, and GitHub refuses the re-run until every sibling has concluded.
