@@ -64,6 +64,16 @@ func TestPodLevelResources_RefuseWhatTheRaiseIsHeldTo(t *testing.T) {
 			corev1.ResourceRequirements{Limits: mem("2560Mi")},
 			corev1.ResourceRequirements{Requests: mem("2304Mi"), Limits: mem("2560Mi")}),
 			"must be less than or equal to memory limit of 2560Mi", ""},
+		// The Binpack case rev-b measured: a 3Gi pod limit and no pod request leaves a
+		// runner whose request follows its limit 3Gi less the dind sidecar's 512Mi.
+		{"a following request at the whole pod limit", pod("follow-whole-limit",
+			corev1.ResourceRequirements{Limits: mem("3Gi")},
+			corev1.ResourceRequirements{Requests: mem("3Gi"), Limits: mem("3Gi")}),
+			"must be less than or equal to memory limit of 3Gi", ""},
+		{"a following request held to the pod limit less the sidecar's", pod("follow-held",
+			corev1.ResourceRequirements{Limits: mem("3Gi")},
+			corev1.ResourceRequirements{Requests: mem("2560Mi"), Limits: mem("2560Mi")}),
+			"", "3Gi"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
