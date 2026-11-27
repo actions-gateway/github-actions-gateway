@@ -141,6 +141,10 @@ Intake is throttled to one probe job per `pendingPodDeadline` window, not stoppe
 
 Without the gate (the default) nothing throttles intake: the pod holds a concurrency slot until the reaper deletes it at `spec.pendingPodDeadline` with a `WorkerPodStuckPending` Warning event, 10 minutes after the pod was created unless you lower that field, and each further job the set acquires starts the same cycle again, spending a single-use runner registration on every one.
 
+**The runner waits for the daemon.** Both entries carry a startup probe on `dockerd`'s port, so the runner container does not start until the daemon is listening.
+The probe allows three minutes (36 tries, 5 seconds apart) before the kubelet restarts the sidecar, and until it passes the worker pod stays in `Init`.
+A fork that drops the probe loses that wait.
+
 **A namespace at PSA `privileged`, plus GAG's three gates.** Both entries need capabilities that Pod Security Standards `baseline` forbids, and PSA has no Kata-aware level in between.
 Tenants cannot self-elevate: the namespace needs all four settings in one object.
 

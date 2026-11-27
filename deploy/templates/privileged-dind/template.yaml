@@ -57,6 +57,14 @@ spec:
           env:
             - name: DOCKER_TLS_CERTDIR
               value: ""
+          # Native-sidecar startup gate, as in ../kata-dind: without it the
+          # kubelet starts the runner once the sidecar's process has started,
+          # whether or not dockerd is listening yet.
+          startupProbe:
+            tcpSocket:
+              port: 2375
+            periodSeconds: 5
+            failureThreshold: 36
           securityContext:
             privileged: true
           # Measured on GAG's own e2e (Q248): the dind daemon peaked 1308m CPU /
