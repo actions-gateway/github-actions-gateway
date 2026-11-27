@@ -9,6 +9,7 @@ Read the relevant doc before starting a task in that area.
 | [backpressure.md](backpressure.md) | The developer/agent feedback loops — pre-commit hook, `make check`, CI tiers, what each mechanism catches, and a graded assessment of the result. |
 | [testing.md](testing.md) | Running integration tests, editing CI workflows, picking the right test scope and tier. |
 | [broker-compatibility.md](broker-compatibility.md) | The published broker-compatibility report — which GitHub broker wire-protocol/API contracts the `cmd/probe/compat` suite verifies, and the result. Generated; regenerate with `make compat-report`. |
+| [code-comments.md](code-comments.md) | Writing or editing a comment in any source file: what a comment carries, what goes in the commit message, the pull request, or `docs/` instead, the length limits, and per-language rules. |
 | [bash-style.md](bash-style.md) | Repo bash conventions for shell scripts — `set -euo pipefail`, quoting, traps, shellcheck-finding policy. Read before writing or editing any script. |
 | [doc-update-matrix.md](doc-update-matrix.md) | Which docs to update for each kind of change — CRD fields, new behaviour, admission rules, operator-visible changes, security, module dependencies. |
 | [documentation-standards.md](documentation-standards.md) | How we write and maintain docs — the goal hierarchy (correct & findable first, usable as well), writing with substance (not AI slop), scannability, copy-paste-safe code, conventions, measurement, and upkeep. Read before writing or restructuring a doc. |
