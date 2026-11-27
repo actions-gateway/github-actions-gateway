@@ -205,8 +205,9 @@ Under the per-cell stamp an aging claim degrades to unverified instead of to wro
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
      When a case is added or removed there, update this paragraph too. -->
-**Auto-re-run covers disruption, never failure.** Eviction, preemption, a Spot node reclaimed, a drain, a node shutdown and a stray `kubectl delete pod` all come back, and so does a dead node once an admin taints it `out-of-service`.
-A job that *failed* and a run you *cancelled* never do, and neither does a worker evicted for exceeding its own storage limit, since a re-run gets the same limit.
+**Auto-re-run fires on disruption, never on a failure alone.** Eviction, preemption, a Spot node reclaimed, a drain, a node shutdown and a stray `kubectl delete pod` all come back, and so does a dead node once an admin taints it `out-of-service`.
+A job that *failed* in a run nothing disrupted and a run you *cancelled* never do, and neither does a worker evicted for exceeding its own storage limit, since a re-run gets the same limit.
+A job that failed on its own beside a disrupted one runs again with it, because GitHub re-runs a run's failed jobs together.
 Nor do workers the reaper took, with one exception: a worker reaped while still `Pending` is re-run once capacity returns.
 [The full boundary](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
