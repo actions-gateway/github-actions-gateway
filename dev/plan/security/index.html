@@ -4979,7 +4979,7 @@ Verify live cluster behavior — resource creation, controller reactions, pod st
 <tr>
 <td>W3 — no env creds in AGC pod</td>
 <td><code>cmd/gmc/test/e2e/provisioning_test.go</code></td>
-<td><code>kubectl exec</code> into AGC (<code>E2E_GMC_AGCNoCredentialEnvVars</code>): <code>env \| grep GITHUB_APP</code> returns nothing; <code>/etc/actions-gateway/github-app/</code> lists <code>appId</code>, <code>installationId</code>, <code>privateKey</code>.</td>
+<td><code>kubectl exec</code> into AGC (<code>E2E_GMC_AGCNoCredentialEnvVars</code>): <code>env | grep GITHUB_APP</code> returns nothing; <code>/etc/actions-gateway/github-app/</code> lists <code>appId</code>, <code>installationId</code>, <code>privateKey</code>.</td>
 <td>✓ done</td>
 </tr>
 <tr>

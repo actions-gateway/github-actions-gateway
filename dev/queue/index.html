@@ -3302,14 +3302,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Under <code>Binpack</code> the out-of-memory class raises the memory request with the limit, and nothing asks whether any node can hold the raised …</td>
 </tr>
 <tr>
-<td><a href="Q1402/">Q1402</a></td>
-<td><a href="../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">An out-of-memory raise past a pod-level limit builds a refused pod</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A template may set a pod-level memory limit (<code>spec.podTemplate.spec.resources</code>, which the CRD carries), and the out-of-memory class raises …</td>
-</tr>
-<tr>
 <td><a href="Q1255/">Q1255</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml">Make increase()-based alerts see a lazily created counter's first count</a></td>
 <td><code>debt</code> <code>bug</code></td>
@@ -3324,6 +3316,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>pr-mergeability-watch.py</code> emits <code>head_change</code>, <code>conflict</code>, <code>closed</code> and <code>timeout</code>, and nothing when the merge queue evicts a PR.</td>
+</tr>
+<tr>
+<td><a href="Q1424/">Q1424</a></td>
+<td><a href="../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">A sizing profile's derived requests can pass a pod-level request</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A template that sets pod-level <code>spec.resources</code> can get a pod the API server refuses from a sizing profile, on the request side.</td>
 </tr>
 <tr>
 <td><a href="Q1329/">Q1329</a></td>
@@ -4446,14 +4446,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>apply_artifacts</code> in <code>deploy/monitoring/preview/render.sh</code> runs <code>rollout restart</code> on the synthetic exporter and then `rollout status …</td>
 </tr>
 <tr>
-<td><a href="Q1269/">Q1269</a></td>
-<td><a href="../operations/observability-dashboards/">Published dashboard doc renders table-cell queries with a literal |</a></td>
-<td><code>docs</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A pipe inside a table cell is written <code>\\|</code> in Markdown, and GitHub drops the backslash inside a code span, but the MkDocs build does not …</td>
-</tr>
-<tr>
 <td><a href="Q1287/">Q1287</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/pull-image-with-retry.sh">pull-image-with-retry.sh has no time bound on a hung docker pull</a></td>
 <td><code>debt</code> <code>tests</code></td>
@@ -4763,7 +4755,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>bug</code> <code>tests</code></td>
 <td>🔲</td>
 <td>XS</td>
-<td><code>required_contexts</code> in <code>scripts/release/check-gates-green.sh</code> reads the branch rulesets with <code>gh api … --jq … 2&gt;/dev/null \|\| true</code>, and …</td>
+<td><code>required_contexts</code> in <code>scripts/release/check-gates-green.sh</code> reads the branch rulesets with <code>gh api … --jq … 2&gt;/dev/null || true</code>, and …</td>
 </tr>
 <tr>
 <td><a href="Q1417/">Q1417</a></td>
@@ -4771,7 +4763,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>bug</code> <code>tests</code></td>
 <td>🔲</td>
 <td>XS</td>
-<td><code>check-release-ladder.sh</code> passes <code>REVIVED_MARKER='(is\|are) back\.\*\*'</code> to awk with <code>-v</code>, and <code>-v</code> processes escape sequences, so the …</td>
+<td><code>check-release-ladder.sh</code> passes <code>REVIVED_MARKER='(is|are) back\.\*\*'</code> to awk with <code>-v</code>, and <code>-v</code> processes escape sequences, so the …</td>
 </tr>
 <tr>
 <td><a href="Q1420/">Q1420</a></td>

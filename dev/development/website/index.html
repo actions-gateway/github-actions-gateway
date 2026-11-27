@@ -3061,6 +3061,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-pipe-inside-a-table-cells-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A pipe inside a table cell's code
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#publication-scope" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3977,6 +3988,18 @@ On github.com the same README renders as the conventions alone, which is the rig
   <code>make queue-rules-check</code> rule 14 catches that shape without building the site, because nothing in <code>make check</code> or <code>make docs-gates</code> does (Q1054).
   Write it relative to the store: <code>../development/go-workspaces.md</code>.</li>
 </ul>
+<h2 id="a-pipe-inside-a-table-cells-code">A pipe inside a table cell's code<a class="headerlink" href="#a-pipe-inside-a-table-cells-code" title="Permanent link">&para;</a></h2>
+<p>A pipe in a table cell is written <code>\|</code>, and the two engines disagree about it inside a code span.
+GitHub unescapes it everywhere in the row, so <code>`agc\|proxy`</code> shows <code>agc|proxy</code>; Python-Markdown leaves it alone inside code, so the site showed <code>agc\|proxy</code> and a PromQL query pasted from it matched a literal pipe (Q1269).
+A bare <code>|</code> is no fix: it renders here and splits the cell on GitHub.</p>
+<p>So the source keeps GitHub's form, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/table_pipes.py"><code>hooks/table_pipes.py</code></a> makes the site agree with it.
+It rewrites <code>\|</code> to <code>|</code> inside code spans on table rows before Python-Markdown reads the page, then warns on any table cell whose <code>&lt;code&gt;</code> still renders <code>\|</code>, which fails the <code>--strict</code> build.
+It is the last hook in <code>mkdocs.yml</code> so the backlog table <code>queue_page.py</code> appends gets the same treatment, since <code>queue.py render</code> escapes every pipe in a note.
+A cell that genuinely means a backslash-pipe writes it as <code>&lt;code&gt;\&amp;#124;&lt;/code&gt;</code>, which the check does not read as one.</p>
+<p>The check catches a <code>\|</code> the rewrite missed, not one it removed wrongly.
+The rewrite treats any line opening with <code>|</code> as a row, so a table-shaped line in an indented code block or a list item's continuation would lose a <code>\|</code> that GitHub keeps; no page holds one.
+<code>check-webhook-selectors.py</code>, the one Markdown checker that reads a cell's text, already reads <code>\|</code> as <code>|</code>, so it and the site agree.
+Unit tests: <code>scripts/docs/table-pipes-hook-test.sh</code>, under <code>make check</code>.</p>
 <h2 id="publication-scope">Publication scope<a class="headerlink" href="#publication-scope" title="Permanent link">&para;</a></h2>
 <p>Scope is <strong>per version</strong>, not per site (Q558):</p>
 <table>

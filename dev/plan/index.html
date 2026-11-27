@@ -2902,7 +2902,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 </tr>
 <tr>
 <td><a href="q245-fqdn-intent-backend-split/">q245-fqdn-intent-backend-split.md</a></td>
-<td>Decouple tenant egress intent (<code>CIDR</code>|<code>FQDN</code>) from the operator-chosen FQDN backend (<code>--fqdn-policy-backend=none\|cilium\|calico\|gke</code>), killing the per-CNI enum fragmentation; add a <code>gke</code> backend emitting <code>networking.gke.io FQDNNetworkPolicy</code>, with the union-vs-default-deny composition invariant</td>
+<td>Decouple tenant egress intent (<code>CIDR</code>|<code>FQDN</code>) from the operator-chosen FQDN backend (<code>--fqdn-policy-backend=none|cilium|calico|gke</code>), killing the per-CNI enum fragmentation; add a <code>gke</code> backend emitting <code>networking.gke.io FQDNNetworkPolicy</code>, with the union-vs-default-deny composition invariant</td>
 <td>ⓘ Design reference — split + <code>gke</code> backend shipped (#576) and <strong>live-GKE validated</strong> (enforcement + fail-closed, <a href="q243-q245-q230-live-validation-campaign/">campaign</a>); Phase-3 <code>aks</code>/<code>eks</code> cluster-scoped backends remain a separate optional follow-up</td>
 </tr>
 <tr>

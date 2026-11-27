@@ -4162,10 +4162,17 @@ This one clears by a value GAG computes: the next attempt's memory limit.</p>
 Under the <code>Binpack</code> and <code>Throughput</code> <a href="../../operations/worker-rightsizing/">sizing profiles</a> GAG chose that limit from history, so it can choose a higher one.
 The history cannot be counted on to move by itself: the sampler records an out-of-memory job's peak at or below the limit the runner had.
 So the class raises the limit from the killed pod's own:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>next = min(roundUp64Mi(killed × headroom), ceiling)
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>next = min(roundUp64Mi(killed × headroom), ceiling, room)
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>headroom = 1.4 (Binpack) | limitHeadroomPercent / 100 (Throughput, default 1.5)
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ceiling  = spec.sizing.maxRequests.memory, or 2 × killed where unset
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>room     = the template's spec.resources.limits.memory, and under Binpack its
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>           spec.resources.requests.memory (its limit where it sets no request)
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>           less the other running containers' requests
 </code></pre></div>
+<p><code>room</code> is there because the API server refuses a pod whose container limit is above the pod's, or whose containers' requests together are above an explicit pod request (<code>validatePodResourceConsistency</code>, Kubernetes v1.35.5, read), and a raise past it recorded a floor and spent a slot on a pod nothing could create (Q1402).
+It is read from the template rather than the killed pod, whose pod request the API server defaulted to its containers' own; that default must itself be at or below the pod's limit, which is why the limit bounds a following request where the template sets no pod request (measured, <code>TestPodLevelResources_RefuseWhatTheRaiseIsHeldTo</code>).
+A raise <code>room</code> cut says so in its <code>MemoryLimitRaisedForRetry</code> Event.
+The profiles' derived limits are capped at the pod's limit the same way.</p>
 <p>It fires on a worker whose pod reached <code>PodFailed</code> with the <strong>runner</strong> container terminated <code>OOMKilled</code>, and which carries the <code>actions-gateway.com/sizing-profile</code> annotation, meaning the profile derived its limits when it was built.
 That is the shape a memory kill leaves on cgroup v2, which kills the whole container: reproduced on dogfood under <code>Throughput</code> on 2026-11-22 and under <code>Binpack</code> on 2026-11-24 (R12), GitHub concluded the job <code>failure</code> 9 min 43 s to 9 min 48 s after the kill, and the re-run at the raised limit succeeded (<a href="../../plan/q555-automatic-recovery-design/#readings-from-the-dogfood-turn-up-2026-11-22">the first readings</a>, <a href="../../plan/q555-automatic-recovery-design/#readings-from-the-binpack-turn-up-2026-11-24">the second</a>).
 A sidecar killed for memory is not covered: the runner survives it to report the job's own result, so the pod's terminal transition says nothing about whether the job failed.</p>
@@ -4234,8 +4241,8 @@ A raised run also counts toward the breaker, which can then withhold kills that 
 <td><code>own_limit</code></td>
 </tr>
 <tr>
-<td><code>next</code> not above the killed limit: at <code>maxRequests</code>, or <code>limitHeadroomPercent: 100</code></td>
-<td>Withheld</td>
+<td><code>next</code> not above the killed limit: at <code>maxRequests</code>, at <code>room</code>, or <code>limitHeadroomPercent: 100</code></td>
+<td>Withheld; at <code>room</code> the Event names the template's pod-level <code>spec.resources</code> as what to raise</td>
 <td><code>own_limit</code></td>
 </tr>
 <tr>
@@ -4296,7 +4303,7 @@ That arm re-runs nothing for a job whose own worker is still listed, with no sta
 Only a kill the class could retry waits: a runner with its own memory limit and a name, on a pod a sizing profile built, that no disruption arm takes.
 The disruption arms do not wait, and read the created-for identity as before (<a href="../../queue/Q1398/">Q1398</a>).</p>
 <p><strong>The raised limit is a per-job floor in the failure ledger</strong>, under <code>memoryFloors["&lt;runID&gt;/&lt;job name&gt;"]</code> for 7 days.
-Provisioning a scale-set worker looks it up by the assignment's run ID and job display name and raises the runner's memory limit to it where the resolved limit is lower; under <code>Binpack</code> the memory request rises with it, since that profile sets the two equal.
+Provisioning a scale-set worker looks it up by the assignment's run ID and job display name and raises the runner's memory limit to it, held to <code>room</code> for a template lowered since the kill, where the resolved limit is lower; under <code>Binpack</code> the memory request rises with it, since that profile sets the two equal.
 Nothing checks that a node can hold the raised request: one no node can hold leaves the re-run <code>Pending</code>, and <code>maxRequests.memory</code> is what caps it (<a href="../../plan/q555-automatic-recovery-design/#readings-from-the-binpack-turn-up-2026-11-24">measured</a>).
 It applies to the job's next attempt whoever starts it, so a manual re-run after the budget is spent gets the memory too.
 The lookup reads the in-memory index of the ledger, so a job with no floor costs no API call once the process has read that set's ledger, and one read before that; a floor another replica wrote since that read is missed, and the attempt then runs at the resolved limit.

@@ -4586,7 +4586,7 @@ One spelling across the tiers, but two filters underneath:</p>
 <td><strong>fails</strong></td>
 </tr>
 <tr>
-<td><code>make -C cmd/agc\|cmd/gmc test-integration</code>, <code>make test-integration-oomreporter</code></td>
+<td><code>make -C cmd/agc|cmd/gmc test-integration</code>, <code>make test-integration-oomreporter</code></td>
 <td><code>go test -run</code></td>
 <td>the Go test-function name</td>
 <td><strong>fails</strong></td>
@@ -7733,7 +7733,7 @@ They are operator-run, never CI-run: they need live App credentials and, in one 
 </tr>
 <tr>
 <td>Investigation F</td>
-<td><code>PROBE_RETENTION_TEST=arm\|check\|cleanup</code></td>
+<td><code>PROBE_RETENTION_TEST=arm|check|cleanup</code></td>
 <td>Does GitHub redeliver an unacknowledged <code>JobCompleted</code> to a session created after a multi-hour gap with no session at all? The Q435 replay path depends on it and the contract does not cover it. <strong>Answered 2026-07-29: yes at a 13 h gap</strong> — re-arm it against a future GitHub rather than trusting the number indefinitely.</td>
 <td><a href="../../plan/archive/q468-jobcompleted-retention/">q468-jobcompleted-retention.md</a></td>
 </tr>
@@ -7914,7 +7914,7 @@ Against a cluster that already has the release installed, it replaces the live r
 <td>Succeeds outright, <strong>or</strong> fails at render with a message naming the documented pre-upgrade step. Any other failure — above all the bare <code>ensure CRDs are installed first</code> — is the Q492 shape reintroduced, and fails the gate with remediation guidance.</td>
 </tr>
 <tr>
-<td>The documented step (<code>helm show crds &lt;chart&gt; \| kubectl apply -f -</code>), then the upgrade</td>
+<td>The documented step (<code>helm show crds &lt;chart&gt; | kubectl apply -f -</code>), then the upgrade</td>
 <td>Must succeed; then every CRD HEAD ships in <code>crds/</code> must exist in the cluster (an upgrade can <em>succeed</em> while silently never delivering one), the restarted manager must come back, the validating webhook must enforce, and the PriorityClass guard's params must resolve.</td>
 </tr>
 <tr>

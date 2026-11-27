@@ -3009,7 +3009,7 @@ Measured on bash 5.3.15, with <code>f() { false; echo after; }</code>:</p>
 <td>exit 1, script aborts</td>
 </tr>
 <tr>
-<td><code>f \|\| rc=$?</code></td>
+<td><code>f || rc=$?</code></td>
 <td>yes</td>
 <td>0, so <code>rc=$?</code> never runs and <code>rc</code> keeps its prior value</td>
 </tr>

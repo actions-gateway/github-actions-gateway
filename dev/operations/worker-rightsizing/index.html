@@ -3243,6 +3243,7 @@ The template stays authoritative unless you opt in.</p>
   <code>status.sizingProfileState</code> reports which side you're on: <code>Active</code> (derived values applied) or <code>AwaitingSamples</code> (template values, history accumulating).</li>
 <li><strong>Clamps</strong> — <code>minRequests</code>/<code>maxRequests</code> bound every derived request, and <code>Throughput</code>'s derived memory limit, so a skewed history (one pathological job) cannot push pods beyond an operator-set envelope.
   The limit needs the bound most: it follows a peak the jobs control, so without <code>maxRequests.memory</code> a job held near its limit raises the next one by the headroom factor each generation (Q1327).
+  A derived limit is also held to the template's pod-level <code>spec.resources.limits</code>, which the API server requires every container's limit to be at or below (Q1402).
   Size the ceiling against the namespace <code>ResourceQuota</code> and any <code>LimitRange</code>: derived values are still subject to both at admission, and the existing <code>WorkerQuota*</code> conditions and quota retries surface a conflict at runtime.
   An admission mutation that cancels <code>Throughput</code> rejects nothing, so it gets its own condition — <a href="#when-something-re-injects-the-cpu-limit-throughput-removes"><code>SizingProfileOverridden</code></a>.</li>
 </ul>
@@ -3260,6 +3261,8 @@ Under <code>Binpack</code> and <code>Throughput</code> the AGC chose that limit,
 It does not check that the job reached the limit; <a href="#which-limit-ran-out">which limit ran out</a> is yours to judge.
 The history alone cannot be relied on to raise it, because a job killed at its limit is sampled at or below that limit.</p>
 <p><strong>What it does.</strong> When a worker the profile built has its runner container killed <code>OOMKilled</code>, the job's next attempt gets the killed limit times the profile's headroom (1.4 under <code>Binpack</code>, <code>limitHeadroomPercent / 100</code> under <code>Throughput</code>), rounded up to 64Mi and capped at <code>maxRequests.memory</code>, or at twice the killed limit where you set none.
+Where the template sets pod-level <code>spec.resources</code>, the raise is also held to the pod's memory limit and, under <code>Binpack</code>, to the pod's memory request less what its other containers request, or to the pod's limit less that where the template sets no pod request, since the API server refuses a pod past either (Q1402).
+The <code>MemoryLimitRaisedForRetry</code> Event says when the pod-level resources cut the raise.
 Under <code>Binpack</code> the memory request rises with it, and nothing checks that a node can hold the raised request.
 One that no node can hold leaves the re-run's worker <code>Pending</code> with <code>WorkersUnschedulable</code> set, until the AGC cancels the run; a later placement of any worker on the set then re-runs it into the same wait, on the same budget (measured on dogfood, 2026-11-24).
 So under <code>Binpack</code> set <code>maxRequests.memory</code> no higher than the memory an empty worker node has free after its DaemonSets, less what the pod's other containers request: the cap applies to each container, not to the pod.
@@ -3302,8 +3305,8 @@ The raised limit stays with that job of that run for up to 7 days, so a manual r
 <tbody>
 <tr>
 <td><code>own_limit</code></td>
-<td>The set's profile is <code>Static</code> or <code>NodeShare</code>, the profile was still <code>AwaitingSamples</code> when the pod was built, or the killed limit is already at <code>maxRequests.memory</code></td>
-<td>If the runner <a href="#which-limit-ran-out">reached its limit</a>, raise the limit or <code>maxRequests.memory</code>; then, in either case, re-run by hand</td>
+<td>The set's profile is <code>Static</code> or <code>NodeShare</code>, the profile was still <code>AwaitingSamples</code> when the pod was built, or the killed limit is already at <code>maxRequests.memory</code> or at what the template's pod-level <code>spec.resources</code> leave the runner</td>
+<td>If the runner <a href="#which-limit-ran-out">reached its limit</a>, raise the limit, <code>maxRequests.memory</code>, or the template's pod-level memory limit or request, whichever the Event names; then, in either case, re-run by hand</td>
 </tr>
 <tr>
 <td><code>same_class_again</code></td>

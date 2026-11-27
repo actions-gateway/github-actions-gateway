@@ -3032,7 +3032,7 @@ Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording 
 </tr>
 <tr>
 <td>AGC / proxy version</td>
-<td><code>actions_gateway_build_info{component=~"agc\|proxy"}</code></td>
+<td><code>actions_gateway_build_info{component=~"agc|proxy"}</code></td>
 <td>Stat showing the series name, not its value (the value is always <code>1</code>). The metric carries no <code>namespace</code> label, so <code>$namespace</code> does not filter it</td>
 </tr>
 <tr>
@@ -3570,7 +3570,7 @@ The egress-posture timeline below plots the per-set gauge; no panel reads the ga
 </tr>
 <tr>
 <td>Egress posture per gateway and RunnerSet</td>
-<td><code>actions_gateway_egress_unattributed</code> / <code>_egress_rules_stale</code> / <code>_github_egress_incomplete</code>, and <code>max by (namespace, runner_set) (actions_gateway_runnerset_egress_audit_unattributed{reason!~"EgressAuditDisabled\|DirectEgress"})</code></td>
+<td><code>actions_gateway_egress_unattributed</code> / <code>_egress_rules_stale</code> / <code>_github_egress_incomplete</code>, and <code>max by (namespace, runner_set) (actions_gateway_runnerset_egress_audit_unattributed{reason!~"EgressAuditDisabled|DirectEgress"})</code></td>
 <td>State timeline (1 = flagged). Whether a tenant's egress is attributable at all: direct mode leaves from no per-tenant proxy, a stale allowlist may have drifted from GitHub's ranges, an incomplete GHES allowlist denies the appliance, and a set's egress audit records join to no job. The first three from the GMC scrape; the fourth per <code>RunnerSet</code> from the AGC scrape, one row per set across a change of <code>reason</code></td>
 </tr>
 </tbody>
@@ -3595,12 +3595,12 @@ It can also outlive its pool: a set whose <code>EgressProxy</code> is deleted ke
 <tbody>
 <tr>
 <td>Admission-policy verdicts/s by policy</td>
-<td><code>sum by (policy, enforcement_action) (rate(apiserver_validating_admission_policy_check_total{policy=~".*-(namespace-psa-guard\|namespace-security-profile-guard\|priorityclass-allowlist-guard\|tenant-resource-guard)"}[5m]))</code></td>
+<td><code>sum by (policy, enforcement_action) (rate(apiserver_validating_admission_policy_check_total{policy=~".*-(namespace-psa-guard|namespace-security-profile-guard|priorityclass-allowlist-guard|tenant-resource-guard)"}[5m]))</code></td>
 <td>Time series, split by the action the binding took: <code>deny</code> rejected the write, <code>audit</code> and <code>warn</code> let a failed validation through, and <code>allow</code> is an evaluation error (<code>error_type</code> of <code>compile_error</code>, <code>invalid_error</code>, or <code>out_of_budget</code>) admitted under <code>failurePolicy: Ignore</code>. The apiserver never increments the counter for a validation that simply passed, so the series is what the policies refused or could not evaluate, not a request count. Values read from <code>kubernetes/kubernetes</code> at <code>release-1.36</code> on 2026-09-07. The policy name is matched on its suffix because the chart prefixes it with the release's <code>namePrefix</code>. Apiserver scrape</td>
 </tr>
 <tr>
 <td>Validating-webhook requests and denials/s</td>
-<td><code>sum (rate(controller_runtime_webhook_requests_total{webhook=~"/validate-.*"}[5m]))</code> and <code>sum (rate(apiserver_admission_webhook_rejection_count{name=~"v(actionsgateway-v2\|clusterrunnertemplate-v2\|egressproxy-v2\|runnerset-v2\|runnertemplate-v2)\\.kb\\.io", error_type="no_error", rejection_code="403"}[5m]))</code></td>
+<td><code>sum (rate(controller_runtime_webhook_requests_total{webhook=~"/validate-.*"}[5m]))</code> and <code>sum (rate(apiserver_admission_webhook_rejection_count{name=~"v(actionsgateway-v2|clusterrunnertemplate-v2|egressproxy-v2|runnerset-v2|runnertemplate-v2)\\.kb\\.io", error_type="no_error", rejection_code="403"}[5m]))</code></td>
 <td>Time series, two series: total requests and total denied. Both are summed across the five validating webhooks the chart ships rather than broken down: a per-webhook split overflows the cell's legend, and the <code>ActionsGatewayWebhookRejections</code> alert carries the offending webhook in its <code>name</code> label, so the breakdown is available where an operator acts on it. The GMC scrape says only that the webhooks are being exercised: controller-runtime writes a denial as an HTTP 200 whose <code>AdmissionReview</code> body carries the 403, so its <code>code</code> label cannot separate a deny from an allow. The apiserver reads that body, so its rejection counter is the series that answers how often a webhook refused (<code>ActionsGatewayWebhookRejections</code>), scoped to <code>error_type="no_error"</code> (the webhook reached and refusing, not the GMC unreachable under <code>failurePolicy: Fail</code>) and to the 403 a validator's denial produces, as against the 400 of a malformed <code>AdmissionReview</code>. Apiserver scrape. Label semantics read from <code>kubernetes/kubernetes</code> at <code>release-1.36</code> on 2026-09-07; the metric is ALPHA-stability</td>
 </tr>
 <tr>

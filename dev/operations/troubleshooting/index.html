@@ -7309,7 +7309,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>MemoryLimitRaisedForRetry</code></td>
 <td>Normal</td>
-<td>A scale-set worker's runner was killed for memory, and the <code>Binpack</code> or <code>Throughput</code> profile gives the job's next attempt a higher limit, so the job is re-run as <code>cause="oom"</code> once GitHub concludes its run, waiting up to 24 hours (Q1183, Q1244). Names the worker, its node, the job, the run, the memory request and both limits. One per job: a second kill is withheld. A rising rate is jobs outgrowing their history, a change that grew one, or nodes running out of memory.</td>
+<td>A scale-set worker's runner was killed for memory, and the <code>Binpack</code> or <code>Throughput</code> profile gives the job's next attempt a higher limit, so the job is re-run as <code>cause="oom"</code> once GitHub concludes its run, waiting up to 24 hours (Q1183, Q1244). Names the worker, its node, the job, the run, the memory request and both limits, and says when the template's pod-level <code>spec.resources</code> held the raise below the profile's headroom (Q1402). One per job: a second kill is withheld. A rising rate is jobs outgrowing their history, a change that grew one, or nodes running out of memory.</td>
 <td><a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">When a job runs out of memory</a></td>
 </tr>
 <tr>

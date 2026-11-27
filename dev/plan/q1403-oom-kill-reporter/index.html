@@ -3870,7 +3870,7 @@ The agent's part was under 0.1 s on kind, from the first rise it read to its ans
 </tr>
 <tr>
 <td><code>PodLimit</code></td>
-<td>The same; a raise past the pod's limit builds a refused pod (<a href="../../queue/Q1402/">Q1402</a>)</td>
+<td>The same; a raise is held to the pod's limit, and withheld as <code>own_limit</code> where that is no raise (Q1402)</td>
 <td>No raise, no re-run; the Event says the pod's limit</td>
 </tr>
 <tr>
