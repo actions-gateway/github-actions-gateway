@@ -83,6 +83,7 @@ Four marks qualify a disruption:
 | **Node shutdown**: a graceful kubelet shutdown, a deleted Node, or a dead node tainted `node.kubernetes.io/out-of-service` | a `DisruptionTarget` condition, reason `TerminationByKubelet`, `DeletionByPodGC` or `DeletionByTaintManager` (Q1179, Q1207) |
 
 **The scope is drawn on purpose.** A job that ran and **failed on its own merits**, a run you **cancelled**, workers the gateway's own cleanup reaped as stuck, and a worker evicted for exceeding its own storage limit are never re-run; the reaper stamps `actions-gateway.com/deletion-reason` on a pod before deleting it, which is what keeps those out.
+The exception is a job that failed on its own beside a disrupted one: GitHub re-runs a run's failed jobs together, so it runs again too.
 A configurable retry budget, one per workflow run in each runner set and shared across every cause, prevents loops on persistently failing workloads.
 
 The runner owns job-lock renewal, so the AGC records the workflow run on the worker pod and detects the disruption from the owning reconciler.

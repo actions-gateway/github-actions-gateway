@@ -17,7 +17,9 @@ The order inside the release is the design's: the measurements first, because ea
 ## What this release must NOT do
 
 **It must not re-run a genuine failure.** The boundary in [troubleshooting.md](../operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do) stands: every class retries only a cause GAG can observe on facts it owns (R9), arrives with a dogfood reproduction (R12), and is punted rather than shipped when no discriminator separates it from a tenant-caused shape.
-One known limit stays from `v2.0.0`: beside a memory kill, a job past its `timeout-minutes` is re-run with it where no job ended `failure` on its own, because GitHub's job list spells it as it does a fail-fast sibling ([how](../design/04-operational-flows.md#the-re-run-takes-only-the-killed-jobs-q1319), Q1399).
+Two known limits stay from `v2.0.0`.
+Beside a memory kill, a job past its `timeout-minutes` is re-run with it where no job ended `failure` on its own, because GitHub's job list spells it as it does a fail-fast sibling ([how](../design/04-operational-flows.md#the-re-run-takes-only-the-killed-jobs-q1319), Q1399).
+Beside any other disruption, a job that failed on its own is re-run with the disrupted one, because those arms call `rerun-failed-jobs` and only the out-of-memory class re-runs the killed job alone; the boundary says so since Q1434, and the fix is [Q1429](../queue/Q1429.md).
 
 **It must not ship a blanket opt-in retry.** `spec.flakyRetry` from [appendix G.17](../design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions) stays unscheduled; the direction is classified platform failures on the existing arms.
 
@@ -46,6 +48,7 @@ What the `v2.1.0` tag waits for, per the [scope-ledger convention](../developmen
 | Q1403 | Say which memory limit killed a container, with a node reporter | `2.1-gate` | ✅ landed: [a node reporter](q1403-oom-kill-reporter.md) writes the limit as a condition and an Event, and the failed job's record names it; CI's kind lane holds one kill at each of four limits to both, and the operator's page states what GKE has not shown; not whose memory it was |
 | [Q1406](../queue/Q1406.md) | Act on the limit a killed runner's condition names | rides | 🔲 open |
 | [Q1407](../queue/Q1407.md) | Read the kernel log beside the counters, as a reporter option | rides | 🔲 open |
+| Q1434 | Say that a disruption re-run takes the run's own failures with it | `2.1-gate` | ✅ landed: the runbook's boundary, the README and the comparison page name the limit; re-running the disrupted job alone is [Q1429](../queue/Q1429.md), not gated |
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
 
 **Scoped 2026-11-09.
@@ -90,6 +93,12 @@ What it still recovers less of is [in the upgrade notes](../operations/upgrade.m
 ### Q1403
 
 Naming no cause leaves the operator without one, and [its design](q1403-oom-kill-reporter.md) reads which limit ran out on the node.
+
+### Q1434
+
+Gated 2026-11-27.
+The boundary this release must not cross was stated as holding with one limit, and an audit read a second from source: every disruption arm but the out-of-memory class re-runs each failed job of the run, a job's own failure among them.
+The behaviour is older than `v2.0.0` and this release does not change it; what gated is the statement, in the release whose headline is telling platform failures from a job's own.
 
 ## Explicitly out of scope
 
