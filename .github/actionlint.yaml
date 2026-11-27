@@ -20,3 +20,4 @@ self-hosted-runner:
     - gag-q583-replay
     - gag-q645-abandoned
     - gag-q1344-ssdelete
+    - gag-q1246-stuck

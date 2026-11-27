@@ -1,0 +1,87 @@
+# Force-cancel probe fixture, dispatch-only: never runs in normal CI.
+#
+# One run of four jobs, for reading what ends a multi-job run's other jobs when one
+# job's worker never starts:
+#   stuck    waits on `gag-q1246-stuck`, a label whose scale set is created only once
+#            the others are running, from a RunnerSet whose worker cannot schedule.
+#   healthy  sleeps on the dogfood `ci` scale set.
+#   hosted   sleeps on a GitHub-hosted runner.
+#   quick    succeeds at once on a GitHub-hosted runner.
+# Arm `cancel` reads the AGC's own force-cancel at its pendingPodDeadline reap; arm
+# `timeout` reads GitHub's unstarted-job timeout with that deadline set past it. The
+# readings are the run's jobs list over time and the sleeping jobs' logs.
+#
+# Runs only while the dogfood cluster is up.
+name: q1246-forcecancel-probe
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "How long healthy and hosted sleep"
+        type: number
+        default: 15
+  # workflow_dispatch only works once the file reaches the default branch; the
+  # push trigger (scoped to this file on claude/ branches) lets the probe session
+  # queue the jobs from its own feature branch.
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/q1246-forcecancel-probe.yml"]
+
+# The jobs never touch the repo, so they get no token scopes at all.
+permissions: {}
+
+# Jobs run only on explicit opt-in: a workflow_dispatch, or a push whose head
+# commit message contains "[q1246-cancel]" or "[q1246-timeout]". A plain push
+# touching this file skips every job, so the run concludes green. The timeout tag
+# sleeps 40 minutes, past GitHub's unstarted-job timeout; the cancel tag sleeps 15.
+env:
+  SLEEP_MINUTES: ${{ inputs.minutes || (contains(github.event.head_commit.message, '[q1246-timeout]') && 40) || 15 }}
+
+jobs:
+  stuck:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[q1246-cancel]') || contains(github.event.head_commit.message, '[q1246-timeout]')
+    runs-on: gag-q1246-stuck
+    timeout-minutes: 60
+    steps:
+      - run: echo "This job is never expected to run (Q1246); attempt ${GITHUB_RUN_ATTEMPT}."
+
+  healthy:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[q1246-cancel]') || contains(github.event.head_commit.message, '[q1246-timeout]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 60
+    steps:
+      - name: sleep, saying how it ends
+        run: |
+          trap 'echo "$(date -u +%FT%TZ) got SIGTERM"; exit 143' TERM
+          trap 'echo "$(date -u +%FT%TZ) got SIGINT"; exit 130' INT
+          echo "attempt ${GITHUB_RUN_ATTEMPT}, sleeping ${SLEEP_MINUTES} minutes"
+          for ((i = 0; i < SLEEP_MINUTES * 4; i++)); do
+            echo "$(date -u +%FT%TZ) alive"
+            sleep 15 &
+            wait $!
+          done
+          echo "$(date -u +%FT%TZ) slept to the end"
+
+  hosted:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[q1246-cancel]') || contains(github.event.head_commit.message, '[q1246-timeout]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: sleep, saying how it ends
+        run: |
+          trap 'echo "$(date -u +%FT%TZ) got SIGTERM"; exit 143' TERM
+          trap 'echo "$(date -u +%FT%TZ) got SIGINT"; exit 130' INT
+          echo "attempt ${GITHUB_RUN_ATTEMPT}, sleeping ${SLEEP_MINUTES} minutes"
+          for ((i = 0; i < SLEEP_MINUTES * 4; i++)); do
+            echo "$(date -u +%FT%TZ) alive"
+            sleep 15 &
+            wait $!
+          done
+          echo "$(date -u +%FT%TZ) slept to the end"
+
+  quick:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[q1246-cancel]') || contains(github.event.head_commit.message, '[q1246-timeout]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "attempt ${GITHUB_RUN_ATTEMPT}"
