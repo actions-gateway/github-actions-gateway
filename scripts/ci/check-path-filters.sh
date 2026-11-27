@@ -87,6 +87,7 @@ NARROW_FILTERS=(
 	'unit-test.yml:claude_usage'      # the claude-usage/ Python module and its stdlib-only suite
 	'security-scan.yml:chart'         # the Helm chart the Polaris posture scan renders
 	'e2e-calico.yml:calico'           # NetworkPolicy/proxy code only; other PRs stay on the kindnet leg
+	'e2e-test.yml:oomreporter'        # the oom-reporter's module, chart, image stage and lane script; it imports no other module
 	'manifest-validate.yml:manifests' # generated YAML, not the Go types behind it
 	'manifest-validate.yml:promql'    # the shipped PrometheusRule and the two docs describing its alerts
 	'manifest-validate.yml:dashboards' # the two dashboards and the two screenshots the docs embed

@@ -48,6 +48,7 @@ jobs:
       pull-requests: read
     outputs:
       e2e: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.e2e || 'true' }}
+      oomreporter: ${{ steps.filter.outcome == 'success' && steps.filter.outputs.oomreporter || 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -100,6 +101,21 @@ jobs:
               - '.github/workflows/e2e-test.yml'
               - '.github/workflows/e2e-reusable.yml'
               - 'scripts/ci/pins.env'
+            # The oom-reporter stands alone (Q1403): its own module, chart, image
+            # stage and script, and nothing of the gateway's.
+            oomreporter:
+              - 'cmd/oomreporter/**'
+              - 'charts/oom-reporter/**'
+              - 'vendor/**'
+              - 'go.work'
+              - 'go.work.sum'
+              - 'Dockerfile'
+              - 'Makefile'
+              - 'scripts/e2e/oomreporter-e2e.sh'
+              - 'scripts/lib/**'
+              - 'scripts/fetch/**'
+              - '.github/workflows/e2e-test.yml'
+              - 'scripts/ci/pins.env'
       # A JS action reports failure only as an ::error:: annotation, so a rerun
       # that replaces the check run erases it — leaving a log that simply stops
       # after `Invoking listFiles` with no error anywhere (Q363). Say it plainly.
@@ -133,6 +149,39 @@ jobs:
       # dispatch), so those events keep the variable-then-hosted fallback.
       runner: ${{ inputs.runner || '' }}
 
+  # The oom-reporter's lane (Q1403): a kill at each memory limit on a kind cluster of
+  # its own, and the condition and Event the reporter writes for it. Queue-time like
+  # `e2e`, for the same reason; `e2e-gate` requires it. Hosted only: it fills a kind
+  # worker's limits, which a shared self-hosted node should not have done to it.
+  oomreporter:
+    needs: [changes]
+    if: (needs.changes.outputs.oomreporter == 'true' && github.event_name == 'merge_group') || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      # e2e-reusable.yml's pin: bump the two together.
+      KIND_NODE_IMAGE: kindest/node:v1.35.5@sha256:ce977ae6d65918d0b58a5f8b5e940429c2ce42fa3a5619ec2bbc60b949c0ac95
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Load tool pins (scripts/ci/pins.env)
+        id: pins
+        run: scripts/ci/load-pins.sh
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.work
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
+      - name: Install kind ${{ steps.pins.outputs.KIND_VERSION }}
+        run: |
+          scripts/fetch/download-verified.sh \
+            "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64" \
+            "${KIND_BINARY_SHA256}" /tmp/kind
+          sudo install -m 0755 /tmp/kind /usr/local/bin/kind
+          kind version
+      - name: a kill at each limit
+        run: make e2e-oomreporter
+
   # Aggregate required-status gate. Mark THIS job's check context
   # (`e2e-gate`) required in the branch ruleset — never the path-gated
   # `e2e` job, because a path-skip leaves it Pending and blocks the merge
@@ -140,7 +189,7 @@ jobs:
   # Passes only when every needed job succeeded or was legitimately skipped.
   # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   e2e-gate:
-    needs: [changes, e2e]
+    needs: [changes, e2e, oomreporter]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10

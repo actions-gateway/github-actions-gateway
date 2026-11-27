@@ -63,6 +63,7 @@ The job's runner was answered with the right limit in all five runs.
 
 What GKE has not shown is a node filling up (`AbovePods`), a pod-level limit, or the cap of a pod with one container.
 The agent itself did not run on GKE: the counters were recorded there, and the rule replayed them.
+On kind, the repository's CI installs this chart and kills a container at each of the four limits, on every merge that changes the reporter, and requires the right condition and Event for each.
 The replay assumes every container's `cgroup.stat` shows nothing below it, and takes `memory.oom.group` from whether a container's counters show a group kill, since the recording did not read it.
 
 ## What it does not cover

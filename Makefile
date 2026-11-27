@@ -1145,6 +1145,10 @@ chart-upgrade-check: ## Verify `helm upgrade` delivers chart changes to a live r
 chart-released-upgrade-check: ## Verify the last released chart upgrades to HEAD's chart (needs the release installed)
 	KIND_CLUSTER=$(KIND_CLUSTER) scripts/e2e/chart-released-upgrade-check.sh
 
+.PHONY: e2e-oomreporter
+e2e-oomreporter: ## Run the oom-reporter's kind e2e lane on a cluster of its own: a kill at each limit, its condition and Event (Q1403); deletes the cluster after (OOM_E2E_KEEP=1 keeps it)
+	$(if $(KIND_NODE_IMAGE),KIND_NODE_IMAGE=$(KIND_NODE_IMAGE)) scripts/e2e/oomreporter-e2e.sh
+
 .PHONY: e2e-cluster-delete
 e2e-cluster-delete: ## Delete the local e2e kind cluster (no-op if it does not exist)
 	@if kind get clusters 2>/dev/null | grep -qx $(KIND_CLUSTER); then \

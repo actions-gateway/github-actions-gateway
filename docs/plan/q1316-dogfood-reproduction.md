@@ -16,7 +16,7 @@ The local readings leave five questions only the dogfood cluster answers:
    A fill by the job is from source.
 3. Do the API server's statuses match the kubelet's, under `privileged-dind` and under Kata?
 4. Does the out-of-memory class read a runner killed at `kubepods`' limit as an own-limit kill (Q1400)?
-5. Can an unprivileged reader on the node say whether the container's limit or `kubepods`' ran out, before the cgroups that say so are removed ([Q1403](../queue/Q1403.md), the node reporter)?
+5. Can an unprivileged reader on the node say whether the container's limit or `kubepods`' ran out, before the cgroups that say so are removed (Q1403, the node reporter)?
    The pod's limit is read locally, and the node's is from source.
 
 One platform cause is already out: locally, restarting containerd or the kubelet and killing containerd left the sidecar and the runner running, and killing the pod's shim ended both.
