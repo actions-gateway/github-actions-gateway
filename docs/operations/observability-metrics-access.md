@@ -14,6 +14,9 @@ Present the published scraper bundle (see [the per-tenant section](#scraping-per
 The metrics port is named `metrics` (`:8443`) on every Service.
 You do not hand-author these `ServiceMonitor`s; the sections below describe what they wire and the prerequisites.
 
+**Google Managed Prometheus (GKE):** managed collection does not read `ServiceMonitor`s, so you write a `PodMonitoring` per component yourself.
+See [Scraping with Google Managed Prometheus](#scraping-with-google-managed-prometheus-gke).
+
 ### Install-time scraping prerequisites (GMC manager)
 
 The default GMC install ships the manager NetworkPolicy **enabled by default** (`networkPolicy.enabled=true`).
@@ -36,6 +39,7 @@ The per-tenant AGC and proxy metrics are governed by the per-tenant NetworkPolic
 
 The `ServiceMonitor` integration stays **opt-in**, behind the `metrics.serviceMonitor.enabled` chart value (default `false`): out-of-box Prometheus Operator scraping.
 It is left off by default because the `ServiceMonitor` CRD only exists once the Prometheus Operator is installed, so rendering it unconditionally would break `helm install` on clusters without it.
+The toggle does nothing for Google Managed Prometheus managed collection, which reads `PodMonitoring` instead.
 
 ### Verifying the metrics scrape TLS (GMC manager)
 
@@ -116,7 +120,7 @@ Its `serverName` is `<gateway>-agc.<namespace>.svc`.
 - **Prometheus Operator** must be installed (the `monitoring.coreos.com` `ServiceMonitor` CRD must exist).
   The toggle is off by default precisely because the CRD is not present on every cluster.
   If the CRD is absent when the toggle is on, the GMC logs a warning and emits a `ServiceMonitorCRDMissing` Event on the `ActionsGateway` and continues — a missing scrape prerequisite never blocks tenant provisioning.
-- **Prometheus reads the client bundle from the `ServiceMonitor`'s namespace** (the tenant namespace), so the scraping Prometheus must be configured to select `ServiceMonitor`s across tenant namespaces (`serviceMonitorNamespaceSelector`) and granted read access to the per-tenant `actions-gateway-metrics-client` Secret.
+- **Prometheus reads the client bundle from the `ServiceMonitor`'s namespace** (the tenant namespace), so the scraping Prometheus must be configured to select `ServiceMonitor`s across tenant namespaces (`serviceMonitorNamespaceSelector`) and granted read access to the per-tenant `<gateway>-agc-metrics-client` and `<ep>-metrics-client` Secrets.
   Each tenant has a distinct CA and client cert, which is why a single cluster-wide `ServiceMonitor` cannot scrape them — the wiring is necessarily per tenant.
 - **NetworkPolicy:** label the Prometheus namespace `metrics: enabled` so the per-tenant NetworkPolicy admits the scrape (the AGC and proxy policies admit the `:8443` metrics port only from `metrics=enabled` namespaces).
 
@@ -146,6 +150,102 @@ rm -f client.crt client.key ca.crt   # delete the cert material when done
 The `--resolve` host must match `$svc.$ns.svc` exactly: that name is what the AGC's serving certificate is issued for, so substituting `localhost` fails the TLS handshake rather than the authorization check.
 
 (The bundle is a client *certificate*, not a long-lived account credential; still remove the files when finished.)
+
+### Scraping with Google Managed Prometheus (GKE)
+
+Google Managed Prometheus (GMP) managed collection reads its own `PodMonitoring` resource.
+It does not read `ServiceMonitor`s: Google's [setup page](https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/setup-managed) (read 2026-11-26) has you convert them, or run self-deployed collectors instead.
+The GMC does not create `PodMonitoring`s either, so `metrics.serviceMonitor.enabled` has no effect on what GMP scrapes.
+This section covers the per-tenant AGC and egress proxy, not the GMC manager.
+
+You need:
+
+- **Managed collection turned on.** The same page says it is on by default for GKE Standard 1.27 and later and for Autopilot 1.25 and later.
+- **A `PodMonitoring` schema with Secret references for `tls.ca`, `tls.cert` and `tls.key`.** The [API reference](https://github.com/GoogleCloudPlatform/prometheus-engine/blob/main/doc/api.md) (read 2026-11-26) lists them.
+  Neither page names the first GKE or GMP version that has them.
+- **The collector's namespace labeled `metrics=enabled`,** or the per-tenant NetworkPolicy drops the scrape.
+  The collector runs in `gmp-system` on Standard clusters and `gke-gmp-system` on Autopilot:
+
+  ```bash
+  kubectl label namespace <collector-namespace> metrics=enabled
+  ```
+
+  The label admits every pod in that namespace to every tenant's metrics port and to the GMC manager's, not only the collector.
+  Each listener still demands its own credential.
+
+Then apply one `PodMonitoring` per component, with the `Role` and `RoleBinding` that let the collector read that component's client bundle.
+For a gateway's AGC:
+
+```yaml
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: <gateway>-agc
+  namespace: <namespace>
+spec:
+  selector:
+    matchLabels:
+      app: <gateway>-agc
+  endpoints:
+    - port: metrics
+      path: /metrics
+      scheme: https
+      interval: 60s
+      tls:
+        serverName: <gateway>-agc.<namespace>.svc
+        ca:
+          secret:
+            name: <gateway>-agc-metrics-client
+            key: ca.crt
+        cert:
+          secret:
+            name: <gateway>-agc-metrics-client
+            key: tls.crt
+        key:
+          secret:
+            name: <gateway>-agc-metrics-client
+            key: tls.key
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gmp-collector-read-<gateway>-agc-metrics-client
+  namespace: <namespace>
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["<gateway>-agc-metrics-client"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gmp-collector-read-<gateway>-agc-metrics-client
+  namespace: <namespace>
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gmp-collector-read-<gateway>-agc-metrics-client
+subjects:
+  - kind: ServiceAccount
+    name: collector
+    namespace: <collector-namespace>
+```
+
+For an `EgressProxy`, write the same three objects in the `EgressProxy`'s namespace with these values, naming the `Role` and `RoleBinding` after its client bundle:
+
+| Field | AGC | `EgressProxy` |
+|---|---|---|
+| `PodMonitoring` name | `<gateway>-agc` | `<ep>-proxy` |
+| Pod selector | `app: <gateway>-agc` | `actions-gateway.com/egress-proxy: <ep>` |
+| `serverName` | `<gateway>-agc.<namespace>.svc` | `<ep>-proxy.<namespace>.svc` |
+| Client bundle Secret | `<gateway>-agc-metrics-client` | `<ep>-metrics-client` |
+
+The AGC manifest is adapted from the project's [dogfood scrape](https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/dogfood-metrics), which landed every scrape over a 15-minute window on 2026-11-02.
+The `EgressProxy` variant has not been tried, nor has anything on Autopilot, including whether it lets you label `gke-gmp-system`.
+
+To check a target, query `up{namespace="<namespace>"}` with PromQL; `1` means the last scrape succeeded.
+Where the NetworkPolicy is enforced, a missing namespace label shows up as a scrape that times out before the TLS handshake.
 
 ---
 
