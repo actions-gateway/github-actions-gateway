@@ -19,7 +19,8 @@
 # cannot see is in that program's package comment.
 #
 # --notes is the same classification read for the release notes: the commits a
-# release publishes, and the residue that reaches no released artifact. The
+# release publishes, the residue that reaches no released artifact, and the
+# commits of other types (a base-image bump) that ship with no semver weight. The
 # notes used to be enumerated by a scope allow-list, which admitted commits by
 # their scope string and silently dropped every scope nobody had listed.
 #
