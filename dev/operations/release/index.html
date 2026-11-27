@@ -4074,7 +4074,8 @@ The usual cause is that something is still up from earlier work, most often the 
 <p>If teardown could not restore the ceiling it says so and prints the <code>gcloud container clusters update</code> that puts it back.
 A ceiling left low throttles everyone's CI, so run it.</p>
 <h5 id="a-killed-gate-is-reclaimed-by-the-next-one">A killed gate is reclaimed by the next one<a class="headerlink" href="#a-killed-gate-is-reclaimed-by-the-next-one" title="Permanent link">&para;</a></h5>
-<p><strong>Self-cleaning covers most endings, not all of them.</strong> Bash runs the teardown trap on Ctrl-C and on an ordinary <code>kill</code>, so those tear the cluster back down.
+<p><strong>Self-cleaning covers most endings, not all of them.</strong> Ctrl-C, an ordinary <code>kill</code> and a closed terminal each end the gate as a failure, exiting 130, 143 or 129, and each tears the cluster back down after dumping the failure diagnostics (Q1392).
+Stop a gate by its process group, <code>kill -TERM -- -&lt;pgid&gt;</code>, as Ctrl-C does: a <code>kill</code> aimed at its pid alone takes effect only once the command it is running ends, which in the e2e leg can be the ~25-minute watch.
 <code>kill -9</code>, a killed parent process, and a teardown interrupted part-way through do not — each leaves billable nodes up with no process left to release them, and twice that was caught only by hunting for a live teardown process by hand (Q640).
 A teardown whose <code>e2e-stop.sh</code> or <code>stop.sh</code> refuses, usually on a drain that will not converge, leaves the same nodes up, so it keeps its lease too and ends <code>Teardown INCOMPLETE</code> with the <code>--reclaim</code> command to run once the drain can finish (Q1155).</p>
 <p>So the gate takes an ownership lease for exactly the window in which it owns cluster state, and reclaims an <em>orphaned</em> one — a lease for the same target whose owner is gone — before it spends anything.
@@ -4177,6 +4178,7 @@ The one stream it leaves alone belongs to a gate whose lease is still <code>held
 <p>Equally supported, and equally legible — drop the <code>nohup</code>/<code>&amp;</code>/<code>ASSUME_YES=1</code> and answer the confirmation:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nv">PROJECT</span><span class="o">=</span>…<span class="w"> </span><span class="nv">CLUSTER</span><span class="o">=</span>…<span class="w"> </span><span class="nv">ZONE</span><span class="o">=</span>…<span class="w"> </span><span class="nv">REPO</span><span class="o">=</span>…<span class="w"> </span>scripts/dogfood/validate-release.sh<span class="w"> </span>vX.Y.Z-rc.N
 </code></pre></div>
+<p>Closing that terminal ends the gate as a failure and still tears the cluster down; the teardown's output, with nowhere left to print, goes to <code>tmp/validate-release-teardown.log</code>.</p>
 <p><strong>The gate narrates itself while it runs.</strong> Each phase is announced as it starts (<code>==&gt; [e2e] Running the e2e matrix on GAG runners</code>), and the e2e leg — the long one, ~25 minutes while runners autoscale in — relays the dispatched run's own spec heartbeat into your terminal every 30 s:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>[e2e t+04:12] 31/73 specs | 29 ok, 1 failed, 1 skipped | running: E2E_GMC_Isolation cross... (3m58s)
 </code></pre></div>
@@ -4686,6 +4688,8 @@ State which of the two you mean.</p>
 <p>Two lists come back and they sum to the window's <code>feat</code>/<code>fix</code>/<code>perf</code> count: <strong>Ships</strong> is the enumeration to curate, <strong>Residue</strong> is every commit reaching no released artifact.
 A commit is admitted by the files it changed, checked against the surface <code>publish.yml</code> packages, so no scope string admits or excludes anything.
 The sum is the reconciliation: a commit cannot leave one list without arriving in the other.
+A third list, <strong>Also ships, no semver weight</strong>, holds commits of any other type that change a released artifact: they never raise the floor, and the notes still owe each one a line.
+A <code>build(deps)</code> bump of an image's base goes under <strong>Dependencies</strong>; the list can also hold a refactor of shipped code or a chart README edit, so read each one (Q1380).
 Keep the trailing <code>(#NNNN)</code>: GitHub auto-links a bare <code>#NNNN</code> in a release body, so every line becomes traceable for free.
 Say in the notes that dev tooling, CI, and docs are excluded, so a reader does not read hundreds of commits as the user-visible change count.</p>
 <p><strong>The scope allow-list this replaced failed in both directions, and its output showed neither.</strong> It matched <code>^(feat|fix)\(&lt;scope&gt;\)</code> against a hand-maintained list of scopes, which silently omits any scope nobody thought of.
