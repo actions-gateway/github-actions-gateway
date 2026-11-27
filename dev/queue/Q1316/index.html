@@ -2741,7 +2741,7 @@ The design's third retry class recognises it from the worker snapshot, where the
 <ul>
 <li>A job that fills the sidecar's disk does not crash <code>dockerd</code>; the next <code>docker run</code> fails and GAG sees nothing.</li>
 <li>An out-of-memory crash is the job's own under <code>kata-dind</code>, and reads the same whether the job or the node caused it under <code>privileged-dind</code>.</li>
-<li>The shapes no job causes by accident have no known platform cause, on the shipped templates, that leaves a serving runner alive; a daemon that fails its first start is the exception, and <a href="../Q1397/">Q1397</a>'s startup probe prevents it.</li>
+<li>The shapes no job causes by accident have no known platform cause, on the shipped templates, that leaves a serving runner alive; a daemon that fails its first start is the exception, and the templates' startup probe prevents it.</li>
 <li>The usage sampler can show the sidecar reached its limit and cannot show that it did not.</li>
 </ul>
 <p><a href="../../plan/q1316-dogfood-reproduction/">The dogfood runs</a> of 2026-11-24 and 25 read the rest on GKE:</p>

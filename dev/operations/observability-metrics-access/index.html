@@ -2272,6 +2272,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#scraping-with-google-managed-prometheus-gke" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scraping with Google Managed Prometheus (GKE)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2913,6 +2924,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#scraping-with-google-managed-prometheus-gke" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scraping with Google Managed Prometheus (GKE)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2950,6 +2972,8 @@ Present the published scraper bundle (see <a href="#scraping-per-tenant-agc-and-
 <p><strong>Prometheus operator (production):</strong> the chart wires scraping automatically when <code>metrics.serviceMonitor.enabled=true</code> — both the GMC manager <code>ServiceMonitor</code> and a per-tenant <code>ServiceMonitor</code> for each provisioned tenant's AGC/proxy.
 The metrics port is named <code>metrics</code> (<code>:8443</code>) on every Service.
 You do not hand-author these <code>ServiceMonitor</code>s; the sections below describe what they wire and the prerequisites.</p>
+<p><strong>Google Managed Prometheus (GKE):</strong> managed collection does not read <code>ServiceMonitor</code>s, so you write a <code>PodMonitoring</code> per component yourself.
+See <a href="#scraping-with-google-managed-prometheus-gke">Scraping with Google Managed Prometheus</a>.</p>
 <h3 id="install-time-scraping-prerequisites-gmc-manager">Install-time scraping prerequisites (GMC manager)<a class="headerlink" href="#install-time-scraping-prerequisites-gmc-manager" title="Permanent link">&para;</a></h3>
 <p>The default GMC install ships the manager NetworkPolicy <strong>enabled by default</strong> (<code>networkPolicy.enabled=true</code>).
 Selecting the manager pod flips it to default-deny on ingress, so its <code>/metrics</code> endpoint admits traffic only from namespaces carrying the right label:</p>
@@ -2968,7 +2992,8 @@ The per-tenant AGC and proxy metrics are governed by the per-tenant NetworkPolic
 The manager NP is verified by manifest review and is pending a cluster-only runtime check.</p>
 </blockquote>
 <p>The <code>ServiceMonitor</code> integration stays <strong>opt-in</strong>, behind the <code>metrics.serviceMonitor.enabled</code> chart value (default <code>false</code>): out-of-box Prometheus Operator scraping.
-It is left off by default because the <code>ServiceMonitor</code> CRD only exists once the Prometheus Operator is installed, so rendering it unconditionally would break <code>helm install</code> on clusters without it.</p>
+It is left off by default because the <code>ServiceMonitor</code> CRD only exists once the Prometheus Operator is installed, so rendering it unconditionally would break <code>helm install</code> on clusters without it.
+The toggle does nothing for Google Managed Prometheus managed collection, which reads <code>PodMonitoring</code> instead.</p>
 <h3 id="verifying-the-metrics-scrape-tls-gmc-manager">Verifying the metrics scrape TLS (GMC manager)<a class="headerlink" href="#verifying-the-metrics-scrape-tls-gmc-manager" title="Permanent link">&para;</a></h3>
 <p>The GMC metrics endpoint (<code>:8443</code>) is served over TLS.
 How the scrape verifies that certificate is controlled by <code>metrics.tls.certManager.enabled</code>:</p>
@@ -3071,7 +3096,7 @@ The same toggle (<code>metrics.serviceMonitor.enabled</code> → <code>--enable-
 <li><strong>Prometheus Operator</strong> must be installed (the <code>monitoring.coreos.com</code> <code>ServiceMonitor</code> CRD must exist).
   The toggle is off by default precisely because the CRD is not present on every cluster.
   If the CRD is absent when the toggle is on, the GMC logs a warning and emits a <code>ServiceMonitorCRDMissing</code> Event on the <code>ActionsGateway</code> and continues — a missing scrape prerequisite never blocks tenant provisioning.</li>
-<li><strong>Prometheus reads the client bundle from the <code>ServiceMonitor</code>'s namespace</strong> (the tenant namespace), so the scraping Prometheus must be configured to select <code>ServiceMonitor</code>s across tenant namespaces (<code>serviceMonitorNamespaceSelector</code>) and granted read access to the per-tenant <code>actions-gateway-metrics-client</code> Secret.
+<li><strong>Prometheus reads the client bundle from the <code>ServiceMonitor</code>'s namespace</strong> (the tenant namespace), so the scraping Prometheus must be configured to select <code>ServiceMonitor</code>s across tenant namespaces (<code>serviceMonitorNamespaceSelector</code>) and granted read access to the per-tenant <code>&lt;gateway&gt;-agc-metrics-client</code> and <code>&lt;ep&gt;-metrics-client</code> Secrets.
   Each tenant has a distinct CA and client cert, which is why a single cluster-wide <code>ServiceMonitor</code> cannot scrape them — the wiring is necessarily per tenant.</li>
 <li><strong>NetworkPolicy:</strong> label the Prometheus namespace <code>metrics: enabled</code> so the per-tenant NetworkPolicy admits the scrape (the AGC and proxy policies admit the <code>:8443</code> metrics port only from <code>metrics=enabled</code> namespaces).</li>
 </ul>
@@ -3097,6 +3122,115 @@ The Service and Secret are named per <strong>gateway</strong>, so set <code>svc<
 </code></pre></div>
 <p>The <code>--resolve</code> host must match <code>$svc.$ns.svc</code> exactly: that name is what the AGC's serving certificate is issued for, so substituting <code>localhost</code> fails the TLS handshake rather than the authorization check.</p>
 <p>(The bundle is a client <em>certificate</em>, not a long-lived account credential; still remove the files when finished.)</p>
+<h3 id="scraping-with-google-managed-prometheus-gke">Scraping with Google Managed Prometheus (GKE)<a class="headerlink" href="#scraping-with-google-managed-prometheus-gke" title="Permanent link">&para;</a></h3>
+<p>Google Managed Prometheus (GMP) managed collection reads its own <code>PodMonitoring</code> resource.
+It does not read <code>ServiceMonitor</code>s: Google's <a href="https://docs.cloud.google.com/stackdriver/docs/managed-prometheus/setup-managed">setup page</a> (read 2026-11-26) has you convert them, or run self-deployed collectors instead.
+The GMC does not create <code>PodMonitoring</code>s either, so <code>metrics.serviceMonitor.enabled</code> has no effect on what GMP scrapes.
+This section covers the per-tenant AGC and egress proxy, not the GMC manager.</p>
+<p>You need:</p>
+<ul>
+<li><strong>Managed collection turned on.</strong> The same page says it is on by default for GKE Standard 1.27 and later and for Autopilot 1.25 and later.</li>
+<li><strong>A <code>PodMonitoring</code> schema with Secret references for <code>tls.ca</code>, <code>tls.cert</code> and <code>tls.key</code>.</strong> The <a href="https://github.com/GoogleCloudPlatform/prometheus-engine/blob/main/doc/api.md">API reference</a> (read 2026-11-26) lists them.
+  Neither page names the first GKE or GMP version that has them.</li>
+<li><strong>The collector's namespace labeled <code>metrics=enabled</code>,</strong> or the per-tenant NetworkPolicy drops the scrape.
+  The collector runs in <code>gmp-system</code> on Standard clusters and <code>gke-gmp-system</code> on Autopilot:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;collector-namespace&gt;<span class="w"> </span><span class="nv">metrics</span><span class="o">=</span>enabled
+</code></pre></div>
+<p>The label admits every pod in that namespace to every tenant's metrics port and to the GMC manager's, not only the collector.
+  Each listener still demands its own credential.</p>
+<p>Then apply one <code>PodMonitoring</code> per component, with the <code>Role</code> and <code>RoleBinding</code> that let the collector read that component's client bundle.
+For a gateway's AGC:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.googleapis.com/v1</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PodMonitoring</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;gateway&gt;-agc</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;namespace&gt;</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="nt">selector</span><span class="p">:</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">      </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;gateway&gt;-agc</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span><span class="nt">endpoints</span><span class="p">:</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metrics</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">      </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/metrics</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">      </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">      </span><span class="nt">tls</span><span class="p">:</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">        </span><span class="nt">serverName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;gateway&gt;-agc.&lt;namespace&gt;.svc</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">        </span><span class="nt">ca</span><span class="p">:</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">          </span><span class="nt">secret</span><span class="p">:</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">            </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;gateway&gt;-agc-metrics-client</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">            </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ca.crt</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">        </span><span class="nt">cert</span><span class="p">:</span>
+<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a><span class="w">          </span><span class="nt">secret</span><span class="p">:</span>
+<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a><span class="w">            </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;gateway&gt;-agc-metrics-client</span>
+<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="w">            </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tls.crt</span>
+<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="w">        </span><span class="nt">key</span><span class="p">:</span>
+<a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="w">          </span><span class="nt">secret</span><span class="p">:</span>
+<a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="w">            </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;gateway&gt;-agc-metrics-client</span>
+<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a><span class="w">            </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tls.key</span>
+<a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a><span class="nn">---</span>
+<a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rbac.authorization.k8s.io/v1</span>
+<a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Role</span>
+<a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-5-33" name="__codelineno-5-33" href="#__codelineno-5-33"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmp-collector-read-&lt;gateway&gt;-agc-metrics-client</span>
+<a id="__codelineno-5-34" name="__codelineno-5-34" href="#__codelineno-5-34"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;namespace&gt;</span>
+<a id="__codelineno-5-35" name="__codelineno-5-35" href="#__codelineno-5-35"></a><span class="nt">rules</span><span class="p">:</span>
+<a id="__codelineno-5-36" name="__codelineno-5-36" href="#__codelineno-5-36"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">apiGroups</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">""</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-5-37" name="__codelineno-5-37" href="#__codelineno-5-37"></a><span class="w">    </span><span class="nt">resources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"secrets"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-5-38" name="__codelineno-5-38" href="#__codelineno-5-38"></a><span class="w">    </span><span class="nt">resourceNames</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"&lt;gateway&gt;-agc-metrics-client"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-5-39" name="__codelineno-5-39" href="#__codelineno-5-39"></a><span class="w">    </span><span class="nt">verbs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"get"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"list"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"watch"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-5-40" name="__codelineno-5-40" href="#__codelineno-5-40"></a><span class="nn">---</span>
+<a id="__codelineno-5-41" name="__codelineno-5-41" href="#__codelineno-5-41"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rbac.authorization.k8s.io/v1</span>
+<a id="__codelineno-5-42" name="__codelineno-5-42" href="#__codelineno-5-42"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RoleBinding</span>
+<a id="__codelineno-5-43" name="__codelineno-5-43" href="#__codelineno-5-43"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-5-44" name="__codelineno-5-44" href="#__codelineno-5-44"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmp-collector-read-&lt;gateway&gt;-agc-metrics-client</span>
+<a id="__codelineno-5-45" name="__codelineno-5-45" href="#__codelineno-5-45"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;namespace&gt;</span>
+<a id="__codelineno-5-46" name="__codelineno-5-46" href="#__codelineno-5-46"></a><span class="nt">roleRef</span><span class="p">:</span>
+<a id="__codelineno-5-47" name="__codelineno-5-47" href="#__codelineno-5-47"></a><span class="w">  </span><span class="nt">apiGroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rbac.authorization.k8s.io</span>
+<a id="__codelineno-5-48" name="__codelineno-5-48" href="#__codelineno-5-48"></a><span class="w">  </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Role</span>
+<a id="__codelineno-5-49" name="__codelineno-5-49" href="#__codelineno-5-49"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmp-collector-read-&lt;gateway&gt;-agc-metrics-client</span>
+<a id="__codelineno-5-50" name="__codelineno-5-50" href="#__codelineno-5-50"></a><span class="nt">subjects</span><span class="p">:</span>
+<a id="__codelineno-5-51" name="__codelineno-5-51" href="#__codelineno-5-51"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceAccount</span>
+<a id="__codelineno-5-52" name="__codelineno-5-52" href="#__codelineno-5-52"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">collector</span>
+<a id="__codelineno-5-53" name="__codelineno-5-53" href="#__codelineno-5-53"></a><span class="w">    </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;collector-namespace&gt;</span>
+</code></pre></div>
+<p>For an <code>EgressProxy</code>, write the same three objects in the <code>EgressProxy</code>'s namespace with these values, naming the <code>Role</code> and <code>RoleBinding</code> after its client bundle:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>AGC</th>
+<th><code>EgressProxy</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PodMonitoring</code> name</td>
+<td><code>&lt;gateway&gt;-agc</code></td>
+<td><code>&lt;ep&gt;-proxy</code></td>
+</tr>
+<tr>
+<td>Pod selector</td>
+<td><code>app: &lt;gateway&gt;-agc</code></td>
+<td><code>actions-gateway.com/egress-proxy: &lt;ep&gt;</code></td>
+</tr>
+<tr>
+<td><code>serverName</code></td>
+<td><code>&lt;gateway&gt;-agc.&lt;namespace&gt;.svc</code></td>
+<td><code>&lt;ep&gt;-proxy.&lt;namespace&gt;.svc</code></td>
+</tr>
+<tr>
+<td>Client bundle Secret</td>
+<td><code>&lt;gateway&gt;-agc-metrics-client</code></td>
+<td><code>&lt;ep&gt;-metrics-client</code></td>
+</tr>
+</tbody>
+</table>
+<p>The AGC manifest is adapted from the project's <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/dogfood-metrics">dogfood scrape</a>, which landed every scrape over a 15-minute window on 2026-11-02.
+The <code>EgressProxy</code> variant has not been tried, nor has anything on Autopilot, including whether it lets you label <code>gke-gmp-system</code>.</p>
+<p>To check a target, query <code>up{namespace="&lt;namespace&gt;"}</code> with PromQL; <code>1</code> means the last scrape succeeded.
+Where the NetworkPolicy is enforced, a missing namespace label shows up as a scrape that times out before the TLS handshake.</p>
 <hr />
 <p>← Back to <a href="../observability/">Observability</a></p>
 

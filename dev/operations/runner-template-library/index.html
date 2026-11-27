@@ -3240,6 +3240,9 @@ The two conditions read opposite halves of <code>PodScheduled</code> and can nev
 Intake is throttled to one probe job per <code>pendingPodDeadline</code> window, not stopped, so the set recovers on its own once the image pulls.
 <code>WorkersNotStarting</code> is the observation and <code>WorkerCapacityDeclined</code> is the intake decision, so a gated set carries both and only the second one says intake is gated.</p>
 <p>Without the gate (the default) nothing throttles intake: the pod holds a concurrency slot until the reaper deletes it at <code>spec.pendingPodDeadline</code> with a <code>WorkerPodStuckPending</code> Warning event, 10 minutes after the pod was created unless you lower that field, and each further job the set acquires starts the same cycle again, spending a single-use runner registration on every one.</p>
+<p><strong>The runner waits for the daemon.</strong> Both entries carry a startup probe on <code>dockerd</code>'s port, so the runner container does not start until the daemon is listening.
+The probe allows three minutes (36 tries, 5 seconds apart) before the kubelet restarts the sidecar, and until it passes the worker pod stays in <code>Init</code>.
+A fork that drops the probe loses that wait.</p>
 <p><strong>A namespace at PSA <code>privileged</code>, plus GAG's three gates.</strong> Both entries need capabilities that Pod Security Standards <code>baseline</code> forbids, and PSA has no Kata-aware level in between.
 Tenants cannot self-elevate: the namespace needs all four settings in one object.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
