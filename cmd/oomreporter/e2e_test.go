@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -40,6 +41,14 @@ const (
 	abovePods = "/sys/fs/cgroup/kubelet.slice"
 )
 
+// errNotOOMKilled is a hog the runtime ended with another reason, which the reporter answers
+// with nothing (q1403-oom-kill-reporter.md § The rule), so the kill set up nothing to test.
+var errNotOOMKilled = errors.New("which the runtime did not call OOMKilled")
+
+// kills bounds the hogs each limit gets. One memory kill in 20 ended Error, 137 on a local kind
+// cluster (Q1412), so three such ends in a row would be about 1 in 8,000 if they were independent.
+const kills = 3
+
 func TestE2E_SaysWhichLimitRanOut(t *testing.T) {
 	require.NotEmpty(t, e2eKubeconfig, "OOM_E2E_KUBECONFIG")
 	cfg, err := clientcmd.BuildConfigFromFlags("", e2eKubeconfig)
@@ -75,16 +84,24 @@ func TestE2E_SaysWhichLimitRanOut(t *testing.T) {
 			if tc.around != nil {
 				tc.around(t)
 			}
-			p := hogPod("oom-"+tc.name, tc.pod)
-			p, err := kube.CoreV1().Pods(e2eNamespace).Create(t.Context(), p, metav1.CreateOptions{})
-			require.NoError(t, err)
-			t.Cleanup(func() {
-				_ = kube.CoreV1().Pods(e2eNamespace).Delete(context.WithoutCancel(t.Context()), p.Name, metav1.DeleteOptions{GracePeriodSeconds: new(int64(0))})
-			})
-			got := waitForCondition(t, kube, p)
-			require.Equal(t, string(tc.reason), got.Reason, "%s", got.Message)
-			require.Equal(t, corev1.ConditionTrue, got.Status)
-			waitForEvent(t, kube, p, "OOM"+string(tc.reason))
+			for kill := 1; ; kill++ {
+				p := hogPod(fmt.Sprintf("oom-%s-%d", tc.name, kill), tc.pod)
+				p, err := kube.CoreV1().Pods(e2eNamespace).Create(t.Context(), p, metav1.CreateOptions{})
+				require.NoError(t, err)
+				t.Cleanup(func() {
+					_ = kube.CoreV1().Pods(e2eNamespace).Delete(context.WithoutCancel(t.Context()), p.Name, metav1.DeleteOptions{GracePeriodSeconds: new(int64(0))})
+				})
+				got, err := waitForCondition(t, kube, p)
+				if errors.Is(err, errNotOOMKilled) && kill < kills {
+					t.Logf("kill %d of %d is not counted: %v", kill, kills, err)
+					continue
+				}
+				require.NoError(t, err, "kill %d of %d", kill, kills)
+				require.Equal(t, string(tc.reason), got.Reason, "%s", got.Message)
+				require.Equal(t, corev1.ConditionTrue, got.Status)
+				waitForEvent(t, kube, p, "OOM"+string(tc.reason))
+				return
+			}
 		})
 	}
 }
@@ -110,8 +127,9 @@ func memory(q string) corev1.ResourceList {
 	return corev1.ResourceList{corev1.ResourceMemory: resource.MustParse(q)}
 }
 
-// waitForCondition returns the hog's condition once the controller has written it.
-func waitForCondition(t *testing.T, kube kubernetes.Interface, p *corev1.Pod) corev1.PodCondition {
+// waitForCondition returns the hog's condition once the controller has written it, or
+// errNotOOMKilled once the hog has ended another way.
+func waitForCondition(t *testing.T, kube kubernetes.Interface, p *corev1.Pod) (corev1.PodCondition, error) {
 	t.Helper()
 	var got corev1.PodCondition
 	var now *corev1.Pod
@@ -123,8 +141,7 @@ func waitForCondition(t *testing.T, kube kubernetes.Interface, p *corev1.Pod) co
 		now = read
 		for _, c := range now.Status.ContainerStatuses {
 			if term := c.State.Terminated; c.Name == "hog" && term != nil && term.Reason != "OOMKilled" {
-				// The reporter answers only a container that ended OOMKilled.
-				return false, fmt.Errorf("the hog ended %s %d, which the runtime did not call OOMKilled", term.Reason, term.ExitCode)
+				return false, fmt.Errorf("the hog ended %s %d, %w", term.Reason, term.ExitCode, errNotOOMKilled)
 			}
 		}
 		for _, c := range now.Status.Conditions {
@@ -135,8 +152,11 @@ func waitForCondition(t *testing.T, kube kubernetes.Interface, p *corev1.Pod) co
 		}
 		return false, nil
 	})
+	if errors.Is(err, errNotOOMKilled) {
+		return got, err
+	}
 	require.NoError(t, err, "no condition on %s; its containers: %s", p.Name, states(now))
-	return got
+	return got, nil
 }
 
 // states says how each of pod's containers ended, or that it has not.
