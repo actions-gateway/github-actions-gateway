@@ -4180,7 +4180,7 @@ The check passes if either adoption or a successful fetch's save supplies the ow
 
 - **`e2e-test.yml`'s `oomreporter` job** runs [`scripts/e2e/oomreporter-e2e.sh`](../../scripts/e2e/oomreporter-e2e.sh) (`make e2e-oomreporter`): a kind cluster of its own, the `oom-reporter` chart installed as an operator would, and one kill at each of four limits, the container's, the pod's, the one the node's pods share and one above them (Q1403).
   `cmd/oomreporter/e2e_test.go` requires the condition and the `OOM<reason>` Event for each.
-  A hog the runtime ends with a reason other than `OOMKilled` gets nothing from the reporter by design, so the test kills again, up to three hogs a limit, and logs `kill N of 3 is not counted`; a hog that ended `OOMKilled` with no condition fails at once ([Q1412](../queue/Q1412.md) asks how often real nodes do this).
+  A hog the runtime ends with a reason other than `OOMKilled` gets nothing from the reporter by design, so the test kills again, up to three hogs a limit, and logs `kill N of 3 is not counted`; a hog that ended `OOMKilled` gets no other kill, and fails if its condition has not come within 3 minutes ([Q1412](../queue/Q1412.md) asks how often real nodes do this).
   The worker reserves all but 1 GiB of the host for the system, so a pod taking 2 GiB is killed at the pods' limit rather than the host's; the kill above them is a limit the test writes to the worker's `kubelet.slice` and takes off again, checking the kubelet and containerd outlive it.
 
   **When it runs:** at merge-queue time, on push to main, and on dispatch, when the diff touches the reporter's module, chart, image stage or the script; `e2e-gate` requires it, so a skip passes and a failure blocks.
