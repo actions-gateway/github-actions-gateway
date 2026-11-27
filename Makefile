@@ -497,6 +497,10 @@ license-header-check: ## Fail if any first-party .go file carries a per-file Apa
 conflict-markers-check: ## Fail if any tracked, non-vendored file contains a leftover merge-conflict marker line (Q379)
 	scripts/ci/check-conflict-markers.sh
 
+.PHONY: comment-provenance-check
+comment-provenance-check: ## Fail when a branch adds a comment line carrying a backlog ID, PR number, date, or change narration
+	scripts/ci/check-comment-provenance.sh
+
 # The shipped runner template library (deploy/templates/) may contain only what
 # CI exercises (Q554). A golden template is an implicit validation claim, so an
 # entry nothing runs is indistinguishable from a validated one and the library

@@ -83,5 +83,6 @@ Read every comment line the diff adds and check, in order:
 
 1. Each sentence passes the test, read as the later reader.
 2. No backlog ID, PR number, date, or change-narration word outside a `TODO(Q…)`.
+   `make comment-provenance-check` fails the branch on the first three and on "used to"; other narration and the two checks below are yours to catch.
 3. No implementation comment over three lines without a reason this page names.
 4. Everything cut is in the commit message, the PR description, or a doc, not gone.

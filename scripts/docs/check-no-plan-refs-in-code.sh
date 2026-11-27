@@ -118,7 +118,7 @@ if [[ -n "$go_hits" || -n "$comment_hits" ]]; then
         fi
         printf '\nPlans get archived; a plan path in code rots on archival and forces a code\n'
         printf 'edit (re-triggering heavy CI) during a docs-only move. Cite a durable doc\n'
-        printf '(design/operations) or a stable Q-ID / appendix §-ref instead. A comment\n'
+        printf '(design/operations) or an appendix §-ref instead. A comment\n'
         printf 'that must name a plan file the script itself operates on may opt out with a\n'
         printf 'no-plan-refs: <reason> marker on the same line. See\n'
         printf 'docs/development/maintaining-backlog.md#archiving-completed-plan-docs\n'
