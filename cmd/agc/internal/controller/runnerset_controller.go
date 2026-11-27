@@ -532,11 +532,15 @@ func (r *RunnerSetReconciler) cleanupLocalState(key types.NamespacedName) {
 	r.ScaleSetMetrics.DeleteRunnerSet(key.Namespace, key.Name)
 }
 
+// recordEvent formats note itself rather than handing it to Eventf, so go vet's
+// printf check infers it as a printf wrapper and rejects a non-constant note
+// passed without arguments: a % in a job name or an error would otherwise be
+// read as a verb (Q1405).
 func (r *RunnerSetReconciler) recordEvent(rs *v2.RunnerSet, eventtype, reason, action, note string, args ...any) {
 	if r.Recorder == nil {
 		return
 	}
-	r.Recorder.Eventf(rs, nil, eventtype, reason, action, note, args...)
+	r.Recorder.Eventf(rs, nil, eventtype, reason, action, "%s", fmt.Sprintf(note, args...))
 }
 
 // drainConditions reads pending listener-pushed condition updates and merges those
@@ -579,7 +583,7 @@ func (r *RunnerSetReconciler) drainEvents(rs *v2.RunnerSet) {
 		select {
 		case ev := <-r.eventCh:
 			if ev.namespace == rs.Namespace && ev.name == rs.Name {
-				r.recordEvent(rs, ev.eventtype, ev.reason, ev.action, ev.note)
+				r.recordEvent(rs, ev.eventtype, ev.reason, ev.action, "%s", ev.note)
 			} else {
 				skipped = append(skipped, ev)
 			}
@@ -616,7 +620,7 @@ func (r *RunnerSetReconciler) setReadyCondition(rs *v2.RunnerSet, ready bool, re
 		if !ready {
 			etype = corev1.EventTypeWarning
 		}
-		r.recordEvent(rs, etype, reason, "Reconcile", msg)
+		r.recordEvent(rs, etype, reason, "Reconcile", "%s", msg)
 	}
 }
 
@@ -750,7 +754,7 @@ func (r *RunnerSetReconciler) setReapBlockingSidecarStatus(rs *v2.RunnerSet, tem
 	// Warn once on a genuine False→True transition so the misconfiguration lands in the
 	// event stream, not only in status.
 	if status == metav1.ConditionTrue && prev.Status != metav1.ConditionTrue {
-		r.recordEvent(rs, corev1.EventTypeWarning, reason, "Reconcile", msg)
+		r.recordEvent(rs, corev1.EventTypeWarning, reason, "Reconcile", "%s", msg)
 	}
 }
 
@@ -779,7 +783,7 @@ func (r *RunnerSetReconciler) setRunnerVersionStatus(rs *v2.RunnerSet, template 
 	// Warn once on a genuine transition into too-old so the deadline lands in the event
 	// stream while there is still time to change the image.
 	if cond.Status == metav1.ConditionTrue && prev.Status != metav1.ConditionTrue {
-		r.recordEvent(rs, corev1.EventTypeWarning, cond.Reason, "Reconcile", cond.Message)
+		r.recordEvent(rs, corev1.EventTypeWarning, cond.Reason, "Reconcile", "%s", cond.Message)
 	}
 }
 

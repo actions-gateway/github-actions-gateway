@@ -73,7 +73,7 @@ func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context,
 		ObservedGeneration: rs.Generation,
 	})
 	if unsched.unschedulable && !wasUnsched {
-		r.recordEvent(rs, corev1.EventTypeWarning, "WorkersUnschedulable", "Reconcile", unsched.message)
+		r.recordEvent(rs, corev1.EventTypeWarning, "WorkersUnschedulable", "Reconcile", "%s", unsched.message)
 	}
 
 	r.applyWorkersNotStartingCondition(rs, unsched)
@@ -119,7 +119,7 @@ func (r *RunnerSetReconciler) applyWorkersNotStartingCondition(rs *v2.RunnerSet,
 		ObservedGeneration: rs.Generation,
 	})
 	if notStarting && !was {
-		r.recordEvent(rs, corev1.EventTypeWarning, "WorkersNotStarting", "Reconcile", message)
+		r.recordEvent(rs, corev1.EventTypeWarning, "WorkersNotStarting", "Reconcile", "%s", message)
 	}
 }
 
@@ -190,7 +190,7 @@ func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs
 	// consequence — this set has STOPPED taking jobs — and that is the moment an
 	// operator needs to know about, not the stuck pod that preceded it.
 	if declined && !wasDeclined {
-		r.recordEvent(rs, corev1.EventTypeWarning, "WorkerCapacityDeclined", "Reconcile", message)
+		r.recordEvent(rs, corev1.EventTypeWarning, "WorkerCapacityDeclined", "Reconcile", "%s", message)
 	}
 	return recheck
 }
