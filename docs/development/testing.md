@@ -1794,7 +1794,7 @@ These shortcuts recur, and each produces confident-but-wrong diagnoses:
   It reads like a hung wait and is a snapshot, not a verdict: the failure is the later `[FAILED] in [It] - <file>:<line> @ <time>` line, and a spec's failure-path dump (`kubectl describe` of the pods it names) carries the pod's own `Started`/`Finished` times.
   Q1015 was filed as a 2-minute pod wait timing out off that block; the pod had completed in 10 s with `CURL_RC=28`, the failure was the assertion on the next line, and the row carried "needs a live cluster and a maintainer at the keyboard" for a week on a question the log answered.
 - **Waiting out a matrix to read a leg that already failed.** `gh run view --job <id> --log-failed` refuses while the *run* is in progress ("logs will be available when it is complete"), so one slow leg withholds every finished leg's log, and pr-sentinel's captured excerpt reads `(no failed-step log available for run <id>)` for the same reason.
-  `gh api "repos/<owner>/<repo>/actions/jobs/<id>/logs"` reads a completed job's log immediately, whatever its run is doing; get the ids from `gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .databaseId'`.
+  `gh api --allow-escape-sequences "repos/<owner>/<repo>/actions/jobs/<id>/logs"` reads a completed job's log immediately, whatever its run is doing ([why the flag](#a-refused-job-log-fetch)); get the ids from `gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") | .databaseId'`.
   Measured 2026-08-12 on run `31622300898`, job `94201728982`: `--log-failed` answered `run 31622300898 is still in progress; logs will be available when it is complete` while that job had read `completed failure` for minutes and `trivy (proxy, 1)` was still `in_progress`; `gh api` returned the job's 1,639-line log in the same minute, naming a syft download that exhausted its retry budget against a release-CDN `503`.
   Reach for it whenever a red job's cause decides what you do next, rather than treating the wait as unavoidable.
 
@@ -1852,6 +1852,16 @@ Each is a claim about state, and each has a cheap way of being wrong:
   Add a count of the reports beside it, so a case that vanishes fails rather than quietly shrinking the log.
   `scripts/ci/workflow-publish-steps-test.sh` is the worked shape.
 - **A tool that exits 0 having printed nothing is the same class at its mildest.** `gh attestation verify` writes its summary only to a TTY; captured or redirected it is silent, so make it emit something assertable (`--format json`, then read the predicate) rather than trusting the status.
+- <a id="a-refused-job-log-fetch"></a>**A job log fetch that is refused leaves nothing for your grep to find.** `gh api .../actions/jobs/<id>/logs` exits 1 when the log contains terminal escape sequences, writes no log, and says `pass --allow-escape-sequences to output it anyway` on stderr.
+  Redirected with `> job.log 2>&1`, the file holds that one message, so a grep for the assertion you expected comes back empty and reads as "the job never ran it".
+  Only some logs carry escapes, so the same command can work on one job and fail on the next.
+  Measured 2026-11-26 on gh 2.103.3, job `140270029259` of run `45926825833`: without the flag, exit 1 and 0 bytes on stdout; with it, 371,613 bytes.
+  When a job log is the evidence for a claim:
+  - Pass `--allow-escape-sequences` to `gh api`.
+    `gh run view --job <id> --log` returned the same job's log without a flag, once its run had finished.
+  - Read the fetch's own exit status before you grep what it wrote.
+  - Grep the log for a line that predates the change under test.
+    If that one is missing too, suspect the read before the job.
 - **A state observed once is not a steady state.** Pods wedged now may clear in ten minutes, and a set that looks static may be churning underneath a stable count, so compare *identities* across two readings rather than counts.
 - **A count grouped by symptom is not a measurement of cause.** workspace-guard's friction report folds `f=$(ls -t …)`, `for f in <glob>`, and a literal `f=/path` into a single `$f` row, so one count of 31 supported four incompatible explanations — the pattern actually being claimed was 4 of them, none in the previous seven days.
   Exercising the system beat counting its records: nineteen prompts whose command text contained a scratchpad path read as a guard defect until the guard was fed a payload directly, which showed it already exempts the session's own scratchpad and every one of the 19 was a correctly-flagged cross-session access.
