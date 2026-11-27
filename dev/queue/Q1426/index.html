@@ -2740,14 +2740,14 @@ The direct branch, where the reaped pod's own run is the one cancelled, has no s
 <p>Measured 2026-11-27 on the unit-test fake of GitHub, with a throwaway test on <code>newAbandonedScaleSetFixture</code>: <code>job-a</code> and <code>job-b</code> are in flight for run 111, <code>job-b</code>'s worker has started <code>job-b</code>, and <code>job-a</code>'s worker is reaped while <code>Pending</code>.
 <code>RecoverAbandonedScaleSetWorker</code> posts <code>/repos/myorg/repo-a/actions/runs/111/force-cancel</code>.
 The existing <code>TestStrandedJob_Q1235_SparesARunWithAJobRunning</code> covers only the shape where another worker's runner took the reaped pod's job.</p>
-<p>Not measured: what the force-cancel does to the running job at GitHub.
-That it ends every job of the run is the claim Q1235 acted on, and <a href="../Q1246/">Q1246</a> owns its measurement on a live multi-job run.
-This row is separate from Q1246: it is the code path that already takes the cautious answer on one branch and not the other.
-It is also separate from Q1398, which is about which run a disruption before the start names.</p>
+<p>Measured on dogfood the same day (<a href="../../plan/q645-abandoned-completion/#q1246--the-multi-job-measurement-2026-11-27">the readings</a>, Q1246): the AGC's force-cancel ends every unfinished job of the run within a second, a job on another set's worker and a job on a GitHub-hosted runner among them, and a re-run restarts each from the beginning.
+A never-started job left alone ended none of them in 41 minutes.
+This row is separate from Q1398, which is about which run a disruption before the start names.</p>
 <p>The check can see only jobs on this set's workers.
 A job of the run on another <code>RunnerSet</code>, or on a GitHub-hosted runner, is invisible to <code>runStarted</code> on both branches, and reading the run's jobs from GitHub before cancelling is what would cover it.</p>
 <p><strong>A fix:</strong> apply the <code>runStarted</code> check to the pod's own run before <code>forceCancelInBackground</code>, on the reaper seam and the scan seam, and leave the job to GitHub's unstarted-job timeout as the stranded branch does.
-Hold it until Q1246 says whether the timeout spares the running jobs, since <a href="../Q1248/">Q1248</a> records that as unmeasured too.</p>
+What leaving it costs: on a scale set GitHub withdrew the assignment and offered the job again, twice, and cancelled nothing, so the job stays queued and the set keeps a worker for it until the run is cancelled or its other jobs end (<a href="../Q1248/">Q1248</a>).
+The run then needs a re-run of that one job once its other jobs conclude, which the abandoned arm does not do today.</p>
 
 
 

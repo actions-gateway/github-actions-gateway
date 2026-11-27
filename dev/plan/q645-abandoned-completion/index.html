@@ -2861,6 +2861,56 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#q1246--the-multi-job-measurement-2026-11-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q1246 — the multi-job measurement (2026-11-27)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Q1246 — the multi-job measurement (2026-11-27)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-agcs-force-cancel-ends-every-unfinished-job" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The AGC's force-cancel ends every unfinished job
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#github-cancelled-nothing-in-41-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHub cancelled nothing in 41 minutes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-this-decides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this decides
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#q691--the-recovery-re-run-arm-2026-08-08" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2948,7 +2998,8 @@ The remedy (Q676) is measured and decided the same day: the listener reports <st
 The fast ending (Q683) is measured and shipped 2026-08-05: a standalone REST force-cancel concludes run and job <code>cancelled</code> in ~1 s, per <a href="#q683--the-fast-ending-measurement-2026-08-05">the fast-ending measurement</a>.
 The recovery arm that ending arms (Q691) shipped 2026-08-08: the cancelled run is re-run automatically once capacity returns, bounded by the shared per-run retry budget, per <a href="#q691--the-recovery-re-run-arm-2026-08-08">the recovery re-run arm</a>.
 The sibling <code>skipped</code> arm (Q682) was never measured; Q264 removed the classic fan-out that sent it.
-Open: what the force-cancel does to a multi-job run's healthy jobs is <a href="../../queue/Q1246/">Q1246</a>.</p>
+What the force-cancel does to a multi-job run's healthy jobs (Q1246) is measured 2026-11-27 on dogfood: it ends every unfinished job of the run, per <a href="#q1246--the-multi-job-measurement-2026-11-27">the multi-job measurement</a>.
+Open: the check that keeps it off a run with a job running is <a href="../../queue/Q1426/">Q1426</a>, and the scale-set tier's unstarted-job timeout, which that measurement did not show, is <a href="../../queue/Q1248/">Q1248</a>.</p>
 <p>Queue item: Q645 (completed; done rows are deleted).
 Origin: <a href="../archive/release-1.3/#the-rc5-re-run-2026-08-02">release-1.3.md § The rc.5 re-run</a>.</p>
 <h2 id="the-question">The question<a class="headerlink" href="#the-question" title="Permanent link">&para;</a></h2>
@@ -3187,6 +3238,150 @@ One run, <a href="https://github.com/actions-gateway/github-actions-gateway/acti
 The deregistration candidate (Q418's mechanism) is moot for this scenario: the record is deletable only <em>after</em> a conclusion, so it cannot cause one.</p>
 <p>Shipped the same day: the classic-tier provisioner force-cancels the run (identity from the acquire payload's <code>github</code> context, the same <code>repoInfo()</code> read the eviction re-run uses) before reporting <code>abandoned</code>, counted by <code>actions_gateway_abandoned_run_force_cancels_total</code>; the unstarted-job timeout stays the backstop for <code>identity_unknown</code>/<code>error</code> outcomes.
 The recovery re-run arm this measurement arms is Q691, below.</p>
+<h2 id="q1246--the-multi-job-measurement-2026-11-27">Q1246 — the multi-job measurement (2026-11-27)<a class="headerlink" href="#q1246--the-multi-job-measurement-2026-11-27" title="Permanent link">&para;</a></h2>
+<p>Q683 measured the force-cancel on a single-job run.
+This reads it on a run of four jobs, on the dogfood cluster with the AGC at <code>v2.0.1-rc.2</code> making the call, from the fixture <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/q1246-forcecancel-probe.yml"><code>q1246-forcecancel-probe.yml</code></a>:</p>
+<table>
+<thead>
+<tr>
+<th>Job</th>
+<th>Runs on</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>stuck</code></td>
+<td><code>gag-q1246-stuck</code>, a throwaway <code>RunnerSet</code> whose template requires a node pool that does not exist</td>
+<td>Is assigned, and its worker stays <code>Pending</code></td>
+</tr>
+<tr>
+<td><code>healthy</code></td>
+<td><code>gag-ci-scaleset</code>, the dogfood <code>ci</code> set</td>
+<td>Sleeps, logging every 15 seconds</td>
+</tr>
+<tr>
+<td><code>hosted</code></td>
+<td><code>ubuntu-latest</code></td>
+<td>The same</td>
+</tr>
+<tr>
+<td><code>quick</code></td>
+<td><code>ubuntu-latest</code></td>
+<td>Succeeds at once</td>
+</tr>
+</tbody>
+</table>
+<p>The stuck job sits on a second set because nothing holds one worker of a set <code>Pending</code> beside a running one.
+The run and its jobs were sampled from the REST API every 10 seconds, and each state change recorded.</p>
+<h3 id="the-agcs-force-cancel-ends-every-unfinished-job">The AGC's force-cancel ends every unfinished job<a class="headerlink" href="#the-agcs-force-cancel-ends-every-unfinished-job" title="Permanent link">&para;</a></h3>
+<p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/46053212506">46053212506</a>, <code>pendingPodDeadline: 2m</code>.
+The throwaway set was created once <code>healthy</code> was running, so the reap could not land on a job still waiting for its node.
+Times are UTC, from the AGC's log and each job's <code>completed_at</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Time</th>
+<th>Event</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>19:00:44</td>
+<td><code>healthy</code> starts on its worker; <code>hosted</code> has run since 18:57:39 and <code>quick</code> succeeded at 18:57:37</td>
+</tr>
+<tr>
+<td>19:01:03</td>
+<td><code>stuck</code> is assigned to the throwaway set, and its worker is created a second later</td>
+</tr>
+<tr>
+<td>19:03:03</td>
+<td>The reaper deletes the worker, <code>Pending</code> past its deadline, and the AGC posts the force-cancel</td>
+</tr>
+<tr>
+<td>19:03:04</td>
+<td><code>stuck</code>, <code>healthy</code> and <code>hosted</code> are each <code>completed</code>/<code>cancelled</code>, and so is the run; <code>quick</code> keeps <code>success</code></td>
+</tr>
+<tr>
+<td>19:03:23</td>
+<td><code>rerun-failed-jobs</code>, called by hand, is accepted</td>
+</tr>
+<tr>
+<td>19:03:34</td>
+<td>Attempt 2 lists <code>stuck</code>, <code>healthy</code> and <code>hosted</code> re-queued or running, and <code>quick</code> carried from attempt 1 with its runner and <code>completed_at</code></td>
+</tr>
+<tr>
+<td>19:05:26</td>
+<td>The reaper deletes attempt 2's stuck worker, and the AGC force-cancels again</td>
+</tr>
+<tr>
+<td>19:05:28</td>
+<td>The same three jobs are <code>cancelled</code> again</td>
+</tr>
+</tbody>
+</table>
+<p>So a force-cancel ends a job running on another set's worker and a job on a GitHub-hosted runner, in the second it lands, twice of twice.
+<code>hosted</code>'s log shows the step interrupted mid-sleep (<code>got SIGINT</code>, then <code>The operation was canceled</code>).
+<code>healthy</code>'s log could not be fetched for either attempt, so how its step ended is not read; its worker pod finished <code>Completed</code>.
+The re-run restarts each cancelled job from the beginning and leaves a job that had succeeded alone.</p>
+<p>The AGC held the run for its capacity-gated re-run and never fired it, because no worker of the throwaway set ever bound: <code>capacity never returned for an abandoned run within the wait window</code> at 19:33:20, thirty minutes after the first cancel.</p>
+<h3 id="github-cancelled-nothing-in-41-minutes">GitHub cancelled nothing in 41 minutes<a class="headerlink" href="#github-cancelled-nothing-in-41-minutes" title="Permanent link">&para;</a></h3>
+<p>Run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/46054293456">46054293456</a>, <code>pendingPodDeadline: 60m</code>, so that the reap could not come first.</p>
+<table>
+<thead>
+<tr>
+<th>Time</th>
+<th>Event</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>19:06:17</td>
+<td><code>stuck</code> is assigned, and its worker is created a second later</td>
+</tr>
+<tr>
+<td>19:07:02</td>
+<td><code>healthy</code> starts; <code>hosted</code> has run since 19:06:19</td>
+</tr>
+<tr>
+<td>19:11:18</td>
+<td>The scale-set session delivers <code>JobCompleted</code>, result <code>canceled</code>, for the assignment, and in the same second assigns the job again under a new job ID</td>
+</tr>
+<tr>
+<td>19:11:48</td>
+<td>The AGC reaps the first worker as <code>completed_pending</code>, with no force-cancel, and creates one for the new assignment at 19:12:09</td>
+</tr>
+<tr>
+<td>19:16:18</td>
+<td>The same again: <code>canceled</code>, and a third assignment</td>
+</tr>
+<tr>
+<td>19:46:23</td>
+<td><code>hosted</code> succeeds after its 40 minutes</td>
+</tr>
+<tr>
+<td>19:47:06</td>
+<td><code>healthy</code> succeeds after its 40 minutes</td>
+</tr>
+<tr>
+<td>19:47:32</td>
+<td>The run still reads <code>queued</code> and <code>stuck</code> still reads <code>queued</code>; a plain cancel, by hand, ends both one second later</td>
+</tr>
+</tbody>
+</table>
+<p>The REST API showed <code>stuck</code> as <code>queued</code> throughout, with no runner, and the run never concluded on its own.
+The roughly 15-minute cancel of run and job that Q676 measured for an acquire the classic broker was told nothing about did not happen here: on a scale set, GitHub withdrew each of the first two assignments five minutes after making it (5:01 and 5:00) and offered the job again.
+The third assignment stood for 31 minutes with no withdrawal, which is not explained.
+One run, so the five-minute figure and the count of two are readings and not a rule.</p>
+<h3 id="what-this-decides">What this decides<a class="headerlink" href="#what-this-decides" title="Permanent link">&para;</a></h3>
+<ul>
+<li>A never-started job left alone costs its run's other jobs nothing, for at least 41 minutes, and the force-cancel costs each of them its progress.
+  The check the stranded-job branch makes before cancelling (Q1235) is right, and the direct branch needs it too (<a href="../../queue/Q1426/">Q1426</a>).</li>
+<li><code>maxEvictionRetries: 0</code> has to skip the force-cancel, since at 0 it ends healthy jobs and re-runs nothing (<a href="../../queue/Q1428/">Q1428</a>).</li>
+<li>Routing never-started preemption and eviction victims through the force-cancel would end the healthy jobs of every multi-job run it touched (<a href="../../queue/Q1230/">Q1230</a>).</li>
+<li>"GitHub cancels it at its ~15-minute unstarted-job timeout" is a classic-tier reading, and the operator docs state it for the scale-set tier, where this run did not show it (<a href="../../queue/Q1248/">Q1248</a>).</li>
+</ul>
+<p>Not read: a matrix, a job that <code>needs</code> the stuck one, a run whose stuck job is on the same set as a running one, and anything past 41 minutes.</p>
 <h2 id="q691--the-recovery-re-run-arm-2026-08-08">Q691 — the recovery re-run arm (2026-08-08)<a class="headerlink" href="#q691--the-recovery-re-run-arm-2026-08-08" title="Permanent link">&para;</a></h2>
 <p>The Q683 ending is honest and recoverable, but recovery was still a human opening the run and clicking re-run.
 This arm automates it, and the whole design question is <em>when</em>, not <em>whether</em>: the run was abandoned because a worker pod sat Pending past <code>pendingPodDeadline</code> and the reaper deleted it, so an immediate re-run re-queues the job into the pool that was starved in the first place.
