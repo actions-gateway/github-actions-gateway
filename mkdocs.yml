@@ -164,6 +164,7 @@ hooks:
   - hooks/source_links.py
   - hooks/backlog_link.py
   - hooks/offline_links.py
+  - hooks/table_pipes.py
 
 # Site-side link gate (Q560). scripts/docs/check-doc-links.sh resolves links the way
 # github.com does; MkDocs resolves them differently, so a link can pass that gate
