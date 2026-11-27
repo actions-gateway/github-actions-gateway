@@ -71,6 +71,10 @@ expect 'escape outside a code span' \
 	'| a\|b | `c` |' unescape '| a\|b | `c` |'
 expect 'prose line, not a row' \
 	'see `a\|b` here' unescape 'see `a\|b` here'
+expect 'escaped backtick opens no span, as on GitHub' \
+	'| \`x\|y` | z |' unescape '| \`x\|y` | z |'
+expect 'escaped backslash before a backtick still opens one' \
+	'| \\`x|y` |' unescape '| \\`x\|y` |'
 expect 'table-shaped line inside a fence' \
 	$'```\n| `a\\|b` |\n```' unescape $'```\n| `a\\|b` |\n```'
 expect 'row after the fence closes is rewritten' \

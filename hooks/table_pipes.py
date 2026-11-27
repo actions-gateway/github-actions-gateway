@@ -29,7 +29,7 @@ log = logging.getLogger("mkdocs.hooks.table_pipes")
 
 _FENCE = re.compile(r"^\s*(?:>\s*)*(`{3,}|~{3,})")
 _ROW = re.compile(r"^\s*(?:>\s*)*\|")
-_SPAN = re.compile(r"(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)")
+_SPAN = re.compile(r"(?<!`)(?:(?<!\\)|(?<=\\\\))(`+)(?!`)(.+?)(?<!`)\1(?!`)")
 _CELL = re.compile(r"<t([dh])\b[^>]*>(.*?)</t\1>", re.S)
 _CODE = re.compile(r"<code\b[^>]*>(.*?)</code>", re.S)
 

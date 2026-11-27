@@ -703,7 +703,9 @@ It rewrites `\|` to `|` inside code spans on table rows before Python-Markdown r
 It is the last hook in `mkdocs.yml` so the backlog table `queue_page.py` appends gets the same treatment, since `queue.py render` escapes every pipe in a note.
 A cell that genuinely means a backslash-pipe writes it as `<code>\&#124;</code>`, which the check does not read as one.
 
-The Markdown checkers that parse table cells, `check-webhook-selectors.py` and `check-dashboard-tables.py`, read `\|` as `|` already, so they and the site now agree.
+The check catches a `\|` the rewrite missed, not one it removed wrongly.
+The rewrite treats any line opening with `|` as a row, so a table-shaped line in an indented code block or a list item's continuation would lose a `\|` that GitHub keeps; no page holds one.
+`check-webhook-selectors.py`, the one Markdown checker that reads a cell's text, already reads `\|` as `|`, so it and the site agree.
 Unit tests: `scripts/docs/table-pipes-hook-test.sh`, under `make check`.
 
 ## Publication scope
