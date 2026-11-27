@@ -47,7 +47,7 @@
 //	semverfloor [-from REF] [-to REF]
 //	semverfloor [-from REF] [-to REF] -notes
 //	semverfloor -check-sources
-//	git diff --name-only A..B | semverfloor -ships
+//	git diff --name-only A..B | semverfloor -ships -from A -to B
 package main
 
 import (
@@ -67,12 +67,12 @@ func main() {
 		to           = flag.String("to", "", "end of the window (default: origin/main, else HEAD)")
 		checkSources = flag.Bool("check-sources", false, "assert the release surface derivation still matches publish.yml; exit 1 if not")
 		notes        = flag.Bool("notes", false, "enumerate the window for the release notes, with the residue path-classified")
-		ships        = flag.Bool("ships", false, "read paths on stdin, print those on the released surface; ignores commit type entirely")
+		ships        = flag.Bool("ships", false, "read paths on stdin, print those on the released surface; ignores commit type entirely. With -from and -to, the Dockerfile counts only when a published stage differs between them")
 	)
 	flag.Parse()
 
 	if *ships {
-		if err := runShips(); err != nil {
+		if err := runShips(*from, *to); err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, "semverfloor:", err)
 			os.Exit(1)
 		}
@@ -105,7 +105,16 @@ func main() {
 // into a released binary, so a test-only change leaves every artifact byte for
 // byte the same. Counting it would answer "the artifact moved" for added coverage
 // or a flake fix and cost a release candidate that nothing required.
-func runShips() error {
+//
+// The Dockerfile has no path rule, since whether it ships depends on what changed
+// in it, so a path list alone cannot answer for it. Given the window the paths came
+// from, it is printed when a published stage differs between the window's two ends
+// — the same endpoints the caller diffed, so an edit reverted inside the window is
+// correctly no change. Without a window it is printed, since nothing can be compared.
+func runShips(from, to string) error {
+	if (from == "") != (to == "") {
+		return fmt.Errorf("-ships takes -from and -to together, or neither")
+	}
 	root, err := repoRoot()
 	if err != nil {
 		return err
@@ -118,6 +127,10 @@ func runShips() error {
 	if err != nil {
 		return err
 	}
+	dockerfileShips := func() bool { return true }
+	if from != "" {
+		dockerfileShips = func() bool { return dockerfileDiffers(root, from, to, sources.Images) }
+	}
 
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
@@ -126,7 +139,7 @@ func runShips() error {
 		if p == "" {
 			continue
 		}
-		if shipsBytes(surface, p) {
+		if shipsBytes(surface, p) || (p == dockerfilePath && dockerfileShips()) {
 			fmt.Println(p)
 		}
 	}

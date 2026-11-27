@@ -683,6 +683,7 @@ That is how `v1.5.0-rc.1` was superseded: it validated, eight rows merged on top
 The rule is **byte-identical artifacts, not "docs only"**.
 Documentation changes are expected in this window and cannot be avoided, because the validation verdict does not exist until the candidate is tagged, so the notes' Validation section is necessarily written afterwards.
 But the labels do not line up: `charts/actions-gateway/README.md` is a markdown file that **ships inside the chart tarball**, so a pure-docs pull request can change a published chart's bytes.
+The same holds for a `build(deps)` pull request that bumps a base image in the `Dockerfile`: it changes every image built on that base, so it counts, while a comment-only `Dockerfile` edit does not (Q1377).
 Check rather than classify:
 
 ```bash
