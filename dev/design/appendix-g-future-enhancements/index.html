@@ -3595,8 +3595,8 @@ Those cheaper layers should be exhausted first; this item is the residual.</p>
 </blockquote>
 <p><strong>Current behavior.</strong> Worker pods are created <strong>reactively</strong> the moment a job is acquired from the broker long-poll, with a just-in-time (JIT) runner config bound to that job, and released on completion (<a href="../02-architecture/">§2 architecture</a>).
 There is no pool of pre-created pods.
-Job-acquisition latency is therefore bounded by pod scheduling + image pull, <strong>not</strong> runner registration — the goroutine session multiplexer already holds a standing pool of pre-registered virtual sessions at negligible cost (<a href="../appendix-d-alternatives-considered/">appendix-d §KEDA</a>, <a href="../appendix-a-capacity-slos/">appendix-a SLOs</a>).
-So GAG is already "warm" at the layer ARC's <code>minRunners &gt; 0</code> exists to warm; only the compute is cold, by design.</p>
+The listener is already polling when a job arrives, but each job still gets its own runner registration when its JIT config is minted.
+So a job waits on that API call, pod scheduling and image pull; how the three compare is unmeasured here.</p>
 <p><strong>What it would add.</strong> A bounded, per-RunnerGroup pool of <strong>pre-scheduled, image-warm worker pods</strong> kept idle so an acquired job binds to a waiting pod instead of creating one — eliminating the pod-schedule (and, on those nodes, image-pull) latency for the first <em>N</em> concurrent jobs.</p>
 <p><strong>Why it is a narrow, last-resort layer.</strong> Decompose the cold start and each layer has a <em>cheaper</em> fix that does not hold idle compute:</p>
 <table>
@@ -3609,7 +3609,7 @@ So GAG is already "warm" at the layer ARC's <code>minRunners &gt; 0</code> exist
 <tbody>
 <tr>
 <td>Runner <strong>registration</strong></td>
-<td>Already eliminated — goroutine session pool.</td>
+<td>None here: one registration per job, which a warm pod would still need when its JIT config is injected.</td>
 </tr>
 <tr>
 <td><strong>Image</strong> pull</td>
@@ -3630,14 +3630,14 @@ So GAG is already "warm" at the layer ARC's <code>minRunners &gt; 0</code> exist
 And GPU cold-start is dominated by image + model-weight loading (the cache-volume row), not scheduling.
 So the segment that most often <em>feels</em> cold is the one this feature should <strong>not</strong> serve — point it at P2P + cache volumes + warm node capacity (Karpenter/CA) instead.</p>
 <p><strong>Design tension.</strong> Today pod creation and JIT binding are coupled to acquisition; a warm pool decouples them — pre-create an <strong>unbound</strong> pod, then inject the JIT config into a waiting one at acquisition.
-That partially re-adopts the ARC pre-registered-idle-runner model GAG deliberately replaced with goroutines, and must preserve the single-use invariant (<strong>1 job per pod</strong>, <a href="../05-security/">§5.2 security</a>): a never-run warm pod may accept a fresh JIT config, but a pod must never be reused across jobs.
+That partially re-adopts the idle-runner model GAG's zero-idle design avoids, and must preserve the single-use invariant (<strong>1 job per pod</strong>, <a href="../05-security/">§5.2 security</a>): a never-run warm pod may accept a fresh JIT config, but a pod must never be reused across jobs.
 Open questions: the knob surface (<code>minIdleWorkers</code> scope/naming, per RunnerGroup), how the pool composes with the worker quota ceiling and <code>WorkerQuotaPressure</code> backoff, and pod TTL/recycle for idle warm pods.</p>
 <p><strong>Why it would be default-off.</strong> It reintroduces the idle-compute cost GAG's core value removes — a speed-for-idle-cost trade.
 Per the <a href="../05-security/">secure-/cost-by-default principle</a>, the zero-idle default stays; this is an explicit per-RunnerGroup opt-in, documented as a trade, and <em>not</em> recommended for GPU groups.</p>
 <p><strong>Status — parked (Deferred), demand-pull only.</strong> No Queue row and no priority position.
 Trigger: a self-hosted, multi-tenant CPU-CI team hits pod-schedule latency after exhausting P2P/pre-pull + cache volumes.
 Rationale for parking: the eligible audience is a single-digit fraction of GAG adopters (every filter above compounds, and GPU — a flagship segment — is excluded), and the cheaper layers absorb most real "GAG feels cold" reports.</p>
-<p><strong>Related.</strong> <a href="#g11-worker-scale-up-rate-limiting-anti-stampede">G.11</a> (scale-up <em>rate</em> limit — a ceiling on how fast pods start, the inverse concern); <a href="../appendix-d-alternatives-considered/">appendix-d §KEDA</a> (why the goroutine pool replaces pre-registered idle runners); <a href="../appendix-f-cost-model/">appendix-f cost model</a> (the idle-floor argument this trades against).</p>
+<p><strong>Related.</strong> <a href="#g11-worker-scale-up-rate-limiting-anti-stampede">G.11</a> (scale-up <em>rate</em> limit — a ceiling on how fast pods start, the inverse concern); <a href="../appendix-f-cost-model/">appendix-f cost model</a> (the idle-floor argument this trades against).</p>
 <hr />
 <h2 id="g13-server-side-apply-for-the-gmcs-child-resources">G.13. Server-Side Apply for the GMC's Child Resources<a class="headerlink" href="#g13-server-side-apply-for-the-gmcs-child-resources" title="Permanent link">&para;</a></h2>
 <p><strong>Current behavior.</strong> The GMC's per-reconcile <code>apply*</code> helpers write child resources with <code>controllerutil.CreateOrPatch</code> and a mutate closure that replaces the whole <code>Spec</code> — see the rationale in <a href="../02-architecture/#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply">§2 architecture</a>.

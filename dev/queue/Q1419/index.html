@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1113/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1419/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>release.md detaches the gate with nohup, bypassing the launch record - GitHub Actions Gateway</title>
+        <title>Appendix D names EgressProxyPool and RunnerGroup, not the v2 kinds - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#releasemd-detaches-the-gate-with-nohup-bypassing-the-launch-record" class="md-skip">
+        <a href="#appendix-d-names-egressproxypool-and-runnergroup-not-the-v2-kinds" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              release.md detaches the gate with nohup, bypassing the launch record
+              Appendix D names EgressProxyPool and RunnerGroup, not the v2 kinds
             
           </span>
         </div>
@@ -2733,17 +2733,11 @@
   
 
 
-<h1 id="releasemd-detaches-the-gate-with-nohup-bypassing-the-launch-record">release.md detaches the gate with nohup, bypassing the launch record<a class="headerlink" href="#releasemd-detaches-the-gate-with-nohup-bypassing-the-launch-record" title="Permanent link">&para;</a></h1>
-<p><code>docs/operations/release.md:441</code> detaches the release-validation gate as <code>nohup scripts/dogfood/validate-release.sh vX.Y.Z-rc.N &gt;tmp/validate-release.log 2&gt;&amp;1 &amp;</code>, and <code>:451</code> starts the sentinel as a bare <code>bash scripts/dogfood/release-sentinel.sh</code>.
-Neither goes through <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/record-launch.sh"><code>record-launch.sh</code></a>, so the longest-running commands in the repo, registered at 60-minute and 120-minute minimums, leave no stop handle on disk.
-The <code>release-candidate</code> skill's own copy of the same step (<code>.claude/skills/release-candidate/SKILL.md:149</code>) does use the wrapper, so the two recipes for one action disagree.</p>
-<p>That matters more since Q739, which enforces the wrapper for an <em>agent</em> backgrounding a registered tier: a session following release.md's form through <code>run_in_background</code> is now denied and told to rewrite, while a session following the skill is not.
-The guard does not fire on the doc's shell <code>&amp;</code>, so nothing is broken for a human at a terminal.
-The cost is one recipe teaching the shape the other repo rule forbids.</p>
-<p>Fix: give both lines the wrapper, matching the skill, and say what the record buys at that length of run.
-Check the surrounding reclaim and recovery steps for the same shape rather than only the two lines cited: the row lists where someone looked, not a census.</p>
-<p>Notes: an operator-facing page, so it publishes.
-Review the render per website.md rather than only the source.</p>
+<h1 id="appendix-d-names-egressproxypool-and-runnergroup-not-the-v2-kinds">Appendix D names EgressProxyPool and RunnerGroup, not the v2 kinds<a class="headerlink" href="#appendix-d-names-egressproxypool-and-runnergroup-not-the-v2-kinds" title="Permanent link">&para;</a></h1>
+<p><a href="../../design/appendix-d-alternatives-considered/">Appendix D</a> D.3 and D.5 describe this design's own features with <code>EgressProxyPool</code> and <code>RunnerGroup</code>.
+<code>git grep</code> finds no <code>EgressProxyPool</code> kind and no <code>type RunnerGroup</code> under <code>api/</code> or <code>cmd/</code>; the v2 kinds are <code>EgressProxy</code> and <code>RunnerSet</code>.
+D.3 also says both controls are expressed in the <code>ActionsGateway</code> CR, which is wrong for <code>priorityTiers</code>: the field is on <code>RunnerSetSpec</code> (<code>api/v2/runnerset_types.go</code>).</p>
+<p>Done when each GAG-side sentence in appendix D names a kind and field the v2 API serves.</p>
 
 
 

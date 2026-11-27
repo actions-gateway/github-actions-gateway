@@ -3998,14 +3998,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Neither <code>PreToolUse</code> hook this repo wires emits its own name, so a session it refuses cannot tell which of the six-odd guards spoke.</td>
 </tr>
 <tr>
-<td><a href="Q1113/">Q1113</a></td>
-<td><a href="../operations/release/">release.md detaches the gate with nohup, bypassing the launch record</a></td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>XS</td>
-<td><code>docs/operations/release.md:441</code> detaches the release-validation gate as `nohup scripts/dogfood/validate-release.sh vX.Y.Z-rc.N …</td>
-</tr>
-<tr>
 <td><a href="Q993/">Q993</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.mdreflow.yaml"><code>mdreflow</code> joins an author's sentence split, and the gate ratifies it</a></td>
 <td><code>ci</code> <code>docs</code> <code>debt</code></td>
@@ -4534,14 +4526,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The site stopped telling a single team to use ARC on 2026-11-07 and now says the team gets every GAG capability and that the running cost …</td>
 </tr>
 <tr>
-<td><a href="Q1309/">Q1309</a></td>
-<td>Date or withdraw the undated competitor claims in appendix D.1 to D.4</td>
-<td><code>docs</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Appendix D dates every third-party claim from D.9 on ("Every claim about a third-party system is dated, because they move"), and …</td>
-</tr>
-<tr>
 <td><a href="Q1310/">Q1310</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-sync.sh">deps-sync can leave go.sum untidy after go work sync moves an indirect</a></td>
 <td><code>debt</code> <code>ci</code> <code>retro</code></td>
@@ -4758,12 +4742,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>required_contexts</code> in <code>scripts/release/check-gates-green.sh</code> reads the branch rulesets with <code>gh api … --jq … 2&gt;/dev/null || true</code>, and …</td>
 </tr>
 <tr>
+<td><a href="Q1418/">Q1418</a></td>
+<td><a href="../why-gag/">why-gag's stamp note names ARC 0.14.2 while its cells say 0.15.0</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The note "What the current stamps were read against" in <a href="../why-gag/#how-to-read-the-arc-column">why-gag.md</a> says every ARC cell was read …</td>
+</tr>
+<tr>
 <td><a href="Q1417/">Q1417</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-release-ladder.sh">The release ladder's revived marker loses its escapes through awk -v</a></td>
 <td><code>bug</code> <code>tests</code></td>
 <td>🔲</td>
 <td>XS</td>
 <td><code>check-release-ladder.sh</code> passes <code>REVIVED_MARKER='(is|are) back\.\*\*'</code> to awk with <code>-v</code>, and <code>-v</code> processes escape sequences, so the …</td>
+</tr>
+<tr>
+<td><a href="Q1419/">Q1419</a></td>
+<td><a href="../design/appendix-d-alternatives-considered/">Appendix D names EgressProxyPool and RunnerGroup, not the v2 kinds</a></td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><a href="../design/appendix-d-alternatives-considered/">Appendix D</a> D.3 and D.5 describe this design's own features with <code>EgressProxyPool</code> and …</td>
 </tr>
 <tr>
 <td><a href="Q1420/">Q1420</a></td>
