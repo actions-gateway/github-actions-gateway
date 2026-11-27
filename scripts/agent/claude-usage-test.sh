@@ -36,9 +36,8 @@ readonly NON_SOURCE_RE='(^|/)(\.venv|venv|__pycache__)/'
 # required one, so a machine without it skips rather than fails — same contract
 # as scripts/docs/release-version-hook-test.sh. On CI it is a hard failure instead: a
 # gate that reports green by skipping is the false negative this gate exists to
-# remove. (Consequence for the documented `CI=1 make check` throttle opt-out: on
-# a python3-less machine that invocation fails here. Drop the CI=1 or install
-# python3.)
+# remove. (So `CI=1 make check` fails here on a python3-less machine; the
+# throttle opt-out is GAG_LOCAL_THROTTLE=off, which sets no CI.)
 if ! command -v python3 >/dev/null 2>&1; then
 	if [[ -n "${CI:-}" ]]; then
 		echo "claude-usage-test: python3 not found on PATH — install: https://www.python.org/downloads/" >&2

@@ -233,6 +233,7 @@ To prevent that, these phases auto-throttle on an **interactive, GUI-bearing dev
 Detection and sizing live in [`scripts/agent/local-throttle.sh`](../../scripts/agent/local-throttle.sh).
 
 **Setting `CI` yourself turns the desktop half of that off.** `throttle_active` returns false on any non-empty `CI` before it looks at the OS, so `CI=true make check` locally runs with no QoS prefix, no core cap and no heavy-build slot.
+On a Mac each heavy phase says so on stderr, a line opening `local-throttle: CI is set on a Mac` (Q1084), because a session copying CI's environment otherwise drops the desktop's protection without a word.
 `RUN_PARALLEL_JOBS` is the exception since Q1105: it comes from `fanout-jobs`, a separate verb that answers on CI at four times the vCPU count, so the fan-outs are capped rather than unbounded.
 On an 18-core Mac that is 72, above the 130 suites, so it does not bind there.
 `jobs` itself still prints nothing on CI, which is what keeps the CI number away from `GOMAXPROCS` and `golangci-lint -j`.
@@ -318,7 +319,8 @@ It is a no-op everywhere the throttle would only slow things down for no benefit
 - **Headless / SSH Linux shells** — no graphical session (`DISPLAY`/`WAYLAND_DISPLAY` unset), so build servers and remote shells are unaffected.
 - **Unsupported OSes** — native Windows (Git Bash/MSYS); use WSL2, which reports as Linux and follows the Linux rule.
 
-To opt out locally (e.g. a machine with cores to spare), set `CI=1` for the run: `CI=1 make check`.
+To opt out locally (e.g. a machine with cores to spare), set `GAG_LOCAL_THROTTLE=off` for the run: `GAG_LOCAL_THROTTLE=off make check`.
+Don't set `CI` for this: it also switches on every CI-only branch in the gates, such as a missing `python3` failing the run where a local run skips.
 
 ##### Not every WindowServer watchdog crash is a build
 
@@ -1528,7 +1530,7 @@ Two things it refuses to let pass quietly, both instances of the green-by-skippi
 
 - **`python3` missing.** `python3` is an [extended-tier prerequisite](../../CONTRIBUTING.md), so a local run without it *skips* (like `scripts/docs/release-version-hook-test.sh`).
   On CI (`$CI` set) the same condition is a hard failure — a gate that reports green having run nothing is exactly what this gate exists to remove.
-  The documented `CI=1 make check` throttle opt-out therefore fails on a python3-less machine; drop the `CI=1`.
+  So `CI=1 make check` fails on a python3-less machine; use `GAG_LOCAL_THROTTLE=off` to opt out of throttling instead.
 - **Zero tests discovered.** `unittest discover` exits 0 on an empty run, so a suite renamed off the `test*.py` pattern would leave the gate passing while testing nothing.
   The gate fails on `Ran 0 tests`.
 
