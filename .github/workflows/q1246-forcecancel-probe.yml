@@ -1,4 +1,4 @@
-# Q1246 probe fixture, dispatch-only: never runs in normal CI.
+# Force-cancel probe fixture, dispatch-only: never runs in normal CI.
 #
 # One run of four jobs, for reading what ends a multi-job run's other jobs when one
 # job's worker never starts:
