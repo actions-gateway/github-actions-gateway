@@ -3198,6 +3198,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The never-started handling force-cancels the whole workflow run (<code>forceCancelAbandonedRun</code>, <code>POST …/actions/runs/{id}/force-cancel</code>), then …</td>
 </tr>
 <tr>
+<td><a href="Q1426/">Q1426</a></td>
+<td><a href="../operations/troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">Reaped Pending worker force-cancels a run with a job still running</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A scale-set worker reaped at <code>pendingPodDeadline</code> has its own run force-cancelled even where another job of that run is running on a live …</td>
+</tr>
+<tr>
 <td><a href="Q1066/">Q1066</a></td>
 <td><a href="../operations/troubleshooting/#worker-image-runner-version">Registry read cannot present node-identity pull credentials (GAR, ECR)</a></td>
 <td><code>feature</code></td>
@@ -3268,6 +3276,54 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>A run holds two matrices under GitHub's default <code>fail-fast: true</code>, each with an aggregate job of its own (<code>if: always()</code>, red when one it …</td>
+</tr>
+<tr>
+<td><a href="Q1428/">Q1428</a></td>
+<td><a href="../operations/troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending"><code>maxEvictionRetries: 0</code> does not stop the abandoned force-cancel</a></td>
+<td><code>bug</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>With automatic re-runs turned off, a worker removed before it ran still has its run force-cancelled, and the run is then never re-run.</td>
+</tr>
+<tr>
+<td><a href="Q1427/">Q1427</a></td>
+<td><a href="../operations/troubleshooting/#evicted-worker-pods-exhausting-retry-budget"><code>maxEvictionRetries: 0</code> reports every disruption as budget exhausted</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A <code>RunnerSet</code> with automatic re-runs turned off still reports each disrupted worker as an exhausted retry budget.</td>
+</tr>
+<tr>
+<td><a href="Q1429/">Q1429</a></td>
+<td><a href="../design/04-operational-flows/#the-re-run-takes-only-the-killed-jobs-q1319">A disruption re-run takes the run's genuine failures with it</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>A job that failed on its own is re-run automatically when another job of its run is disrupted.</td>
+</tr>
+<tr>
+<td><a href="Q1430/">Q1430</a></td>
+<td><a href="../operations/troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">An abandoned run's re-run wait is lost on an AGC restart</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A run the gateway force-cancelled, because its worker never started, stays cancelled with no re-run and no signal when the AGC restarts …</td>
+</tr>
+<tr>
+<td><a href="Q1432/">Q1432</a></td>
+<td><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">No workflow or job can opt out of the automatic re-run</a></td>
+<td><code>feature</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>The only switch on automatic re-runs is <code>maxEvictionRetries</code> on the <code>RunnerSet</code>, so a job that must not be repeated cannot say so.</td>
+</tr>
+<tr>
+<td><a href="Q1431/">Q1431</a></td>
+<td><a href="../operations/troubleshooting/#flaky-jobs-and-platform-faults-on-failed-jobs"><code>FlakyJobDetected</code> names a run with no repository</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>XS</td>
+<td>A flaky verdict cannot be followed to its run from what it reports.</td>
 </tr>
 <tr>
 <td><a href="Q1315/">Q1315</a></td>
