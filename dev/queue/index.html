@@ -3918,6 +3918,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Four tracked files are read by <code>lint-status</code> and matched by no pattern in either of the workflow's two path lists, so a PR changing only …</td>
 </tr>
 <tr>
+<td><a href="Q1421/">Q1421</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/unit-test.yml">unit-test skips a PR that edits only files its tests read by symlink</a></td>
+<td><code>ci</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A pull request that changes only <code>deploy/templates/</code> does not run <code>TestTemplateLibrary_PodShape</code>, the test that checks each shipped runner …</td>
+</tr>
+<tr>
 <td><a href="Q948/">Q948</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/check-path-filters.sh">Nothing asserts a path filter covers the inputs its gated jobs read</a></td>
 <td><code>ci</code> <code>debt</code></td>
