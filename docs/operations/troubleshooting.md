@@ -1539,6 +1539,7 @@ The deadline is a capacity-protection mechanism; the job is re-queued separately
 
 **The AGC force-cancels the run (Q683, Q766).** The worker never ran, so nothing will ever report its job, and the assignment is fire-and-forget, so the AGC has no way to report it either.
 The reconciler that reaped the pod issues a REST `force-cancel` of the run and logs `force-cancelled the abandoned job's run`: measured live (2026-08-05), the standalone call is accepted and concludes the run *and* job as **`cancelled`** about one second later, and the cancelled run *does* accept `rerun-failed-jobs`.
+The cancel is the run's: every other job of it that is still queued or running ends `cancelled` in the same second, on any runner, a GitHub-hosted one included, and the automatic re-run restarts each from the beginning (measured 2026-11-27 on a four-job run).
 This holds whether the reaped pod was never scheduled or was bound and still pulling its image; for the second, a real kubelet publishes a transient `Failed` before the pod goes, and the AGC still reads it as never having started (Q1231).
 The same handling takes a still-`Pending` worker someone else deletes, such as a drain.
 When GitHub refuses the call (`outcome="error"` on `actions_gateway_abandoned_run_force_cancels_total`), GitHub's own ~15-minute unstarted-job timeout reaches the same `cancelled` ending.
