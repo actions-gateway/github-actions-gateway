@@ -131,14 +131,20 @@ func TestEnumerateNotesListsAShippingDependencyBump(t *testing.T) {
 		baseFiles[dockerfilePath], "alpine:3.20", "alpine:3.21")}),
 		"build(deps): bump the fixture base", dockerfilePath)
 
+	// A test file beside shipped code is on the package-directory surface and
+	// compiles into no binary.
+	testOnly := commit(commitFiles(t, dir, "test(agc): cover the listener", map[string]string{
+		"cmd/agc/internal/listener/job_test.go": "package listener\n"}),
+		"test(agc): cover the listener", "cmd/agc/internal/listener/job_test.go")
+
 	s := testSurface()
 	s.DockerfileChanged = func(sha string) bool { return dockerfileChanged(dir, sha, publishedImages) }
-	r := Classify([]Commit{bump, tool, fixture}, s, gitNarrower{root: dir})
+	r := Classify([]Commit{bump, tool, fixture, testOnly}, s, gitNarrower{root: dir})
 	n := EnumerateNotes(r, nil)
 
 	if len(n.Unweighted) != 1 || n.Unweighted[0].Commit.SHA != bump.SHA {
-		t.Fatalf("Unweighted = %v, want only the published base bump; a dev tool and an "+
-			"unpublished stage change no artifact", subjects(n.Unweighted))
+		t.Fatalf("Unweighted = %v, want only the published base bump; a dev tool, an "+
+			"unpublished stage and a test file change no artifact", subjects(n.Unweighted))
 	}
 	if len(n.Ships) != 0 || len(n.Residue) != 0 || r.Floor != LevelNone {
 		t.Errorf("ships=%d residue=%d floor=%v, want 0/0/none: a dependency bump never raises the floor",

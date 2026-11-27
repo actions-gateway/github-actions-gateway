@@ -1035,7 +1035,8 @@ scripts/release/semver-floor.sh <prev-tag> HEAD --notes
 Two lists come back and they sum to the window's `feat`/`fix`/`perf` count: **Ships** is the enumeration to curate, **Residue** is every commit reaching no released artifact.
 A commit is admitted by the files it changed, checked against the surface `publish.yml` packages, so no scope string admits or excludes anything.
 The sum is the reconciliation: a commit cannot leave one list without arriving in the other.
-A third list, **Also ships, no semver weight**, holds commits of any other type that change a released artifact, such as a `build(deps)` bump of an image's base: they never raise the floor, and they go under the notes' **Dependencies** section (Q1380).
+A third list, **Also ships, no semver weight**, holds commits of any other type that change a released artifact: they never raise the floor, and the notes still owe each one a line.
+A `build(deps)` bump of an image's base goes under **Dependencies**; the list can also hold a refactor of shipped code or a chart README edit, so read each one (Q1380).
 Keep the trailing `(#NNNN)`: GitHub auto-links a bare `#NNNN` in a release body, so every line becomes traceable for free.
 Say in the notes that dev tooling, CI, and docs are excluded, so a reader does not read hundreds of commits as the user-visible change count.
 

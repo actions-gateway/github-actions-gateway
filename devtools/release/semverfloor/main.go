@@ -139,7 +139,7 @@ func runShips() error {
 // directory whole, so a _test.go beside shipped code reads as shipping, while the
 // toolchain never compiles one into a released binary.
 func shipsBytes(surface Surface, p string) bool {
-	return surface.Ships(p) && !strings.HasSuffix(p, "_test.go")
+	return surface.Ships(p) && !isGoTest(p)
 }
 
 func run(from, to string, checkSources, notes bool) error {

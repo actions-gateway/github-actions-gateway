@@ -76,6 +76,20 @@ func (s Surface) ShippedFiles(c Commit) []string {
 	return out
 }
 
+// isGoTest reports whether a path is a Go test file, which the toolchain never
+// compiles into a released binary.
+func isGoTest(p string) bool { return strings.HasSuffix(p, "_test.go") }
+
+func withoutGoTests(files []string) []string {
+	var out []string
+	for _, f := range files {
+		if !isGoTest(f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // levelFor is the semver weight of a commit that has already been shown to
 // touch the released surface.
 //
@@ -153,9 +167,12 @@ func Classify(commits []Commit, surface Surface, n Narrower) Result {
 			r.Unresolved = append(r.Unresolved, v)
 		}
 		if lvl == LevelNone {
-			if len(shipped) > 0 {
+			// A test file never compiles into a released binary, so a test-only
+			// commit changes no artifact.
+			v.Shipped = withoutGoTests(shipped)
+			if len(v.Shipped) > 0 {
 				if n != nil {
-					v.Shipped = n.Substantive(c, shipped)
+					v.Shipped = n.Substantive(c, v.Shipped)
 				}
 				if len(v.Shipped) > 0 {
 					r.Unweighted = append(r.Unweighted, v)
