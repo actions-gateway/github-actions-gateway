@@ -107,14 +107,19 @@ Exception: a Go build-/codegen-time tool may be added to the vendored `tools/` m
 
 ## Code standards
 
+### Comments
+
+**Before writing or editing a comment in any source file (Go, Bash, Python, YAML, Makefile), invoke the `code-comments` skill**; [code-comments.md](docs/development/code-comments.md) holds the reasons.
+A comment keeps only what a later reader of the file needs to read the code correctly or change it safely, in one or two lines.
+What changed, why this approach won, the incident behind it, measurements, and finished `QNNN`/PR numbers go in the commit message, the PR description, or `docs/`, never the comment; a backlog ID appears only as `TODO(QNNN):` for open work.
+**Do not match the surrounding file's comment density**: Go here runs 0.50 comment lines per code line, and 96% of the backlog IDs its comments cite are deleted rows.
+A comment asserting how something **upstream** behaves cites the measured version or the gate pinning it ([documentation-standards.md](docs/development/documentation-standards.md#an-upstream-behavior-claim-cites-a-measurement)) — Q270's unmeasured one was the safety argument for dropping a job, and Q551 refuted it.
+CRD field godoc (it becomes the API description) stays complete.
+
 ### Go
 
-- Follow Go best practices for code style, naming, comments, and package organization.
+- Follow Go best practices for code style, naming, and package organization.
 - Public types, functions, and packages must have godoc comments.
-- **Comments are terse, mechanism-focused, and present tense.** Long-form narrative rationale belongs in `docs/` or the PR description, not in code comments.
-  Never narrate the diff ("previously…", "no longer…", commit SHAs) or argue with a hypothetical reviewer in a comment; state a shared rationale once at the declaration and cross-reference it elsewhere.
-  A comment asserting how something **upstream** behaves cites the measured version or the gate pinning it ([documentation-standards.md](docs/development/documentation-standards.md#an-upstream-behavior-claim-cites-a-measurement)) — Q270's unmeasured one was the safety argument for dropping a job, and Q551 refuted it.
-  CRD field godoc (it becomes the API description) stays complete.
 - Tests must be meaningful — verify behavior, not just that the code runs.
 - All go modules in the repo must use the same Go version.
 - When a function starts something asynchronous, return a `<-chan struct{}` done channel so the caller controls whether and how to wait (block, select with timeout, ignore).

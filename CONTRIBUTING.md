@@ -220,6 +220,8 @@ See [`docs/development/code-generation.md`](docs/development/code-generation.md)
 - Async functions return a `<-chan struct{}` done channel — callers decide whether to block, select with timeout, or ignore.
 - All modules in the repo must use the same Go version.
 - Shell scripts follow the repo bash conventions — see [`docs/development/bash-style.md`](docs/development/bash-style.md).
+- Comments are one or two lines and say what a later reader of the file needs; history, rationale, and backlog IDs go in the commit message, the pull request, or `docs/`.
+  See [`docs/development/code-comments.md`](docs/development/code-comments.md).
 
 ## Documentation
 
