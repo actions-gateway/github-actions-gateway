@@ -2298,7 +2298,8 @@ main() {
 		echo ""
 		echo "Progress: ${RELEASE_STATUS_FILE} holds where this gate is, one JSON object,"
 		echo "  refreshed on every phase transition and e2e heartbeat. Watch it from an"
-		echo "  agent session with: bash ${SCRIPT_DIR}/release-sentinel.sh"
+		echo "  agent session with:"
+		echo "    ${REPO_ROOT}/scripts/agent/record-launch.sh bash ${SCRIPT_DIR}/release-sentinel.sh"
 	fi
 
 	# Child scripts run unattended past this point. DOGFOOD_RUNNER_IMAGE is

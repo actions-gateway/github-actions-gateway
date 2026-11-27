@@ -261,18 +261,18 @@ report() {
 		echo "silent too, so this event fires only once the run status agrees."
 		echo "Next action: check the gate task is still alive, tell the operator, and"
 		echo "relaunch this watcher if the gate is simply slow:"
-		echo "  bash scripts/dogfood/release-sentinel.sh"
+		echo "  scripts/agent/record-launch.sh bash scripts/dogfood/release-sentinel.sh"
 		;;
 	timeout)
 		echo "The watch budget (${RELEASE_SENTINEL_TIMEOUT}s) elapsed with no transition."
 		echo "Next action: relaunch this watcher as a background task if the gate is"
 		echo "still running:"
-		echo "  bash scripts/dogfood/release-sentinel.sh"
+		echo "  scripts/agent/record-launch.sh bash scripts/dogfood/release-sentinel.sh"
 		;;
 	*)
 		echo "Next action: tell the operator where the gate is, then relaunch this"
 		echo "watcher as a background task so the next transition wakes you again:"
-		echo "  bash scripts/dogfood/release-sentinel.sh"
+		echo "  scripts/agent/record-launch.sh bash scripts/dogfood/release-sentinel.sh"
 		;;
 	esac
 }

@@ -236,6 +236,13 @@ want_contains 'a terminal event does not ask for a relaunch' 'Do NOT relaunch' "
 out="$(report phase '{"gate":"running","rc":"v1.2.3-rc.4","phase":"e2e","state":"start","detail":"Running the e2e matrix on GAG runners","elapsed":600,"phaseElapsed":5,"idle":5}')"
 want_contains 'a transition names the phase' 'Phase: e2e (start) — Running the e2e matrix' "$out"
 want_contains 'a transition asks for a relaunch' 'release-sentinel.sh' "$out"
+# Through the wrapper: the record-launch guard denies a bare background launch
+# of the sentinel, so a report naming the bare form teaches a denied command.
+for event in phase stalled timeout; do
+	want_contains "a ${event} relaunch goes through record-launch" \
+		'scripts/agent/record-launch.sh bash scripts/dogfood/release-sentinel.sh' \
+		"$(report "${event}" '{"gate":"running","rc":"v1.2.3-rc.4","phase":"e2e","state":"start","elapsed":600,"phaseElapsed":5,"idle":1300}')"
+done
 
 echo
 echo '== live: the watcher exits when the stream transitions under it =='

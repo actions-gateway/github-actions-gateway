@@ -473,22 +473,38 @@ The instance list has no such hole, because every instance carries a name: an em
 ##### Run it detached; the sentinel reports it back
 
 **This is the default path.** Nobody should spend an hour watching a terminal for a gate built to be walked away from.
-Launch it as a background task — an agent session's background task, or `nohup … &` by hand — from a checkout of any post-Q74 ref, with `PROJECT`/`CLUSTER`/`ZONE`/`REPO` exported (App IDs auto-resolved; the one-time `scripts/dogfood/e2e-setup.sh` must have run once):
+Launch it through [`record-launch.sh`](../../scripts/agent/record-launch.sh) from a checkout of any post-Q74 ref, with `PROJECT`/`CLUSTER`/`ZONE`/`REPO` exported (App IDs auto-resolved; the one-time `scripts/dogfood/e2e-setup.sh` must have run once).
+In an agent session, run this as a background task with a 60-minute Bash timeout:
 
 ```bash
 ASSUME_YES=1 PROJECT=… CLUSTER=… ZONE=… REPO=… \
-  nohup scripts/dogfood/validate-release.sh vX.Y.Z-rc.N >tmp/validate-release.log 2>&1 &
+  scripts/agent/record-launch.sh scripts/dogfood/validate-release.sh vX.Y.Z-rc.N >tmp/validate-release.log 2>&1
 ```
+
+By hand, put `nohup` in front and `&` after, so the run outlives the terminal:
+
+```bash
+ASSUME_YES=1 PROJECT=… CLUSTER=… ZONE=… REPO=… \
+  nohup scripts/agent/record-launch.sh scripts/dogfood/validate-release.sh vX.Y.Z-rc.N >tmp/validate-release.log 2>&1 &
+```
+
+**The wrapper is the gate's stop handle.** It runs the gate in a process group of its own and writes a record under `tmp/launches/` naming the command that stops it, a TERM to that group.
+`scripts/agent/record-launch.sh --list` prints it.
+Send that TERM once: a second interrupt while the gate tears down ends the teardown where it is, before either stop script if it lands during the diagnostics dump, and the lease it keeps leaves the rest to `--reclaim`, which runs both.
+That matters for an hour-long run: a TERM to the group ends the gate at once as a failure and tears the cluster down, where a `kill` aimed at its pid alone waits for the gate's current command, and an agent session's task id is gone after a compaction.
+A session that backgrounds the gate or the sentinel without the wrapper is denied and told to rewrite the command (Q739).
 
 **`ASSUME_YES=1` is required when detaching.** The gate confirms the resolved target once before it spends anything, and a detached run has no stdin to answer with — without it the gate exits 1 immediately, having done nothing.
 Leave it off when you run the gate in your own terminal, so the confirmation still gates a fat-finger.
 
-Then launch the sentinel as a second background task.
+Then launch the sentinel as a second background task, through the wrapper too.
 It is what turns a silent hour into a report:
 
 ```bash
-bash scripts/dogfood/release-sentinel.sh
+scripts/agent/record-launch.sh bash scripts/dogfood/release-sentinel.sh
 ```
+
+The wrapper waits for the sentinel and exits with its status, and the report still reaches the task's output, so the sentinel's exit is still the wake.
 
 It sleeps, and *exits* when there is something to say — a phase transition, a verdict, or a gate that has gone quiet for `RELEASE_SENTINEL_STALL` seconds (default 1200) **while GitHub reports no live run it could be waiting on**.
 That exit is the report: it carries the phase, both clocks, the run URL, the latest e2e heartbeat, and what to do next.
@@ -535,7 +551,7 @@ The one stream it leaves alone belongs to a gate whose lease is still `held`, wh
 
 ##### Running it in your own terminal instead
 
-Equally supported, and equally legible — drop the `nohup`/`&`/`ASSUME_YES=1` and answer the confirmation:
+Equally supported, and equally legible — drop the wrapper, `nohup`, `&` and `ASSUME_YES=1`, and answer the confirmation:
 
 ```bash
 PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh vX.Y.Z-rc.N
