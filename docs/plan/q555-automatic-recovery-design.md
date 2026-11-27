@@ -734,7 +734,7 @@ A class for either would cost, where wrong, a wasted budget slot or a masked dae
 **How often it happens is unmeasured.** The CI survey found 2 jobs that failed with dockerd unreachable among the 127 failed jobs on GAG's runners; their logs have expired and no annotation names them.
 Re-read on 2026-11-24, the 740 runs of the five workflows that can use the e2e runners and that ended failed, cancelled or timed out from 2026-05-18 to 2026-10-11 hold 17 failed jobs on GAG's runners: 11 lost the runner, and the other six failed a Helm download, an image build, the Calico suite (three, 2026-07-16 and 17) and an egress assertion, the only one after 2026-07-17.
 That reading misses a job that failed and passed on a re-run, which is what a class would be for.
-[The Kata rollout](archive/kata-on-gke.md#what-the-live-session-found-2026-07-16) records one sidecar crash loop, on 2026-07-16, when a `blkid` defect failed every fresh volume and the runner took the job before the daemon was up; a startup probe, which landed on 2026-07-17 and ships in `kata-dind` alone, closes that shape for it and leaves it open for `privileged-dind` ([Q1397](../queue/Q1397.md)).
+[The Kata rollout](archive/kata-on-gke.md#what-the-live-session-found-2026-07-16) records one sidecar crash loop, on 2026-07-16, when a `blkid` defect failed every fresh volume and the runner took the job before the daemon was up; a startup probe, which landed in `kata-dind` on 2026-07-17 and in `privileged-dind` under Q1397, closes that shape for both.
 
 **A deliberate kill does not decide it.** A job has its daemon's API, and `docker run --pid=host` then `kill -9` crashes dockerd from inside the job, with the same status as a kill from the node (measured).
 That a job can fake the status shows it cannot be trusted, but a job that does so spends its own run's retry budget and masks nobody's breakage.
@@ -743,7 +743,7 @@ That a job can fake the status shows it cannot be trusted, but a job that does s
 
 - **A platform-caused crash, reproduced on dogfood (R12).** The one on record is a daemon that failed its first start (2026-07-16, above).
   No job can cause that, but the fault was the template's entrypoint on every fresh volume, so a re-run would have failed too, and `privileged-dind` has no block volume to have it with.
-  A startup probe keeps the runner from starting, so for a first start [Q1397](../queue/Q1397.md) prevents the failure where a class would re-run it.
+  A startup probe keeps the runner from starting, so for a first start both templates now prevent the failure where a class would re-run it.
   None is recorded for a daemon that had served.
   The local readings are from one node image on runc; the dogfood runs read GKE's nodes, the API server's copy of the statuses and Kata, and found no such crash.
 - **What separates part of the memory case.** The kernel keeps a fact that neither the status nor the sampler carries: a cgroup's `oom` counts its limit being reached, and its `oom_kill` counts its processes killed by any out-of-memory killer (kernel `cgroup-v2` documentation).
