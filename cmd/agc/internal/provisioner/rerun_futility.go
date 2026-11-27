@@ -170,11 +170,15 @@ const (
 type workflowJobSummary struct {
 	ID          int64     `json:"id"`
 	Name        string    `json:"name"`
+	Status      string    `json:"status"`
 	Conclusion  string    `json:"conclusion"`
 	RunnerName  string    `json:"runner_name"`
 	RunAttempt  int       `json:"run_attempt"`
 	CompletedAt time.Time `json:"completed_at"`
 }
+
+// jobStatusInProgress is the status of a listed job a runner is running.
+const jobStatusInProgress = "in_progress"
 
 // carried reports a job that run's attempt did not run: GitHub lists every job of the run
 // under each attempt, and one the attempt did not re-run keeps the runner_name and
