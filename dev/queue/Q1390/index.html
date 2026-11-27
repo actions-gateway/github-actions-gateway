@@ -2715,6 +2715,25 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#measured-2026-11-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Measured 2026-11-26
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2734,14 +2753,21 @@
 
 
 <h1 id="sizing-envtest-reads-status-directly-and-the-pod-build-reads-a-cache">Sizing envtest reads status directly and the pod build reads a cache<a class="headerlink" href="#sizing-envtest-reads-status-directly-and-the-pod-build-reads-a-cache" title="Permanent link">&para;</a></h1>
-<p><code>TestV2_RunnerSet_ThroughputCPULimitInjectionIsReported</code> can get a worker pod built without the sizing profile it waited for, and fail three assertions that follow from it: no <code>sizing-profile</code> annotation, a 500m CPU limit (the provisioner's <code>defaultWorkerCPU</code>, since the test's template sets no resources) where the injected one is 2, and <code>SizingProfileOverridden</code> never True.
-Seen once, on 2026-11-23 in a local full <code>make -C cmd/agc test-integration</code> at load average 100 on 18 cores; the same test alone passed every repeat straight after at load 60 to 70, and CI has not been searched for it.</p>
-<p>The likely mechanism is read from source and not reproduced.
-The test waits with <code>waitForSizingProfileState</code> on <code>k8sClient</code>, which reads the apiserver, then enqueues a job; <code>runnerSetTarget.Resolve</code> (<code>runnerset_target.go</code>) sizes the pod from <code>rs.Status.SizingRecommendation</code> on the manager's cached client.
-Under load the cache can still hold the <code>RunnerSet</code> from before the status write when the job arrives, and <code>applySizingProfile</code> then returns the template untouched.
-That would be a test that waits on one reader and asserts on another, not a product defect: a job arriving in that window gets the static template, which the profile's own rule allows.</p>
-<p>Settle the mechanism first: hold the manager's <code>RunnerSet</code> informer back and see the same three assertions fail.
-The fix is then to wait through the reader the pod build uses, and the other profile tests in the file share the wait.</p>
+<p><strong>Event:</strong> a test in <code>v2_runnerset_sizing_profile_test.go</code> fails on <code>main</code> on a worker pod built from the template's static resources (a missing <code>sizing-profile</code> annotation, the template's CPU or memory where a derived value is expected, or <code>SizingProfileOverridden</code> never True) after its <code>waitForSizingProfileState</code> returned. → top of Queue, escalated.
+The same failure on a local run or a PR branch does not meet it: record it here, with the date and which test, and count the soak from then.</p>
+<p><code>TestV2_RunnerSet_ThroughputCPULimitInjectionIsReported</code> failed once, on 2026-11-23 in a local full <code>make -C cmd/agc test-integration</code> at load average 100 on 18 cores, on three assertions: no <code>sizing-profile</code> annotation, a 500m CPU limit (the provisioner's <code>defaultWorkerCPU</code>) where the injected one is 2, and <code>SizingProfileOverridden</code> never True.
+CI has not been searched for it.</p>
+<p>The tests waited for <code>status.sizingProfileState</code> on <code>k8sClient</code>, which reads the apiserver, while <code>runnerSetTarget.Resolve</code> sizes the pod from <code>rs.Status.SizingRecommendation</code> on the manager's cached client.
+The same status write sets both fields, so a cache still holding the <code>RunnerSet</code> from before it builds the job's pod from the template.
+That is a test waiting on one reader and asserting on another, not a product defect: a job arriving in that window gets the static template, which the profile's own rule allows.
+<code>waitForSizingProfileState</code> now takes the reader, and every call in the file passes the reconciler's cached client.</p>
+<h2 id="measured-2026-11-26">Measured 2026-11-26<a class="headerlink" href="#measured-2026-11-26" title="Permanent link">&para;</a></h2>
+<p>A temporary cache <code>Transform</code> on the manager's <code>RunnerSet</code> informer, delaying each new version of a sized set in a <code>v2-rs-sizing*</code> namespace by 3s before the cache stored it, reproduced the three assertions on the unfixed tests.
+It also failed the Binpack and Throughput tests in the same file on the template's CPU and memory, which the 2026-11-23 run did not show.
+The NodeShare test passed under it, since that profile reads only the spec, which the cache holds from the set's creation.
+With the wait on the cached client the four tests passed under the same delay in 2 of 2 runs, the hold firing 13 times in each; the unfixed tests failed in 2 of 2.
+The control is not committed, and no run has shown the fixed tests under real load.</p>
+<p>The pod build's one other status read on the job path, <code>WorkerCapacityDeclined</code> in <code>capacityGateCondition</code>, is already waited on through the cached client (<code>waitForCapacityDeclined</code>).</p>
 
 
 
