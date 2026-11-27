@@ -42,9 +42,9 @@ const (
 )
 
 // EgressProxySpec is the desired state of a standalone, optionally shared egress
-// proxy pool — v1alpha1's inline ActionsGateway.spec.proxy promoted to its own kind
-// so any number of RunnerSets can point at one pool (§H.4, §H.5). Reconciled by the
-// GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2).
+// proxy pool, its own kind so any number of RunnerSets can point at one pool
+// (§H.4, §H.5). Reconciled by the GMC, which owns the proxy
+// Deployment/Service/HPA/PDB (the reconciler lands in M2).
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.minReplicas) || !has(self.maxReplicas) || self.minReplicas <= self.maxReplicas",message="minReplicas must not exceed maxReplicas"
 // +kubebuilder:validation:XValidation:rule="!has(self.destinationFQDNs) || self.destinationFQDNs.size() == 0 || (has(self.egressPolicyMode) && self.egressPolicyMode == 'FQDN')",message="destinationFQDNs requires egressPolicyMode FQDN"

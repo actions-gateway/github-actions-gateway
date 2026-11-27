@@ -107,18 +107,18 @@ namespace (multi-gateway support lands in M3b).
 
 
 ActionsGatewaySpec is the desired state of a v2 ActionsGateway: the GitHub
-identity plus the AGC control plane only. v2 decomposes the v1alpha1 monolith —
-the inline proxy moves to a standalone EgressProxy and the bootstrap runner
-groups become explicit RunnerSet objects, both removed from this spec (§H.4).
+identity plus the AGC control plane only. Egress proxies are standalone
+EgressProxy objects and runner pools are explicit RunnerSet objects, so neither
+appears in this spec (§H.4).
 Multiple ActionsGateways are permitted per namespace in v2 (the singleton rule is
 dropped); the multi-gateway controller behavior lands in M3b.
 
-The Pod Security Admission level is NOT a field here. v1alpha1 hung securityProfile
-on this per-gateway object, but Pod Security Admission is a namespace-scoped control
-in Kubernetes, so under multi-gateway two gateways in one namespace would fight over
-the single namespace PSA label. v2 moves the profile to the namespace itself — the
-operator sets the actions-gateway.com/security-profile label on the tenant namespace
-and the GMC stamps the PSA labels from it (GMC-guarded, §H.16 #7). See
+The Pod Security Admission level is NOT a field here. Pod Security Admission is a
+namespace-scoped control in Kubernetes, so a per-gateway field would let two
+gateways in one namespace fight over the single namespace PSA label. The profile
+lives on the namespace itself — the operator sets the
+actions-gateway.com/security-profile label on the tenant namespace and the GMC
+stamps the PSA labels from it (GMC-guarded, §H.16 #7). See
 docs/operations/security-operations.md.
 
 
@@ -134,7 +134,7 @@ _Appears in:_
 | `defaultProxyRef` _[ProxyObjectRef](#proxyobjectref)_ | DefaultProxyRef names an EgressProxy used for AGC control-plane egress and inherited by RunnerSets under this gateway that do not set their own proxyRef. Optional: unset means the control plane egresses directly (subject to NetworkPolicy). Same-namespace unless the target EgressProxy grants cross-namespace use (§H.4, §H.9). |  | Optional: \{\} |
 | `proxyFailureAttribution` _string_ | ProxyFailureAttribution opts this gateway's namespace into the egress proxy recording which job a CONNECT failure came from. Disabled (the default) opts nothing in.<br />PerJob takes effect only on a pool whose EgressProxy.spec.failureAttribution is PerConsumerPort; either side alone attributes nothing. The opt-in is per namespace: once any gateway in a namespace sets PerJob, that namespace gets its own port on each attributing pool it uses, and the workers of every gateway in it that uses such a pool move to that port at their next job, once the pool has rolled; nothing restarts. The AGC's own traffic stays on the shared port. The AGC then reads its namespace's failures from the pool and keeps only those from its own worker pods. Each policy denial it attributes is recorded as a Warning Event, reason EgressDestinationDenied, on the worker's RunnerSet in this namespace, naming the blocked host; it is recorded once per job and destination, for at most eight destinations a job. That Event is why this is a separate switch from the pool's. Design: docs/design/05-security.md, "Proxy failure attribution" (Q1184, Q1210).<br />The AGC does not retry a job, or withhold a retry, on these records, so enabling this moves the namespace's workers onto their port, counts their failures, and reports their denials. | Disabled | Enum: [Disabled PerJob]<br />Optional: \{\} |
 | `defaultTemplateRef` _[ObjectRef](#objectref)_ | DefaultTemplateRef names a RunnerTemplate (default) or ClusterRunnerTemplate (set kind: ClusterRunnerTemplate) inherited as the worker pod shape by RunnerSets under this gateway that set no spec.templateRef of their own (Q172). Optional: it is the second rung of the template-resolution chain — an unset RunnerSet templateRef resolves rs.templateRef → this defaultTemplateRef → the single cluster-default ClusterRunnerTemplate → fail-closed TemplateNotFound (§H.4). Resolved at runtime in the gateway's own namespace (for a RunnerTemplate); a ClusterRunnerTemplate referent is cluster-scoped. A defaultTemplateRef that names a *missing* template fails the inheriting set closed (TemplateNotFound), exactly like an explicit templateRef. |  | Optional: \{\} |
-| `defaultRunnerGroup` _string_ | DefaultRunnerGroup names the GitHub runner group inherited by RunnerSets under this gateway that set no spec.runnerGroup of their own. This is GitHub's own grouping, not the deprecated v1alpha1 RunnerGroup CR. Optional: unset on both objects leaves the scale set in GitHub's default group.<br />This is where a tenant's GitHub-side boundary is declared once. The runner group decides which repositories may target the tenant's runners, so a gateway whose sets all land in the default group is reachable by every repository that group admits, typically the whole organization. Resolved at runtime and fail-closed per set, exactly like an explicit spec.runnerGroup.<br />GAG does not create runner groups or manage their repository access: the platform admin pre-creates the group at GitHub and scopes it to the tenant's repositories. See docs/operations/tenant-onboarding.md. |  | MaxLength: 255<br />MinLength: 1<br />Optional: \{\} |
+| `defaultRunnerGroup` _string_ | DefaultRunnerGroup names the GitHub runner group inherited by RunnerSets under this gateway that set no spec.runnerGroup of their own. This is GitHub's own grouping, not a Kubernetes object. Optional: unset on both objects leaves the scale set in GitHub's default group.<br />This is where a tenant's GitHub-side boundary is declared once. The runner group decides which repositories may target the tenant's runners, so a gateway whose sets all land in the default group is reachable by every repository that group admits, typically the whole organization. Resolved at runtime and fail-closed per set, exactly like an explicit spec.runnerGroup.<br />GAG does not create runner groups or manage their repository access: the platform admin pre-creates the group at GitHub and scopes it to the tenant's repositories. See docs/operations/tenant-onboarding.md. |  | MaxLength: 255<br />MinLength: 1<br />Optional: \{\} |
 | `agcResources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#resourcerequirements-v1-core)_ | AGCResources tunes the CPU/memory requests and limits stamped on this gateway's AGC control-plane container (Q171). It is an additive, per-key override of the platform default — the documented Appendix A sizing of requests \{cpu: 500m, memory: 2Gi\}, limits \{cpu: 2, memory: 4Gi\}. The GMC starts from that default and overlays only the request/limit keys set here, so a value that sets just one knob keeps the sensible default for the others. Unset ⇒ the platform default unchanged. Changing it is a rolling restart of the AGC, not a hot reload.<br />Tune cautiously: the AGC is a single pod holding all listener-goroutine state in memory. A memory limit below the AGC's working set OOMKills the control plane, and a request larger than any node (or the namespace ResourceQuota) leaves the AGC pod unschedulable (Pending). See docs/operations/tenant-onboarding.md and docs/design/appendix-e-capacity-planning.md for sizing guidance and the recommended floor. |  | Optional: \{\} |
 | `agcAutoscaling` _[AGCVerticalAutoscaling](#agcverticalautoscaling)_ | AGCAutoscaling opts this gateway's AGC control-plane pod into managed vertical right-sizing (Q360): the GMC stamps a VerticalPodAutoscaler next to the AGC Deployment so the autoscaler observes actual usage and sizes the container's resource *requests* for it. Unset (the default) ⇒ no VerticalPodAutoscaler is created and any one the GMC previously stamped is deleted, so the opt-in is off by default and fully reversible.<br />It composes with — it does not replace — agcResources. See AGCVerticalAutoscaling for the precedence rules and the behavior when the VerticalPodAutoscaler CRD is not installed in the cluster. |  | Optional: \{\} |
 | `logLevel` _string_ | LogLevel controls the log verbosity of this tenant's AGC. Allowed values: info (default), debug. Changing it is a rolling restart of the AGC, not a hot reload. Use debug only for a bug repro. | info | Enum: [info debug]<br />Optional: \{\} |
@@ -392,9 +392,9 @@ proxy pool. It is referenced by RunnerSets (proxyRef) and ActionsGateways
 
 
 EgressProxySpec is the desired state of a standalone, optionally shared egress
-proxy pool — v1alpha1's inline ActionsGateway.spec.proxy promoted to its own kind
-so any number of RunnerSets can point at one pool (§H.4, §H.5). Reconciled by the
-GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2).
+proxy pool, its own kind so any number of RunnerSets can point at one pool
+(§H.4, §H.5). Reconciled by the GMC, which owns the proxy
+Deployment/Service/HPA/PDB (the reconciler lands in M2).
 
 
 
@@ -513,10 +513,9 @@ _Appears in:_
 
 
 LocalSecretReference is a name-only reference to a Kubernetes Secret in the same
-namespace. v2 drops v1alpha1's SecretReference.namespace field: it was
-reserved-but-validated-empty and read like a cross-namespace reference that does
-not exist — a confused-deputy footgun. The referenced Secret must reside in the
-referrer's own namespace (§H.15).
+namespace. It carries no namespace field, because one would read like a
+cross-namespace reference that does not exist — a confused-deputy footgun. The
+referenced Secret must reside in the referrer's own namespace (§H.15).
 
 
 
@@ -724,8 +723,7 @@ _Appears in:_
 
 
 PriorityTier maps a Kubernetes PriorityClass to a cumulative pod-count
-threshold. Thresholds must be in strictly ascending order. Unchanged in meaning
-from v1alpha1; carried onto the RunnerSet (was RunnerGroup).
+threshold. Thresholds must be in strictly ascending order.
 
 
 
@@ -785,8 +783,8 @@ _Appears in:_
 
 RunnerSet is a namespace-scoped CRD reconciled by the AGC. It binds a worker pod
 shape (templateRef) and an optional egress proxy (proxyRef) to a GitHub gateway
-(gatewayRef), and carries the scheduling/quota knobs that were RunnerGroup's in
-v1alpha1. Worker pods are provisioned per acquired job and released on completion.
+(gatewayRef), and carries the scheduling/quota knobs. Worker pods are provisioned
+per acquired job and released on completion.
 
 The .spec.gatewayRef.name selectable field (KEP-4358) is how the AGC scopes its
 RunnerSet watch server-side.
@@ -809,11 +807,10 @@ RunnerSet watch server-side.
 
 
 RunnerSetSpec is the desired state of a RunnerSet — the small scheduling/quota
-binder that replaces v1alpha1's RunnerGroup. The large PodTemplateSpec no longer
-lives here: it moves to a referenced RunnerTemplate / ClusterRunnerTemplate so a
-runner set stays a fixed-size object and a template is reused across many sets
-(docs/design/appendix-h-v2-api-decomposition.md §H.5). The scheduling and
-lifecycle fields are carried over from RunnerGroup unchanged in meaning.
+binder between a gateway, a worker pod template and an optional egress proxy.
+The large PodTemplateSpec does not live here: it is a referenced RunnerTemplate /
+ClusterRunnerTemplate so a runner set stays a fixed-size object and a template is
+reused across many sets (docs/design/appendix-h-v2-api-decomposition.md §H.5).
 
 
 
@@ -827,7 +824,7 @@ _Appears in:_
 | `proxyRef` _[ProxyObjectRef](#proxyobjectref)_ | ProxyRef optionally names the EgressProxy this runner set's traffic egresses through. Unset means inherit the gateway's defaultProxyRef; both unset means direct egress (still NetworkPolicy-restricted to DNS + GitHub) — a well-defined behavior, so the dependency is simply droppable, which is why proxyRef is optional where templateRef is required (§H.4, §H.10). Direct egress is reflected in status as proxyMode=Direct plus an advisory EgressUnattributed condition; a proxyRef/defaultProxyRef that names a *missing* proxy still fails closed (ProxyNotFound), not direct egress (Q168). |  | Optional: \{\} |
 | `maxWorkers` _integer_ | MaxWorkers caps the number of worker pods this RunnerSet may run concurrently. A soft, in-process ceiling; pair it with a namespace ResourceQuota for a hard, cluster-enforced limit. |  | Minimum: 1<br />Optional: \{\} |
 | `runnerLabels` _string array_ | RunnerLabels is the label set matched against workflow runs-on values. Every label is registered on the scale set at GitHub, so a workflow may target the set with a single name (runs-on: linux) or with an array (runs-on: [linux, gpu]); the Actions Service matches a scale set's labels the way it matches a plain self-hosted runner's. Each label must be non-empty and contain no whitespace or commas (comma is the runs-on list separator).<br />The FIRST label is the scale set's name at GitHub, which makes it this set's identity: reordering the list renames the scale set, leaving the old one orphaned at GitHub, so treat runnerLabels[0] as stable and append rather than prepend. It is also the label the GMC's admission webhook holds unique across the runner sets under one gateway; later labels may overlap freely, and which set an ambiguous runs-on reaches is GitHub's decision.<br />A GitHub Enterprise Server appliance below 3.21 accepts only the name label unless a site admin enables DistributedTask.AllowRunnerScaleSetCustomLabels, and it discards the rest without an error. The AGC compares the registered label set against this one and reports any shortfall as the advisory RunnerLabelsIncomplete condition (Q726). |  | MinItems: 1<br />items:MaxLength: 256<br />items:Pattern: `^[^,\s]+$` |
-| `runnerGroup` _string_ | RunnerGroup names the GitHub runner group this set's scale set is registered into. This is GitHub's own grouping, not the deprecated v1alpha1 RunnerGroup CR. Unset means inherit the gateway's defaultRunnerGroup; both unset means GitHub's default group.<br />The runner group is the GitHub-side authorization point for which repositories may target these runners. A scale set left in the default group is reachable by every repository that group admits, typically the whole organization, so a repository outside the tenant can name this set in runs-on and route work into its namespace, quota, and egress IP. Pod-level isolation is unaffected; what the group bounds is who can cause a job to run here.<br />Resolved at runtime against GitHub, not at admission (§H.7), and fail-closed: a name no runner group matches leaves the set Ready=False/ RunnerGroupNotFound rather than falling back to the default group, and a scale set already registered in a different group is moved into this one. The group's own repository access is configured at GitHub and is not managed by GAG. See docs/operations/tenant-onboarding.md. |  | MaxLength: 255<br />MinLength: 1<br />Optional: \{\} |
+| `runnerGroup` _string_ | RunnerGroup names the GitHub runner group this set's scale set is registered into. This is GitHub's own grouping, not a Kubernetes object. Unset means inherit the gateway's defaultRunnerGroup; both unset means GitHub's default group.<br />The runner group is the GitHub-side authorization point for which repositories may target these runners. A scale set left in the default group is reachable by every repository that group admits, typically the whole organization, so a repository outside the tenant can name this set in runs-on and route work into its namespace, quota, and egress IP. Pod-level isolation is unaffected; what the group bounds is who can cause a job to run here.<br />Resolved at runtime against GitHub, not at admission (§H.7), and fail-closed: a name no runner group matches leaves the set Ready=False/ RunnerGroupNotFound rather than falling back to the default group, and a scale set already registered in a different group is moved into this one. The group's own repository access is configured at GitHub and is not managed by GAG. See docs/operations/tenant-onboarding.md. |  | MaxLength: 255<br />MinLength: 1<br />Optional: \{\} |
 | `priorityTiers` _[PriorityTier](#prioritytier) array_ | PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds. Tiers must be in strictly ascending threshold order, and admission rejects a list that is not: the AGC assigns the first tier whose threshold the active-pod count is below, so a tier at or under an earlier one never receives a pod. A list already stored is not re-checked until it changes. |  | MaxItems: 10<br />Optional: \{\} |
 | `maxEvictionRetries` _integer_ | MaxEvictionRetries controls how many times the AGC automatically re-queues a job whose worker pod was evicted. Set to 0 to disable auto-retry entirely. Defaults to 2 when omitted.<br />Honored on both acquisition tiers as of Q417. On ScaleSet — the only tier this API version offers — the worker is provisioned fire-and-forget, so the eviction is detected by the owning reconciler from the worker pod rather than by a goroutine watching it. The cap counts the AGC's own re-runs of each workflow run, across every disruption cause, and is kept per RunnerSet in a ConfigMap that an AGC restart does not reset. Disruptions of one run attempt share one re-run. |  | Maximum: 10<br />Minimum: 0<br />Optional: \{\} |
 | `evictionRetryDelay` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#duration-v1-meta)_ | EvictionRetryDelay is the minimum time to wait before re-queuing an evicted job. Must be at least 1s. Defaults to "5s" when omitted.<br />Honored on both acquisition tiers as of Q417, as for MaxEvictionRetries. |  | Optional: \{\} |
@@ -905,8 +902,7 @@ objects it would otherwise co-bloat, and lets one template be referenced by many
 RunnerSets (docs/design/appendix-h-v2-api-decomposition.md §H.2, §H.5).
 
 Reserved pod-field guardrail (§H.4, §H.7). A worker pod's identity and isolation
-are controller-enforced invariants — in v1 the AGC silently overrode them at pod
-build time. v2 makes them author-time rejections instead, so a template that
+are controller-enforced invariants, rejected at author time so a template that
 tries to set them fails closed rather than being silently rewritten. The cheap,
 scalar pod-level fields are enforced here via CEL; the per-container checks that
 require iterating an unbounded containers array (privileged containers, proxy

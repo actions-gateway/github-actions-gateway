@@ -122,10 +122,9 @@ func EffectiveSecurityProfile(profile string) string {
 const ActionsGatewayFinalizer = "actions-gateway.com/gmc-cleanup"
 
 // LocalSecretReference is a name-only reference to a Kubernetes Secret in the same
-// namespace. v2 drops v1alpha1's SecretReference.namespace field: it was
-// reserved-but-validated-empty and read like a cross-namespace reference that does
-// not exist — a confused-deputy footgun. The referenced Secret must reside in the
-// referrer's own namespace (§H.15).
+// namespace. It carries no namespace field, because one would read like a
+// cross-namespace reference that does not exist — a confused-deputy footgun. The
+// referenced Secret must reside in the referrer's own namespace (§H.15).
 type LocalSecretReference struct {
 	// Name of the referenced Secret in the same namespace.
 	//
@@ -203,8 +202,7 @@ type ProxyObjectRef struct {
 }
 
 // PriorityTier maps a Kubernetes PriorityClass to a cumulative pod-count
-// threshold. Thresholds must be in strictly ascending order. Unchanged in meaning
-// from v1alpha1; carried onto the RunnerSet (was RunnerGroup).
+// threshold. Thresholds must be in strictly ascending order.
 type PriorityTier struct {
 	// PriorityClassName is the name of an existing cluster-scoped PriorityClass.
 	// The platform owns which classes a tenant may reference: the GMC admission
