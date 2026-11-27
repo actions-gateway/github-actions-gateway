@@ -76,7 +76,8 @@ func TestEnumerateNotesReconciles(t *testing.T) {
 		commit("3333333c3", "perf(agc): a shipping perf change", "cmd/agc/internal/listener/job.go"),
 		commit("4444444d4", "feat(ci): tooling", "scripts/ci/gate.sh"),
 		commit("5555555e5", "fix(docs): a doc fix", "docs/STATUS.md"),
-		// Neither of these carries a level, so neither belongs in either list.
+		// Neither of these carries a level, so neither belongs in either list; the
+		// refactor ships, so it is in the third.
 		commit("6666666f6", "refactor(agc): moves shipped code", "cmd/agc/internal/listener/job.go"),
 		commit("7777777g7", "chore: bump a pin", "scripts/ci/gate.sh"),
 		{SHA: "8888888h8", Subject: "Not a conventional subject", Files: []string{"docs/STATUS.md"}},
@@ -95,6 +96,10 @@ func TestEnumerateNotesReconciles(t *testing.T) {
 		t.Errorf("Ships = %v, want the three commits touching cmd/agc/internal/listener", subjects(n.Ships))
 	}
 
+	if len(n.Unweighted) != 1 || n.Unweighted[0].Commit.SHA != "6666666f6" {
+		t.Errorf("Unweighted = %v, want only the refactor of shipped code", subjects(n.Unweighted))
+	}
+
 	seen := map[string]int{}
 	for _, v := range n.Ships {
 		seen[v.Commit.SHA]++
@@ -106,6 +111,43 @@ func TestEnumerateNotesReconciles(t *testing.T) {
 		if count != 1 {
 			t.Errorf("%s appears %d times across the two lists, want exactly 1", sha, count)
 		}
+	}
+}
+
+// TestEnumerateNotesListsAShippingDependencyBump is the v2.0.1 case: a
+// `build(deps)` bump of a published image's base carries no level, so it is in
+// neither Ships nor Residue, and the notes must still name it. Run against real
+// git so the Dockerfile is judged by dockerfileChanged, not by a stub.
+func TestEnumerateNotesListsAShippingDependencyBump(t *testing.T) {
+	dir := narrowRepo(t)
+	commitFiles(t, dir, "chore: base", map[string]string{dockerfilePath: dockerfileBase, "tools/go.mod": "module tools\n"})
+	baseFiles := map[string]string{dockerfilePath: replace(t, dockerfileBase,
+		"distroless/static:nonroot@sha256:111", "distroless/static:nonroot@sha256:999")}
+	bump := commit(commitFiles(t, dir, "build(deps): bump distroless/static", baseFiles),
+		"build(deps): bump distroless/static", dockerfilePath)
+	tool := commit(commitFiles(t, dir, "build(deps): bump a dev tool", map[string]string{"tools/go.mod": "module tools\n\ngo 1.27\n"}),
+		"build(deps): bump a dev tool", "tools/go.mod")
+	fixture := commit(commitFiles(t, dir, "build(deps): bump the fixture base", map[string]string{dockerfilePath: replace(t,
+		baseFiles[dockerfilePath], "alpine:3.20", "alpine:3.21")}),
+		"build(deps): bump the fixture base", dockerfilePath)
+
+	s := testSurface()
+	s.DockerfileChanged = func(sha string) bool { return dockerfileChanged(dir, sha, publishedImages) }
+	r := Classify([]Commit{bump, tool, fixture}, s, gitNarrower{root: dir})
+	n := EnumerateNotes(r, nil)
+
+	if len(n.Unweighted) != 1 || n.Unweighted[0].Commit.SHA != bump.SHA {
+		t.Fatalf("Unweighted = %v, want only the published base bump; a dev tool and an "+
+			"unpublished stage change no artifact", subjects(n.Unweighted))
+	}
+	if len(n.Ships) != 0 || len(n.Residue) != 0 || r.Floor != LevelNone {
+		t.Errorf("ships=%d residue=%d floor=%v, want 0/0/none: a dependency bump never raises the floor",
+			len(n.Ships), len(n.Residue), r.Floor)
+	}
+	var b strings.Builder
+	reportNotes(&b, "v2.0.0", "HEAD", []Commit{bump, tool, fixture}, s, Sources{}, n, "")
+	if !strings.Contains(b.String(), "bump distroless/static") {
+		t.Error("the report does not name the base bump")
 	}
 }
 

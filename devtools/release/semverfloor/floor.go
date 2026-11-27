@@ -121,6 +121,12 @@ type Result struct {
 	// major the tool cannot confirm or dismiss; a commit here may also appear
 	// in Raising, since its type still carries a floor of its own.
 	Unresolved []Verdict
+	// Unweighted holds commits whose type carries no level but whose change
+	// reaches a released artifact: a `build(deps)` base-image bump, a refactor of
+	// shipped code. They never raise the floor, and the release notes still owe
+	// them a line. A change narrowed to comments and whitespace is not here, since
+	// its artifact is byte-identical.
+	Unweighted []Verdict
 	// NonConventional holds subjects with no readable type. Each is a commit
 	// whose weight was not assessed.
 	NonConventional []Commit
@@ -147,6 +153,14 @@ func Classify(commits []Commit, surface Surface, n Narrower) Result {
 			r.Unresolved = append(r.Unresolved, v)
 		}
 		if lvl == LevelNone {
+			if len(shipped) > 0 {
+				if n != nil {
+					v.Shipped = n.Substantive(c, shipped)
+				}
+				if len(v.Shipped) > 0 {
+					r.Unweighted = append(r.Unweighted, v)
+				}
+			}
 			continue
 		}
 		if len(shipped) == 0 {
