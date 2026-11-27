@@ -32,7 +32,8 @@ permissions: {}
 
 # Jobs run only on explicit opt-in: a workflow_dispatch, or a push whose head
 # commit message contains "[q1246-cancel]" or "[q1246-timeout]". A plain push
-# touching this file skips every job, so the run concludes green.
+# touching this file skips every job, so the run concludes green. The timeout tag
+# sleeps 40 minutes, past GitHub's unstarted-job timeout; the cancel tag sleeps 15.
 env:
   SLEEP_MINUTES: ${{ inputs.minutes || (contains(github.event.head_commit.message, '[q1246-timeout]') && 40) || 15 }}
 
