@@ -161,6 +161,39 @@ expect_eq main-local-jobs-unchanged 6 \
 expect_eq main-local-fanout-matches-jobs 6 \
 	"$(unset CI; os_kind() { printf 'darwin'; }; physical_cores() { printf '8'; }; main fanout-jobs)"
 
+# --- GAG_LOCAL_THROTTLE and the CI-on-a-Mac warning (Q1084) ----------------
+# The opt-out turns every desktop setting off without setting CI, so a person
+# who wants a full-speed run no longer has to impersonate a runner to get one.
+
+expect_eq optout-darwin-prefix-silent '' \
+	"$(unset CI; os_kind() { printf 'darwin'; }; GAG_LOCAL_THROTTLE=off main prefix)"
+expect_eq optout-darwin-jobs-silent '' \
+	"$(unset CI; os_kind() { printf 'darwin'; }; GAG_LOCAL_THROTTLE=off main jobs)"
+expect_eq optout-darwin-slots-silent '' \
+	"$(unset CI; os_kind() { printf 'darwin'; }; GAG_LOCAL_THROTTLE=off main slots)"
+# Any other value leaves the throttle on, so a typo fails safe.
+expect_eq optout-other-value-keeps-prefix 'nice -n 10 taskpolicy -d throttle' \
+	"$(unset CI; os_kind() { printf 'darwin'; }; GAG_LOCAL_THROTTLE=no main prefix)"
+
+# The warning is the half of Q1084 that reaches a session mid-gate: CI on a Mac
+# warns on `prefix`, which every heavy phase asks for, and stays silent on a
+# Linux runner, off CI, on the other verbs, and after an explicit opt-out.
+warning() { { "$@" >/dev/null; } 2>&1; }
+ci_warns=$(warning env CI=true bash -c 'source scripts/agent/local-throttle.sh; os_kind() { printf darwin; }; main prefix')
+if [[ "$ci_warns" == "local-throttle: CI is set on a Mac"* ]]; then
+	expect_eq warn-ci-darwin-prefix yes yes
+else
+	expect_eq warn-ci-darwin-prefix yes "no: [$ci_warns]"
+fi
+expect_eq warn-ci-linux-silent '' \
+	"$(warning env CI=true bash -c 'source scripts/agent/local-throttle.sh; os_kind() { printf linux; }; main prefix')"
+expect_eq warn-no-ci-silent '' \
+	"$(warning env -u CI bash -c 'source scripts/agent/local-throttle.sh; os_kind() { printf darwin; }; main prefix')"
+expect_eq warn-ci-other-verb-silent '' \
+	"$(warning env CI=true bash -c 'source scripts/agent/local-throttle.sh; os_kind() { printf darwin; }; logical_cpus() { printf 4; }; main fanout-jobs')"
+expect_eq warn-optout-silent '' \
+	"$(warning env CI=true GAG_LOCAL_THROTTLE=off bash -c 'source scripts/agent/local-throttle.sh; os_kind() { printf darwin; }; main prefix')"
+
 # A headless non-CI shell caps neither: no GUI to protect and no runner to
 # bound, which is the third case the CI branch must not swallow.
 expect_eq fanout-headless-empty '' \

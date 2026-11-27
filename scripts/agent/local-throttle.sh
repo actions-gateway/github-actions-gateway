@@ -55,6 +55,7 @@
 #
 # The desktop throttling below is auto-detected and applies ONLY to an
 # interactive, GUI-bearing dev machine that is not CI:
+#   * GAG_LOCAL_THROTTLE must not be `off` (the local opt-out), and
 #   * the CI env var must be unset (GitHub Actions et al. set it), and
 #   * macOS — always (Macs have a GUI worth protecting), or
 #   * Linux — only when a graphical session is present (DISPLAY or
@@ -173,14 +174,26 @@ linux_has_gui() {
 }
 
 # throttle_active returns success only on an interactive, GUI-bearing dev shell
-# that is not CI.
+# that is not CI and has not opted out.
 throttle_active() {
+	[[ "${GAG_LOCAL_THROTTLE:-}" == off ]] && return 1
 	[[ -n "${CI:-}" ]] && return 1
 	case "$(os_kind)" in
 		darwin) return 0 ;;
 		linux) linux_has_gui ;;
 		*) return 1 ;;
 	esac
+}
+
+# warn_ci_on_darwin names on stderr what a set CI turns off on a Mac. Every
+# runner this repo uses is Linux, so the combination is almost always a local
+# `CI=true make check`, which would otherwise drop the desktop's protection
+# without a word (Q1084). It warns rather than refuses: a genuine macOS runner
+# loses one stderr line and nothing else.
+warn_ci_on_darwin() {
+	[[ -n "${CI:-}" && "${GAG_LOCAL_THROTTLE:-}" != off ]] || return 0
+	[[ "$(os_kind)" == darwin ]] || return 0
+	printf '%s\n' 'local-throttle: CI is set on a Mac, so heavy phases run with no nice/taskpolicy prefix, no core cap and no heavy-build slot. Unset CI to keep the desktop protected; GAG_LOCAL_THROTTLE=off is the local opt-out.' >&2
 }
 
 # physical_cores prints a best-effort physical (not logical) core count,
@@ -415,6 +428,10 @@ main() {
 		compute_fanout_jobs
 		return
 	fi
+
+	# Every heavy phase asks for `prefix` once, which makes it the one verb
+	# that reaches a person running the gate.
+	[[ "$want" == prefix ]] && warn_ci_on_darwin
 
 	# Off-switch and non-GUI/CI: print nothing so the Makefile runs unthrottled.
 	if ! throttle_active; then
