@@ -7727,19 +7727,32 @@ They are operator-run, never CI-run: they need live App credentials and, in one 
 <td>Does GitHub redeliver an unacknowledged <code>JobCompleted</code> to a session created after a multi-hour gap with no session at all? The Q435 replay path depends on it and the contract does not cover it. <strong>Answered 2026-07-29: yes at a 13 h gap</strong> — re-arm it against a future GitHub rather than trusting the number indefinitely.</td>
 <td><a href="../../plan/archive/q468-jobcompleted-retention/">q468-jobcompleted-retention.md</a></td>
 </tr>
+<tr>
+<td>Investigation G</td>
+<td><code>PROBE_REPLAY_TEST=true</code></td>
+<td>Does a <strong>cursor-acked but undeleted</strong> message replay to a fresh session polling from cursor 0, and does <code>DeleteMessage</code> stop it? The Q583 fix rests on both, and the <code>DeleteMessage</code> wire shape is the P2-surfaced P4 unknown Q264 left open.</td>
+<td><a href="../../plan/archive/q583-restart-replay/">q583-restart-replay.md</a></td>
+</tr>
+<tr>
+<td>Investigation H</td>
+<td><code>PROBE_ABANDONED_TEST=true</code></td>
+<td>What does the run service do with a completion for an acquired-but-never-run assignment? <strong>Answered 2026-08-04 across four arms</strong> (<code>PROBE_ABANDONED_RESULT</code> selects; <code>none</code> sends nothing): <code>abandoned</code> and <code>canceled</code> conclude the run <code>success</code> in one second (a false green), <code>failed</code> is refused 401, and silence gets an honest run+job <code>cancelled</code> at the ~15-minute unstarted-job horizon — so the listener reports nothing (Q676). <code>PROBE_ABANDONED_FORCECANCEL=true</code> adds the Q683 remedy arm, <strong>answered 2026-08-05: a standalone REST force-cancel in the told-nothing state concludes run and job <code>cancelled</code> in ~1 s and unpins the runner record</strong>, so the provisioner now ships it. <code>PROBE_ABANDONED_RERUN_CHECK=true</code> adds a <code>rerun-failed-jobs</code> measurement after a concluded-run verdict.</td>
+<td><a href="../../plan/q645-abandoned-completion/">q645-abandoned-completion.md</a></td>
+</tr>
+<tr>
+<td>Investigation I</td>
+<td><code>PROBE_LABELPATCH_TEST=true</code></td>
+<td>Does the Actions Service honour a scale-set <strong>labels</strong> <code>PATCH</code>? Q726 registers labels at create and never rewrites them, and whether it could was the unknown that decided report-vs-reconcile. <strong>Answered 2026-08-24: no</strong>. A labels <code>PATCH</code> answers 200, stores nothing, and returns the <em>stored</em> set rather than an echo, and a live session is undisturbed. Five arms, gated on a create-arm control that stops the run when a backend drops extra labels at create and would make every <code>PATCH</code> verdict unreadable.</td>
+<td><a href="../../plan/archive/q793-labels-patch/">q793-labels-patch.md</a></td>
+</tr>
+<tr>
+<td>Investigation J</td>
+<td><code>PROBE_SSDELETE_TEST=true</code></td>
+<td>Does the Actions Service delete a scale set holding a queued or assigned job, what becomes of that job and the runner record minted under it, and does a scale set re-created under the same name receive the job? Decides whether deleting on rename or delete can close Q1344's adoption. <strong>Not yet run live.</strong></td>
+<td><a href="../../plan/q1344-scaleset-delete/">q1344-scaleset-delete.md</a></td>
+</tr>
 </tbody>
 </table>
-<p>| Investigation G | <code>PROBE_REPLAY_TEST=true</code> | Does a <strong>cursor-acked but undeleted</strong> message replay to a fresh session polling from cursor 0, and does <code>DeleteMessage</code> stop it?
-The Q583 fix rests on both, and the <code>DeleteMessage</code> wire shape is the P2-surfaced P4 unknown Q264 left open. | <a href="../../plan/archive/q583-restart-replay/">q583-restart-replay.md</a> | | Investigation H | <code>PROBE_ABANDONED_TEST=true</code> | What does the run service do with a completion for an acquired-but-never-run assignment?
-<strong>Answered 2026-08-04 across four arms</strong> (<code>PROBE_ABANDONED_RESULT</code> selects; <code>none</code> sends nothing): <code>abandoned</code> and <code>canceled</code> conclude the run <code>success</code> in one second (a false green), <code>failed</code> is refused 401, and silence gets an honest run+job <code>cancelled</code> at the ~15-minute unstarted-job horizon — so the listener reports nothing (Q676).
-<code>PROBE_ABANDONED_FORCECANCEL=true</code> adds the Q683 remedy arm, <strong>answered 2026-08-05: a standalone REST force-cancel in the told-nothing state concludes run and job <code>cancelled</code> in ~1 s and unpins the runner record</strong>, so the provisioner now ships it.
-<code>PROBE_ABANDONED_RERUN_CHECK=true</code> adds a <code>rerun-failed-jobs</code> measurement after a concluded-run verdict. | <a href="../../plan/q645-abandoned-completion/">q645-abandoned-completion.md</a> | | Investigation I | <code>PROBE_LABELPATCH_TEST=true</code> | Does the Actions Service honour a scale-set <strong>labels</strong> <code>PATCH</code>?
-Q726 registers labels at create and never rewrites them, and whether it could was the unknown that decided report-vs-reconcile.
-<strong>Answered 2026-08-24: no</strong>.
-A labels <code>PATCH</code> answers 200, stores nothing, and returns the <em>stored</em> set rather than an echo, and a live session is undisturbed.
-Five arms, gated on a create-arm control that stops the run when a backend drops extra labels at create and would make every <code>PATCH</code> verdict unreadable. | <a href="../../plan/archive/q793-labels-patch/">q793-labels-patch.md</a> | | Investigation J | <code>PROBE_SSDELETE_TEST=true</code> | Does the Actions Service delete a scale set holding a queued or assigned job, what becomes of that job and the runner record minted under it, and does a scale set re-created under the same name receive the job?
-Decides whether deleting on rename or delete can close Q1344's adoption.
-<strong>Not yet run live.</strong> | <a href="../../plan/q1344-scaleset-delete/">q1344-scaleset-delete.md</a> |</p>
 <p>Investigation I is one run against one throwaway scale set, with no job and no wall clock, which makes it the cheapest of the five to re-run against a future GitHub.
 Its verdicts come from an independent <code>GET</code> rather than the <code>PATCH</code> response, because a service echoing its input is byte-identical to one that stored it, and reading the response instead is exactly what its <code>LabelPatchEcho</code> unit case fails on.</p>
 <p>Investigation G is one run, three session generations, so it needs no state file and no multi-hour gap.
