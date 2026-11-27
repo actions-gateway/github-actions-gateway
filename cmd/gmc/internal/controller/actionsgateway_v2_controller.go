@@ -655,7 +655,7 @@ func (r *ActionsGatewayV2Reconciler) recordEvent(ag *gmcv2.ActionsGateway, event
 	if r.Recorder == nil {
 		return
 	}
-	r.Recorder.Eventf(ag, nil, eventtype, reason, action, note, args...)
+	r.Recorder.Eventf(ag, nil, eventtype, reason, action, "%s", fmt.Sprintf(note, args...))
 }
 
 // conditionStatusValue returns the current status of the named condition, or the

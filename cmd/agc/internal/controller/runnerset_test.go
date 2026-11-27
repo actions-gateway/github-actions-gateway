@@ -656,3 +656,30 @@ func TestRunnerSetDrainEvents_RecordsOwnSkipsOthers(t *testing.T) {
 	// The other set's event is re-enqueued, not recorded here.
 	assert.Len(t, r.eventCh, 1)
 }
+
+// A workflow author picks the job name, so a % in it is text, not a verb (Q1405).
+func TestRunnerSetEvents_RecordPercentVerbatim(t *testing.T) {
+	rec := events.NewFakeRecorder(16)
+	r := &RunnerSetReconciler{Log: slog.Default(), Recorder: rec}
+	r.ensureMaps()
+	rs := rsObj("set", "team-a", nil)
+	next := func() string {
+		select {
+		case e := <-rec.Events:
+			return e
+		default:
+			t.Fatal("expected an Event")
+			return ""
+		}
+	}
+
+	note := `job "cover 80% d (50%)" failed on a platform fault`
+	r.eventCh <- eventRecord{namespace: "team-a", name: "set", eventtype: corev1.EventTypeWarning,
+		reason: "PlatformFaultOnFailedJob", action: "DetectFlakyJob", note: note}
+	r.drainEvents(rs)
+	assert.Equal(t, "Warning PlatformFaultOnFailedJob "+note, next())
+
+	msg := "listener down: %d of 100%"
+	r.setReadyCondition(rs, false, v2.ReasonNoActiveSessions, msg)
+	assert.Equal(t, "Warning "+v2.ReasonNoActiveSessions+" "+msg, next())
+}

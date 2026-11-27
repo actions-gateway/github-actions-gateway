@@ -463,7 +463,7 @@ func (r *EgressProxyReconciler) recordEvent(ep *gmcv2.EgressProxy, eventtype, re
 	if r.Recorder == nil {
 		return
 	}
-	r.Recorder.Eventf(ep, nil, eventtype, reason, action, note, args...)
+	r.Recorder.Eventf(ep, nil, eventtype, reason, action, "%s", fmt.Sprintf(note, args...))
 }
 
 // The apply* helpers follow the shared applyManagedChild pattern: CreateOrPatch
