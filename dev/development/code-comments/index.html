@@ -2788,6 +2788,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#what-enforces-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What enforces this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#sources" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2957,6 +2968,10 @@ The longest doc comment on a function is 98 lines, above <code>Admit</code> in <
 Most of it argues for the design, which is a <code>docs/design/</code> page a caller of <code>Admit</code> could be pointed at in one line.</p>
 <p>So <strong>do not match the density of the file you are editing.</strong> The surrounding comments are the thing this page exists to stop, and matching them reproduces it.
 Write new comments to this page, trim a comment when you change the code it describes, and leave the rest for a change that is about comments.</p>
+<h2 id="what-enforces-this">What enforces this<a class="headerlink" href="#what-enforces-this" title="Permanent link">&para;</a></h2>
+<p><code>make comment-provenance-check</code>, in <code>make check</code> and CI, fails a branch that adds a comment line carrying a backlog ID outside <code>TODO(Q123):</code>, a pull request number, a date, or the phrase "used to" in its history sense.
+A date passes beside the word <code>measured</code> or a version on the same line, which is the upstream citation above; an upstream issue is written <code>owner/repo#123</code>; and a line that must keep the text carries <code>comment-provenance: &lt;reason&gt;</code>.
+Everything else on this page is review's to hold: the length limits, other narration wording ("no longer" describes runtime state four times in five here, so it cannot be gated), and whether a sentence passes the test.</p>
 <h2 id="sources">Sources<a class="headerlink" href="#sources" title="Permanent link">&para;</a></h2>
 <p>Read 2026-11-27.
 Where they disagree, the paragraph says which way this page went.</p>

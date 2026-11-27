@@ -23,7 +23,7 @@
     
     
       
-        <title>Gate new comments for provenance; move the existing ones to docs - GitHub Actions Gateway</title>
+        <title>Move existing comment rationale to docs; drop dead backlog IDs - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gate-new-comments-for-provenance-move-the-existing-ones-to-docs" class="md-skip">
+        <a href="#move-existing-comment-rationale-to-docs-drop-dead-backlog-ids" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Gate new comments for provenance; move the existing ones to docs
+              Move existing comment rationale to docs; drop dead backlog IDs
             
           </span>
         </div>
@@ -2733,18 +2733,29 @@
   
 
 
-<h1 id="gate-new-comments-for-provenance-move-the-existing-ones-to-docs">Gate new comments for provenance; move the existing ones to docs<a class="headerlink" href="#gate-new-comments-for-provenance-move-the-existing-ones-to-docs" title="Permanent link">&para;</a></h1>
-<p><a href="../../development/code-comments/">code-comments.md</a> limits a comment to what a later reader of the file needs, and nothing enforces it: the rule is prose in a doc and a skill, and the existing source contradicts it at every turn, so a session matching its surroundings reproduces what the page forbids.</p>
-<p>Measured 2026-11-27 at <code>036f6ccc9</code> over tracked first-party source: Go implementation files hold 0.50 comment lines per code line and shell 0.65; 550 Go and 320 shell comment blocks run 10 lines or more; comments cite a backlog ID 5,139 times and 4,915 of those name a row no longer in this directory.</p>
-<p>Two pieces, separable:</p>
-<p><strong>A diff-scoped gate on added comment lines.</strong> It fails an added comment line that carries a backlog ID or PR number outside <code>TODO(QNNN):</code>, a date, or a change-narration word ("previously", "no longer"), and an added implementation comment block over a length cap.
-Diff-scoped so it ratchets without a baseline file; the existing comments stay legal until touched.
-Open before building: whether a cap on block length can tell a doc comment from an implementation comment in Bash and YAML, where nothing marks the difference, and what the exemption for Custom Resource Definition field godoc and chart <code>values.yaml</code> keys on.
-The counts above came from plain regular expressions over comment lines, which is enough to count and not enough to gate: a gate needs a false-positive suite in both directions.</p>
-<p><strong>Burning down what exists.</strong> The dead backlog IDs are the mechanical half: an ID cited outside a <code>TODO</code> with no row here can be dropped where the sentence stands without it.
+<h1 id="move-existing-comment-rationale-to-docs-drop-dead-backlog-ids">Move existing comment rationale to docs; drop dead backlog IDs<a class="headerlink" href="#move-existing-comment-rationale-to-docs-drop-dead-backlog-ids" title="Permanent link">&para;</a></h1>
+<p><a href="../../development/code-comments/">code-comments.md</a> limits a comment to what a later reader of the file needs, and the existing source contradicts it at every turn.
+<code>make comment-provenance-check</code> holds the lines a branch adds, so the contradiction stops growing; what is already there stays until a change is about it.</p>
+<p><code>scripts/ci/check-comment-provenance.sh --all --report</code> lists every comment line the gate would fail if it were added today.
+Measured 2026-11-27 at <code>a79628a59</code>, over 78,957 comment lines in 1,321 files: 4,913 carry a backlog ID outside <code>TODO(QNNN):</code>, 111 a pull request number, 103 a date with no measurement beside it, and 96 the phrase "used to".
+Not one comment in the tree uses the <code>TODO(QNNN):</code> form.</p>
+<p>Two pieces, separable.</p>
+<p><strong>Burning down what exists.</strong> The dead backlog IDs are the mechanical half: an ID cited outside a <code>TODO</code> can be dropped where the sentence stands without it.
 The long blocks are not mechanical, because most hold real design rationale that has no other copy.
 Each needs its content moved to <code>docs/design/</code> before the comment shrinks, starting with the longest: <code>Admit</code> in <code>cmd/agc/internal/provisioner/admission.go</code> (98 lines) and the script headers over 70 lines under <code>scripts/</code>.
-A sweep per package, in its own PR, keeps each reviewable.</p>
+A sweep per package, in its own PR, keeps each reviewable; the gate then holds every line the sweep rewrites.
+One comment to fix on the way: the header of <code>scripts/docs/check-no-plan-refs-in-code.sh</code> still recommends citing a Q-ID in a comment.</p>
+<p><strong>A length cap, which the gate does not have.</strong> The page's limits are per kind of comment (two lines for an implementation comment, the contract for a doc comment, ten lines for a file header), so a cap has to know the kind, and outside Go nothing in the syntax says it.
+Measured over the 300 commits ending at <code>a79628a59</code>, which added 3,648 whole-line comment blocks: of the 116 shell blocks of four lines or more, 32 open a file and 25 sit above a function, and the other 59 sit above a statement, where a comment documenting the case below and one narrating it look the same.
+Workflow and manifest YAML is the same, 45 of 65.
+A kind-blind ceiling does not rescue it: the page sets no number for a doc comment, and the blocks of 18 lines or more in that window are mostly file headers and package comments.
+The ten-line header limit is checkable by position, and 23 of the 34 shell headers added in that window exceed it, so gating it fires on two new scripts in three; whether those headers or the number is wrong is a decision to take with the burn-down's first header rewrites in hand.
+A cap is also weaker than it looks under diff scoping, since one line added to a 40-line block is a one-line addition.
+What can be built is Go alone: <code>go/ast</code> separates a doc comment from one inside a function body, so a two-line cap on added in-body comments is decidable there, as a <code>devtools/</code> tool behind the same gate.</p>
+<p>Narration wording is gated on "used to" only.
+Read over the whole tree, that phrase narrates a change in 79 of the 96 lines the gate matches.
+The other candidates describe runtime state too often to gate: "no longer" narrates in 3 of 17 added lines sampled ("the pod no longer exists" is the usual sense), "previously" in 4 of 28, "is now" in about 15 of 24.
+Those stay with review.</p>
 
 
 
