@@ -167,7 +167,7 @@ jobs:
           # and history back to the validated commit for the surface diff. The
           # default depth-1, tagless checkout can answer neither.
           fetch-depth: 0
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           # check-artifact-unchanged.sh derives the released surface by building
           # semverfloor from the vendored devtools module.
@@ -573,7 +573,7 @@ jobs:
             prerelease=false
           fi
           echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           # Cross-compiles the gag-migrate release binaries (Q306). Same Go version
           # source as the other workflows so the CLI is built with the toolchain the
