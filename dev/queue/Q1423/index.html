@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1405/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1423/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A percent sign in a job name garbles, or loses, the Event naming it - GitHub Actions Gateway</title>
+        <title>An Event note carrying another component's text has no length cap - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-percent-sign-in-a-job-name-garbles-or-loses-the-event-naming-it" class="md-skip">
+        <a href="#an-event-note-carrying-another-components-text-has-no-length-cap" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A percent sign in a job name garbles, or loses, the Event naming it
+              An Event note carrying another component's text has no length cap
             
           </span>
         </div>
@@ -2733,24 +2733,15 @@
   
 
 
-<h1 id="a-percent-sign-in-a-job-name-garbles-or-loses-the-event-naming-it">A percent sign in a job name garbles, or loses, the Event naming it<a class="headerlink" href="#a-percent-sign-in-a-job-name-garbles-or-loses-the-event-naming-it" title="Permanent link">&para;</a></h1>
-<p>An Event whose text holds a <code>%</code> reads wrong, because the text is passed where a format string goes: a job named <code>cover 80% d (50%)</code> reads <code>cover 80%!d(MISSING) (50%!)(MISSING)</code> (measured: <code>fmt.Sprintf</code> with no arguments, which is what client-go's recorder calls, <code>event_recorder.go</code>, vendored, read).
-A workflow author chooses the name, and a matrix leg's name can hold one without trying.</p>
-<p><strong>Beyond garbling, it can lose the Event.</strong> Each verb with no argument grows about six times (<code>%s</code>, 2 bytes to 12; 127 of them, 254 bytes to 1,524), and the API server refuses a note past 1,024 (<code>NoteLengthLimit</code>, <code>core/validation/events.go</code>, v1.35.5, read), so a short enough name can push an operator's Event about its own job out of existence.
-A long plain name can do that too, at about six times the length.
-Nothing else was found: there are no arguments to read, Go's <code>fmt</code> writes nothing, and a width is not applied where the argument is missing (<code>%1000000d</code> gave 12 bytes).
-Not run through a live recorder or an API server.</p>
-<p><strong>Where the text reaches a format position</strong> (read):</p>
-<ul>
-<li><code>drainEvents</code> (<code>cmd/agc/internal/controller/runnerset_controller.go:582</code>), which passes every note a provisioner or listener queues through <code>RecordEvent</code> with no arguments.
-  Those that carry a job's name: <code>FlakyJobDetected</code>, <code>PlatformFaultOnFailedJob</code>, <code>CancelledJobUnread</code>, <code>MemoryLimitRaisedForRetry</code> and <code>EvictionRerunWithheld</code>.
-  Others carry an error's text, as <code>WorkerPodCreateFailed</code> does, and a URL-escaped one is garbled the same way.</li>
-<li>Six more calls on the reconciler's own text: <code>cmd/agc/internal/controller/runnerset_controller.go:619</code>, <code>:753</code> and <code>:782</code>, <code>cmd/agc/internal/controller/runnerset_capacity.go:76</code>, <code>:122</code> and <code>:193</code>.
-  Whether any of their text comes from outside the AGC was not read.</li>
-</ul>
-<p>The GMC's calls pass <code>"%s"</code> first, and so does <code>cmd/agc/internal/controller/runnerset_scaleset.go:698</code>, which is the fix: <code>"%s", note</code> at each of the seven, or a <code>recordEvent</code> with no variadic arguments.
-A test names a job with a <code>%</code> and requires the recorded text to hold it unchanged.</p>
-<p>The duplicate search flags Q1389, which is about which job a killed worker ran and not how its name is printed.</p>
+<h1 id="an-event-note-carrying-another-components-text-has-no-length-cap">An Event note carrying another component's text has no length cap<a class="headerlink" href="#an-event-note-carrying-another-components-text-has-no-length-cap" title="Permanent link">&para;</a></h1>
+<p>An Event whose note runs past 1,024 bytes never reaches the operator: the API server refuses it (<code>NoteLengthLimit</code>, <code>core/validation/events.go</code>, v1.35.5, as read for Q1405 and not re-read here), and client-go's recorder sends the note as built (<code>grep</code> for <code>1024</code>, <code>NoteLength</code> and <code>truncat</code> over the vendored <code>k8s.io/client-go/tools/events</code> and <code>tools/record</code> finds nothing, 2026-11-26).
+Q1405 removed the way a <code>%</code> grew a note about sixfold; length on its own is what remains.</p>
+<p><strong>The AGC bounds its own notes one at a time, and only the ones it wrote.</strong> <code>cmd/agc/internal/provisioner/flaky_jobs.go:757:if len(text) &gt; maxEventNote {</code> shortens the failed-job record, and <code>TestOOMNotes_FitAnEvent</code> and <code>TestOOMReason_GivesWayToTheEventsLength</code> pin the out-of-memory notes at or under 1,024 bytes with a 255-byte job name.
+Nothing bounds a note that carries text another component wrote: <code>WorkerPodCreateFailed</code> records the API server's error whole (<code>cmd/agc/internal/provisioner/capacity.go:37:fmt.Sprintf("the apiserver rejected worker pod %s: %v", pod.Name, err))</code>), and that error carries an admission webhook's or a policy's denial message as the webhook wrote it.
+How long such an error gets has not been measured, so whether any real one is lost is not known.</p>
+<p>What the operator would see is no <code>WorkerPodCreateFailed</code> Event for a pod the AGC could not create, with only the AGC's <code>apiserver rejected worker pod</code> log line left.</p>
+<p>The fix is expected to be one cap at <code>maxEventNote</code>, cut at a rune boundary and marked, in <code>channelEventRecorder</code> for the notes the provisioner and the listener queue or in <code>recordEvent</code> for all of them; which, and whether the GMC's two <code>recordEvent</code> wrappers want it, is open.</p>
+<p>The duplicate search flags Q1402, which is about a memory raise the API server refuses in the pod it builds, and not about the length of any Event.</p>
 
 
 
