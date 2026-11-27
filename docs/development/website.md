@@ -692,6 +692,20 @@ Three things this wiring depends on, all of which fail quietly:
   `make queue-rules-check` rule 14 catches that shape without building the site, because nothing in `make check` or `make docs-gates` does (Q1054).
   Write it relative to the store: `../development/go-workspaces.md`.
 
+## A pipe inside a table cell's code
+
+A pipe in a table cell is written `\|`, and the two engines disagree about it inside a code span.
+GitHub unescapes it everywhere in the row, so `` `agc\|proxy` `` shows `agc|proxy`; Python-Markdown leaves it alone inside code, so the site showed `agc\|proxy` and a PromQL query pasted from it matched a literal pipe (Q1269).
+A bare `|` is no fix: it renders here and splits the cell on GitHub.
+
+So the source keeps GitHub's form, and [`hooks/table_pipes.py`](../../hooks/table_pipes.py) makes the site agree with it.
+It rewrites `\|` to `|` inside code spans on table rows before Python-Markdown reads the page, then warns on any table cell whose `<code>` still renders `\|`, which fails the `--strict` build.
+It is the last hook in `mkdocs.yml` so the backlog table `queue_page.py` appends gets the same treatment, since `queue.py render` escapes every pipe in a note.
+A cell that genuinely means a backslash-pipe writes it as `<code>\&#124;</code>`, which the check does not read as one.
+
+The Markdown checkers that parse table cells, `check-webhook-selectors.py` and `check-dashboard-tables.py`, read `\|` as `|` already, so they and the site now agree.
+Unit tests: `scripts/docs/table-pipes-hook-test.sh`, under `make check`.
+
 ## Publication scope
 
 Scope is **per version**, not per site (Q558):
