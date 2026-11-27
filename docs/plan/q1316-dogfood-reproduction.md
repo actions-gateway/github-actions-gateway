@@ -24,7 +24,7 @@ Those readings are one run each, and nothing here repeats them.
 
 ## No privileged debug pod
 
-Every node fact this needs is readable from inside a `privileged-dind` job: its daemon sees the host's cgroup tree, so `docker run --privileged -v /sys/fs/cgroup:/h:ro` reads any pod's `memory.events` (measured on a kind node, not on GKE).
+Every node fact this needs is readable from inside a `privileged-dind` job: its daemon sees the host's cgroup tree, so `docker run --privileged -v /sys/fs/cgroup:/h:ro` reads any pod's `memory.events` (measured in one container of the `kindest/node:v1.35.5` image, running containerd and a kubelet with no API server, so not a cluster and not GKE).
 Statuses, Node Events and the AGC's log come from read-only `kubectl`.
 The same job container opens `/dev/kmsg` (measured on Docker's `--privileged`, not on GKE), and prints from it only the `oom-kill:constraint=` line the kernel prints for a kill, which names the cgroup whose limit was hit, the victim's cgroup and the process.
 That is what the counters are checked against, and no other line of the node's log is printed.
