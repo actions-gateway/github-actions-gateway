@@ -648,10 +648,18 @@ The history cannot be counted on to move by itself: the sampler records an out-o
 So the class raises the limit from the killed pod's own:
 
 ```
-next = min(roundUp64Mi(killed × headroom), ceiling)
+next = min(roundUp64Mi(killed × headroom), ceiling, room)
 headroom = 1.4 (Binpack) | limitHeadroomPercent / 100 (Throughput, default 1.5)
 ceiling  = spec.sizing.maxRequests.memory, or 2 × killed where unset
+room     = the template's spec.resources.limits.memory, and under Binpack its
+           spec.resources.requests.memory (its limit where it sets no request)
+           less the other running containers' requests
 ```
+
+`room` is there because the API server refuses a pod whose container limit is above the pod's, or whose containers' requests together are above an explicit pod request (`validatePodResourceConsistency`, Kubernetes v1.35.5, read), and a raise past it recorded a floor and spent a slot on a pod nothing could create (Q1402).
+It is read from the template rather than the killed pod, whose pod request the API server defaulted to its containers' own; that default must itself be at or below the pod's limit, which is why the limit bounds a following request where the template sets no pod request (measured, `TestPodLevelResources_RefuseWhatTheRaiseIsHeldTo`).
+A raise `room` cut says so in its `MemoryLimitRaisedForRetry` Event.
+The profiles' derived limits are capped at the pod's limit the same way.
 
 It fires on a worker whose pod reached `PodFailed` with the **runner** container terminated `OOMKilled`, and which carries the `actions-gateway.com/sizing-profile` annotation, meaning the profile derived its limits when it was built.
 That is the shape a memory kill leaves on cgroup v2, which kills the whole container: reproduced on dogfood under `Throughput` on 2026-11-22 and under `Binpack` on 2026-11-24 (R12), GitHub concluded the job `failure` 9 min 43 s to 9 min 48 s after the kill, and the re-run at the raised limit succeeded ([the first readings](../plan/q555-automatic-recovery-design.md#readings-from-the-dogfood-turn-up-2026-11-22), [the second](../plan/q555-automatic-recovery-design.md#readings-from-the-binpack-turn-up-2026-11-24)).
@@ -680,7 +688,7 @@ A raised run also counts toward the breaker, which can then withhold kills that 
 |---|---|---|
 | Profile-built worker, `next` above the killed limit | `next` is recorded for the job's later attempts and the run goes to the disruption arms' futility checks and budget. Once it holds a slot, a **Normal** `MemoryLimitRaisedForRetry` Event names both limits and the run is re-run as `eviction_retries_total{cause="oom"}`; a run with no budget left gets `EvictionRetriesExhausted` and no `MemoryLimitRaisedForRetry` | none: re-run |
 | No right-sizing profile now, or the pod was built before one applied (`Static`, `NodeShare`, `AwaitingSamples`) | Withheld: a re-run may get the same limit; a set that was `AwaitingSamples` gives it a derived one where it has samples by then | `own_limit` |
-| `next` not above the killed limit: at `maxRequests`, or `limitHeadroomPercent: 100` | Withheld | `own_limit` |
+| `next` not above the killed limit: at `maxRequests`, at `room`, or `limitHeadroomPercent: 100` | Withheld; at `room` the Event names the template's pod-level `spec.resources` as what to raise | `own_limit` |
 | The same job killed again after its limit was raised | Withheld: one raise per job, so growth is bounded by the ceiling | `same_class_again` |
 | More than 10 distinct runs held a slot in 10 minutes | Withheld for 30 minutes, with one **Warning** `AutoRetryPaused` Event when it opens | `breaker_open` |
 | The runner had no memory limit | Not this class: there is no limit to raise. No re-run, and no Event of its own; the job's failure still raises `PlatformFaultOnFailedJob` | none: not recognised |
@@ -716,7 +724,7 @@ Only a kill the class could retry waits: a runner with its own memory limit and 
 The disruption arms do not wait, and read the created-for identity as before ([Q1398](../queue/Q1398.md)).
 
 **The raised limit is a per-job floor in the failure ledger**, under `memoryFloors["<runID>/<job name>"]` for 7 days.
-Provisioning a scale-set worker looks it up by the assignment's run ID and job display name and raises the runner's memory limit to it where the resolved limit is lower; under `Binpack` the memory request rises with it, since that profile sets the two equal.
+Provisioning a scale-set worker looks it up by the assignment's run ID and job display name and raises the runner's memory limit to it, held to `room` for a template lowered since the kill, where the resolved limit is lower; under `Binpack` the memory request rises with it, since that profile sets the two equal.
 Nothing checks that a node can hold the raised request: one no node can hold leaves the re-run `Pending`, and `maxRequests.memory` is what caps it ([measured](../plan/q555-automatic-recovery-design.md#readings-from-the-binpack-turn-up-2026-11-24)).
 It applies to the job's next attempt whoever starts it, so a manual re-run after the budget is spent gets the memory too.
 The lookup reads the in-memory index of the ledger, so a job with no floor costs no API call once the process has read that set's ledger, and one read before that; a floor another replica wrote since that read is missed, and the attempt then runs at the resolved limit.

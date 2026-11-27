@@ -76,8 +76,8 @@ func applySizingProfile(template corev1.PodTemplateSpec, sizing *v2.WorkerSizing
 			c := &out.Spec.Containers[i]
 			rec := recommendationFor(recs, c.Name)
 			// Binpack: requests == limits from the history → Guaranteed QoS.
-			cpu := clampQuantity(rec.Requests[corev1.ResourceCPU], sizing, corev1.ResourceCPU)
-			mem := clampQuantity(rec.Limits[corev1.ResourceMemory], sizing, corev1.ResourceMemory)
+			cpu := capAtPodLimit(clampQuantity(rec.Requests[corev1.ResourceCPU], sizing, corev1.ResourceCPU), &out.Spec, corev1.ResourceCPU)
+			mem := capAtPodLimit(clampQuantity(rec.Limits[corev1.ResourceMemory], sizing, corev1.ResourceMemory), &out.Spec, corev1.ResourceMemory)
 			setResource(&c.Resources, corev1.ResourceCPU, cpu, cpu)
 			setResource(&c.Resources, corev1.ResourceMemory, mem, mem)
 		}
@@ -90,13 +90,14 @@ func applySizingProfile(template corev1.PodTemplateSpec, sizing *v2.WorkerSizing
 			c := &out.Spec.Containers[i]
 			rec := recommendationFor(recs, c.Name)
 			// Requests from the history; no CPU limit so jobs burst; memory
-			// limit = observed peak × headroom, clamped like a request and never
-			// below one. The peak is the job's own, so an unclamped limit could
+			// limit = observed peak × headroom, clamped like a request and at the
+			// pod's limit, and never below the request. The peak is the job's own, so an unclamped limit could
 			// climb by the headroom factor each generation (Q1327).
 			cpuReq := clampQuantity(rec.Requests[corev1.ResourceCPU], sizing, corev1.ResourceCPU)
 			memReq := clampQuantity(rec.Requests[corev1.ResourceMemory], sizing, corev1.ResourceMemory)
 			memPeak := rec.ObservedPeak[corev1.ResourceMemory]
-			memLimit := clampQuantity(scaleQuantity(corev1.ResourceMemory, memPeak, headroom), sizing, corev1.ResourceMemory)
+			memLimit := capAtPodLimit(clampQuantity(scaleQuantity(corev1.ResourceMemory, memPeak, headroom), sizing, corev1.ResourceMemory),
+				&out.Spec, corev1.ResourceMemory)
 			if memLimit.Cmp(memReq) < 0 {
 				memLimit = memReq
 			}
@@ -200,6 +201,18 @@ func clampQuantity(q resource.Quantity, sizing *v2.WorkerSizing, name corev1.Res
 	}
 	if max, ok := sizing.MaxRequests[name]; ok && q.Cmp(max) > 0 {
 		return max
+	}
+	return q
+}
+
+// capAtPodLimit lowers q to spec's pod-level limit for name, where it sets one: the
+// API server refuses a container limit above it (Q1402).
+func capAtPodLimit(q resource.Quantity, spec *corev1.PodSpec, name corev1.ResourceName) resource.Quantity {
+	if spec.Resources == nil {
+		return q
+	}
+	if lim, ok := spec.Resources.Limits[name]; ok && q.Cmp(lim) > 0 {
+		return lim
 	}
 	return q
 }
