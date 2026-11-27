@@ -356,3 +356,30 @@ func TestApplySizingProfileThroughputMemoryLimitHonoursMaxRequests(t *testing.T)
 		t.Fatalf("memory limit %s, request %s, want both 1Gi", l.String(), r.String())
 	}
 }
+
+// TestApplySizingProfileCapsAtThePodLimit: the API server refuses a container limit above
+// the template's pod-level one, so neither history-based profile derives one (Q1402).
+func TestApplySizingProfileCapsAtThePodLimit(t *testing.T) {
+	tmpl := profileTemplate(false)
+	tmpl.PodTemplate.Spec.Resources = &corev1.ResourceRequirements{Limits: corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("400m"),
+		corev1.ResourceMemory: resource.MustParse("1536Mi"),
+	}}
+	recs := []v2.ContainerSizingRecommendation{confidentRec("runner")}
+
+	binpack := applySizingProfile(tmpl.PodTemplate, &v2.WorkerSizing{Profile: v2.SizingProfileBinpack}, tmpl, recs)
+	res := binpack.Spec.Containers[0].Resources
+	for _, rl := range []corev1.ResourceList{res.Requests, res.Limits} {
+		if q := rl[corev1.ResourceCPU]; q.String() != "400m" {
+			t.Fatalf("binpack cpu = %s, want the pod's 400m", q.String())
+		}
+		if q := rl[corev1.ResourceMemory]; q.String() != "1536Mi" {
+			t.Fatalf("binpack memory = %s, want the pod's 1536Mi", q.String())
+		}
+	}
+
+	throughput := applySizingProfile(tmpl.PodTemplate, &v2.WorkerSizing{Profile: v2.SizingProfileThroughput}, tmpl, recs)
+	if q := throughput.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory]; q.String() != "1536Mi" {
+		t.Fatalf("throughput memory limit = %s, want the pod's 1536Mi over the derived 2304Mi", q.String())
+	}
+}

@@ -204,6 +204,100 @@ func TestRecoverOOMKilled_WithholdsWhatARerunRepeats(t *testing.T) {
 	}
 }
 
+// podLevelTemplate is a runner beside a dind sidecar asking 512Mi, under the pod-level
+// resources given.
+func podLevelTemplate(resources *corev1.ResourceRequirements) corev1.PodTemplateSpec {
+	always := corev1.ContainerRestartPolicyAlways
+	mem := func(q string) corev1.ResourceList {
+		return corev1.ResourceList{corev1.ResourceMemory: resource.MustParse(q)}
+	}
+	return corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+		Resources: resources,
+		InitContainers: []corev1.Container{
+			{Name: "dind", RestartPolicy: &always, Resources: corev1.ResourceRequirements{Requests: mem("512Mi")}},
+			{Name: "setup", Resources: corev1.ResourceRequirements{Requests: mem("8Gi")}},
+		},
+		Containers: []corev1.Container{
+			{Name: runnerContainer, Resources: corev1.ResourceRequirements{Requests: mem("2Gi"), Limits: mem("2Gi")}},
+			{Name: "cache", Resources: corev1.ResourceRequirements{Limits: mem("256Mi")}},
+		},
+	}}
+}
+
+func TestPodLevelMemoryRoom(t *testing.T) {
+	mem := func(q string) corev1.ResourceList {
+		return corev1.ResourceList{corev1.ResourceMemory: resource.MustParse(q)}
+	}
+	cases := []struct {
+		name           string
+		resources      *corev1.ResourceRequirements
+		requestsFollow bool
+		want           string // "" for no bound
+	}{
+		{"no pod-level resources", nil, true, ""},
+		{"a pod-level CPU limit only", &corev1.ResourceRequirements{Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2")}}, true, ""},
+		{"the pod's limit", &corev1.ResourceRequirements{Limits: mem("3Gi")}, false, "3Gi"},
+		{"a pod request is not the runner's to fill where requests stay", &corev1.ResourceRequirements{Requests: mem("3Gi")}, false, ""},
+		// 4Gi less the sidecar's 512Mi and the cache's 256Mi, which defaults its
+		// request to its limit; the plain init container runs before the runner.
+		{"the pod's request less the other running containers'", &corev1.ResourceRequirements{Requests: mem("4Gi")}, true, "3328Mi"},
+		{"the lower of the two", &corev1.ResourceRequirements{Requests: mem("4Gi"), Limits: mem("3Gi")}, true, "3Gi"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpl := podLevelTemplate(tc.resources)
+			room, ok := podLevelMemoryRoom(&tmpl.Spec, runnerContainer, tc.requestsFollow)
+			if tc.want == "" {
+				assert.False(t, ok, "got %s", room.String())
+				return
+			}
+			require.True(t, ok)
+			assert.Zero(t, room.Cmp(resource.MustParse(tc.want)), "got %s, want %s", room.String(), tc.want)
+		})
+	}
+}
+
+// TestRecoverOOMKilled_HoldsTheRaiseToThePodLevelRoom: a raise past the template's
+// pod-level resources would build a pod the API server refuses, so it is cut to the room
+// they leave, and withheld where that is no raise at all (Q1402).
+func TestRecoverOOMKilled_HoldsTheRaiseToThePodLevelRoom(t *testing.T) {
+	mem := func(q string) corev1.ResourceList {
+		return corev1.ResourceList{corev1.ResourceMemory: resource.MustParse(q)}
+	}
+	ctx := context.Background()
+
+	pod := oomKilled(scaleSetWorkerPod("runner-gpu-job1", rightSizedAnnotations("4242")), "2Gi")
+	p, target, _, _, _ := recoveryFixture(t, pod)
+	target.spec.MemoryRetry = throughputRetry()
+	target.spec.PodTemplate = podLevelTemplate(&corev1.ResourceRequirements{Limits: mem("2560Mi")})
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+	l, _, err := p.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	f := l.MemoryFloors[failureKey("4242", "build")]
+	require.NotNil(t, f)
+	assert.Equal(t, "2560Mi", f.Limit.String(), "the pod's limit, not the 3Gi the headroom asks for")
+	assert.Contains(t, lastNote(t, target, "MemoryLimitRaisedForRetry"), "gets a limit of 2560Mi")
+
+	// Binpack's request follows the limit, so the pod's request bounds it too.
+	pod = oomKilled(scaleSetWorkerPod("runner-gpu-job1", rightSizedAnnotations("4242")), "2Gi")
+	p, target, m, _, _ := recoveryFixture(t, pod)
+	target.spec.MemoryRetry = &MemoryRetryPolicy{HeadroomPercent: 140, RequestsFollow: true}
+	target.spec.PodTemplate = podLevelTemplate(&corev1.ResourceRequirements{Requests: mem("2816Mi"), Limits: mem("8Gi")})
+	done, err = p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+	assert.Equal(t, float64(1), testutil.ToFloat64(
+		m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", recoveryCauseOOM, rerunWithheldReasonOwnLimit)),
+		"2816Mi less the dind and cache containers' 768Mi leaves the runner its own 2Gi")
+	assert.Contains(t, lastNote(t, target, "EvictionRerunWithheld"),
+		"the most the template's pod-level spec.resources leaves the runner")
+	l, _, err = p.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	assert.Empty(t, l.MemoryFloors)
+}
+
 // oomKilledOn is oomKilled with the memory request and node a note has to name.
 func oomKilledOn(pod *corev1.Pod, node, request, limit string) *corev1.Pod {
 	oomKilled(pod, limit)
@@ -249,6 +343,17 @@ func oomNotes(t *testing.T, pod, node, job string) map[string]string {
 	notes["no profile"] = lastNote(t, recoverAll(nil, worker(pod, "4242", "2Gi")), "EvictionRerunWithheld")
 	notes["at the ceiling"] = lastNote(t, recoverAll(
 		&MemoryRetryPolicy{HeadroomPercent: 150, Ceiling: resource.MustParse("2Gi")}, worker(pod, "4242", "2Gi")), "EvictionRerunWithheld")
+	notes["at the pod's limit"] = func() string {
+		w := worker(pod, "4242", "2Gi")
+		p, target, _, _, _ := recoveryFixture(t, w)
+		target.spec.MemoryRetry = throughputRetry()
+		target.spec.PodTemplate = podLevelTemplate(&corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("2Gi")}})
+		done, err := p.RecoverDisruptedScaleSetWorker(ctx, target, w.DeepCopy())
+		require.NoError(t, err)
+		<-done
+		return lastNote(t, target, "EvictionRerunWithheld")
+	}()
 	notes["raised"] = lastNote(t, recoverAll(throughputRetry(), worker(pod, "4242", "2Gi")), "MemoryLimitRaisedForRetry")
 	notes["killed again"] = lastNote(t, recoverAll(throughputRetry(),
 		worker(pod+"-first", "4242", "2Gi"), worker(pod, "4242", "2Gi")), "EvictionRerunWithheld")
@@ -285,6 +390,8 @@ func TestOOMNotes_NameWhatWasReadAndNoCause(t *testing.T) {
 			"If the runner reached it, raise it, or use the Binpack or Throughput sizing profile, which derives one once it has samples; then, in either case, re-run it by hand"},
 		"at the ceiling": {worker, "No automatic re-run was requested", "a re-run would get the same one",
 			"If the runner reached it, raise spec.sizing.maxRequests memory or reduce what the job uses; then, in either case, re-run it by hand"},
+		"at the pod's limit": {worker, "No automatic re-run was requested", "a re-run would get the same one",
+			"If the runner reached it, raise the pod-level memory limit or request in the RunnerTemplate, or reduce what the job uses; then, in either case, re-run it by hand"},
 		"raised": {worker, `Job "build" gets a limit of 3Gi on its next attempt, and is re-run automatically once the run concludes`},
 		"killed again": {worker, "No automatic re-run was requested",
 			`a job gets one raise and job "build" had its own after an earlier kill, from 2Gi to 3Gi, which lasts until `,
@@ -564,6 +671,22 @@ func TestApplyMemoryFloor_NeverLowersALimit(t *testing.T) {
 	got := p.applyMemoryFloor(ctx, target, spec("2Gi"), job, log)
 	assert.Equal(t, "3Gi", got.PodTemplate.Spec.Containers[0].Resources.Limits.Memory().String())
 	assert.Equal(t, "1Gi", got.PodTemplate.Spec.Containers[0].Resources.Requests.Memory().String())
+}
+
+// TestApplyMemoryFloor_HeldToALoweredPodLimit: a template edited after the kill to a
+// lower pod-level limit gets that limit, not a pod the API server refuses (Q1402).
+func TestApplyMemoryFloor_HeldToALoweredPodLimit(t *testing.T) {
+	ctx := context.Background()
+	p, target, _, _, _ := recoveryFixture(t)
+	_, err := p.recordMemoryFloor(ctx, target, "4242", "build", memoryFloor{
+		Pod: "w", Container: runnerContainer, KilledLimit: resource.MustParse("2Gi"), Limit: resource.MustParse("3Gi"),
+	})
+	require.NoError(t, err)
+	spec := &ResolvedSpec{PodTemplate: podLevelTemplate(&corev1.ResourceRequirements{
+		Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("2560Mi")}})}
+
+	got := p.applyMemoryFloor(ctx, target, spec, ScaleSetJob{RunID: "4242", JobName: "build"}, p.logFor())
+	assert.Equal(t, "2560Mi", got.PodTemplate.Spec.Containers[0].Resources.Limits.Memory().String())
 }
 
 // TestProvisionScaleSetWorker_StampsTheRerunCause: a worker built for a run GAG has

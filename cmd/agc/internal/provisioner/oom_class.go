@@ -23,8 +23,9 @@ import (
 // memory limit, raised from the killed pod's own limit rather than from the set's
 // history, because the sampler records an out-of-memory job's peak at or below the limit
 // it ran under, so the history may never move. A kill is withheld before any slot is
-// spent where the next attempt could not get a higher limit, with no profile or at the
-// profile's ceiling, and where it already got one raise. A re-run that holds a slot waits
+// spent where the next attempt could not get a higher limit, with no profile, at the
+// profile's ceiling or at what the template's pod-level resources leave the runner, and
+// where it already got one raise. A re-run that holds a slot waits
 // in the ledger until the run concludes (pending_rerun.go). The operator-facing account
 // is docs/design/04-operational-flows.md §4.2.
 //
@@ -126,6 +127,46 @@ func nextMemoryLimit(killed resource.Quantity, policy MemoryRetryPolicy) resourc
 	return *resource.NewQuantity(min(next, ceiling), resource.BinarySI)
 }
 
+// podLevelMemoryRoom is the most memory limit the template's pod-level resources admit
+// for container: the pod's limit, since each container's must be at or below it, and,
+// where the request follows the limit, the pod's request less every other running
+// container's, since their requests together must be at or below it (Kubernetes
+// v1.35.5, validatePodResourceConsistency). It reads the template, not a pod the API
+// server returned, whose pod request is defaulted to the containers' own. ok is false
+// where neither bounds it.
+func podLevelMemoryRoom(spec *corev1.PodSpec, container string, requestsFollow bool) (room resource.Quantity, ok bool) {
+	if spec.Resources == nil {
+		return resource.Quantity{}, false
+	}
+	room, ok = spec.Resources.Limits[corev1.ResourceMemory]
+	podRequest, set := spec.Resources.Requests[corev1.ResourceMemory]
+	if !requestsFollow || !set {
+		return room, ok
+	}
+	left := podRequest.DeepCopy()
+	subtract := func(r corev1.ResourceRequirements) {
+		if q, has := r.Requests[corev1.ResourceMemory]; has {
+			left.Sub(q)
+		} else if q, has := r.Limits[corev1.ResourceMemory]; has {
+			left.Sub(q)
+		}
+	}
+	for i := range spec.Containers {
+		if spec.Containers[i].Name != container {
+			subtract(gapFilledResources(&spec.Containers[i]))
+		}
+	}
+	for i := range spec.InitContainers {
+		if IsNativeSidecar(&spec.InitContainers[i]) {
+			subtract(spec.InitContainers[i].Resources)
+		}
+	}
+	if !ok || left.Cmp(room) < 0 {
+		return left, true
+	}
+	return room, true
+}
+
 // recoverOOMKilled is the out-of-memory class's recovery of one claimed worker: it
 // withholds a kill the next attempt would repeat, records the raised limit for the
 // job's next attempt, and hands the re-run to the disruption arms' path.
@@ -148,6 +189,13 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 		return closedChan()
 	}
 	next := nextMemoryLimit(killed, *spec.MemoryRetry)
+	if room, ok := podLevelMemoryRoom(&spec.PodTemplate.Spec, runnerContainer, spec.MemoryRetry.RequestsFollow); ok && next.Cmp(room) > 0 {
+		next = room
+		if next.Cmp(killed) <= 0 {
+			p.withholdOOMRerun(target, runID, log, rerunWithheldReasonOwnLimit, facts+". No automatic re-run was requested, because that limit is already the most the template's pod-level spec.resources leaves the runner, and a re-run would get the same one. If the runner reached it, raise the pod-level memory limit or request in the RunnerTemplate, or reduce what the job uses; then, in either case, re-run it by hand")
+			return closedChan()
+		}
+	}
 	if next.Cmp(killed) <= 0 {
 		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonOwnLimit, facts+". No automatic re-run was requested, because that limit is already the most the sizing profile allows and a re-run would get the same one. If the runner reached it, raise spec.sizing.maxRequests memory or reduce what the job uses; then, in either case, re-run it by hand")
 		return closedChan()
@@ -272,6 +320,11 @@ func (p *Provisioner) applyMemoryFloor(ctx context.Context, target Target, spec 
 	if f == nil {
 		return spec
 	}
+	// A template edited since the kill may have lowered its pod-level resources.
+	limit := f.Limit
+	if room, ok := podLevelMemoryRoom(&spec.PodTemplate.Spec, f.Container, f.RequestsFollow); ok && limit.Cmp(room) > 0 {
+		limit = room
+	}
 	tmpl := spec.PodTemplate.DeepCopy()
 	for i := range tmpl.Spec.Containers {
 		c := &tmpl.Spec.Containers[i]
@@ -279,23 +332,23 @@ func (p *Provisioner) applyMemoryFloor(ctx context.Context, target Target, spec 
 			continue
 		}
 		resolved := c.Resources.Limits[corev1.ResourceMemory]
-		if resolved.Cmp(f.Limit) >= 0 {
+		if resolved.Cmp(limit) >= 0 {
 			return spec
 		}
 		if c.Resources.Limits == nil {
 			c.Resources.Limits = corev1.ResourceList{}
 		}
-		c.Resources.Limits[corev1.ResourceMemory] = f.Limit
+		c.Resources.Limits[corev1.ResourceMemory] = limit
 		if f.RequestsFollow {
 			if c.Resources.Requests == nil {
 				c.Resources.Requests = corev1.ResourceList{}
 			}
-			c.Resources.Requests[corev1.ResourceMemory] = f.Limit
+			c.Resources.Requests[corev1.ResourceMemory] = limit
 		}
 		raised := *spec
 		raised.PodTemplate = *tmpl
 		log.Info("provisioning at the memory limit an out-of-memory retry raised", "container", f.Container,
-			"resolvedLimit", resolved.String(), "limit", f.Limit.String())
+			"resolvedLimit", resolved.String(), "limit", limit.String())
 		return &raised
 	}
 	return spec
