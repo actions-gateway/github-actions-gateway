@@ -110,9 +110,13 @@ func (r *NamespacePSAReconciler) applyNamespacePSA(ctx context.Context, ns *core
 		return fmt.Errorf("stamp PSA labels on namespace %q: %w", ns.Name, err)
 	}
 	if r.Recorder != nil {
+		source := fmt.Sprintf("set by its %s label", gmcv2.SecurityProfileLabel)
+		if ns.Labels[gmcv2.SecurityProfileLabel] == "" {
+			source = fmt.Sprintf("the default for a namespace without an %s label", gmcv2.SecurityProfileLabel)
+		}
 		r.Recorder.Eventf(ns, nil, corev1.EventTypeWarning, "PSALabelsOverridden", "ReapplyPSALabels",
-			"Reconciling Pod Security Admission labels on namespace %q to the %s=%s profile after detecting an out-of-band modification: %v",
-			ns.Name, gmcv2.SecurityProfileLabel, profile, err)
+			"Reconciling Pod Security Admission labels on namespace %q to the %q profile (%s) after detecting an out-of-band modification: %v",
+			ns.Name, profile, source, err)
 	}
 	return r.Apply(ctx, desired, client.FieldOwner(nsPSAFieldManager), client.ForceOwnership)
 }
