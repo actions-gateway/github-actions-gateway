@@ -4725,6 +4725,7 @@ On a Linux/WSL desktop you instead get input lag and compositor stutter while th
 <p>To prevent that, these phases auto-throttle on an <strong>interactive, GUI-bearing dev shell</strong>: the scripts behind the make targets (<code>scripts/go/go-test.sh</code>, <code>scripts/go/go-lint.sh</code>, <code>scripts/go/coverage.sh</code>) run them with both CPU priority <strong>and</strong> disk I/O demoted below the desktop (macOS: <code>nice -n 10 taskpolicy -d throttle</code>; Linux/WSL: <code>nice -n 19</code>, plus <code>ionice -c 3</code> when available), and cap parallelism to physical-cores − 2 (<code>golangci-lint -j</code>, <code>go test -p</code>, <code>GOMAXPROCS</code>, and since Q822 the <a href="#the-fast-gates-fan-out-past-the-heavy-build-semaphore">fast-gate fan-outs</a> through <code>RUN_PARALLEL_JOBS</code>).
 Detection and sizing live in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/local-throttle.sh"><code>scripts/agent/local-throttle.sh</code></a>.</p>
 <p><strong>Setting <code>CI</code> yourself turns the desktop half of that off.</strong> <code>throttle_active</code> returns false on any non-empty <code>CI</code> before it looks at the OS, so <code>CI=true make check</code> locally runs with no QoS prefix, no core cap and no heavy-build slot.
+On a Mac each heavy phase says so on stderr, a line opening <code>local-throttle: CI is set on a Mac</code> (Q1084), because a session copying CI's environment otherwise drops the desktop's protection without a word.
 <code>RUN_PARALLEL_JOBS</code> is the exception since Q1105: it comes from <code>fanout-jobs</code>, a separate verb that answers on CI at four times the vCPU count, so the fan-outs are capped rather than unbounded.
 On an 18-core Mac that is 72, above the 130 suites, so it does not bind there.
 <code>jobs</code> itself still prints nothing on CI, which is what keeps the CI number away from <code>GOMAXPROCS</code> and <code>golangci-lint -j</code>.
@@ -4794,7 +4795,8 @@ The behaviour is covered both directions by the package's table test and, end to
 - <strong>CI</strong> — the <code>CI</code> environment variable is set (GitHub Actions et al.).
 - <strong>Headless / SSH Linux shells</strong> — no graphical session (<code>DISPLAY</code>/<code>WAYLAND_DISPLAY</code> unset), so build servers and remote shells are unaffected.
 - <strong>Unsupported OSes</strong> — native Windows (Git Bash/MSYS); use WSL2, which reports as Linux and follows the Linux rule.</p>
-<p>To opt out locally (e.g. a machine with cores to spare), set <code>CI=1</code> for the run: <code>CI=1 make check</code>.</p>
+<p>To opt out locally (e.g. a machine with cores to spare), set <code>GAG_LOCAL_THROTTLE=off</code> for the run: <code>GAG_LOCAL_THROTTLE=off make check</code>.
+Don't set <code>CI</code> for this: it also switches on every CI-only branch in the gates, such as a missing <code>python3</code> failing the run where a local run skips.</p>
 <h5 id="not-every-windowserver-watchdog-crash-is-a-build">Not every WindowServer watchdog crash is a build<a class="headerlink" href="#not-every-windowserver-watchdog-crash-is-a-build" title="Permanent link">&para;</a></h5>
 <p>The throttle addresses one specific cause of <code>WindowServer … userspace_watchdog_timeout</code>: a build saturating CPU <strong>and</strong> disk I/O so the compositor's own work is stuck behind it.
 That is a <em>resource-starvation</em> stall — WindowServer's main thread is runnable but can't get serviced.
@@ -5932,7 +5934,7 @@ Bytecode goes to a throwaway tree via <code>PYTHONPYCACHEPREFIX</code>, so the g
 <ul>
 <li><strong><code>python3</code> missing.</strong> <code>python3</code> is an <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md">extended-tier prerequisite</a>, so a local run without it <em>skips</em> (like <code>scripts/docs/release-version-hook-test.sh</code>).
   On CI (<code>$CI</code> set) the same condition is a hard failure — a gate that reports green having run nothing is exactly what this gate exists to remove.
-  The documented <code>CI=1 make check</code> throttle opt-out therefore fails on a python3-less machine; drop the <code>CI=1</code>.</li>
+  So <code>CI=1 make check</code> fails on a python3-less machine; use <code>GAG_LOCAL_THROTTLE=off</code> to opt out of throttling instead.</li>
 <li><strong>Zero tests discovered.</strong> <code>unittest discover</code> exits 0 on an empty run, so a suite renamed off the <code>test*.py</code> pattern would leave the gate passing while testing nothing.
   The gate fails on <code>Ran 0 tests</code>.</li>
 </ul>
