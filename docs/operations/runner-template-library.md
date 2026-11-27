@@ -102,6 +102,10 @@ The v2 CRDs must be installed (the opt-in `actions-gateway-crds-v2` chart), and 
 That image installs the Docker static bundle into `/usr/bin` and ships a buildx plugin, so the runner container already has the *client* that the entry's dockerd sidecar is the *daemon* for.
 Both entries run a job as applied.
 
+Both also carry a startup probe on the daemon's port, so the runner container does not start until `dockerd` is listening.
+The probe allows three minutes (36 tries, 5 seconds apart) before the kubelet restarts the sidecar, and until it passes the worker pod stays in `Init`.
+A fork that drops the probe loses that wait.
+
 Set `spec.workerImage` when your jobs need more than that:
 
 | What you need | Point it at |
