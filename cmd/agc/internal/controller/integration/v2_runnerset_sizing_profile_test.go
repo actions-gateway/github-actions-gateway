@@ -89,12 +89,12 @@ func TestV2_RunnerSet_BinpackProfileProvisionsDerivedResources(t *testing.T) {
 	})
 
 	// The measured set persists the recommendation and reports the profile live.
-	waitForSizingProfileState(t, ns, "measured-set", v2.SizingProfileStateActive)
+	waitForSizingProfileState(t, r.Client, ns, "measured-set", v2.SizingProfileStateActive)
 	var measuredStatus v2.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "measured-set"}, &measuredStatus))
 	require.Len(t, measuredStatus.Status.SizingRecommendation, 1, "the recommendation should be persisted")
 	// The fresh set has no history: profile selected but not actuating.
-	waitForSizingProfileState(t, ns, "fresh-set", v2.SizingProfileStateAwaitingSamples)
+	waitForSizingProfileState(t, r.Client, ns, "fresh-set", v2.SizingProfileStateAwaitingSamples)
 
 	// Measured set: derived requests == limits (Guaranteed QoS), GPU untouched.
 	runner := containerNamed(t, workerPodFor(t, srv, ns, "measured-set"), "runner")
@@ -180,8 +180,8 @@ func TestV2_RunnerSet_ThroughputProfileProvisionsBurstableResources(t *testing.T
 		_ = k8sClient.Delete(context.Background(), tuned)
 	})
 
-	waitForSizingProfileState(t, ns, "default-headroom", v2.SizingProfileStateActive)
-	waitForSizingProfileState(t, ns, "tuned-headroom", v2.SizingProfileStateActive)
+	waitForSizingProfileState(t, r.Client, ns, "default-headroom", v2.SizingProfileStateActive)
+	waitForSizingProfileState(t, r.Client, ns, "tuned-headroom", v2.SizingProfileStateActive)
 
 	// Default headroom (150%): requests from the history, memory limit is the
 	// 1536Mi observed peak x 1.5, and the CPU limit is gone so the job bursts.
@@ -250,7 +250,7 @@ func TestV2_RunnerSet_NodeShareProfileDividesTheNodeEnvelope(t *testing.T) {
 
 	srv := scalesettest.New()
 	t.Cleanup(srv.Close)
-	startRunnerSetReconcilerOn(t, srv)
+	r := startRunnerSetReconcilerOn(t, srv)
 	// Deliberately NO sizing history is seeded for either set.
 	envelope := func() *v2.NodeShareSizing {
 		return &v2.NodeShareSizing{
@@ -281,7 +281,7 @@ func TestV2_RunnerSet_NodeShareProfileDividesTheNodeEnvelope(t *testing.T) {
 
 	// Active with zero samples — the whole point of the profile. Binpack and
 	// Throughput would report AwaitingSamples in this exact state.
-	waitForSizingProfileState(t, ns, "shared-node", v2.SizingProfileStateActive)
+	waitForSizingProfileState(t, r.Client, ns, "shared-node", v2.SizingProfileStateActive)
 	var status v2.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "shared-node"}, &status))
 	require.Empty(t, status.Status.SizingRecommendation, "NodeShare must actuate with no recommendation at all")
@@ -301,7 +301,7 @@ func TestV2_RunnerSet_NodeShareProfileDividesTheNodeEnvelope(t *testing.T) {
 	assert.Equal(t, "512Mi", sidecar.Resources.Requests.Memory().String(), "the sidecar keeps its template memory ask")
 
 	// maxRequests clamps the derived share, and the lift respects the clamp.
-	waitForSizingProfileState(t, ns, "clamped-node", v2.SizingProfileStateActive)
+	waitForSizingProfileState(t, r.Client, ns, "clamped-node", v2.SizingProfileStateActive)
 	runner = containerNamed(t, workerPodFor(t, srv, ns, "clamped-node"), "runner")
 	assert.Equal(t, "1500m", runner.Resources.Requests.Cpu().String(), "maxRequests clamps the derived cpu share")
 	assert.Equal(t, "1500m", runner.Resources.Limits.Cpu().String(), "the lifted limit follows the clamped request")
@@ -362,7 +362,7 @@ func TestV2_RunnerSet_ThroughputCPULimitInjectionIsReported(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
 
-	waitForSizingProfileState(t, ns, "capped", v2.SizingProfileStateActive)
+	waitForSizingProfileState(t, r.Client, ns, "capped", v2.SizingProfileStateActive)
 	// Nothing built yet: the condition must not claim health it has not observed.
 	waitForSizingOverride(t, ns, "capped", metav1.ConditionFalse, v2.ReasonAwaitingWorkerPods)
 
@@ -441,13 +441,16 @@ func containerNamed(t *testing.T, pod corev1.Pod, name string) *corev1.Container
 	return nil
 }
 
-// waitForSizingProfileState blocks until the RunnerSet reports the expected
-// status.sizingProfileState.
-func waitForSizingProfileState(t *testing.T, ns, name, want string) {
+// waitForSizingProfileState blocks until reader reports the expected
+// status.sizingProfileState. Pass the reconciler's cached client: Resolve sizes a
+// worker pod from that cache, so a wait on the apiserver can return while the cache
+// still holds the RunnerSet from before the status write, and the next job gets the
+// template untouched (Q1390).
+func waitForSizingProfileState(t *testing.T, reader client.Reader, ns, name, want string) {
 	t.Helper()
 	require.Eventually(t, func() bool {
 		var rs v2.RunnerSet
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
+		if err := reader.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
 			return false
 		}
 		return rs.Status.SizingProfileState == want
