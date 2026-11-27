@@ -4,9 +4,9 @@
 #   # shellcheck source=scripts/dogfood/lib/lease.sh
 #   source "$REPO_ROOT/scripts/dogfood/lib/lease.sh"
 #
-# validate-release.sh self-cleans through `trap teardown EXIT`, and bash runs
-# that trap on TERM, INT and HUP as well as on an ordinary exit (measured on
-# bash 5.3). SIGKILL cannot be trapped at all, a killed parent takes the whole
+# validate-release.sh self-cleans through `trap teardown EXIT`, and traps TERM,
+# INT and HUP to exits so that each reaches it as a failure (Q1392). SIGKILL
+# cannot be trapped at all, a killed parent takes the whole
 # process group with it, a teardown that is itself killed part-way through stops
 # between the two stop scripts, and a CI runner can vanish mid-run. Every one of
 # those leaves the same state: no process, and a cluster still billing (Q640).
@@ -315,17 +315,28 @@ lease_renew_once() {
 # LEASE_RENEWER_PID — the background renewer lease_renew_start launched.
 LEASE_RENEWER_PID=""
 
+# lease_children PID EXCEPT — PID's direct children, other than EXCEPT.
+lease_children() {
+	ps -A -o pid= -o ppid= | awk -v parent="$1" -v except="$2" '$2 == parent && $1 != except { print $1 }'
+}
+
 # lease_renew_start PROJECT ZONE CLUSTER [stop-owner] — renew in the background
 # for as long as this process lives. With stop-owner, finding the lease lost
 # TERMs this process, whose teardown then sees `lost` and leaves the cluster to
-# its new owner. Without it the renewer only stops renewing: a teardown or a
-# reclaim already running its stop scripts gains nothing from a TERM, which
-# kills bash mid-trap and leaves the stop script it was running carrying on.
+# its new owner. The gate traps TERM, and bash runs a trap only once the command
+# it is waiting on ends, which can be a 25-minute e2e watch, so the owner's
+# children are TERMed too: listed before the owner's TERM, so none is a process
+# the teardown starts. Without stop-owner the renewer only stops renewing: a
+# teardown or a reclaim already running its stop scripts gains nothing from a
+# TERM, which kills bash mid-trap and leaves the stop script it was running
+# carrying on.
 lease_renew_start() {
 	local owner="$$" on_lost="${4:-}"
 	(
 		trap - EXIT
 		set +e
+		local self="${BASHPID}"
+		local -a children
 		# `command`, so a caller's sleep() stub cannot turn this into a spin.
 		# Nothing but the lost message reaches the gate's output: a renewer or
 		# its sleep holding a pipe open keeps a CI step waiting on it.
@@ -334,7 +345,9 @@ lease_renew_start() {
 			if [[ "$(lease_renew_once "$1" "$2" "$3")" == lost ]]; then
 				[[ "${on_lost}" == stop-owner ]] || exit 0
 				echo "error: another holder took the release-gate lease on $(lease_target "$1" "$2" "$3"); stopping this gate." >&2
+				mapfile -t children < <(lease_children "${owner}" "${self}")
 				kill -TERM "${owner}" 2>/dev/null
+				((${#children[@]} == 0)) || kill -TERM "${children[@]}" 2>/dev/null
 				exit 0
 			fi
 		done

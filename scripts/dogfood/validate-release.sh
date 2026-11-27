@@ -35,11 +35,15 @@
 # Idempotent: every underlying script is idempotent (guarded creates,
 # apply/upsert, --ignore-not-found), so a re-run after a partial failure is
 # safe. Self-cleaning: an EXIT trap tears the environment back down to 0 nodes
-# on success AND failure — bash runs it on TERM, INT and HUP too, so Ctrl-C and
-# an ordinary `kill` self-clean. On failure the trap first dumps a cluster
-# snapshot (nodes, pods, events) — teardown's scale-to-0 evicts everything,
-# destroying the evidence (e.g. the FailedScheduling reason) a diagnosis needs
-# (Q355).
+# on success AND failure. INT, TERM and HUP are each trapped to an exit with
+# the status the signal would have left (130, 143, 129), so Ctrl-C, a `kill`
+# and a closed terminal tear down as a failure (Q1392). A trapped signal waits
+# for the command the gate is running, so stop it by its process group: a TERM
+# to the gate's pid alone waits that command out. On failure the trap first
+# dumps a cluster snapshot (nodes, pods, events) — teardown's scale-to-0 evicts
+# everything, destroying the evidence (e.g. the FailedScheduling reason) a
+# diagnosis needs (Q355). A teardown whose terminal is gone writes to
+# tmp/validate-release-teardown.log instead.
 #
 # Self-cleaning cannot cover every ending, though. SIGKILL is untrappable, a
 # killed parent takes the process group with it, and a teardown killed part-way
@@ -848,13 +852,15 @@ dragonfly_interrupted() {
 # which with its AGC and two workers is its ResourceQuota's six.
 #
 # The traps are what lets Ctrl-C end the gate here: bash starts a background lane
-# with INT ignored, so nothing under it dies of the signal.
+# with INT ignored, so nothing under it dies of the signal. They replace the
+# gate's own (arm_teardown) for the lanes' lifetime and put them back after.
 dragonfly_readings() {
 	echo "Dragonfly back-end readings (Q539, Q1160)..."
 	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
 	local dir="${WORKDIR}/dragonfly-readings" reading
-	local lane
+	local lane gate_traps
 	local -a readings=(battery p2p worker connect) lanes=("battery p2p connect" worker) pids=()
+	gate_traps="$(trap -p INT TERM HUP)"
 	rm -rf "${dir}"
 	mkdir -p "${dir}"
 	# The node clients run on the tainted e2e pool alone, where no probe pod can
@@ -874,6 +880,7 @@ dragonfly_readings() {
 	# By pid: capture_worker_sizing is e2e_leg's to wait for.
 	wait "${pids[@]}" || true
 	trap - INT TERM HUP
+	eval "${gate_traps}"
 	for reading in "${readings[@]}"; do
 		cat "${dir}/${reading}.out" || true
 		if [[ -s "${dir}/${reading}.jsonl" ]]; then
@@ -1849,6 +1856,35 @@ dump_diagnostics() {
 	echo "=== End failure diagnostics ==="
 }
 
+# Where teardown writes once its own output is gone. A closed terminal fails
+# every write, so errexit ended the trap at its first echo, and the stop
+# scripts, which print before they act, died at theirs (Q1392).
+TEARDOWN_LOG="${TEARDOWN_LOG:-${REPO_ROOT}/tmp/validate-release-teardown.log}"
+
+# teardown_output GATE_RC — print the blank line teardown opens with, on stdout
+# and on stderr, and move both to TEARDOWN_LOG if either write fails. Each probe
+# runs in a subshell, so a SIGPIPE ends the probe rather than the trap.
+teardown_output() {
+	if (echo "") 2>/dev/null && (echo "" >&2); then
+		return 0
+	fi
+	mkdir -p "$(dirname "${TEARDOWN_LOG}")"
+	exec >>"${TEARDOWN_LOG}" 2>&1 || exec >/dev/null 2>&1
+	echo "=== $(date -u +%Y-%m-%dT%H:%M:%SZ): the gate's output is gone (exit $1); teardown continues here ==="
+}
+
+# arm_teardown — run teardown on every ending bash can trap. EXIT alone is not
+# enough: after an untrapped INT, TERM or HUP bash runs it with the last
+# command's status, 0, so the gate recorded no failure and dumped nothing
+# (Q1392). A signal ignored when the gate started, as `nohup` ignores HUP, stays
+# ignored: bash cannot trap it.
+arm_teardown() {
+	trap teardown EXIT
+	trap 'exit 130' INT
+	trap 'exit 143' TERM
+	trap 'exit 129' HUP
+}
+
 # teardown — EXIT trap: route e2e + CI off GAG and scale the cluster back to 0 on
 # both success and failure, so a failed gate never strands billable nodes. Each
 # step is guarded so one failure does not skip the rest. On failure, diagnostics
@@ -1861,7 +1897,10 @@ dump_diagnostics() {
 # that case, so --reclaim retries the stop scripts once the drain can finish.
 teardown() {
 	local rc="$?"
-	echo ""
+	# A hangup leaves nobody to want the cluster up, and a second one arrives
+	# from the shell that closed with the terminal. The stop scripts inherit it.
+	trap '' HUP
+	teardown_output "${rc}"
 	# A gate whose lease another holder took has a successor on this cluster.
 	# Every step below would tear down or reset the successor's run, so none
 	# runs. The trap is armed only once the lease is taken, so no lease means
@@ -2242,7 +2281,7 @@ main() {
 	fi
 
 	# Everything below mutates the cluster — arm the self-cleaning teardown first.
-	trap teardown EXIT
+	arm_teardown
 	# Renew for as long as this process lives, so a host that cannot check this
 	# pid reads the lease as held, and stop the gate if another holder takes it.
 	# Teardown replaces it with a renewer that does not signal.
