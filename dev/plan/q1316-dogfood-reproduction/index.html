@@ -2985,7 +2985,7 @@ The local readings leave five questions only the dogfood cluster answers:</p>
 <p>One platform cause is already out: locally, restarting containerd or the kubelet and killing containerd left the sidecar and the runner running, and killing the pod's shim ended both.
 Those readings are one run each, and nothing here repeats them.</p>
 <h2 id="no-privileged-debug-pod">No privileged debug pod<a class="headerlink" href="#no-privileged-debug-pod" title="Permanent link">&para;</a></h2>
-<p>Every node fact this needs is readable from inside a <code>privileged-dind</code> job: its daemon sees the host's cgroup tree, so <code>docker run --privileged -v /sys/fs/cgroup:/h:ro</code> reads any pod's <code>memory.events</code> (measured on a kind node, not on GKE).
+<p>Every node fact this needs is readable from inside a <code>privileged-dind</code> job: its daemon sees the host's cgroup tree, so <code>docker run --privileged -v /sys/fs/cgroup:/h:ro</code> reads any pod's <code>memory.events</code> (measured in a container of the <code>kindest/node:v1.35.5</code> image, not on a kind cluster and not on GKE).
 Statuses, Node Events and the AGC's log come from read-only <code>kubectl</code>.
 The same job container opens <code>/dev/kmsg</code> (measured on Docker's <code>--privileged</code>, not on GKE), and prints from it only the <code>oom-kill:constraint=</code> line the kernel prints for a kill, which names the cgroup whose limit was hit, the victim's cgroup and the process.
 That is what the counters are checked against, and no other line of the node's log is printed.

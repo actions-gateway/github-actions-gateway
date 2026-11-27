@@ -4789,6 +4789,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>S</td>
 <td>Both e2e lanes' path filters in <code>e2e-test.yml</code>, <code>e2e</code> and <code>oomreporter</code>, leave out <code>.dockerignore</code>, which decides what the image builds …</td>
 </tr>
+<tr>
+<td><a href="Q1416/">Q1416</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-gates-green.sh">The release gate check reads a gh error body as required contexts</a></td>
+<td><code>bug</code> <code>tests</code></td>
+<td>🔲</td>
+<td>XS</td>
+<td><code>required_contexts</code> in <code>scripts/release/check-gates-green.sh</code> reads the branch rulesets with <code>gh api … --jq … 2&gt;/dev/null \|\| true</code>, and …</td>
+</tr>
+<tr>
+<td><a href="Q1417/">Q1417</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-release-ladder.sh">The release ladder's revived marker loses its escapes through awk -v</a></td>
+<td><code>bug</code> <code>tests</code></td>
+<td>🔲</td>
+<td>XS</td>
+<td><code>check-release-ladder.sh</code> passes <code>REVIVED_MARKER='(is\|are) back\.\*\*'</code> to awk with <code>-v</code>, and <code>-v</code> processes escape sequences, so the …</td>
+</tr>
 </tbody>
 </table>
 
