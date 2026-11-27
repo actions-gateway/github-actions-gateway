@@ -58,8 +58,7 @@ spec:
               RunnerSets (docs/design/appendix-h-v2-api-decomposition.md §H.2, §H.5).
 
               Reserved pod-field guardrail (§H.4, §H.7). A worker pod's identity and isolation
-              are controller-enforced invariants — in v1 the AGC silently overrode them at pod
-              build time. v2 makes them author-time rejections instead, so a template that
+              are controller-enforced invariants, rejected at author time so a template that
               tries to set them fails closed rather than being silently rewritten. The cheap,
               scalar pod-level fields are enforced here via CEL; the per-container checks that
               require iterating an unbounded containers array (privileged containers, proxy

@@ -111,8 +111,8 @@ func (r *NamespacePSAReconciler) applyNamespacePSA(ctx context.Context, ns *core
 	}
 	if r.Recorder != nil {
 		r.Recorder.Eventf(ns, nil, corev1.EventTypeWarning, "PSALabelsOverridden", "ReapplyPSALabels",
-			"Reconciling Pod Security Admission labels on namespace %q to securityProfile=%q after detecting an out-of-band modification: %v",
-			ns.Name, profile, err)
+			"Reconciling Pod Security Admission labels on namespace %q to the %s=%s profile after detecting an out-of-band modification: %v",
+			ns.Name, gmcv2.SecurityProfileLabel, profile, err)
 	}
 	return r.Apply(ctx, desired, client.FieldOwner(nsPSAFieldManager), client.ForceOwnership)
 }

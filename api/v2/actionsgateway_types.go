@@ -6,18 +6,18 @@ import (
 )
 
 // ActionsGatewaySpec is the desired state of a v2 ActionsGateway: the GitHub
-// identity plus the AGC control plane only. v2 decomposes the v1alpha1 monolith —
-// the inline proxy moves to a standalone EgressProxy and the bootstrap runner
-// groups become explicit RunnerSet objects, both removed from this spec (§H.4).
+// identity plus the AGC control plane only. Egress proxies are standalone
+// EgressProxy objects and runner pools are explicit RunnerSet objects, so neither
+// appears in this spec (§H.4).
 // Multiple ActionsGateways are permitted per namespace in v2 (the singleton rule is
 // dropped); the multi-gateway controller behavior lands in M3b.
 //
-// The Pod Security Admission level is NOT a field here. v1alpha1 hung securityProfile
-// on this per-gateway object, but Pod Security Admission is a namespace-scoped control
-// in Kubernetes, so under multi-gateway two gateways in one namespace would fight over
-// the single namespace PSA label. v2 moves the profile to the namespace itself — the
-// operator sets the actions-gateway.com/security-profile label on the tenant namespace
-// and the GMC stamps the PSA labels from it (GMC-guarded, §H.16 #7). See
+// The Pod Security Admission level is NOT a field here. Pod Security Admission is a
+// namespace-scoped control in Kubernetes, so a per-gateway field would let two
+// gateways in one namespace fight over the single namespace PSA label. The profile
+// lives on the namespace itself — the operator sets the
+// actions-gateway.com/security-profile label on the tenant namespace and the GMC
+// stamps the PSA labels from it (GMC-guarded, §H.16 #7). See
 // docs/operations/security-operations.md.
 type ActionsGatewaySpec struct {
 	// Credentials configures how this gateway authenticates to GitHub. It is a
@@ -112,8 +112,8 @@ type ActionsGatewaySpec struct {
 
 	// DefaultRunnerGroup names the GitHub runner group inherited by RunnerSets under
 	// this gateway that set no spec.runnerGroup of their own. This is GitHub's own
-	// grouping, not the deprecated v1alpha1 RunnerGroup CR. Optional: unset on both
-	// objects leaves the scale set in GitHub's default group.
+	// grouping, not a Kubernetes object. Optional: unset on both objects leaves the
+	// scale set in GitHub's default group.
 	//
 	// This is where a tenant's GitHub-side boundary is declared once. The runner group
 	// decides which repositories may target the tenant's runners, so a gateway whose

@@ -6,11 +6,10 @@ import (
 )
 
 // RunnerSetSpec is the desired state of a RunnerSet — the small scheduling/quota
-// binder that replaces v1alpha1's RunnerGroup. The large PodTemplateSpec no longer
-// lives here: it moves to a referenced RunnerTemplate / ClusterRunnerTemplate so a
-// runner set stays a fixed-size object and a template is reused across many sets
-// (docs/design/appendix-h-v2-api-decomposition.md §H.5). The scheduling and
-// lifecycle fields are carried over from RunnerGroup unchanged in meaning.
+// binder between a gateway, a worker pod template and an optional egress proxy.
+// The large PodTemplateSpec does not live here: it is a referenced RunnerTemplate /
+// ClusterRunnerTemplate so a runner set stays a fixed-size object and a template is
+// reused across many sets (docs/design/appendix-h-v2-api-decomposition.md §H.5).
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.maxWorkers) || !has(self.priorityTiers) || self.priorityTiers.size() == 0 || self.maxWorkers == self.priorityTiers[self.priorityTiers.size()-1].threshold",message="maxWorkers must equal the last priorityTiers threshold when both are set"
 // +kubebuilder:validation:XValidation:rule="!has(self.evictionRetryDelay) || duration(self.evictionRetryDelay) >= duration('1s')",message="evictionRetryDelay must be at least 1s"
@@ -88,9 +87,9 @@ type RunnerSetSpec struct {
 	RunnerLabels []string `json:"runnerLabels"`
 
 	// RunnerGroup names the GitHub runner group this set's scale set is registered
-	// into. This is GitHub's own grouping, not the deprecated v1alpha1 RunnerGroup
-	// CR. Unset means inherit the gateway's defaultRunnerGroup; both unset means
-	// GitHub's default group.
+	// into. This is GitHub's own grouping, not a Kubernetes object. Unset means
+	// inherit the gateway's defaultRunnerGroup; both unset means GitHub's default
+	// group.
 	//
 	// The runner group is the GitHub-side authorization point for which repositories
 	// may target these runners. A scale set left in the default group is reachable
@@ -711,8 +710,8 @@ type ContainerSizingRecommendation struct {
 
 // RunnerSet is a namespace-scoped CRD reconciled by the AGC. It binds a worker pod
 // shape (templateRef) and an optional egress proxy (proxyRef) to a GitHub gateway
-// (gatewayRef), and carries the scheduling/quota knobs that were RunnerGroup's in
-// v1alpha1. Worker pods are provisioned per acquired job and released on completion.
+// (gatewayRef), and carries the scheduling/quota knobs. Worker pods are provisioned
+// per acquired job and released on completion.
 //
 // The .spec.gatewayRef.name selectable field (KEP-4358) is how the AGC scopes its
 // RunnerSet watch server-side.
