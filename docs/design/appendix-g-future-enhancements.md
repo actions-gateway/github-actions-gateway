@@ -348,8 +348,8 @@ Operator guidance: [tenant-onboarding.md § worker scale-up rate limit](../opera
 
 **Current behavior.** Worker pods are created **reactively** the moment a job is acquired from the broker long-poll, with a just-in-time (JIT) runner config bound to that job, and released on completion ([§2 architecture](02-architecture.md)).
 There is no pool of pre-created pods.
-Job-acquisition latency is therefore bounded by pod scheduling + image pull, **not** runner registration — the goroutine session multiplexer already holds a standing pool of pre-registered virtual sessions at negligible cost ([appendix-d §KEDA](appendix-d-alternatives-considered.md), [appendix-a SLOs](appendix-a-capacity-slos.md)).
-So GAG is already "warm" at the layer ARC's `minRunners > 0` exists to warm; only the compute is cold, by design.
+The listener is already polling when a job arrives, but each job still gets its own runner registration when its JIT config is minted.
+So a job waits on that API call, pod scheduling and image pull; how the three compare is unmeasured here.
 
 **What it would add.** A bounded, per-RunnerGroup pool of **pre-scheduled, image-warm worker pods** kept idle so an acquired job binds to a waiting pod instead of creating one — eliminating the pod-schedule (and, on those nodes, image-pull) latency for the first *N* concurrent jobs.
 
@@ -357,7 +357,7 @@ So GAG is already "warm" at the layer ARC's `minRunners > 0` exists to warm; onl
 
 | Cold-start layer | Cheaper fix (no idle pods) |
 |---|---|
-| Runner **registration** | Already eliminated — goroutine session pool. |
+| Runner **registration** | None here: one registration per job, which a warm pod would still need when its JIT config is injected. |
 | **Image** pull | P2P image mirror (Spegel/Dragonfly) / pre-pull DaemonSet. |
 | Build cache / **model weights** (the real GPU/ML startup cost) | Cache volume in the `podTemplate` (raw PVC works today); `actions/cache` and BuildKit's `type=gha` can use the [in-cluster cache server](../operations/in-cluster-cache.md). |
 | **Pod scheduling** | *This item* — the only layer a warm pod pool uniquely addresses. |
@@ -369,7 +369,7 @@ And GPU cold-start is dominated by image + model-weight loading (the cache-volum
 So the segment that most often *feels* cold is the one this feature should **not** serve — point it at P2P + cache volumes + warm node capacity (Karpenter/CA) instead.
 
 **Design tension.** Today pod creation and JIT binding are coupled to acquisition; a warm pool decouples them — pre-create an **unbound** pod, then inject the JIT config into a waiting one at acquisition.
-That partially re-adopts the ARC pre-registered-idle-runner model GAG deliberately replaced with goroutines, and must preserve the single-use invariant (**1 job per pod**, [§5.2 security](05-security.md)): a never-run warm pod may accept a fresh JIT config, but a pod must never be reused across jobs.
+That partially re-adopts the idle-runner model GAG's zero-idle design avoids, and must preserve the single-use invariant (**1 job per pod**, [§5.2 security](05-security.md)): a never-run warm pod may accept a fresh JIT config, but a pod must never be reused across jobs.
 Open questions: the knob surface (`minIdleWorkers` scope/naming, per RunnerGroup), how the pool composes with the worker quota ceiling and `WorkerQuotaPressure` backoff, and pod TTL/recycle for idle warm pods.
 
 **Why it would be default-off.** It reintroduces the idle-compute cost GAG's core value removes — a speed-for-idle-cost trade.
@@ -379,7 +379,7 @@ Per the [secure-/cost-by-default principle](05-security.md), the zero-idle defau
 Trigger: a self-hosted, multi-tenant CPU-CI team hits pod-schedule latency after exhausting P2P/pre-pull + cache volumes.
 Rationale for parking: the eligible audience is a single-digit fraction of GAG adopters (every filter above compounds, and GPU — a flagship segment — is excluded), and the cheaper layers absorb most real "GAG feels cold" reports.
 
-**Related.** [G.11](#g11-worker-scale-up-rate-limiting-anti-stampede) (scale-up *rate* limit — a ceiling on how fast pods start, the inverse concern); [appendix-d §KEDA](appendix-d-alternatives-considered.md) (why the goroutine pool replaces pre-registered idle runners); [appendix-f cost model](appendix-f-cost-model.md) (the idle-floor argument this trades against).
+**Related.** [G.11](#g11-worker-scale-up-rate-limiting-anti-stampede) (scale-up *rate* limit — a ceiling on how fast pods start, the inverse concern); [appendix-f cost model](appendix-f-cost-model.md) (the idle-floor argument this trades against).
 
 ---
 

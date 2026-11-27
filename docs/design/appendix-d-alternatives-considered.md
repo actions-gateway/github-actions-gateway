@@ -13,23 +13,24 @@ The requirements driving this evaluation were: goroutine-level session multiplex
 
 ## D.1. GitHub-Hosted Runners
 
-GitHub provides managed compute for running workflow jobs, with no cluster infrastructure required.
+GitHub's documentation carries no version, so claims from it are dated by when they were read.
 
 **Advantages**
 
-* Zero operational overhead — no runner infrastructure to deploy, upgrade, or monitor.
-* Automatically scaled by GitHub; no capacity planning required.
-* Free for public repositories; included minutes for most GitHub plans.
-* Broad OS and architecture matrix available (Linux, macOS, Windows; x64, ARM).
+* No cluster of your own is needed: GitHub hosts each runner and takes care of machine maintenance and upgrades ([GitHub-hosted runners](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners), read 2026-11-26).
+* Standard runners are free in public repositories, and plans include a compute allowance expressed as money rather than minutes ([Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions), read 2026-11-26).
+* Ubuntu Linux, Windows, and macOS are offered, with arm64 rates listed for Linux and Windows (same two pages, read 2026-11-26).
 
 **Disadvantages**
 
-* No access to private network resources (internal APIs, private registries, on-premises databases) without additional tunneling infrastructure, which reintroduces operational complexity.
-  Larger runners narrow this: GitHub's docs list static IP ranges for firewall allow-lists and Azure private networking on Linux and Windows larger runners, and GPU-powered runners (read 2026-11-07), so the gaps below are about hardware you own rather than about reachability.
-* The hardware is GitHub's, so GPUs already bought, reserved capacity, and on-premises or air-gapped networks are out of reach whatever the plan.
-* Cannot use custom base images or pre-warmed dependency caches without workarounds (artifact caching, container layer caching), which add latency and complexity.
-* Per-minute billing at scale makes GitHub-hosted runners substantially more expensive than self-managed compute for teams with high job volume or long-running build pipelines.
-* No platform/tenant boundary: a runner group is a routing rule, not a cap one team sets and another cannot raise.
+* Reaching a private network takes setup: larger runners offer static IP ranges and Azure private networking, on Linux and Windows only ([larger runners](https://docs.github.com/en/actions/concepts/runners/larger-runners), read 2026-11-26).
+  Those narrow the gap, and larger runners can be GPU-powered (same read), so the gaps here are about hardware you own rather than about reachability.
+* The hardware is GitHub's (first page above, read 2026-11-26), so GPUs already bought, reserved capacity, and on-premises or air-gapped machines do not run these jobs.
+* Custom images work only with larger runners ([GitHub-hosted runners](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners), read 2026-11-26).
+* Larger runners are billed per minute, in public repositories too ([larger runners](https://docs.github.com/en/actions/concepts/runners/larger-runners), read 2026-11-26).
+  Whether that costs more than self-managed compute at a given job volume is unverified here.
+* A runner group restricts which organizations and repositories can use runners and can set concurrency limits ([runner groups](https://docs.github.com/en/actions/concepts/runners/runner-groups), read 2026-11-26).
+  Whether those limits can serve as a cap a platform team sets and a tenant cannot raise is unverified.
 
 **Verdict:** Appropriate for teams whose jobs can leave the clusters they operate and who do not need a boundary between a platform team and its tenants.
 Does not satisfy the owned-hardware, multi-tenant cluster requirements driving this design.
@@ -42,109 +43,87 @@ The baseline approach: register runner processes directly with GitHub, either as
 
 **Advantages**
 
-* Minimal setup — the `actions/runner` binary is well-documented and requires no Kubernetes-specific tooling.
-* No operator or CRD complexity; the runner process handles its own registration and job polling.
-* Straightforward to debug: one process, one log stream, one GitHub registration entry.
+* No operator or Custom Resource Definition (CRD) to run: the runner application connects to GitHub for job assignments by itself ([self-hosted runners reference](https://docs.github.com/en/actions/reference/runners/self-hosted-runners), read 2026-11-26, when the latest runner was v2.338.2).
+* The runner updates its own software by default (same read).
 
 **Disadvantages**
 
-* The 1:1 pod-to-connection model is the core problem this design solves.
-  Every runner slot requires a running pod holding memory, a cluster IP, and a long-poll connection — regardless of whether any jobs are queued.
-* No lifecycle automation: scaling up or down requires manual intervention or custom scripts.
-  Idle capacity is permanent unless explicitly removed.
-* No multi-tenancy.
-  Runners registered at the organization or repository level are shared across all teams, with no resource isolation between tenants.
-* No egress IP isolation.
-  All runner traffic exits from shared node IPs.
-* GPU nodes must be allocated to runner pods continuously, even between jobs.
-  A team running ten GPU runner slots holds ten GPU allocations idle, paying for capacity that is delivering no value during quiet periods.
-* Runner registration tokens expire; re-registration is a manual or scripted process with no automated recovery.
+* A static runner has to be running before it can receive a job, so each slot holds its pod or VM whether or not jobs are queued (inferred from the model above, unmeasured).
+  That one-process-per-slot shape is the core problem this design solves.
+* Adding and removing capacity is yours to script, and idle capacity stays until you remove it (inferred from the baseline having no controller, unverified).
+* A registration token expires after one hour ([REST API](https://docs.github.com/en/rest/actions/self-hosted-runners), read 2026-11-26), so a later registration needs a fresh one.
+* GitHub removes a runner that has not connected for more than 14 days, or 1 day for an ephemeral one ([removing runners](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/remove-runners), read 2026-11-26).
+* Runner groups restrict which repositories can use a runner ([runner groups](https://docs.github.com/en/actions/concepts/runners/runner-groups), read 2026-11-26).
+  Compute isolation between teams is whatever the host provides (unverified).
+* Nothing in this baseline assigns an egress identity, so runners share whatever source IPs their hosts use (inferred, unverified).
+* A static runner on a GPU node keeps its GPU allocated between jobs (inferred, unmeasured).
 
-**Verdict:** Viable for small teams with a handful of runners.
-Fails at scale due to idle resource accumulation, and provides no multi-tenancy or egress isolation primitives.
+**Verdict:** Can serve a small team with a handful of runners.
+It does not meet the scale-to-zero requirement, and it brings no tenant provisioning or egress isolation of its own (inferred, as above).
 
 ---
 
 ## D.3. Actions Runner Controller (ARC)
 
-[ARC](https://github.com/actions/actions-runner-controller) is the official GitHub-maintained Kubernetes operator for self-hosted runners.
-It is the most mature and widely-deployed alternative and the most relevant comparison for this design.
+[ARC](https://github.com/actions/actions-runner-controller) is a Kubernetes operator for self-hosted runners that GitHub documents and supports ([support for ARC](https://docs.github.com/en/actions/concepts/runners/support-for-arc), read 2026-11-26).
+It is the most relevant comparison for this design.
 
 **Advantages**
 
-* Official GitHub support: ARC is maintained by GitHub, has a large community, and is well-documented.
-  API compatibility with the GitHub broker protocol is kept current by the maintainers.
+* GitHub Support covers the latest Autoscaling Runner Sets version of ARC, on GitHub Enterprise Server (GHES) 3.9 and later ([support for ARC](https://docs.github.com/en/actions/concepts/runners/support-for-arc), read 2026-11-26).
+  Orchestration, networking and policy application are among the things it leaves out of scope (same read).
 * The same protocol dependency, since `v2.0.0`.
-  Both acquire jobs through the official `actions/scaleset` client library.
+  Both acquire jobs through the official `actions/scaleset` client library ([ARC 0.15.1 `go.mod`](https://github.com/actions/actions-runner-controller/blob/gha-runner-scale-set-0.15.1/go.mod), read 2026-11-26).
   Until `v2.0.0` this design also carried a classic tier that re-implemented part of the broker API ([§3.3](03-api-contracts.md#33-re-implemented-broker-api-endpoints)); that tier was [removed at `v2.0.0`](03-api-contracts.md#31-kubernetes-crd-schemas), so the maintenance risk it carried is no longer a difference between the two.
-* `RunnerScaleSet` mode (introduced in ARC v0.5+) supports ephemeral runners that are provisioned on-demand and terminated after each job, eliminating the idle-pod problem for teams that adopt this mode.
-* Integrates with Kubernetes-native autoscaling.
-  The `RunnerScaleSet` controller publishes a custom metric that KEDA or the built-in autoscaler can act on.
-* Broad adoption means community-tested Helm charts, pre-built container images, and an established set of known operational issues.
-* **`containerMode: kubernetes`** runs a job's `container:` and `services:` steps as separate unprivileged pods sharing a `ReadWriteMany` volume.
-  GAG has no equivalent and will not adopt this mechanism: it requires a namespace-wide pod-`create` grant in a namespace that holds other runner sets' registration credentials.
+* Scale-set mode runs ephemeral runner pods on demand and none at rest ([comparison table](../why-gag.md#gag-vs-arc-scale-set-mode), ARC 0.15.0 read 2026-10-04).
+* **`containerMode: kubernetes`** runs a job's `container:` and `services:` steps as separate unprivileged pods sharing a `ReadWriteMany` volume (ARC `gha-runner-scale-set` 0.14.2, measured 2026-08-06, [D.15](#d15-pod-per-step-container-execution-arcs-containermode-kubernetes)).
+  GAG has no equivalent and will not adopt this mechanism: it requires a namespace-wide pod-`create` grant in a namespace that holds other runner sets' registration credentials (same reading).
   The supported GAG answer is Docker-in-Docker under Kata, and the reasoning, the alternatives, and the population that answer does not serve are in [D.15](#d15-pod-per-step-container-execution-arcs-containermode-kubernetes).
 
 **Disadvantages**
 
-* **Listener packaging.** In `RunnerScaleSet` mode, ARC uses one listener per scale set (not one per slot) — a Go binary (`cmd/ghalistener`, built on the same official `github.com/actions/scaleset` client library this design tracks) — so its steady-state long-poll connection count is similar to this design's adaptive listener model.
-  The difference is packaging: ARC deploys each listener as its own always-on pod with its own cluster IP, while the Actions Gateway Controller (AGC) runs every listener as a goroutine in one shared pod, at a measured ~7.7 KiB of AGC state per scale set ([Appendix A](appendix-a-capacity-slos.md)).
-  At a tenant operating 10 RunnerScaleSets, that is 10 always-on listener pods and 10 cluster IPs for ARC versus 1 AGC pod and 1 cluster IP here.
-  (No per-listener memory ratio is published: the `gha-runner-scale-set` chart ships no default listener resource requests, so there is no measured ARC-side figure to compare against — see [Appendix A](appendix-a-capacity-slos.md) for why the earlier ~4,000× claim was retired.)
-* **Multi-tenant isolation.** ARC does not provide a self-service multi-tenancy model.
-  Each team typically requires a separate `RunnerDeployment` or `RunnerScaleSet` with its own RBAC, and cluster-admin involvement is required to set up network policies and resource quotas per tenant.
-  There is no equivalent of the `ActionsGateway` CR that lets a team provision an isolated gateway instance within their existing namespace without cluster-admin.
-* **Egress IP isolation.** ARC provides no per-tenant egress IP control.
-  All runner traffic exits from shared node IPs unless the operator independently layers a proxy or NAT gateway, which is not part of ARC's feature set.
+* **Listener packaging.** In `RunnerScaleSet` mode, ARC uses one listener per scale set, not one per slot ([comparison table](../why-gag.md#gag-vs-arc-scale-set-mode), ARC 0.15.0 read 2026-10-04), so its steady-state long-poll connection count is similar to this design's adaptive listener model.
+  The difference is packaging: ARC deploys each listener as its own always-on pod holding a pod IP (same read), while the Actions Gateway Controller (AGC) runs every listener as a goroutine in one shared pod, at a measured ~7.7 KiB of AGC state per scale set ([Appendix A](appendix-a-capacity-slos.md)).
+  At a tenant operating 10 RunnerScaleSets, that is 10 always-on listener pods and 10 pod IPs for ARC versus 1 AGC pod and 1 pod IP here (same reading).
+  (No per-listener memory ratio is published: there is no measured ARC-side figure to compare against, and [Appendix A](appendix-a-capacity-slos.md) records why the earlier ~4,000× claim was retired.)
+* **Multi-tenant isolation.** ARC offers no self-service multi-tenancy model: network policies and resource quotas per tenant take cluster-admin work (unverified).
+  This design's `ActionsGateway` CR lets a team provision an isolated gateway instance within their existing namespace without cluster-admin.
+* **Egress IP isolation.** ARC points at a proxy you already run and provisions no per-tenant egress addresses ([comparison table](../why-gag.md#gag-vs-arc-scale-set-mode), ARC 0.15.0 read 2026-10-04).
   This design's per-tenant `EgressProxyPool` (Tier 3) provides this natively.
 * **GPU idle cost is not a difference in scale-set mode.** Both delete the runner pod when its job completes and run no worker at rest ([comparison row](../why-gag.md#gag-vs-arc-scale-set-mode), ARC 0.15.0 read 2026-10-04).
-  Where the two part is what happens when the cluster takes a running GPU worker away: this design re-runs the job, and ARC gives it up.
-* **AGC node placement.** ARC's controller runs on whatever nodes are available and does not distinguish between CPU-only and GPU node pools.
-  The AGC in this design is explicitly designed to run on CPU-only nodes, keeping GPU capacity entirely free for worker pods.
-  This distinction requires intentional `nodeSelector` or `taints/tolerations` configuration in ARC but is enforced structurally in this design.
+  Where the two part is what happens when the cluster takes a running GPU worker away: this design re-runs the job, and ARC gives it up (same table and read).
 * **No shared ceiling across runner sets, and no reserved floor within one.** ARC does express scheduling *ordering* natively: `AutoscalingRunnerSetSpec.Template` is a full `corev1.PodTemplateSpec`, the `gha-runner-scale-set` chart copies every `template.spec` key it does not reserve for itself (`containers`, `initContainers`, `volumes`, `serviceAccountName`), and the `EphemeralRunner` controller assigns that `PodSpec` to the runner pod wholesale (`newPod.Spec = runner.Spec.Spec`), so a `priorityClassName` set on a scale set reaches its runner pods and preempts lower-priority ones (measured against ARC `master`, 2026-08-12).
-  What ARC cannot express is a *bounded* reservation, in either direction.
-  The floor: priority is a property of the scale set's one pod template, so every runner in the set carries the same class.
-  "The first 5 GPU runners preempt, the rest schedule opportunistically" requires the class to vary by pod index within a single set, and a set whose whole template preempts starves the sets beneath it rather than reserving a slice of the pool.
-  The ceiling: `maxRunners` is a per-`AutoscalingRunnerSet` property with no mechanism to express a shared budget across multiple sets.
-  A team with three sets each capped at 50 can theoretically schedule 150 concurrent runners, exceeding the namespace's actual resource capacity, and there is no native way to say "all sets combined may use at most 100 concurrent jobs" without external tooling or manual coordination of per-set caps.
+  What ARC cannot express is a *bounded* reservation, in either direction ([comparison table](../why-gag.md#gag-vs-arc-scale-set-mode), ARC 0.15.0 read 2026-10-04).
+  The floor: priority is a property of the scale set's one pod template, so every runner in the set carries the same class (same read).
+  "The first 5 GPU runners preempt, the rest schedule opportunistically" requires the class to vary by pod index within a single set, and a set whose whole template preempts starves the sets beneath it rather than reserving a slice of the pool (inferred from the same read).
+  The ceiling: `maxRunners` is a per-`AutoscalingRunnerSet` property with no mechanism to express a shared budget across multiple sets (same read).
+  A team with three sets each capped at 50 can theoretically schedule 150 concurrent runners, exceeding the namespace's actual resource capacity, so "all sets combined may use at most 100 concurrent jobs" takes a `ResourceQuota`, external tooling, or hand-coordinated caps (inferred from the same read).
   This design bounds all worker pods from all `RunnerGroup`s against the same Kubernetes `ResourceQuota` for the shared ceiling, and adds a `priorityTiers` field on each `RunnerGroup` for the floor: the first N pods of a high-priority group are assigned a preempting `PriorityClass` that displaces lower-priority pods when the namespace is contended, while additional pods above the preemption threshold schedule opportunistically.
   Both are expressed declaratively in the `ActionsGateway` CR and enforced by the Kubernetes scheduler, with no external tooling or manual cap coordination.
-* **The protocol dependency is shared and undocumented upstream.** Both ride the Public-Preview runner-scale-set protocol through the same client library, so a breaking change there reaches both.
-  This design records each GitHub-facing protocol, its source of truth and a stability tier in the [protocol dependency register](github-protocol-dependencies.md); a search of ARC's repository for "stability tier" and "protocol dependency" found no equivalent (0 code hits and one unrelated closed issue, 2026-11-07).
+* **The protocol dependency is shared.** Both reach the runner-scale-set protocol through the same client library ([ARC 0.15.1 `go.mod`](https://github.com/actions/actions-runner-controller/blob/gha-runner-scale-set-0.15.1/go.mod), read 2026-11-26), so a breaking change there reaches both.
+  This design records each GitHub-facing protocol, its source of truth and a stability tier in the [protocol dependency register](github-protocol-dependencies.md); a search of ARC's repository for "stability tier" and "protocol dependency" found no equivalent (0 code hits and one unrelated closed issue, 2026-11-26).
 
-**Verdict:** ARC is the right choice where its GitHub Support entitlement, `containerMode: kubernetes`, GHES tested on a real appliance, or install base decides the evaluation.
-Those four are real, this design has none of them, and a capability list does not offset them.
-This design is the right choice for a cluster several teams share: a platform-owned quota the tenant controller has no verb to write, intake that reads that quota before claiming, a `priorityTiers` floor under the shared ceiling, re-run of a job the cluster disrupts, isolation reconciled per tenant, per-tenant egress identity, and self-service from namespaced objects, none of which ARC provides natively.
+**Verdict:** ARC is the right choice where its GitHub Support entitlement or `containerMode: kubernetes` (both dated above), GHES tested on a real appliance, or install base (both unverified) decides the evaluation.
+This design has none of those four, and a capability list does not offset them.
+This design is the right choice for a cluster several teams share: a platform-owned quota the tenant controller has no verb to write, intake that reads that quota before claiming, a `priorityTiers` floor under the shared ceiling, re-run of a job the cluster disrupts, isolation reconciled per tenant, per-tenant egress identity, and self-service from namespaced objects, which ARC does not provide natively (per the reads dated above; the self-service point is unverified).
 A single team on its own cluster gets the same behaviour, and the cost of running this design for one team against ARC is unmeasured.
 
 ---
 
 ## D.4. ARC with KEDA Autoscaling
 
-A common production pattern layers [KEDA](https://keda.sh/) on top of ARC, using a `ScaledObject` targeting ARC's queue-depth metric to drive runner replica count.
-This addresses ARC's baseline idle-runner problem more aggressively than ARC's built-in autoscaler alone.
+This section weighs layering [KEDA](https://keda.sh/), an event-driven autoscaler, on top of ARC with a `ScaledObject` driving the runner count.
+That layering does not fit scale-set mode:
 
-**Advantages**
+* ARC's listener already sets the runner count itself, by patching the `EphemeralRunnerSet` ([ARC concepts](https://docs.github.com/en/actions/concepts/runners/actions-runner-controller), read 2026-11-26).
+* A `ScaledObject` can target a custom resource only if it defines a `/scale` subresource ([KEDA 2.21 `ScaledObject` spec](https://keda.sh/docs/latest/reference/scaledobject-spec/), read 2026-11-26).
+* The `AutoscalingRunnerSet` CRD declares a `status` subresource and no `scale` one ([ARC 0.15.1 CRD](https://github.com/actions/actions-runner-controller/blob/gha-runner-scale-set-0.15.1/charts/gha-runner-scale-set-controller/crds/actions.github.com_autoscalingrunnersets.yaml), read 2026-11-26).
+* KEDA's `github-runner` scaler reads queued jobs from the GitHub API, and its page does not mention ARC ([KEDA 2.21 scaler](https://keda.sh/docs/latest/scalers/github-runner/), read 2026-11-26).
+  Autoscaling runners with it and without ARC is a different setup, which this appendix has not evaluated.
+* Whether KEDA is useful with ARC's legacy mode is unverified.
+  GitHub leaves that mode to community support ([support for ARC](https://docs.github.com/en/actions/concepts/runners/support-for-arc), read 2026-11-26).
 
-* Eliminates idle runners during sustained quiet periods: KEDA can scale the `RunnerScaleSet` to zero replicas when the queue is empty and scale up in response to queued jobs.
-* Uses standard, widely-adopted tooling.
-  KEDA is a CNCF project with broad ecosystem support.
-* Requires no changes to ARC's runner binary or broker integration.
-
-**Disadvantages**
-
-* **Scale-up latency.** KEDA reacts to metric changes on a configurable polling interval (default 30 seconds).
-  During a burst, new runner pods must be scheduled, image-pulled, and registered with GitHub before they can accept work.
-  This design's goroutine model maintains a standing pool of pre-registered virtual sessions at negligible cost, so job acquisition latency is bounded by pod scheduling and image pull time rather than runner registration time.
-* **Adds operational dependency.** KEDA introduces another component to install, upgrade, and monitor.
-  Failure modes compound: a KEDA controller outage or metric source failure stalls autoscaling.
-* **Does not solve multiplexing or egress isolation.** KEDA addresses scale-to-zero but leaves the per-pod session overhead and shared-egress-IP problems untouched.
-* **GPU idle gap.** Even with KEDA scaling ARC to zero, the scale-down reaction time means GPU allocations are held for up to a full KEDA polling interval after the last job completes.
-  This design's immediate compute release on pod completion eliminates that gap.
-
-**Verdict:** A meaningful improvement over plain ARC for teams where idle runner cost is the primary concern.
-Does not close the gap on session multiplexing, egress isolation, or multi-tenant self-service provisioning.
+**Verdict:** Not a separate alternative to scale-set ARC, so D.3's comparison applies.
 
 ---
 
