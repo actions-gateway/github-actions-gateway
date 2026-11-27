@@ -943,7 +943,8 @@ The same change should also keep the plan's `docs/plan/README.md` **status text*
 For a `release-X.Y.md` row the text is gated rather than remembered: once that release is published, `make plan-index-check` rejects an open marker (❌, 🔲, 🚧) on it, because the tag settles the question the cell was still arguing (Q812).
 
 **Keep archival a docs-only operation.** Archival must never touch code — a code edit re-triggers the heavy path-gated CI (e2e / integration / trivy) on what should be a `docs/**`-only move.
-The way to guarantee that: **code never references a plan by path.** A Go comment must not contain `docs/plan/<file>.md`; cite the durable layer instead — a `docs/design/` or `docs/operations/` doc, or a stable `Q-ID` / appendix `§`-ref (those survive archival untouched).
+The way to guarantee that: **code never references a plan by path.** A Go comment must not contain `docs/plan/<file>.md`; cite the durable layer instead — a `docs/design/` or `docs/operations/` doc, or an appendix `§`-ref (those survive archival untouched).
+A `Q-ID` survives archival too, but [code-comments.md](code-comments.md) keeps it out of a comment, and `make comment-provenance-check` fails a branch that adds one.
 If a plan's conclusion is load-bearing enough that code wants to cite it, promote that conclusion to a durable doc when the plan closes.
 Prose mentions of a plan's *content* ("Milestone 1 §8") are fine — only file *paths* rot.
 

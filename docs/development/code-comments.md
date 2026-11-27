@@ -100,6 +100,12 @@ Most of it argues for the design, which is a `docs/design/` page a caller of `Ad
 So **do not match the density of the file you are editing.** The surrounding comments are the thing this page exists to stop, and matching them reproduces it.
 Write new comments to this page, trim a comment when you change the code it describes, and leave the rest for a change that is about comments.
 
+## What enforces this
+
+`make comment-provenance-check`, in `make check` and CI, fails a branch that adds a comment line carrying a backlog ID outside `TODO(Q123):`, a pull request number, a date, or the phrase "used to" in its history sense.
+A date passes beside the word `measured` or a version on the same line, which is the upstream citation above; an upstream issue is written `owner/repo#123`; and a line that must keep the text carries `comment-provenance: <reason>`.
+Everything else on this page is review's to hold: the length limits, other narration wording ("no longer" describes runtime state four times in five here, so it cannot be gated), and whether a sentence passes the test.
+
 ## Sources
 
 Read 2026-11-27.

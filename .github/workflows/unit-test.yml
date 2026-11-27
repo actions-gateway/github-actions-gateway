@@ -558,6 +558,38 @@ jobs:
       - name: gate jobs wait on every job (make gate-needs-check)
         run: make gate-needs-check
 
+  # Hold the comment lines a branch adds to docs/development/code-comments.md.
+  # No path gate: its subject is every Go, shell, Python, YAML and make file in
+  # the tree, so a filter could only make it green by skipping.
+  #
+  # fetch-depth: 0 and the explicit main fetch provide the base the diff is
+  # taken against; REQUIRE_BASE turns the gate's local fail-open into an error.
+  comment-provenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
+        continue-on-error: true
+        with:
+          fetch-depth: 0
+      - name: annotate the stalled checkout
+        if: steps.checkout.outcome != 'success'
+        run: echo "::warning title=checkout stalled::the first checkout did not finish inside its step timeout and is being retried"
+      - name: retry checkout after a stall
+        if: steps.checkout.outcome != 'success'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 6
+        with:
+          fetch-depth: 0
+      - name: fetch the diff base
+        run: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+      - name: added comments carry no provenance (make comment-provenance-check)
+        run: make comment-provenance-check
+        env:
+          COMMENT_PROVENANCE_REQUIRE_BASE: '1'
+
   # The scripts/ behavioural suites, split out of `shellcheck` (Q1105). They
   # shared one job and one 5-minute cap until the cap evicted a PR from the
   # merge queue: the job's steps totalled 287s against 300s, and a 36s tail
@@ -760,7 +792,7 @@ jobs:
   # and passes only when every needed job succeeded or was legitimately skipped.
   # See docs/development/testing.md#path-gated-workflows-verify-the-heavy-gates-actually-ran.
   unit-test-gate:
-    needs: [changes, lint, shellcheck, scripts-test, actionlint, uses-pinned, cosign-pin, publish-digest, vendor-check, tidy-check, unit-test, coverage, path-filters, gate-needs, semver-floor-sources, claude-usage-test]
+    needs: [changes, lint, shellcheck, scripts-test, actionlint, uses-pinned, cosign-pin, publish-digest, vendor-check, tidy-check, unit-test, coverage, path-filters, gate-needs, semver-floor-sources, claude-usage-test, comment-provenance]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10

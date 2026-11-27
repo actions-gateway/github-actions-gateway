@@ -47,6 +47,7 @@
 CHECK_FAST_GATES := roadmap-check \
                     plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
+                    comment-provenance-check \
                     test-cache-inputs-check \
                     path-filters-check gate-lists-check shellcheck \
                     errexit-prologue-check \
@@ -341,4 +342,5 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  agent/record-launch-guard-test \
                  lib/retry-test \
                  manifest/check-gha-cache-render-test \
-                 go/check-oomreporter-imports-test
+                 go/check-oomreporter-imports-test \
+                 ci/check-comment-provenance-test
