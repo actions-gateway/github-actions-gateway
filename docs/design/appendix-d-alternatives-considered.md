@@ -26,8 +26,8 @@ GitHub's documentation carries no version, so claims from it are dated by when t
 * Reaching a private network takes setup: larger runners offer static IP ranges and Azure private networking, on Linux and Windows only ([larger runners](https://docs.github.com/en/actions/concepts/runners/larger-runners), read 2026-11-26).
   Those narrow the gap, and larger runners can be GPU-powered (same read), so the gaps here are about hardware you own rather than about reachability.
 * The hardware is GitHub's (first page above, read 2026-11-26), so GPUs already bought, reserved capacity, and on-premises or air-gapped machines do not run these jobs.
-* Custom images work only with larger runners ([larger runners](https://docs.github.com/en/actions/concepts/runners/larger-runners), read 2026-11-26).
-* Larger runners are billed per minute, in public repositories too (same read).
+* Custom images work only with larger runners ([GitHub-hosted runners](https://docs.github.com/en/actions/concepts/runners/github-hosted-runners), read 2026-11-26).
+* Larger runners are billed per minute, in public repositories too ([larger runners](https://docs.github.com/en/actions/concepts/runners/larger-runners), read 2026-11-26).
   Whether that costs more than self-managed compute at a given job volume is unverified here.
 * A runner group restricts which organizations and repositories can use runners and can set concurrency limits ([runner groups](https://docs.github.com/en/actions/concepts/runners/runner-groups), read 2026-11-26).
   Whether those limits can serve as a cap a platform team sets and a tenant cannot raise is unverified.
