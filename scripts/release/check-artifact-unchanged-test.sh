@@ -203,6 +203,30 @@ else
 	run_lane_case "--lane reads the filter at both ends of the window" 1 "$head_sha" "$narrowed_commit" --lane e2e-calico.yml
 fi
 
+# The Dockerfile (Q1377). A path cannot say what changed inside it, so the check
+# hands semverfloor the window and it compares the published stages at both ends.
+# synth_dockerfile_commit AWK — a commit on HEAD whose Dockerfile is AWK's output.
+synth_dockerfile_commit() {
+	local blob
+	blob="$(git -C "$REPO_ROOT" show HEAD:Dockerfile | awk "$1" | git -C "$REPO_ROOT" hash-object -w --stdin)"
+	GIT_INDEX_FILE="$objs/index" git -C "$REPO_ROOT" read-tree HEAD
+	GIT_INDEX_FILE="$objs/index" git -C "$REPO_ROOT" update-index --cacheinfo "100644,$blob,Dockerfile"
+	git -C "$REPO_ROOT" commit-tree "$(GIT_INDEX_FILE="$objs/index" git -C "$REPO_ROOT" write-tree)" -p HEAD -m q1377
+}
+# Every image compiles in a stage built FROM golang, so moving its digest moves them all.
+base_bump_commit="$(synth_dockerfile_commit '/^FROM .*golang:[^@]*@sha256:/ && !done { sub(/@sha256:[0-9a-f]+/, "@sha256:" sprintf("%064d", 0)); done = 1 } { print }')"
+comment_commit="$(synth_dockerfile_commit '{ print } END { print "# q1377: a comment changes no stage" }')"
+if [[ "$(git -C "$REPO_ROOT" diff --name-only "$head_sha" "$base_bump_commit")" != Dockerfile ]]; then
+	bad "fixture: the base-bump commit does not change exactly the Dockerfile"
+else
+	run_case "a Dockerfile base bump moves the surface" 1 "$head_sha" "$base_bump_commit"
+fi
+if [[ "$(git -C "$REPO_ROOT" diff --name-only "$head_sha" "$comment_commit")" != Dockerfile ]]; then
+	bad "fixture: the comment commit does not change exactly the Dockerfile"
+else
+	run_case "a comment-only Dockerfile edit is unchanged" 0 "$head_sha" "$comment_commit"
+fi
+
 unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 rm -rf "$objs"
 

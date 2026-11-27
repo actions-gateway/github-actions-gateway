@@ -26,7 +26,10 @@
 # The surface is derived, never listed here. `semverfloor -ships` follows
 # publish.yml's image matrix through each Dockerfile's COPY --from= edges to the
 # go build behind it, plus the chart trees `helm package` packages, so adding an
-# image or a chart is picked up with nothing to maintain in this script.
+# image or a chart is picked up with nothing to maintain in this script. It is
+# handed the window too, because a path cannot say what changed inside the
+# Dockerfile: that counts only when a stage a published image is built from
+# differs between the two ends, so a base bump ships and a comment edit does not.
 #
 # Not `semver-floor.sh`: the floor reads a commit's *type* before its paths, so a
 # `build:` or `docs:` commit that edits a shipped file is withheld from it by
@@ -96,7 +99,7 @@ shipped=""
 if [[ -n "$changed" ]]; then
 	# The tool decides; this script never pattern-matches a path itself.
 	ships_rc=0
-	shipped="$(printf '%s\n' "$changed" | "$bin" -ships)" || ships_rc=$?
+	shipped="$(printf '%s\n' "$changed" | "$bin" -ships -from "$from" -to "$to")" || ships_rc=$?
 	if [[ "$ships_rc" -ne 0 ]]; then
 		echo "check-artifact-unchanged: semverfloor -ships failed (exit ${ships_rc})" >&2
 		exit 2

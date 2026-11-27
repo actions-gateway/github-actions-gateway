@@ -101,6 +101,32 @@ func TestDockerfileChanged(t *testing.T) {
 	})
 }
 
+// TestDockerfileDiffers pins the window reading -ships uses: the answer is the
+// two ends compared, so an edit reverted inside the window is no change.
+func TestDockerfileDiffers(t *testing.T) {
+	dir := narrowRepo(t)
+	bumped := replace(t, dockerfileBase, "distroless/static:nonroot@sha256:111", "distroless/static:nonroot@sha256:999")
+	base := commitFiles(t, dir, "chore: base", map[string]string{dockerfilePath: dockerfileBase})
+	comment := commitFiles(t, dir, "docs: reword", map[string]string{dockerfilePath: "# only a comment\n" + dockerfileBase})
+	bump := commitFiles(t, dir, "build(deps): bump", map[string]string{dockerfilePath: bumped})
+	revert := commitFiles(t, dir, "revert: bump", map[string]string{dockerfilePath: dockerfileBase})
+
+	for _, tc := range []struct {
+		name     string
+		from, to string
+		want     bool
+	}{
+		{"a comment-only edit", base, comment, false},
+		{"a published base bump", comment, bump, true},
+		{"a bump reverted inside the window", base, revert, false},
+		{"a revision that does not resolve", "no-such-ref", bump, true},
+	} {
+		if got := dockerfileDiffers(dir, tc.from, tc.to, publishedImages); got != tc.want {
+			t.Errorf("%s: dockerfileDiffers = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
 // TestShippedFilesCountsDockerfile covers the wiring: the Dockerfile is on the
 // surface only for a commit that changed a published stage, and a surface with
 // no Dockerfile rule behaves as before.

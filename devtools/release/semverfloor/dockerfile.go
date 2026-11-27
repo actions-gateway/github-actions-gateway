@@ -51,11 +51,19 @@ func publishedStageBodies(stages map[string]*dockerStage, images []string) map[s
 // not parse. A stage that is not published (a test fixture image) leaves the
 // answer false.
 func dockerfileChanged(root, sha string, images []string) bool {
-	before, ok := gitShow(root, sha+"^:"+dockerfilePath)
+	return dockerfileDiffers(root, sha+"^", sha, images)
+}
+
+// dockerfileDiffers reports whether any stage a published image is built from
+// differs between two revisions, under the same reading as dockerfileChanged:
+// a revision with no Dockerfile, a failed git read, or text that does not parse
+// counts as a difference.
+func dockerfileDiffers(root, from, to string, images []string) bool {
+	before, ok := gitShow(root, from+":"+dockerfilePath)
 	if !ok {
 		return true
 	}
-	after, ok := gitShow(root, sha+":"+dockerfilePath)
+	after, ok := gitShow(root, to+":"+dockerfilePath)
 	if !ok {
 		return true
 	}
