@@ -395,7 +395,8 @@ A ceiling left low throttles everyone's CI, so run it.
 
 ##### A killed gate is reclaimed by the next one
 
-**Self-cleaning covers most endings, not all of them.** Bash runs the teardown trap on Ctrl-C and on an ordinary `kill`, so those tear the cluster back down.
+**Self-cleaning covers most endings, not all of them.** Ctrl-C, an ordinary `kill` and a closed terminal each end the gate as a failure, exiting 130, 143 or 129, and each tears the cluster back down after dumping the failure diagnostics (Q1392).
+Stop a gate by its process group, `kill -TERM -- -<pgid>`, as Ctrl-C does: a `kill` aimed at its pid alone takes effect only once the command it is running ends, which in the e2e leg can be the ~25-minute watch.
 `kill -9`, a killed parent process, and a teardown interrupted part-way through do not — each leaves billable nodes up with no process left to release them, and twice that was caught only by hunting for a live teardown process by hand (Q640).
 A teardown whose `e2e-stop.sh` or `stop.sh` refuses, usually on a drain that will not converge, leaves the same nodes up, so it keeps its lease too and ends `Teardown INCOMPLETE` with the `--reclaim` command to run once the drain can finish (Q1155).
 
@@ -539,6 +540,8 @@ Equally supported, and equally legible — drop the `nohup`/`&`/`ASSUME_YES=1` a
 ```bash
 PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh vX.Y.Z-rc.N
 ```
+
+Closing that terminal ends the gate as a failure and still tears the cluster down; the teardown's output, with nowhere left to print, goes to `tmp/validate-release-teardown.log`.
 
 **The gate narrates itself while it runs.** Each phase is announced as it starts (`==> [e2e] Running the e2e matrix on GAG runners`), and the e2e leg — the long one, ~25 minutes while runners autoscale in — relays the dispatched run's own spec heartbeat into your terminal every 30 s:
 
