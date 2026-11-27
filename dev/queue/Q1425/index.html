@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1128/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1425/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>gh api job logs exits 1 and writes nothing on escape sequences - GitHub Actions Gateway</title>
+        <title>Dogfood heartbeat relay reads nothing from a log with escape sequences - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gh-api-job-logs-exits-1-and-writes-nothing-on-escape-sequences" class="md-skip">
+        <a href="#dogfood-heartbeat-relay-reads-nothing-from-a-log-with-escape-sequences" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              gh api job logs exits 1 and writes nothing on escape sequences
+              Dogfood heartbeat relay reads nothing from a log with escape sequences
             
           </span>
         </div>
@@ -2715,47 +2715,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#measured-2026-09-18" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Measured 2026-09-18
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-to-write-down" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What to write down
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#notes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Notes
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2774,36 +2733,15 @@
   
 
 
-<h1 id="gh-api-job-logs-exits-1-and-writes-nothing-on-escape-sequences"><code>gh api</code> job logs exits 1 and writes nothing on escape sequences<a class="headerlink" href="#gh-api-job-logs-exits-1-and-writes-nothing-on-escape-sequences" title="Permanent link">&para;</a></h1>
-<p>Reading a workflow job's log to confirm a gate actually ran is the instrument <a href="../../development/testing/#path-gated-workflows-verify-the-heavy-gates-actually-ran">testing.md</a> sends you to when a green check is not enough.
-It has a failure mode that turns a failed read into a plausible finding, and nothing in the output marks it.</p>
-<h2 id="measured-2026-09-18">Measured 2026-09-18<a class="headerlink" href="#measured-2026-09-18" title="Permanent link">&para;</a></h2>
-<p>Confirming that Q1118's new assertions had run on GitHub's runner rather than only locally:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>gh api "repos/{owner}/{repo}/actions/jobs/105392327528/logs" &gt; st.log 2&gt;&amp;1
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a># exit 1; st.log holds:
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>#   the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway
-</code></pre></div>
-<p>The log is <strong>not written</strong>, so a grep for the assertion names over <code>st.log</code> returns empty.
-That empty reads exactly like the assertions being absent, which is the conclusion under test and the alarming one — a gate job reporting green for a heavy job whose content never ran.
-Re-running with <code>--allow-escape-sequences</code> returned the real 423 KB log, with every assertion present.</p>
-<p>Both halves of the trap are ordinary practice.
-The redirect is what <a href="../../development/bash-style/">bash-style.md</a> and the exit-status rules ask for, and it is what routes the error message into the file a later grep reads.
-And a job log is exactly where a reader has already decided the answer matters.</p>
-<h2 id="what-to-write-down">What to write down<a class="headerlink" href="#what-to-write-down" title="Permanent link">&para;</a></h2>
-<p>One entry under testing.md § <a href="../../development/testing/#the-status-you-report-is-a-claim-too">The status you report is a claim too</a>, where the neighbouring rules about an empty result already live:</p>
-<ul>
-<li>The invocation carries <code>--allow-escape-sequences</code> whenever a job log is fetched to support a claim.</li>
-<li>Reconcile the fetch's own exit status before grepping what it wrote, since the error lands <em>in</em> the output file rather than beside it.</li>
-<li>A positive control settles it in one line: grep the log for an assertion that existed before the change under test, and disbelieve the read if that one is missing too.
-  The control is what separates "the read failed" from "the job did not run it", which no amount of re-reading the empty result can.</li>
-</ul>
-<p>The doc's own worked example is the first site to fix: the <code>gh api</code> line under § Diagnosing failures carries no flag, so a reader following it lands in exactly this case.</p>
-<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
-<p>No page owns this today.
-<code>docs/operations/release.md</code> and the archived <code>test-progress-visibility.md</code> mention escape sequences, but both are about keeping the repo's <em>own</em> progress output append-only, not about reading a log back out of the Actions API.</p>
-<p><code>collect_heartbeats</code> in <code>scripts/dogfood/e2e-run-watch.sh</code> fetches the same endpoint with <code>2&gt;/dev/null || true</code>, so the same response would yield no heartbeat lines rather than an error.
-Unverified — nobody has reproduced it there, and the repo's own progress output is deliberately ANSI-free, so it may never be what that job's log carries.</p>
-<p>Found while confirming PR #1962's path-gated gates; the finding is about the instrument rather than that change, so it did not ride along.</p>
+<h1 id="dogfood-heartbeat-relay-reads-nothing-from-a-log-with-escape-sequences">Dogfood heartbeat relay reads nothing from a log with escape sequences<a class="headerlink" href="#dogfood-heartbeat-relay-reads-nothing-from-a-log-with-escape-sequences" title="Permanent link">&para;</a></h1>
+<p><code>collect_heartbeats</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-run-watch.sh"><code>scripts/dogfood/e2e-run-watch.sh</code></a> fetches job logs with <code>gh api .../actions/jobs/&lt;id&gt;/logs</code> and no <code>--allow-escape-sequences</code>, then discards stderr and the exit status.
+When the log holds terminal escape sequences, gh refuses and writes nothing, so the operator sees no <code>[e2e t+…]</code> progress and no error.</p>
+<p>Measured 2026-11-26 on gh 2.103.3, job <code>140270029259</code> (<code>e2e / e2e</code>, run <code>45926825833</code>, a GitHub-hosted merge-group run): without the flag, exit 1 and 0 bytes; with it, 371,613 bytes holding 19 heartbeat lines.</p>
+<p>Unverified: that job had completed and was not a dogfood run, so neither an in-flight log nor a dogfood runner's log has been read.
+Check both before fixing, and check whether the flag changes what <code>heartbeat_lines</code> matches.
+<code>job_progress</code> in the same script records a passing run whose e2e log GitHub never served (Q855); whether this refusal explains that is unknown.</p>
+<p>The rule for a reader fetching a log by hand is in <a href="../../development/testing/#a-refused-job-log-fetch">testing.md</a>.
+The one near-duplicate the allocator offered, Q1128, was that doc rule and closed when this row was filed.</p>
 
 
 

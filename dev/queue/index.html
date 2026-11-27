@@ -4318,12 +4318,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>A green assertion means the suite ran, not that the assertion could have failed.</td>
 </tr>
 <tr>
-<td><a href="Q1128/">Q1128</a></td>
-<td><a href="../development/testing/#the-status-you-report-is-a-claim-too"><code>gh api</code> job logs exits 1 and writes nothing on escape sequences</a></td>
-<td><code>debt</code> <code>docs</code></td>
+<td><a href="Q1425/">Q1425</a></td>
+<td>Dogfood heartbeat relay reads nothing from a log with escape sequences</td>
+<td><code>bug</code> <code>dogfood</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Reading a workflow job's log to confirm a gate actually ran is the instrument …</td>
+<td><code>collect_heartbeats</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-run-watch.sh"><code>scripts/dogfood/e2e-run-watch.sh</code></a> fetches job logs with `gh api …</td>
 </tr>
 <tr>
 <td><a href="Q1135/">Q1135</a></td>
