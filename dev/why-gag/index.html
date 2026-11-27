@@ -3293,8 +3293,9 @@ rather than trusting it, and
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
      When a case is added or removed there, update this paragraph too. -->
-<p><strong>Auto-re-run covers disruption, never failure.</strong> Eviction, preemption, a Spot node reclaimed, a drain, a node shutdown and a stray <code>kubectl delete pod</code> all come back, and so does a dead node once an admin taints it <code>out-of-service</code>.
-A job that <em>failed</em> and a run you <em>cancelled</em> never do, and neither does a worker evicted for exceeding its own storage limit, since a re-run gets the same limit.
+<p><strong>Auto-re-run fires on disruption, never on a failure alone.</strong> Eviction, preemption, a Spot node reclaimed, a drain, a node shutdown and a stray <code>kubectl delete pod</code> all come back, and so does a dead node once an admin taints it <code>out-of-service</code>.
+A job that <em>failed</em> in a run nothing disrupted and a run you <em>cancelled</em> never do, and neither does a worker evicted for exceeding its own storage limit, since a re-run gets the same limit.
+A job that failed on its own beside a disrupted one runs again with it, because GitHub re-runs a run's failed jobs together.
 Nor do workers the reaper took, with one exception: a worker reaped while still <code>Pending</code> is re-run once capacity returns.
 <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">The full boundary</a>.</p>
 <p><strong>Right-sizing is structural, not a feature race.</strong> An ephemeral pod runs one job and lives minutes, so stock Vertical Pod Autoscaler cannot size it.

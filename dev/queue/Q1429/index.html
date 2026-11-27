@@ -2740,12 +2740,11 @@ The design says what that costs, in its account of Q1319: the call re-runs a sib
 A job that is not safe to repeat, such as a deploy that failed partway, is re-run without anyone asking.</p>
 <p>Read from source and the design on 2026-11-27; how often a disrupted run also holds a genuine failure is not measured.
 <code>actions_gateway_scaleset_job_reruns_total{trigger="gag_collateral"}</code> counts these re-runs, and its share of <code>trigger="gag"</code> on dogfood is that measurement.
-The operator runbook's boundary list says a genuine job failure never fires, which holds only for a run with no disrupted job.</p>
+The runbook's boundary, the README and the comparison page state this as a known limit (Q1434).</p>
 <p><strong>A fix:</strong> give the disruption arms the scope decision the out-of-memory release already makes (<code>planJobRerun</code>), re-running the disrupted job by its runner's name where another job of the attempt failed on its own.
 That decision needs the run concluded and its jobs list read, which the out-of-memory class gets by parking the re-run; the disruption arms call inside a 15-minute window instead, so this is a change of shape and not a flag.
 <a href="../Q1394/">Q1394</a> is the dogfood reading of the single-job call on a killed job, and should land first.
-Q1398 is a different defect on the same arms: there the re-run names the wrong run, and here it names the right run and too many of its jobs.
-Until then, correct the runbook line to say what happens beside a disrupted job.</p>
+Q1398 is a different defect on the same arms: there the re-run names the wrong run, and here it names the right run and too many of its jobs.</p>
 
 
 

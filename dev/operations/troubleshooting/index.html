@@ -8056,7 +8056,9 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 </table>
 <p><strong>Never fires, by design:</strong></p>
 <ul>
-<li><strong>A genuine job failure.</strong> The job ran and failed on its own merits; nothing was disrupted, and re-running it would mask real breakage.</li>
+<li><strong>A genuine job failure, in a run nothing disrupted.</strong> The job ran and failed on its own merits, and re-running it would mask real breakage.
+  Beside a disrupted job it is re-run: every cause but <code>oom</code> calls <code>rerun-failed-jobs</code>, which re-runs every failed job of the run, so a job that failed on its own in the same attempt runs again with the disrupted one.
+  The <a href="#flaky-jobs-and-platform-faults-on-failed-jobs">flaky-job counters</a> count it as <code>trigger="gag_collateral"</code>, and a <code>FlakyJobDetected</code> Event names it if it then passes.</li>
 <li><strong>A worker evicted for its own limit.</strong> The kubelet writes <code>Failed</code> / <code>Evicted</code> too when a pod exceeds its own <code>ephemeral-storage</code> limit, one container's limit, or an <code>emptyDir</code> <code>sizeLimit</code>, but with a limit message and no <code>DisruptionTarget</code> condition.
   The job outgrew a limit its template sets, so a re-run gets the same limit and fails the same way.
   No slot is spent: <code>eviction_rerun_withheld_total{cause="eviction", reason="own_limit"}</code> increments, and a Normal <code>EvictionRerunWithheld</code> Event quotes the kubelet's message.

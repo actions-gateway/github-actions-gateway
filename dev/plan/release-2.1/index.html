@@ -2843,6 +2843,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#q1434" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q1434
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2894,7 +2905,9 @@ What it ships is <a href="#scope-ledger">in the ledger</a>, among it job-granula
 <p>The order inside the release is the design's: the measurements first, because each class and the job-granular re-run are built on their answers.</p>
 <h2 id="what-this-release-must-not-do">What this release must NOT do<a class="headerlink" href="#what-this-release-must-not-do" title="Permanent link">&para;</a></h2>
 <p><strong>It must not re-run a genuine failure.</strong> The boundary in <a href="../../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">troubleshooting.md</a> stands: every class retries only a cause GAG can observe on facts it owns (R9), arrives with a dogfood reproduction (R12), and is punted rather than shipped when no discriminator separates it from a tenant-caused shape.
-One known limit stays from <code>v2.0.0</code>: beside a memory kill, a job past its <code>timeout-minutes</code> is re-run with it where no job ended <code>failure</code> on its own, because GitHub's job list spells it as it does a fail-fast sibling (<a href="../../design/04-operational-flows/#the-re-run-takes-only-the-killed-jobs-q1319">how</a>, Q1399).</p>
+Two known limits stay from <code>v2.0.0</code>.
+Beside a memory kill, a job past its <code>timeout-minutes</code> is re-run with it where no job ended <code>failure</code> on its own, because GitHub's job list spells it as it does a fail-fast sibling (<a href="../../design/04-operational-flows/#the-re-run-takes-only-the-killed-jobs-q1319">how</a>, Q1399).
+Beside any other disruption, a job that failed on its own is re-run with the disrupted one, because those arms call <code>rerun-failed-jobs</code> and only the out-of-memory class re-runs the killed job alone; the boundary says so since Q1434, and the fix is <a href="../../queue/Q1429/">Q1429</a>.</p>
 <p><strong>It must not ship a blanket opt-in retry.</strong> <code>spec.flakyRetry</code> from <a href="../../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">appendix G.17</a> stays unscheduled; the direction is classified platform failures on the existing arms.</p>
 <h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
 <p>What the <code>v2.1.0</code> tag waits for, per the <a href="../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">scope-ledger convention</a>.</p>
@@ -3023,6 +3036,12 @@ One known limit stays from <code>v2.0.0</code>: beside a memory kill, a job past
 <td>🔲 open</td>
 </tr>
 <tr>
+<td>Q1434</td>
+<td>Say that a disruption re-run takes the run's own failures with it</td>
+<td><code>2.1-gate</code></td>
+<td>✅ landed: the runbook's boundary, the README and the comparison page name the limit; re-running the disrupted job alone is <a href="../../queue/Q1429/">Q1429</a>, not gated</td>
+</tr>
+<tr>
 <td>-</td>
 <td>RC validated on dogfood</td>
 <td>gates</td>
@@ -3056,6 +3075,10 @@ They name no cause now, and what the class re-runs, raises and withholds is unch
 What it still recovers less of is <a href="../../operations/upgrade/#non-breaking-an-out-of-memory-retry-re-runs-the-killed-job-not-every-failed-job-of-its-run">in the upgrade notes</a>.</p>
 <h3 id="q1403">Q1403<a class="headerlink" href="#q1403" title="Permanent link">&para;</a></h3>
 <p>Naming no cause leaves the operator without one, and <a href="../q1403-oom-kill-reporter/">its design</a> reads which limit ran out on the node.</p>
+<h3 id="q1434">Q1434<a class="headerlink" href="#q1434" title="Permanent link">&para;</a></h3>
+<p>Gated 2026-11-27.
+The boundary this release must not cross was stated as holding with one limit, and an audit read a second from source: every disruption arm but the out-of-memory class re-runs each failed job of the run, a job's own failure among them.
+The behaviour is older than <code>v2.0.0</code> and this release does not change it; what gated is the statement, in the release whose headline is telling platform failures from a job's own.</p>
 <h2 id="explicitly-out-of-scope">Explicitly out of scope<a class="headerlink" href="#explicitly-out-of-scope" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
