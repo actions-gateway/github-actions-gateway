@@ -496,7 +496,7 @@ The agent's part was under 0.1 s on kind, from the first rise it read to its ans
 | Reason | Today | With the condition |
 |---|---|---|
 | `ContainerLimit` | Raise and re-run, or a withhold, naming no cause | The same actions, and the text says the limit ran out |
-| `PodLimit` | The same; a raise past the pod's limit builds a refused pod ([Q1402](../queue/Q1402.md)) | No raise, no re-run; the Event says the pod's limit |
+| `PodLimit` | The same; a raise is held to the pod's limit, and withheld as `own_limit` where that is no raise (Q1402) | No raise, no re-run; the Event says the pod's limit |
 | `PodsLimit`, `AbovePods` | Raise and re-run, or `own_limit`; the kill can open the set's breaker | No raise, not counted by the breaker, and D3 |
 | `Unknown`, a `Log` reason, or none in time | Today's | Today's, with Q1400's text |
 | Any, on a runner with no limit | A log line, no Event | An Event that names the reason |

@@ -133,6 +133,7 @@ Safety rails, in all profiles:
   `status.sizingProfileState` reports which side you're on: `Active` (derived values applied) or `AwaitingSamples` (template values, history accumulating).
 - **Clamps** — `minRequests`/`maxRequests` bound every derived request, and `Throughput`'s derived memory limit, so a skewed history (one pathological job) cannot push pods beyond an operator-set envelope.
   The limit needs the bound most: it follows a peak the jobs control, so without `maxRequests.memory` a job held near its limit raises the next one by the headroom factor each generation (Q1327).
+  A derived limit is also held to the template's pod-level `spec.resources.limits`, which the API server requires every container's limit to be at or below (Q1402).
   Size the ceiling against the namespace `ResourceQuota` and any `LimitRange`: derived values are still subject to both at admission, and the existing `WorkerQuota*` conditions and quota retries surface a conflict at runtime.
   An admission mutation that cancels `Throughput` rejects nothing, so it gets its own condition — [`SizingProfileOverridden`](#when-something-re-injects-the-cpu-limit-throughput-removes).
 
@@ -151,6 +152,7 @@ It does not check that the job reached the limit; [which limit ran out](#which-l
 The history alone cannot be relied on to raise it, because a job killed at its limit is sampled at or below that limit.
 
 **What it does.** When a worker the profile built has its runner container killed `OOMKilled`, the job's next attempt gets the killed limit times the profile's headroom (1.4 under `Binpack`, `limitHeadroomPercent / 100` under `Throughput`), rounded up to 64Mi and capped at `maxRequests.memory`, or at twice the killed limit where you set none.
+Where the template sets pod-level `spec.resources`, the raise is also held to the pod's memory limit and, under `Binpack`, to the pod's memory request less what its other containers request, since the API server refuses a pod past either (Q1402).
 Under `Binpack` the memory request rises with it, and nothing checks that a node can hold the raised request.
 One that no node can hold leaves the re-run's worker `Pending` with `WorkersUnschedulable` set, until the AGC cancels the run; a later placement of any worker on the set then re-runs it into the same wait, on the same budget (measured on dogfood, 2026-11-24).
 So under `Binpack` set `maxRequests.memory` no higher than the memory an empty worker node has free after its DaemonSets, less what the pod's other containers request: the cap applies to each container, not to the pod.
@@ -189,7 +191,7 @@ The raised limit stays with that job of that run for up to 7 days, so a manual r
 
 | `reason` | Why | What to do |
 |---|---|---|
-| `own_limit` | The set's profile is `Static` or `NodeShare`, the profile was still `AwaitingSamples` when the pod was built, or the killed limit is already at `maxRequests.memory` | If the runner [reached its limit](#which-limit-ran-out), raise the limit or `maxRequests.memory`; then, in either case, re-run by hand |
+| `own_limit` | The set's profile is `Static` or `NodeShare`, the profile was still `AwaitingSamples` when the pod was built, or the killed limit is already at `maxRequests.memory` or at what the template's pod-level `spec.resources` leave the runner | If the runner [reached its limit](#which-limit-ran-out), raise the limit, `maxRequests.memory`, or the template's pod-level memory limit or request, whichever the Event names; then, in either case, re-run by hand |
 | `same_class_again` | The job was killed again after a retry raised its limit: one raise per job | If the runner [reached its limit](#which-limit-ran-out), look at what grew or raise the limit; then, in either case, re-run by hand, which gets the raised limit for up to 7 days |
 | `job_not_found` | No failed job of the run ran on the killed worker's runner: the runner took no job, or its job ended before the kill. Decided after the run concludes, so this one has spent its slot | Nothing, unless a job was lost; find it in the run's other attempts and re-run it by hand |
 | `breaker_open` | More than 10 runs were re-run for memory within 10 minutes, so retries are paused for 30, with one Warning `AutoRetryPaused` Event | Look for a shared cause first: a dependency that grew every job, or nodes packed past their memory |
