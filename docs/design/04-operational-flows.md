@@ -652,11 +652,13 @@ next = min(roundUp64Mi(killed × headroom), ceiling, room)
 headroom = 1.4 (Binpack) | limitHeadroomPercent / 100 (Throughput, default 1.5)
 ceiling  = spec.sizing.maxRequests.memory, or 2 × killed where unset
 room     = the template's spec.resources.limits.memory, and under Binpack its
-           spec.resources.requests.memory less the other running containers' requests
+           spec.resources.requests.memory (its limit where it sets no request)
+           less the other running containers' requests
 ```
 
 `room` is there because the API server refuses a pod whose container limit is above the pod's, or whose containers' requests together are above an explicit pod request (`validatePodResourceConsistency`, Kubernetes v1.35.5, read), and a raise past it recorded a floor and spent a slot on a pod nothing could create (Q1402).
-It is read from the template rather than the killed pod, whose pod request the API server defaulted to its containers' own.
+It is read from the template rather than the killed pod, whose pod request the API server defaulted to its containers' own; that default must itself be at or below the pod's limit, which is why the limit bounds a following request where the template sets no pod request (measured, `TestPodLevelResources_RefuseWhatTheRaiseIsHeldTo`).
+A raise `room` cut says so in its `MemoryLimitRaisedForRetry` Event.
 The profiles' derived limits are capped at the pod's limit the same way.
 
 It fires on a worker whose pod reached `PodFailed` with the **runner** container terminated `OOMKilled`, and which carries the `actions-gateway.com/sizing-profile` annotation, meaning the profile derived its limits when it was built.

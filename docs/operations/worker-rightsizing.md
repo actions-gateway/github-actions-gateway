@@ -152,7 +152,8 @@ It does not check that the job reached the limit; [which limit ran out](#which-l
 The history alone cannot be relied on to raise it, because a job killed at its limit is sampled at or below that limit.
 
 **What it does.** When a worker the profile built has its runner container killed `OOMKilled`, the job's next attempt gets the killed limit times the profile's headroom (1.4 under `Binpack`, `limitHeadroomPercent / 100` under `Throughput`), rounded up to 64Mi and capped at `maxRequests.memory`, or at twice the killed limit where you set none.
-Where the template sets pod-level `spec.resources`, the raise is also held to the pod's memory limit and, under `Binpack`, to the pod's memory request less what its other containers request, since the API server refuses a pod past either (Q1402).
+Where the template sets pod-level `spec.resources`, the raise is also held to the pod's memory limit and, under `Binpack`, to the pod's memory request less what its other containers request, or to the pod's limit less that where the template sets no pod request, since the API server refuses a pod past either (Q1402).
+The `MemoryLimitRaisedForRetry` Event says when the pod-level resources cut the raise.
 Under `Binpack` the memory request rises with it, and nothing checks that a node can hold the raised request.
 One that no node can hold leaves the re-run's worker `Pending` with `WorkersUnschedulable` set, until the AGC cancels the run; a later placement of any worker on the set then re-runs it into the same wait, on the same budget (measured on dogfood, 2026-11-24).
 So under `Binpack` set `maxRequests.memory` no higher than the memory an empty worker node has free after its DaemonSets, less what the pod's other containers request: the cap applies to each container, not to the pod.
