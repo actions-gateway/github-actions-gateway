@@ -2742,7 +2742,7 @@ The only tie runs the other way: the AGC reads the pod condition the reporter wr
 D5 planned a gate that fails if either side imports the other, and Q1403's PR 3 (#2428) adds it as <code>scripts/go/check-oomreporter-imports.sh</code>, which keeps the move a move rather than an untangling.</p>
 <p><strong>What a move costs</strong>, from D5's table and since: the whole release pipeline again (builds, signing, SBOMs, scans, verification, a release process), its own docs and CI, including the kind e2e lane Q1403's PR 5 adds, and the condition becoming an interface between two repositories, versioned and documented as one, where a change to it is today one PR that both sides' tests read.
 Q1403 gates 2.1 on the reporter, so 2.1 would then depend on another repository's release.</p>
-<p><strong>Ask:</strong> keep D5, move the reporter once <a href="../Q1403/">Q1403</a>'s PRs have landed, or move it later with the import gate and the condition held stable meanwhile.
+<p><strong>Ask:</strong> keep D5, move the reporter once Q1403's PRs have landed, or move it later with the import gate and the condition held stable meanwhile.
 The call is the maintainer's, since it creates a repository outside this one.
 Whichever is picked, the reporter's own docs should say it runs without the gateway.</p>
 

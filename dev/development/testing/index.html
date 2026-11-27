@@ -4445,6 +4445,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#the-oom-reporter-e2e-lane" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The oom-reporter e2e lane
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -8258,6 +8269,16 @@ The check passes if either adoption or a successful fetch's save supplies the ow
   This keeps the per-PR Calico cost bounded and quay.io off the critical path.
   Calico still gets a 60-minute timeout vs. the kindnet leg's 45 for rollout headroom.
   <code>CALICO_VERSION</code> is pinned in both the root <code>Makefile</code> and <code>scripts/ci/pins.env</code>; updatecli bumps them together.</p>
+<h4 id="the-oom-reporter-e2e-lane">The oom-reporter e2e lane<a class="headerlink" href="#the-oom-reporter-e2e-lane" title="Permanent link">&para;</a></h4>
+<ul>
+<li><strong><code>e2e-test.yml</code>'s <code>oomreporter</code> job</strong> runs <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/oomreporter-e2e.sh"><code>scripts/e2e/oomreporter-e2e.sh</code></a> (<code>make e2e-oomreporter</code>): a kind cluster of its own, the <code>oom-reporter</code> chart installed as an operator would, and one kill at each of four limits, the container's, the pod's, the one the node's pods share and one above them (Q1403).
+  <code>cmd/oomreporter/e2e_test.go</code> requires the condition and the <code>OOM&lt;reason&gt;</code> Event for each.
+  A hog the runtime ends with a reason other than <code>OOMKilled</code> gets nothing from the reporter by design, so the test kills again, up to three hogs a limit, and logs <code>kill N of 3 is not counted</code>; a hog that ended <code>OOMKilled</code> gets no other kill, and fails if its condition has not come within 3 minutes (<a href="../../queue/Q1412/">Q1412</a> asks how often real nodes do this).
+  The worker reserves all but 1 GiB of the host for the system, so a pod taking 2 GiB is killed at the pods' limit rather than the host's; the kill above them is a limit the test writes to the worker's <code>kubelet.slice</code> and takes off again, checking the kubelet and containerd outlive it.</li>
+</ul>
+<p><strong>When it runs:</strong> at merge-queue time, on push to main, and on dispatch, when the diff touches the reporter's module, chart, image stage or the script; <code>e2e-gate</code> requires it, so a skip passes and a failure blocks.
+  It is hosted only, since it fills a worker's memory limits.
+  Locally it took 2 minutes with Docker's build cache warm (2026-11-26), and it deletes its cluster however it ends; <code>OOM_E2E_KEEP=1</code> keeps it.</p>
 <h3 id="the-dockerfile-lint-gate">The Dockerfile-lint gate<a class="headerlink" href="#the-dockerfile-lint-gate" title="Permanent link">&para;</a></h3>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dockerfile-lint.yml"><code>.github/workflows/dockerfile-lint.yml</code></a> runs <code>hadolint</code> over the root <code>Dockerfile</code> (one leg; it holds every first-party image as a named stage — <code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>fakegithub</code>) and <code>scripts/dogfood/runner/Dockerfile</code> (a dev/reference image, not a shipped one), path-gated on <code>**/Dockerfile</code>.
 The failure threshold is <code>style</code> — the strictest level, which both currently pass clean — so a regression such as an unpinned base tag, a dropped digest pin, or a relaxed non-root <code>USER</code> fails at PR time.

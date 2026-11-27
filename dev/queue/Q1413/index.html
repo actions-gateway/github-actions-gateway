@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1403/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1413/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Say which memory limit killed a container, with a node reporter - GitHub Actions Gateway</title>
+        <title>A container's end trailed its kill by 7.65 s, past the 5 s pairing bound - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#say-which-memory-limit-killed-a-container-with-a-node-reporter" class="md-skip">
+        <a href="#a-containers-end-trailed-its-kill-by-765-s-past-the-5-s-pairing-bound" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Say which memory limit killed a container, with a node reporter
+              A container's end trailed its kill by 7.65 s, past the 5 s pairing bound
             
           </span>
         </div>
@@ -2733,16 +2733,17 @@
   
 
 
-<h1 id="say-which-memory-limit-killed-a-container-with-a-node-reporter">Say which memory limit killed a container, with a node reporter<a class="headerlink" href="#say-which-memory-limit-killed-a-container-with-a-node-reporter" title="Permanent link">&para;</a></h1>
-<p>Nothing the AGC reads says which limit ran out when a runner is killed for memory, so Q1400's Events name no cause.
-A small tool could say it on the pod, as a condition and an Event, for anyone debugging such a kill, with or without GAG.
-It gates 2.1, and puts the limit that ran out in place of that text.
-It does not say whose memory it was: a job and its neighbours can each fill the limit all pods share, or the node, so that is the operator's to judge.</p>
-<p><a href="../../plan/q1403-oom-kill-reporter/">The design</a> is decided: cgroup counters read by an unprivileged node agent, a controller that writes the answer, off by default, in its own module and chart here.
-It carries what is read, measured and from recall, who could forge each part, and the build.
-What is left of this row is PR 5's kind e2e lane: one kill per reason, the condition and the Event; the other five PRs are built, and reading 8's gap is stated on the operator's page; <a href="../Q1406/">Q1406</a> and <a href="../Q1407/">Q1407</a> ride 2.1, and <a href="../Q1408/">Q1408</a> is after it.
-Its rule agrees with the kernel on the kills a kind run made, and names no other limit than the kernel's on the thirteen <a href="../Q1316/">Q1316</a>'s dogfood runs recorded on GKE; the operator's page says which limits GKE has not shown.</p>
-<p>The duplicate search flags Q1399, about a job GitHub lists as cancelled, and Q1389, which was about which job a killed worker ran; neither reads a node.</p>
+<h1 id="a-containers-end-trailed-its-kill-by-765-s-past-the-5-s-pairing-bound">A container's end trailed its kill by 7.65 s, past the 5 s pairing bound<a class="headerlink" href="#a-containers-end-trailed-its-kill-by-765-s-past-the-5-s-pairing-bound" title="Permanent link">&para;</a></h1>
+<p>The controller counts a kill for a container only when the kill is within 5 seconds before to 6 after the container's end; the design calls that bound "a guess, for reading 3 to set".
+Outside it the answer is <code>Unknown</code>, even for a container whose own cgroup the agent read and named.</p>
+<p><strong>Measured 2026-11-26 on a local kind cluster</strong> (<code>kindest/node:v1.35.5</code>, Docker Desktop, host load 45 ten minutes after a reboot), in the oom-reporter lane's <code>above</code> case: the agent recorded the kill at 01:22:34.349Z with the hog's container ID read from its cgroup (<code>"read":true</code>, <code>"containers":["a10c37a1…"]</code>, <code>groupKills</code> 1, no counter below the pods risen), and the hog's status gave <code>OOMKilled</code> ending at 01:22:42Z.
+The kill came 7.65 s before the end, so the controller wrote <code>Unknown</code> where the rise alone decides <code>AbovePods</code>.
+The hog had taken 2 GiB; the same run's container, pod and pods cases passed, and the hog's container took 71 s from <code>Pulled</code> to <code>Started</code>, so the host was starved throughout.
+The agent also logged <code>fsnotify: queue or buffer overflow</code> 0.4 s before the kill and <code>cannot write the report … context deadline exceeded</code> 2 s after the end; the report did land, with that kill in it.</p>
+<p>This is one reading of the bound, and the first past it.
+A node out of memory is a node under load, so the case it misses is the one the reporter is for: a wider bound for a container named by its own cgroup, which no other container's kill can claim, may be what reading 3 should set, against the bound's purpose for a container whose cgroup went unread.
+Until then the lane's <code>above</code> case can fail on a starved host, and the retry for a non-<code>OOMKilled</code> end (Q1412) does not cover it.
+The duplicate search flags Q1412, which is about a container the runtime does not call <code>OOMKilled</code>, not about when the end is recorded.</p>
 
 
 

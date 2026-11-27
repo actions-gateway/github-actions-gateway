@@ -2881,9 +2881,9 @@ Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits u
 Some of it is committed to a named release, and a pill beside the title says which; the pill is read from the backlog rather than typed here, so it cannot outlive the commitment.
 No pill means no release is decided for that item yet.</p>
 <ul>
-<li><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Flaky-job detection, and saying which memory limit killed a runner</a></strong> <span class="gag-release-chip" title="Blocks the 2.1 release">2.1</span> <!-- q:Q1403 --> A job the cluster disrupts already <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>; a flaky failure does not.
-  Detection already counts flaky jobs per runner set.
-  Next, a node reporter says which memory limit killed a runner, so a kill at the runner's own limit reads apart from one made above it.</li>
+<li><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Flaky-job detection, and acting on which memory limit killed a runner</a></strong> <!-- q:Q1406 --> A job the cluster disrupts already <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>; a flaky failure does not.
+  Detection counts flaky jobs per runner set, and a <a href="../operations/oom-reporter/">node reporter</a> names which memory limit killed a runner.
+  Next, opt-in, the AGC stops raising memory after a kill made above the runner's own limit.</li>
 </ul>
 <h2 id="exploring--longer-term">Exploring / longer-term<a class="headerlink" href="#exploring--longer-term" title="Permanent link">&para;</a></h2>
 <p>Directions we expect to pursue as demand and validated evidence accumulate.

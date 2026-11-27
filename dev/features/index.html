@@ -3042,6 +3042,8 @@ A capability listed under <code>dev</code> but not under a numbered release has 
   Readable from <code>kubectl describe</code>, so answering it no longer needs metrics access.</li>
 <li><strong><a href="../operations/observability-logging/#attributing-a-record-to-a-tenant-and-a-job">Egress attribution readiness</a></strong> <span class="gag-v2-badge">v2</span>: an <code>EgressAuditUnattributed</code> condition and gauge, on each gateway and each <code>RunnerSet</code>, say whether both halves of that attribution are on, and name the half that is not.
   Advisory: it never gates <code>Ready</code>.</li>
+<li><strong><a href="../operations/oom-reporter/">Which memory limit killed a container</a></strong>: a chart of its own.
+  A condition and an Event on the pod name the limit that ran out: the container's, the pod's, the one all pods share, or one above them.</li>
 <li><strong><a href="../operations/observability-logging/">Logging and tracing</a></strong>: structured logs and OpenTelemetry tracing across the four tiers.
   Name a collector and its private CA in <code>spec.tracing</code> and the AGC exports over TLS, through an egress rule worker pods never get.</li>
 <li><strong><a href="../operations/observability-logging/#proxy-egress-audit-record">Per-pool egress audit record</a></strong> <span class="gag-v2-badge">v2</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.</li>

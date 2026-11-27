@@ -2734,7 +2734,7 @@
 
 
 <h1 id="read-the-kernel-log-beside-the-counters-as-a-reporter-option">Read the kernel log beside the counters, as a reporter option<a class="headerlink" href="#read-the-kernel-log-beside-the-counters-as-a-reporter-option" title="Permanent link">&para;</a></h1>
-<p>Blocked on <a href="../Q1403/">Q1403</a>'s PRs 5 and 6: the e2e lane it extends and the record it adds words to.</p>
+<p>Its e2e lane is a run of <code>make e2e-oomreporter</code> with the option on, and its words go in the record Q1403's PR 6 added.</p>
 <p>PR 9 of Q1403's design, off by default behind the reporter chart's own value: a second container at uid 0 with <code>CAP_SYSLOG</code> and nothing else, which reads the kernel's out-of-memory lines by <code>syslog(2)</code>.
 It names some kills the counters leave <code>Unknown</code>, and loses lines the counters do not: the kernel prints ten in five seconds for a whole node (read, <code>oom_kill.c</code>, v6.12).
 A line can be falsified, so its reasons have names of their own, the AGC never acts on one, and where it disagrees with the counters their reason stands.</p>

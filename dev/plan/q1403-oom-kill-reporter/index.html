@@ -3070,9 +3070,8 @@
 
 <h1 id="a-node-reporter-for-out-of-memory-kills-q1403">A node reporter for out-of-memory kills: Q1403<a class="headerlink" href="#a-node-reporter-for-out-of-memory-kills-q1403" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status (2026-11-25): decided, D1 to D6 each as recommended.
-<a href="#build-size">PRs 1 to 4 and 6</a> are built: the reader and the rule, the two programs, the chart, the image, and the AGC's record; of PR 5, the operator's page and GKE's readings are, and the kind e2e lane is not.
-They have run together against an API server alone, and not on a node.</strong></p>
+<p><strong>Status (2026-11-26): decided, D1 to D6 each as recommended.
+<a href="#build-size">PRs 1 to 6</a> are built: the reader and the rule, the two programs, the chart, the image, and the AGC's record; the operator's page, GKE's readings, and PR 5's kind e2e lane, which runs both programs from the chart and holds a kill at each of four limits to its condition and Event.</strong></p>
 </blockquote>
 <p>A container killed for memory reads <code>OOMKilled</code> with exit code 137 whichever limit ran out: its own, its pod's, the one all pods share, or the node's memory.
 The AGC therefore names no cause (Q1400), and neither does anything else in the Kubernetes API that a tenant's operator can read on the pod.
@@ -4259,7 +4258,7 @@ Nor reading 10, since the job's own privileged container opens <code>/dev/kmsg</
 Nor does it run a one-container pod or a pod-level limit: either answer to the first is <code>ContainerLimit</code> by the rule, and what decides both is the kubelet's cap and the kernel, which a local node reads.</p>
 <h2 id="build-size">Build size<a class="headerlink" href="#build-size" title="Permanent link">&para;</a></h2>
 <p>Sizes are estimates.
-PRs 1 to 6 are <a href="../../queue/Q1403/">Q1403</a>, which gates 2.1; the three that do not gate it have rows of their own, so that its label does not hold the tag for them.</p>
+PRs 1 to 6 are Q1403, which gates 2.1; the three that do not gate it have rows of their own, so that its label does not hold the tag for them.</p>
 <table>
 <thead>
 <tr>
