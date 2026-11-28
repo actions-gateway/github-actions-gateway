@@ -165,3 +165,43 @@ func TestChart_RefusesToBeInATenantsNamespace(t *testing.T) {
 	_, err := render(t.Context(), strings.Replace(values, tenant, reporter, 1))
 	require.ErrorContains(t, err, "namespaces holds the release's own")
 }
+
+// The option adds one container to the agent's pod, and moves the agent's token into its own
+// container, so that the log reader has none.
+func TestChart_TheKernelLogAddsAContainerWithOneCapabilityAndNoToken(t *testing.T) {
+	const agent = "DaemonSet " + reporter + " " + release + "-agent"
+	off := rendered(t, values)
+	on := rendered(t, values+"kernelLog:\n  enabled: true\n")
+	assert.Equal(t, without(off, "DaemonSet"), without(on, "DaemonSet"))
+
+	pod, _, err := unstructured.NestedMap(on[agent], "spec", "template", "spec")
+	require.NoError(t, err)
+	assert.Equal(t, false, pod["automountServiceAccountToken"])
+	assert.NotContains(t, pod, "shareProcessNamespace")
+	assert.NotContains(t, pod, "hostUsers")
+	containers := pod["containers"].([]any)
+	require.Len(t, containers, 2)
+	agentContainer, reader := containers[0].(map[string]any), containers[1].(map[string]any)
+	assert.Equal(t, "log-reader", reader["name"])
+	assert.Equal(t, map[string]any{
+		"runAsNonRoot": false, "runAsUser": int64(0), "runAsGroup": int64(0),
+		"readOnlyRootFilesystem": true, "allowPrivilegeEscalation": false,
+		"capabilities": map[string]any{"drop": []any{"ALL"}, "add": []any{"SYSLOG"}},
+	}, reader["securityContext"])
+	assert.NotContains(t, reader, "env")
+	assert.Equal(t, []any{map[string]any{"name": "log-socket", "mountPath": "/run/oom-reporter"}}, reader["volumeMounts"])
+
+	mounts := map[string]bool{}
+	for _, m := range agentContainer["volumeMounts"].([]any) {
+		mounts[m.(map[string]any)["name"].(string)] = true
+	}
+	assert.Equal(t, map[string]bool{"cgroup": true, "token": true, "log-socket": true}, mounts)
+	assert.Contains(t, agentContainer["args"], "-log-socket=/run/oom-reporter/log.sock")
+
+	volumes := map[string]map[string]any{}
+	for _, v := range pod["volumes"].([]any) {
+		volumes[v.(map[string]any)["name"].(string)] = v.(map[string]any)
+	}
+	assert.NotContains(t, volumes["log-socket"], "hostPath")
+	assert.Contains(t, volumes["token"], "projected")
+}

@@ -46,6 +46,25 @@ agent:
     limits:
       memory: 128Mi
 
+# kernelLog runs a second container in each agent's pod, which reads the
+# kernel's out-of-memory lines by syslog(2) and hands the agent numbers for each
+# kill: a pod, a container, the level of the limit that ran out, and a time.
+# The agent keeps them in its report. In this release the controller reads none
+# of them, so turning it on changes no condition and no Event.
+#
+# The container is the node's uid 0 with CAP_SYSLOG and no other capability, no
+# token and no hostPath. Taken over, it reads the node's whole kernel log, with
+# the name and size of every process in each kill's dump, any tenant's, and can
+# clear that log. A policy that refuses added capabilities refuses it.
+kernelLog:
+  enabled: false
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 64Mi
+
 # controller is the Deployment that writes to pods.
 controller:
   # placement is what keeps the controller's token off nodes that run tenants'

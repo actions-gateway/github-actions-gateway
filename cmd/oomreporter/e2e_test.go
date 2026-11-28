@@ -22,7 +22,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/cgroup"
 	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/controller"
+	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/kernlog"
+	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/report"
 	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/rule"
 )
 
@@ -33,6 +36,8 @@ var (
 	e2eWorker     = os.Getenv("OOM_E2E_WORKER")
 	e2eNamespace  = os.Getenv("OOM_E2E_NAMESPACE")
 	e2eHog        = os.Getenv("OOM_E2E_HOG_IMAGE")
+	// e2eReporter is the chart's namespace. The lane installs it with kernelLog on.
+	e2eReporter = os.Getenv("OOM_E2E_RELEASE_NAMESPACE")
 )
 
 // The cgroup kind's kubelet puts the node's pods in, and the one above it.
@@ -59,24 +64,26 @@ func TestE2E_SaysWhichLimitRanOut(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		reason rule.Reason
+		// level is where the kernel's line names the limit.
+		level  cgroup.Level
 		pod    func(*corev1.Pod)
 		around func(t *testing.T)
 	}{
-		{"container", rule.ContainerLimit, func(p *corev1.Pod) {
+		{"container", rule.ContainerLimit, cgroup.InPod, func(p *corev1.Pod) {
 			p.Spec.Containers[0].Args = []string{"256"}
 			p.Spec.Containers[0].Resources.Limits = memory("64Mi")
 			p.Spec.Containers[1].Resources.Limits = memory("32Mi")
 		}, nil},
-		{"pod", rule.PodLimit, func(p *corev1.Pod) {
+		{"pod", rule.PodLimit, cgroup.PodLevel, func(p *corev1.Pod) {
 			p.Spec.Containers[0].Args = []string{"512"}
 			p.Spec.Resources = &corev1.ResourceRequirements{Limits: memory("128Mi")}
 		}, nil},
-		{"pods", rule.PodsLimit, func(p *corev1.Pod) {
+		{"pods", rule.PodsLimit, cgroup.RootLevel, func(p *corev1.Pod) {
 			p.Spec.Containers[0].Args = []string{"2048"}
 		}, func(t *testing.T) {
 			require.Less(t, readBytes(t, nodePods+"/memory.max"), int64(1536)<<20, "the worker's pods share less than the hog takes")
 		}},
-		{"above", rule.AbovePods, func(p *corev1.Pod) {
+		{"above", rule.AbovePods, cgroup.Above, func(p *corev1.Pod) {
 			p.Spec.Containers[0].Args = []string{"2048"}
 		}, limitAbovePods},
 	} {
@@ -100,6 +107,8 @@ func TestE2E_SaysWhichLimitRanOut(t *testing.T) {
 				require.Equal(t, string(tc.reason), got.Reason, "%s", got.Message)
 				require.Equal(t, corev1.ConditionTrue, got.Status)
 				waitForEvent(t, kube, p, "OOM"+string(tc.reason))
+				line := waitForLine(t, kube, p)
+				require.Equal(t, tc.level, line.Level, "the level the kernel's line names")
 				return
 			}
 		})
@@ -214,4 +223,99 @@ func node(t *testing.T, args ...string) string {
 	out, err := exec.CommandContext(context.WithoutCancel(t.Context()), "docker", append([]string{"exec", e2eWorker}, args...)...).CombinedOutput()
 	require.NoError(t, err, "%v: %s", args, out)
 	return string(out)
+}
+
+// waitForLine returns the line the worker's report holds for the hog's kill, and logs how far its
+// time is from the end the kubelet gives the container, which a status has in whole seconds.
+func waitForLine(t *testing.T, kube kubernetes.Interface, p *corev1.Pod) report.Line {
+	t.Helper()
+	pod, err := kube.CoreV1().Pods(p.Namespace).Get(t.Context(), p.Name, metav1.GetOptions{})
+	require.NoError(t, err)
+	var id string
+	var ended time.Time
+	for _, c := range pod.Status.ContainerStatuses {
+		if c.Name == "hog" && c.State.Terminated != nil {
+			_, id, _ = strings.Cut(c.State.Terminated.ContainerID, "://")
+			ended = c.State.Terminated.FinishedAt.Time
+		}
+	}
+	require.NotEmpty(t, id, "the hog has ended")
+	var got report.Line
+	err = wait.PollUntilContextTimeout(t.Context(), time.Second, time.Minute, true, func(ctx context.Context) (bool, error) {
+		for _, l := range reportLines(ctx, t, kube) {
+			if l.Pod == string(p.UID) && l.Container == id {
+				got = l
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	require.NoError(t, err, "no line in the worker's report for %s", p.Name)
+	t.Logf("the line's time is %s from the container's end", time.UnixMilli(got.At).Sub(ended))
+	require.InDelta(t, 0, time.UnixMilli(got.At).Sub(ended).Seconds(), 30, "the line's time is the node's")
+	return got
+}
+
+func reportLines(ctx context.Context, t *testing.T, kube kubernetes.Interface) []report.Line {
+	t.Helper()
+	cm, err := kube.CoreV1().ConfigMaps(e2eReporter).Get(ctx, report.Name(e2eWorker), metav1.GetOptions{})
+	require.NoError(t, err)
+	_, lines, err := report.Decode(cm.Data[report.Key])
+	require.NoError(t, err)
+	return lines
+}
+
+// A job that can make cgroups names one for a key with a path, as q1403-oom-kill-reporter.md
+// § The kernel log, as an option has it, and is killed in it: the kernel prints task_memcg twice,
+// and the reader refuses the line.
+func TestE2E_RefusesALineAJobForged(t *testing.T) {
+	require.NotEmpty(t, e2eKubeconfig, "OOM_E2E_KUBECONFIG")
+	cfg, err := clientcmd.BuildConfigFromFlags("", e2eKubeconfig)
+	require.NoError(t, err)
+	kube, err := kubernetes.NewForConfig(cfg)
+	require.NoError(t, err)
+
+	forged := []string{"x,task_memcg=", "kubepods.slice", "kubepods-podffffffff_ffff_ffff_ffff_ffffffffffff.slice",
+		"cri-containerd-" + strings.Repeat("f", 64) + ".scope"}
+	p := hogPod("oom-forged", func(p *corev1.Pod) {
+		p.Spec.Containers = p.Spec.Containers[:1]
+		p.Spec.Containers[0].Args = append([]string{"256"}, forged...)
+		p.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{Privileged: new(true)}
+	})
+	p, err = kube.CoreV1().Pods(e2eNamespace).Create(t.Context(), p, metav1.CreateOptions{})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = kube.CoreV1().Pods(e2eNamespace).Delete(context.WithoutCancel(t.Context()), p.Name, metav1.DeleteOptions{GracePeriodSeconds: new(int64(0))})
+	})
+
+	reader := agentOnWorker(t, kube)
+	err = wait.PollUntilContextTimeout(t.Context(), 2*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+		logs, err := kube.CoreV1().Pods(e2eReporter).GetLogs(reader, &corev1.PodLogOptions{Container: "log-reader"}).DoRaw(ctx)
+		return err == nil && strings.Contains(string(logs), kernlog.ErrDuplicate.Error()), nil
+	})
+	require.NoError(t, err, "the log reader refused no line with a key twice; the hog: %s", hogLogs(t, kube, p))
+	for _, l := range reportLines(t.Context(), t, kube) {
+		require.NotEqual(t, string(p.UID), l.Pod, "a line for the pod that forged one")
+		require.NotEqual(t, "ffffffff-ffff-ffff-ffff-ffffffffffff", l.Pod, "a line for the pod it named")
+	}
+}
+
+// agentOnWorker is the name of the agent's pod on the worker.
+func agentOnWorker(t *testing.T, kube kubernetes.Interface) string {
+	t.Helper()
+	pods, err := kube.CoreV1().Pods(e2eReporter).List(t.Context(), metav1.ListOptions{
+		LabelSelector: "app.kubernetes.io/component=agent",
+		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", e2eWorker).String(),
+	})
+	require.NoError(t, err)
+	require.Len(t, pods.Items, 1)
+	return pods.Items[0].Name
+}
+
+func hogLogs(t *testing.T, kube kubernetes.Interface, p *corev1.Pod) string {
+	logs, err := kube.CoreV1().Pods(p.Namespace).GetLogs(p.Name, &corev1.PodLogOptions{Container: "hog"}).DoRaw(context.WithoutCancel(t.Context()))
+	if err != nil {
+		return err.Error()
+	}
+	return string(logs)
 }

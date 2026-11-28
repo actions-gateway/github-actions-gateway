@@ -22,6 +22,10 @@ spec:
         {{- include "oom-reporter.selectorLabels" (list . "agent") | nindent 8 }}
     spec:
       serviceAccountName: {{ include "oom-reporter.agentName" . }}
+      {{- if .Values.kernelLog.enabled }}
+      # The token goes to the agent's container alone, by the volume below.
+      automountServiceAccountToken: false
+      {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -41,6 +45,9 @@ spec:
         - agent
         - -cgroup-mount=/host/sys/fs/cgroup
         - -pods-root={{ .Values.agent.podsRoot }}
+        {{- if .Values.kernelLog.enabled }}
+        - -log-socket=/run/oom-reporter/log.sock
+        {{- end }}
         env:
         - name: NODE_NAME
           valueFrom:
@@ -61,11 +68,67 @@ spec:
         - name: cgroup
           mountPath: /host/sys/fs/cgroup
           readOnly: true
+        {{- if .Values.kernelLog.enabled }}
+        - name: token
+          mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          readOnly: true
+        - name: log-socket
+          mountPath: /run/oom-reporter
+        {{- end }}
+      {{- if .Values.kernelLog.enabled }}
+      # The node's uid 0 with CAP_SYSLOG and no other capability, no token and no hostPath. It
+      # hands the agent numbers over the socket and nothing else.
+      - name: log-reader
+        image: {{ include "oom-reporter.image" . }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        command: ["/oomreporter"]
+        args:
+        - logreader
+        - -socket=/run/oom-reporter/log.sock
+        - -pods-root={{ .Values.agent.podsRoot }}
+        securityContext:
+          runAsNonRoot: false
+          runAsUser: 0
+          runAsGroup: 0
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+            add: ["SYSLOG"]
+        resources:
+          {{- toYaml .Values.kernelLog.resources | nindent 10 }}
+        volumeMounts:
+        - name: log-socket
+          mountPath: /run/oom-reporter
+      {{- end }}
       volumes:
       - name: cgroup
         hostPath:
           path: /sys/fs/cgroup
           type: Directory
+      {{- if .Values.kernelLog.enabled }}
+      - name: log-socket
+        emptyDir:
+          medium: Memory
+          sizeLimit: 1Mi
+      # What the kubelet mounts by default, for the agent's container alone.
+      - name: token
+        projected:
+          sources:
+          - serviceAccountToken:
+              path: token
+              expirationSeconds: 3607
+          - configMap:
+              name: kube-root-ca.crt
+              items:
+              - key: ca.crt
+                path: ca.crt
+          - downwardAPI:
+              items:
+              - path: namespace
+                fieldRef:
+                  fieldPath: metadata.namespace
+      {{- end }}
       nodeSelector:
         {{- toYaml (merge (dict "kubernetes.io/os" "linux") (default dict .Values.agent.nodeSelector)) | nindent 8 }}
       {{- with .Values.agent.tolerations }}

@@ -2,6 +2,8 @@
 #
 # oomreporter-e2e.sh — the oom-reporter's kind e2e lane: one kill at each limit, and the
 # condition and the Event the reporter writes for it (Q1403).
+# The chart's kernelLog option is on: each kill's line reaches the agent's report, and a line a
+# job forged is refused.
 #
 # Makes its own kind cluster, a control plane and one worker, so that nothing else's pods
 # share the worker's limits. The worker reserves all but 1 GiB of the host's memory for the
@@ -105,11 +107,12 @@ helm install oom-reporter charts/oom-reporter --kubeconfig "$KUBECONFIG_FILE" \
   --set allowFloatingImageTags=true \
   --set image.repository="${REPORTER_IMAGE%%:*}" --set image.tag="${REPORTER_IMAGE##*:}" \
   --set agent.podsRoot=kubelet.slice/kubelet-kubepods.slice \
+  --set kernelLog.enabled=true \
   --set 'controller.tolerations[0].key=node-role.kubernetes.io/control-plane' \
   --set 'controller.tolerations[0].operator=Exists' \
   --set 'controller.tolerations[0].effect=NoSchedule'
 
 step "the kills"
 (cd cmd/oomreporter && OOM_E2E_KUBECONFIG="$KUBECONFIG_FILE" OOM_E2E_WORKER="${CLUSTER}-worker" \
-  OOM_E2E_NAMESPACE="$TENANT_NS" OOM_E2E_HOG_IMAGE="docker.io/library/${HOG_IMAGE}" \
+  OOM_E2E_NAMESPACE="$TENANT_NS" OOM_E2E_RELEASE_NAMESPACE="$RELEASE_NS" OOM_E2E_HOG_IMAGE="docker.io/library/${HOG_IMAGE}" \
   go test -tags e2e -run '^TestE2E_' -count=1 -timeout 20m -v .)

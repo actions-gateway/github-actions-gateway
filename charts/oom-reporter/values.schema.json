@@ -40,6 +40,15 @@
       },
       "required": ["podsRoot"]
     },
+    "kernelLog": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "resources": { "type": "object" }
+      },
+      "required": ["enabled"]
+    },
     "controller": {
       "type": "object",
       "additionalProperties": false,
