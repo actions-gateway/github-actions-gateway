@@ -2742,9 +2742,9 @@ Not one comment in the tree uses the <code>TODO(QNNN):</code> form.</p>
 <p>Two pieces, separable.</p>
 <p><strong>Burning down what exists.</strong> The dead backlog IDs are the mechanical half: an ID cited outside a <code>TODO</code> can be dropped where the sentence stands without it.
 The long blocks are not mechanical, because most hold real design rationale that has no other copy.
-Each needs its content moved to <code>docs/design/</code> before the comment shrinks, starting with the longest: <code>Admit</code> in <code>cmd/agc/internal/provisioner/admission.go</code> (98 lines) and the script headers over 70 lines under <code>scripts/</code>.
+Each needs its content moved to <code>docs/design/</code> before the comment shrinks, starting with the script headers over 70 lines under <code>scripts/</code>.
 A sweep per package, in its own PR, keeps each reviewable; the gate then holds every line the sweep rewrites.
-One comment to fix on the way: the header of <code>scripts/docs/check-no-plan-refs-in-code.sh</code> still recommends citing a Q-ID in a comment.</p>
+<code>cmd/agc/internal/provisioner/admission.go</code> is the worked example: its rationale sits in step 2a of <a href="../../design/04-operational-flows/#42-job-execution-flow-agc">04-operational-flows.md § 4.2. Job Execution Flow (AGC)</a>, and the doc comments keep the contract and a pointer.</p>
 <p><strong>A length cap, which the gate does not have.</strong> The page's limits are per kind of comment (two lines for an implementation comment, the contract for a doc comment, ten lines for a file header), so a cap has to know the kind, and outside Go nothing in the syntax says it.
 Measured over the 300 commits ending at <code>a79628a59</code>, which added 3,648 whole-line comment blocks: of the 116 shell blocks of four lines or more, 32 open a file and 25 sit above a function, and the other 59 sit above a statement, where a comment documenting the case below and one narrating it look the same.
 Workflow and manifest YAML is the same, 45 of 65.

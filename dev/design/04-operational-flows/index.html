@@ -3582,6 +3582,19 @@ All three were classic-only, which the <code>v2.0.0</code> removal of classic ac
    The rate rung reserves nothing either but <em>takes</em> its token, which is what lets it bind on a simultaneously-delivered burst where an observation could not: every listener would read the same free token and claim anyway.
    It comes last, behind the ceiling, so no rung refuses a job the bucket has already charged, and so the reason reported is the one that will not clear on its own.</li>
 </ol>
+<p><strong>Why the rate rung is last.</strong> A rung that refused a job the bucket had already charged would have to hand the token back on the refusal path, and the ladder has no such path.
+   Run the other way round, a set sitting at its ceiling under continued delivery spends a token per refusal and pins the bucket at zero.
+   <code>maxPerSecond</code> then stops being the ramp rate and becomes a function of delivery churn, and a freed ceiling slot cannot be filled until a refill wins against that churn.
+   Every refusal past the burst also reports <code>reason="scaleup"</code> for a set whose real limit is <code>maxWorkers</code>, which sends an operator to raise <code>maxPerSecond</code> and feed the churn faster.
+   The order puts the reasons in priority as well: a ceiling refusal needs someone to act, and a rate refusal clears itself.</p>
+<p><strong>What that order costs.</strong> A job reserves its ceiling slot before the rate rung refuses it, so inside that window a concurrent delivery can read an inflated count and be told <code>ceiling</code> while the set is really ramp-limited.
+   The mislabel is transient and corrects itself within the same call, spends no token and no throughput, and cannot over-admit: the gate refuses at <code>reserved &gt;= limit</code>, so the reserve-then-release churn inflates the count only within the ceiling.
+   It needs ceiling-many admissions inside one sub-microsecond window, so it concentrates on a small <code>maxWorkers</code> with many listeners.
+   That is a direction and not a threshold, and no incidence figure is given: one configuration measured anywhere from 0 to 20 occurrences in 20 repetitions across runs on one machine.
+   The obvious repair, a non-binding read of the bucket ahead of the ceiling, was measured and rejected.
+   It removes the transient and makes a set bound by both rungs report <code>scaleup</code> on every delivery while it sits at its ceiling with an empty bucket, which trades a rare transient mislabel for a common systematic one.</p>
+<p><strong>What the quota rung replaces.</strong> Without it, quota exhaustion is handled one layer down by the provisioner's quota-retry loop, which holds the GitHub job lock across <code>maxQuotaRetries</code> × <code>quotaRetryDelay</code> (150s of a roughly 10-minute lock at the defaults) and drops the job with the lock held once that budget runs out.
+   Refusing to claim leaves the job queued at GitHub for a sibling with capacity.</p>
 <p><strong>Why an admitted job can hand its token back (Q972).</strong> The token buys a worker pod, so a delivery that returns before asking for one gives it back when it releases its slot: a failed <code>acquirejob</code>, and above all a duplicate delivery whose <code>planID</code> a sibling has already claimed (Q260).
    Without the refund a job fanned out to N sibling sessions charges N tokens for the one pod its dedup winner creates, so the effective ramp is <code>maxPerSecond / N</code> under exactly the burst <code>spec.scaleUp</code> exists to smooth.
    The refund stops at pod creation and never fires on job <em>completion</em>: returning a token when a worker finishes would make the bucket a second concurrency ceiling rather than a rate limit.</p>
@@ -3698,7 +3711,9 @@ GitHub then holds <code>totalAssignedJobs</code> at or below that value, so the 
 <p>Because every rung can only <em>lower</em> the number, a rung that cannot read what it needs (no quota, an unreadable quota, an unresolved template) contributes no bound and the set advertises its declared ceiling — exactly the behavior that predates this rung.
 The provisioner's post-create ceiling check and quota-retry loop remain the backstops for the races an advertised integer cannot close (a sibling AGC, a stale <code>.status.used</code>).</p>
 <p><strong>What an operator sees.</strong> <code>actions_gateway_scaleset_advertised_capacity</code> is the number most recently advertised, and <code>actions_gateway_scaleset_capacity_withheld{reason}</code> attributes the gap to the rung that took it (<code>quota</code>, <code>capacity</code>, <code>scaleup</code>).
-The per-job <code>actions_gateway_jobs_admission_rejected_total</code> is structurally unreachable on this tier — there is no rejected job to count — so these two gauges are its counterpart, alongside the <code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code> and <code>WorkerCapacityDeclined</code> conditions the set publishes.</p>
+The per-job <code>actions_gateway_jobs_admission_rejected_total</code> is structurally unreachable on this tier — there is no rejected job to count — so these two gauges are its counterpart, alongside the <code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code> and <code>WorkerCapacityDeclined</code> conditions the set publishes.
+The rate rung does not increment <code>actions_gateway_worker_scaleup_throttled_total</code> when it lowers the advertisement, for the same reason: a counter ticking once per long-poll would measure the poll interval and not the throttling, and would not compare with the per-job count the classic tier keeps under that name.
+On this tier the counter records a pod creation that had to wait for a token, which means the advertisement was stale.</p>
 <hr />
 <h2 id="43-failure-paths">4.3. Failure Paths<a class="headerlink" href="#43-failure-paths" title="Permanent link">&para;</a></h2>
 <p>The happy-path flows above are sufficient for most operations.
