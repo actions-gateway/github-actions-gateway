@@ -104,18 +104,26 @@ func (s *startWaitState) deadline(set string, pod *corev1.Pod, now time.Time) ti
 
 // HoldUnclaimedOOM reports whether the reaper must keep pod, a terminal worker of target
 // whose out-of-memory kill has not been claimed, until when, and when a reconcile should
-// look at it again.
+// look at it again. A kill that waits for its runner's reason is held whether or not the
+// class may retry it, since the reason changes the text of one it may not.
 func (p *Provisioner) HoldUnclaimedOOM(target Target, pod *corev1.Pod, now time.Time) (until, look time.Time, hold bool) {
+	reasonDeadline, awaitingReason := p.awaitingOOMReason(pod, now)
 	if !oomRetryable(pod) {
-		return time.Time{}, time.Time{}, false
+		if !awaitingReason {
+			return time.Time{}, time.Time{}, false
+		}
+		return reasonDeadline.Add(startWaitSlack), reasonDeadline, true
 	}
 	deadline := p.startWaits.deadline(target.Key().String(), pod, now)
 	if until = deadline.Add(startWaitSlack); !now.Before(until) {
 		return time.Time{}, time.Time{}, false
 	}
 	look = now.Add(startWaitRetry)
-	if oomAwaitingStart(pod) && deadline.After(look) {
+	switch {
+	case oomAwaitingStart(pod) && deadline.After(look):
 		look = deadline
+	case awaitingReason && reasonDeadline.Before(look):
+		look = reasonDeadline
 	}
 	return until, look, true
 }
@@ -150,18 +158,19 @@ func (p *Provisioner) awaitStart(ctx context.Context, target Target, pod *corev1
 }
 
 // SettleDeletedKill settles pod, a deleted worker of target whose out-of-memory kill is
-// unclaimed: one whose start is recorded is recovered, and one still waiting is reported,
-// since nothing is left for the start to be stamped on. The returned channel closes when
-// the recovery finishes.
+// unclaimed: one whose start is recorded is recovered without its reason, and one still
+// waiting for its start is reported, since nothing is left for either to be written on.
+// The returned channel closes when the recovery finishes.
 func (p *Provisioner) SettleDeletedKill(ctx context.Context, target Target, pod *corev1.Pod) (<-chan struct{}, error) {
-	if pod.Labels[LabelAcquisitionProtocol] != AcquisitionProtocolScaleSet || !oomRetryable(pod) {
+	_, awaitingReason := p.awaitingOOMReason(pod, p.nowFn())
+	if pod.Labels[LabelAcquisitionProtocol] != AcquisitionProtocolScaleSet || !oomRetryable(pod) && !awaitingReason {
 		return closedChan(), nil
 	}
 	if oomAwaitingStart(pod) {
 		p.reportUnstartedKill(ctx, target, pod, p.logForKey(target.Key()).With("podName", pod.Name))
 		return closedChan(), nil
 	}
-	return p.RecoverDisruptedScaleSetWorker(ctx, target, pod)
+	return p.recoverScaleSetWorker(ctx, target, pod, true)
 }
 
 // reportUnstartedKill claims pod's kill for no job and reports that the job it was running

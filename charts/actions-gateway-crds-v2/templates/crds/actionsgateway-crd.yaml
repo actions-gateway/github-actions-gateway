@@ -684,6 +684,34 @@ spec:
                 - info
                 - debug
                 type: string
+              oomKillReasons:
+                default: Record
+                description: |-
+                  OOMKillReasons selects what this tenant's AGC does with the reason an
+                  out-of-memory reporter writes on a worker pod whose runner was killed for
+                  memory: a pod condition of type oom.actions-gateway.com/<container>, whose
+                  reason names the limit that ran out. The reporter is its own chart, which
+                  the gateway's does not install.
+
+                  Record (the default) repeats the reason in the failed job's record and its
+                  PlatformFaultOnFailedJob Event and changes nothing the AGC does. Act also
+                  waits up to 30 seconds after the pod ends for the runner's reason, then
+                  acts on it: where the limit that ran out was the pod's (PodLimit) or above
+                  the pod (PodsLimit, AbovePods), no limit is raised and no automatic re-run
+                  is requested, and an EvictionRerunWithheld Event with reason
+                  above_container says which ran out. ContainerLimit is retried as without
+                  it, and its Event names the limit. Unknown, a reason read from the kernel
+                  log alone, or none in time leaves the AGC acting as under Record.
+
+                  Set Act only where the reporter is installed and trusted: whoever can
+                  write a pod's status can write the condition, and under Act a forged
+                  reason above the container withholds a re-run the job would otherwise get.
+
+                  Changing it is a rolling restart of the AGC.
+                enum:
+                - Record
+                - Act
+                type: string
               proxyFailureAttribution:
                 default: Disabled
                 description: |-

@@ -29,11 +29,11 @@ import (
 // in the ledger until the run concludes (pending_rerun.go). The operator-facing account
 // is docs/design/04-operational-flows.md §4.2.
 //
-// No arm knows whether the runner reached its own limit: a kill at kubepods.slice's limit
-// left the same status (kubelet v1.35.8-gke.1796000, kernel 6.8.0-1064-gke, 2026-11-25),
-// one made by a full node or a pod's limit is expected to, and nothing else the AGC can
-// read separates the two. So every arm acts on the limit the next attempt would get, and
-// no text it writes names the cause (oomKillFacts).
+// The kill's status does not say whether the runner reached its own limit: a kill at
+// kubepods.slice's limit left the same status (kubelet v1.35.8-gke.1796000, kernel
+// 6.8.0-1064-gke, 2026-11-25). Only a reporter's reason separates the two, and only where
+// the gateway acts on one (oom_reason_wait.go); otherwise every arm acts on the limit the
+// next attempt would get, and no text it writes names the cause (oomKillFacts).
 //
 // Only a kill of the runner container is recognised. It is the one that ends the job
 // on the pod's terminal transition; a sidecar killed for memory leaves the runner to
@@ -43,6 +43,9 @@ import (
 const (
 	rerunWithheldReasonSameClassAgain = "same_class_again"
 	rerunWithheldReasonBreakerOpen    = "breaker_open"
+	// rerunWithheldReasonAboveContainer is a kill whose reason names a limit above the
+	// runner's own.
+	rerunWithheldReasonAboveContainer = "above_container"
 )
 
 // containerReasonOOMKilled is the termination reason the kubelet reports for a
@@ -104,13 +107,26 @@ func containerMemory(pod *corev1.Pod, name string) (request, limit resource.Quan
 // a Burstable container's chance of a node-wide kill by its request (qos/policy.go,
 // v1.35.5), and a SystemOOM Event is on the node.
 func oomKillFacts(pod *corev1.Pod) string {
+	return oomKillFactsSaying(pod, "")
+}
+
+// oomKillFactsSaying is oomKillFacts with what a reporter's reason says in place of the
+// cause it cannot name, where the reason has words.
+func oomKillFactsSaying(pod *corev1.Pod, reason string) string {
 	request, limit := containerMemory(pod, runnerContainer)
 	asked := "no memory request"
 	if !request.IsZero() {
 		asked = "a memory request of " + request.String()
 	}
-	return fmt.Sprintf("killed for memory on node %s, with %s and a limit of %s; its termination reason does not say whether it reached that limit or memory ran out above it, as on a full node",
-		pod.Spec.NodeName, asked, limit.String())
+	limited := "no memory limit"
+	if !limit.IsZero() {
+		limited = "a limit of " + limit.String()
+	}
+	cause := "its termination reason does not say whether it reached that limit or memory ran out above it, as on a full node"
+	if words := oomReasonWords[reason]; reason != "" && words != "" {
+		cause = "a pod condition says " + words
+	}
+	return fmt.Sprintf("killed for memory on node %s, with %s and %s; %s", pod.Spec.NodeName, asked, limited, cause)
 }
 
 // nextMemoryLimit is the limit a retry gives the killed container: killed ×
@@ -179,6 +195,13 @@ func podLevelMemoryRoom(spec *corev1.PodSpec, container string, requestsFollow b
 // withholds a kill the next attempt would repeat, records the raised limit for the
 // job's next attempt, and hands the re-run to the disruption arms' path.
 func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec *ResolvedSpec, pod *corev1.Pod, owner, repo, runID string, log *slog.Logger) <-chan struct{} {
+	reason := p.oomReasonToActOn(pod)
+	facts := fmt.Sprintf("worker pod %s for run %s had its runner %s", pod.Name, runID, oomKillFactsSaying(pod, reason))
+	// Ahead of the breaker, which counts only a re-run.
+	if advice, above := aboveContainerAdvice(reason); above {
+		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonAboveContainer, facts+". "+advice)
+		return closedChan()
+	}
 	job := pod.Annotations[annotationJobName]
 	_, killed := containerMemory(pod, runnerContainer)
 	switch {
@@ -191,7 +214,6 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 			"runID", runID)
 		return closedChan()
 	}
-	facts := fmt.Sprintf("worker pod %s for run %s had its runner %s", pod.Name, runID, oomKillFacts(pod))
 	if spec.MemoryRetry == nil || pod.Annotations[AnnotationSizingProfile] == "" {
 		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonOwnLimit, facts+". No automatic re-run was requested, because the set's sizing profile did not derive that limit from history and a re-run may get the same one. If the runner reached it, raise it, or use the Binpack or Throughput sizing profile, which derives one once it has samples; then, in either case, re-run it by hand")
 		return closedChan()

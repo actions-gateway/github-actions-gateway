@@ -1025,6 +1025,9 @@ func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 		},
 		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 			if r.addOOMReasons(e) {
+				if r.Provisioner != nil && r.Provisioner.OOMReasonEndsWait(e.ObjectNew.(*corev1.Pod)) {
+					r.recoverDisruptedWorkerPod(ctx, e.ObjectNew)
+				}
 				return
 			}
 			r.snapshotWorkerPod(ctx, e.ObjectNew, false)
@@ -1041,7 +1044,8 @@ func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 }
 
 // addOOMReasons hands an update that passed only for a reporter's condition to the
-// provisioner's snapshot store, and reports whether e was one.
+// provisioner's snapshot store, and reports whether e was one. Such an update queues no
+// reconcile, and starts a recovery only where the kill was waiting for its reason.
 func (r *RunnerSetReconciler) addOOMReasons(e event.UpdateEvent) bool {
 	oldPod, ok1 := e.ObjectOld.(*corev1.Pod)
 	newPod, ok2 := e.ObjectNew.(*corev1.Pod)

@@ -96,7 +96,7 @@ Two badges appear below. <span class="gag-v2-badge">v2</span> marks a capability
 - **[Egress attribution readiness](operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job)** <span class="gag-v2-badge">v2</span>: an `EgressAuditUnattributed` condition and gauge, on each gateway and each `RunnerSet`, say whether both halves of that attribution are on, and name the half that is not.
   Advisory: it never gates `Ready`.
 - **[Which memory limit killed a container](operations/oom-reporter.md)**: a chart of its own.
-  A condition and an Event on the pod name the limit that ran out: the container's, the pod's, the one all pods share, or one above them.
+  A condition and an Event on the pod name the limit that ran out, and, opt-in, the AGC [raises no limit](operations/oom-reporter.md#what-the-gateway-does-with-it) after a kill above the runner's.
 - **[Logging and tracing](operations/observability-logging.md)**: structured logs and OpenTelemetry tracing across the four tiers.
   Name a collector and its private CA in `spec.tracing` and the AGC exports over TLS, through an egress rule worker pods never get.
 - **[Per-pool egress audit record](operations/observability-logging.md#proxy-egress-audit-record)** <span class="gag-v2-badge">v2</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.

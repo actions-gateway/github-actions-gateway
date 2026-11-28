@@ -38,6 +38,31 @@ kubectl get events -n <namespace> --field-selector involvedObject.name=<pod>
 
 A pod that is deleted takes its condition with it, and an Event expires after an hour by default.
 
+## What the gateway does with it
+
+A failed job's `PlatformFaultOnFailedJob` Event and its record repeat a worker's reason, whatever the gateway is set to.
+Acting on it is a setting on the `ActionsGateway`, off by default:
+
+```bash
+kubectl patch actionsgateway <name> -n <namespace> \
+  --type merge -p '{"spec":{"oomKillReasons":"Act"}}'
+```
+
+Under `Act`, a runner killed for memory waits up to 30 seconds after its pod ends for the runner's condition, and then:
+
+| Reason | What the AGC does |
+|---|---|
+| `ContainerLimit` | What it does with no reporter: [raises the limit and re-runs](worker-rightsizing.md#when-a-job-runs-out-of-memory), or withholds; its Events now say the container's limit ran out |
+| `PodLimit` | Raises nothing and re-runs nothing. A Normal `EvictionRerunWithheld` Event says the pod's limit ran out, and to raise it in the RunnerTemplate |
+| `PodsLimit`, `AbovePods` | Raises nothing and re-runs nothing, and the kill does not count toward the retry pause. The Event says memory ran out above the pod; re-run the job by hand |
+| `Unknown`, or no condition in 30 seconds | What it does with no reporter |
+
+The two withholds count in `actions_gateway_eviction_rerun_withheld_total{cause="oom", reason="above_container"}`.
+Changing the setting restarts the AGC.
+
+Set `Act` only where this chart is installed and you trust who can write pod status in the tenant's namespace.
+Anyone who can write a pod's status can write the condition, and under `Act` a false `PodsLimit` withholds a re-run the job would have had; it cannot get a job a raise it would not have had.
+
 ## Installing it
 
 The [chart's README](https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/oom-reporter/README.md) has the install command, the values, and what an install that fails partway leaves.

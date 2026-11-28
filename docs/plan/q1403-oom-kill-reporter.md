@@ -1,7 +1,8 @@
 # A node reporter for out-of-memory kills: Q1403
 
-> **Status (2026-11-26): decided, D1 to D6 each as recommended.
-> [PRs 1 to 6](#build-size) are built: the reader and the rule, the two programs, the chart, the image, and the AGC's record; the operator's page, GKE's readings, and PR 5's kind e2e lane, which runs both programs from the chart and holds a kill at each of four limits to its condition and Event.**
+> **Status (2026-11-27): decided, D1 to D6 each as recommended.
+> [PRs 1 to 7](#build-size) are built: the reader and the rule, the two programs, the chart, the image, and the AGC's record and its action; the operator's page, GKE's readings, and PR 5's kind e2e lane, which runs both programs from the chart and holds a kill at each of four limits to its condition and Event.
+> PR 7 has unit tests and an envtest, and no e2e of its own.**
 
 A container killed for memory reads `OOMKilled` with exit code 137 whichever limit ran out: its own, its pod's, the one all pods share, or the node's memory.
 The AGC therefore names no cause (Q1400), and neither does anything else in the Kubernetes API that a tenant's operator can read on the pod.
@@ -476,7 +477,7 @@ That changes no action, and needs no setting within these limits, each with a te
 The record's JSON holds the type and reason of every condition its snapshot saw, as written (read, `snapshotOf`), in a log line and the ledger; of them only `DisruptionTarget`'s reason reaches an Event (read, `faultsBy`).
 Two losses stay: an AGC restart drops a snapshot whose job has not concluded, and a condition that comes after the completion is not recorded.
 
-For acting on it, a setting, off by default, says that a reporter is installed.
+For acting on it, a setting, off by default, says that a reporter is installed: `ActionsGateway.spec.oomKillReasons: Act`, beside the default `Record`.
 It bounds the wait below and is required for any change of action, so a cluster that happens to carry one changes what a record says and nothing the AGC does.
 
 ### Timing
@@ -670,7 +671,7 @@ PRs 1 to 6 are Q1403, which gates 2.1; the three that do not gate it have rows o
 | 4 | Image and publish: a `Dockerfile` stage, `docker-bake.hcl`, the `publish.yml` matrix (seven images become eight), SBOM, Trivy, `verify-release.sh` and the docs that count seven | M | The tool, outside a source build |
 | 5 | kind e2e: one kill per reason, the condition and the Event; the operator's page | M | The tool, trusted |
 | 6 | AGC, the record: the edge, and the reason in the failed job's record and Event, with a test for each of [its limits](#reading-it) | S | The answer outliving the worker |
-| 7 | ([Q1406](../queue/Q1406.md)) AGC, the action: the setting through the GMC, the wait, text by reason, no raise and no re-run above the container; its e2e and docs | M | D3 |
+| 7 | (Q1406, built) AGC, the action: the setting through the GMC, the wait, text by reason, no raise and no re-run above the container; its e2e and docs | M | D3 |
 | 8 | ([Q1408](../queue/Q1408.md)) The re-run class | M, and a dogfood run | After 2.1 |
 | 9 | ([Q1407](../queue/Q1407.md)) The kernel-log option: the second container and its chart value, the parser and its fixtures, the two-witness table in the controller, its words in PR 6's record, an e2e lane with it on (reading 10) and its part of the operator's page | L | D1's option |
 

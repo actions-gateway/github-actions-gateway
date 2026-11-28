@@ -3058,7 +3058,7 @@ It is covered in [Worker Pod Reaped While Pending](#worker-pod-reaped-while-pend
   No slot is spent: `eviction_rerun_withheld_total{cause="eviction", reason="own_limit"}` increments, and a Normal `EvictionRerunWithheld` Event quotes the kubelet's message.
   Raise the limit, or reduce what the job writes, then re-run it by hand (Q1177).
 - **A runner killed for memory that a re-run would repeat.** Without a `Binpack` or `Throughput` profile, at the profile's memory ceiling, or a second kill after a retry already raised the job's limit, a re-run may get the limit the killed runner had.
-  No slot is spent: `eviction_rerun_withheld_total{cause="oom"}` increments with `reason="own_limit"` or `"same_class_again"`, and a Normal `EvictionRerunWithheld` Event says what to do (Q1183).
+  No slot is spent: `eviction_rerun_withheld_total{cause="oom"}` increments with `reason="own_limit"`, `"same_class_again"`, or, under `oomKillReasons: Act`, `"above_container"` where the pod's condition names a limit above the runner's, and a Normal `EvictionRerunWithheld` Event says what to do (Q1183, Q1406).
   Where the node ran out rather than the job, re-running it by hand may be all it needs; [which limit ran out](worker-rightsizing.md#which-limit-ran-out) says how to tell.
 - **A cancelled run.** A cancel is the intended stop — it is the supported way to end a job without triggering recovery (delete the worker pod instead and the job *is* re-run; see [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod)).
 - **A node that goes `NotReady` and keeps its Node object, untainted.** The taint manager stamps `DeletionByTaintManager` and deletes the worker gracefully without failing it, and the kubelet cannot finish that delete while the node stays unreachable, so the pod stays `Running` and no arm fires.
@@ -3148,6 +3148,7 @@ kubectl get configmap -n <namespace> scaleset-failures-<runnerset> -o jsonpath='
 At its own limit, the job needs more memory than the worker template gives it.
 Where the Warning goes on `(a pod condition says …)`, a condition of type `oom.actions-gateway.com/runner` on the pod named the limit.
 It is the out-of-memory reporter's (Q1403), which is not released yet, and the AGC repeats what it names and checks nothing: whoever can write `pods/status` in the namespace could have written it.
+Under `ActionsGateway.spec.oomKillReasons: Act` the AGC also acts on it, and a limit above the runner's gets no raise and no re-run ([what it does](oom-reporter.md#what-the-gateway-does-with-it)).
 Without one, nothing GAG reads separates the two ([how to tell](worker-rightsizing.md#which-limit-ran-out)).
 On a sidecar it means the sidecar was killed with that reason, usually for its own memory limit.
 A sidecar killed while the runner works on is restarted, and a kill before a restart is recorded with no limit named.

@@ -144,6 +144,12 @@ func (p *Provisioner) RecoverEvictedScaleSetWorkers(ctx context.Context, target 
 // claim arbitrates against the scan and against other replicas exactly as it does for
 // the scan, so a pod both paths see is recovered once.
 func (p *Provisioner) RecoverDisruptedScaleSetWorker(ctx context.Context, target Target, pod *corev1.Pod) (<-chan struct{}, error) {
+	return p.recoverScaleSetWorker(ctx, target, pod, false)
+}
+
+// recoverScaleSetWorker is RecoverDisruptedScaleSetWorker for a pod that is gone or not.
+// A gone pod's kill waits for no reason, since none can be written on it now.
+func (p *Provisioner) recoverScaleSetWorker(ctx context.Context, target Target, pod *corev1.Pod, gone bool) (<-chan struct{}, error) {
 	if pod.Labels[LabelAcquisitionProtocol] != AcquisitionProtocolScaleSet {
 		return closedChan(), nil
 	}
@@ -152,6 +158,7 @@ func (p *Provisioner) RecoverDisruptedScaleSetWorker(ctx context.Context, target
 	if !ok {
 		return closedChan(), nil
 	}
+	d.gone = gone
 	spec, err := target.Resolve(ctx)
 	if err != nil {
 		return closedChan(), fmt.Errorf("provisioner: resolve provisioning spec for eviction recovery: %w", err)
@@ -169,6 +176,8 @@ type disruptedScaleSetWorker struct {
 	// rerun-failed-jobs: it never ran its job, so the run has to be concluded before
 	// a re-run is legal (Q766, abandoned_scaleset.go).
 	abandoned bool
+	// gone is a pod the API no longer has.
+	gone bool
 }
 
 // judgeScaleSetDisruption classifies one unclaimed scale-set worker pod against the
@@ -210,6 +219,10 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 		if pod = p.awaitStart(ctx, target, pod, podLog); pod == nil {
 			return closedChan()
 		}
+	}
+	if _, waiting := p.awaitingOOMReason(pod, p.nowFn()); cause == recoveryCauseOOM && waiting && !d.gone {
+		podLog.Debug("runner was killed for memory and no reporter's reason for it has come yet; waiting for one")
+		return closedChan()
 	}
 
 	// Claim before calling GitHub, and off the pod: the claim outlives the pod the
