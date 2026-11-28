@@ -25,8 +25,8 @@ No pill means no release is decided for that item yet.
 
 
 - **[Flaky-job detection, and acting on which memory limit killed a runner](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q1408 --> A job the cluster disrupts already [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do); a flaky failure does not.
-  Detection counts flaky jobs per runner set, and a [node reporter](operations/oom-reporter.md) names which memory limit killed a runner, which the AGC can act on.
-  Next, a job killed at the limit all pods share, with no cause of its tenant's, is re-run.
+  Detection counts flaky jobs per runner set, and a [node reporter](operations/oom-reporter.md) names which memory limit killed a runner.
+  Next, a job killed at the limit all pods share, through no fault of its tenant, is re-run.
 
 
 ## Exploring / longer-term
