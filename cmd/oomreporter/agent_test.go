@@ -19,6 +19,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
+	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/cgroup"
+	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/logreader"
 	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/report"
 )
 
@@ -103,7 +105,7 @@ func TestAgent_ReportsAKillAgainUntilTheReportIsThere(t *testing.T) {
 			assert.Equal(t, "/api/v1/namespaces/oom/configmaps/oom-report-node-a", req.path)
 			assert.Equal(t, "oom-report-node-a", req.body.Name)
 			assert.Empty(t, req.body.ResourceVersion, "it may not read the one there")
-			kills, err := report.Decode(req.body.Data[report.Key])
+			kills, _, err := report.Decode(req.body.Data[report.Key])
 			require.NoError(t, err)
 			return kills
 		case <-time.After(20 * time.Second):
@@ -127,6 +129,39 @@ func TestAgent_ReportsAKillAgainUntilTheReportIsThere(t *testing.T) {
 	assert.Equal(t, []string{runnerID}, second[1].Rise.Containers)
 	stop()
 	require.NoError(t, <-done)
+}
+
+func TestAgent_ReportsTheLinesTheLogReaderSends(t *testing.T) {
+	dir, _ := mount(t)
+	kube, got := server(t, 0)
+	sock, err := os.MkdirTemp("", "oom")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(sock) })
+	sock = filepath.Join(sock, "s")
+	o := agentOptions{node: "node-a", namespace: "oom", mount: dir, poll: 10 * time.Millisecond, mountinfo: info(t, "rw,nsdelegate"), socket: sock}
+	ctx, stop := context.WithCancel(t.Context())
+	done := make(chan error)
+	go func() { done <- o.run(ctx, kube, noLog) }()
+	line := report.Line{Pod: podUID, Container: runnerID, Level: cgroup.InPod, At: 1}
+	s := &logreader.Sender{Path: sock}
+	require.Eventually(t, func() bool { return s.Send(line) == nil }, 20*time.Second, 10*time.Millisecond)
+	timeout := time.After(20 * time.Second)
+	for {
+		select {
+		case req := <-got:
+			_, lines, err := report.Decode(req.body.Data[report.Key])
+			require.NoError(t, err)
+			if len(lines) == 0 {
+				continue
+			}
+			assert.Equal(t, []report.Line{line}, lines)
+			stop()
+			require.NoError(t, <-done)
+			return
+		case <-timeout:
+			t.Fatal("no report of the line")
+		}
+	}
 }
 
 func TestAgent_RefusesANodeItCannotCountOn(t *testing.T) {
@@ -161,4 +196,21 @@ func TestAgent_StopsWhereTheCgroupsGo(t *testing.T) {
 	case <-time.After(20 * time.Second):
 		t.Fatal("it goes on")
 	}
+}
+
+func TestTakeLines_WritesEachNewLine(t *testing.T) {
+	lines := make(chan report.Line)
+	var got [][]report.Line
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() { defer close(done); takeLines(ctx, lines, func(l []report.Line) { got = append(got, l) }) }()
+	a := report.Line{Pod: "1b4e28ba-2fa1-11d2-883f-0016d3cca427", Container: strings.Repeat("a", 64), Level: cgroup.PodLevel, At: 1}
+	b := a
+	b.At = 2
+	lines <- a
+	lines <- a
+	lines <- b
+	cancel()
+	<-done
+	assert.Equal(t, [][]report.Line{{a}, {a, b}}, got)
 }

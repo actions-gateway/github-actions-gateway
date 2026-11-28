@@ -61,3 +61,23 @@ func (l *Log) drop() {
 		}
 	}
 }
+
+// Lines is the kernel log's kills of a node's report, the oldest first.
+type Lines struct {
+	lines []Line
+}
+
+// Lines is the log's lines.
+func (l *Lines) Lines() []Line { return slices.Clone(l.lines) }
+
+// Add adds line, and reports whether it was not there. A full log drops the oldest.
+func (l *Lines) Add(line Line) bool {
+	if slices.Contains(l.lines, line) {
+		return false
+	}
+	l.lines = append(l.lines, line)
+	if len(l.lines) > MaxLines {
+		l.lines = slices.Delete(l.lines, 0, 1)
+	}
+	return true
+}

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/report"
@@ -21,34 +22,51 @@ type Writer struct {
 	Put func(ctx context.Context, data string) error
 	Log *slog.Logger
 
-	newest chan []report.Kill
+	changed chan struct{}
+	mu      sync.Mutex
+	kills   []report.Kill
+	lines   []report.Line
 }
 
 // NewWriter is a Writer for put.
 func NewWriter(put func(ctx context.Context, data string) error, log *slog.Logger) *Writer {
-	return &Writer{Put: put, Log: log, newest: make(chan []report.Kill, 1)}
+	return &Writer{Put: put, Log: log, changed: make(chan struct{}, 1)}
 }
 
-// Write has kills written, in place of any not yet. One goroutine calls it.
+// Write has kills written, with the newest lines, in place of any not yet.
 func (w *Writer) Write(kills []report.Kill) {
+	w.mu.Lock()
+	w.kills = kills
+	w.mu.Unlock()
+	w.poke()
+}
+
+// WriteLines has lines written, with the newest kills, in place of any not yet.
+func (w *Writer) WriteLines(lines []report.Line) {
+	w.mu.Lock()
+	w.lines = lines
+	w.mu.Unlock()
+	w.poke()
+}
+
+func (w *Writer) poke() {
 	select {
-	case <-w.newest:
+	case w.changed <- struct{}{}:
 	default:
 	}
-	w.newest <- kills
 }
 
 // Run writes until ctx is done.
 func (w *Writer) Run(ctx context.Context) {
-	var pending []report.Kill
+	pending := false
 	var last time.Time
 	gap := minGap
 	for {
-		if pending == nil {
+		if !pending {
 			select {
 			case <-ctx.Done():
 				return
-			case pending = <-w.newest:
+			case <-w.changed:
 			}
 			if time.Since(last) >= quiet {
 				gap = minGap
@@ -58,24 +76,25 @@ func (w *Writer) Run(ctx context.Context) {
 			return
 		}
 		select {
-		case pending = <-w.newest:
+		case <-w.changed:
 		default:
 		}
-		ok := w.put(ctx, pending)
+		ok := w.put(ctx)
 		last, gap = time.Now(), min(2*gap, maxGap)
-		if ok {
-			pending = nil
-		}
+		pending = !ok
 	}
 }
 
-func (w *Writer) put(ctx context.Context, kills []report.Kill) bool {
-	data, err := report.Encode(kills)
+func (w *Writer) put(ctx context.Context) bool {
+	w.mu.Lock()
+	kills, lines := w.kills, w.lines
+	w.mu.Unlock()
+	data, err := report.Encode(kills, lines)
 	if err == nil {
 		err = w.Put(ctx, data)
 	}
 	if err != nil {
-		w.Log.Warn("cannot write the report", "kills", len(kills), "error", err)
+		w.Log.Warn("cannot write the report", "kills", len(kills), "lines", len(lines), "error", err)
 	}
 	return err == nil
 }

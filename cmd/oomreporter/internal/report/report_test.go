@@ -1,6 +1,7 @@
 package report
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -36,24 +37,99 @@ func TestDecode_ReturnsWhatWasEncoded(t *testing.T) {
 		}},
 		{Pod: strings.Repeat("a", 32), At: 2, Processes: 3},
 	}
-	data, err := Encode(want)
+	data, err := Encode(want, nil)
 	require.NoError(t, err)
-	got, err := Decode(data)
+	got, _, err := Decode(data)
 	require.NoError(t, err)
 	assert.Equal(t, want, got)
 	assert.Equal(t, int64(1_800_000_000_123), got[0].Time().UnixMilli())
 }
 
 func TestDecode_AnEmptyReportHasNone(t *testing.T) {
-	got, err := Decode("")
+	got, lines, err := Decode("")
 	require.NoError(t, err)
 	assert.Empty(t, got)
+	assert.Empty(t, lines)
+}
+
+func line(pod, container int) Line {
+	return Line{Pod: uid(pod), Container: id(container), Level: cgroup.PodLevel, At: 1_800_000_000_123}
+}
+
+func TestDecode_ReturnsTheLinesEncoded(t *testing.T) {
+	want := []Line{line(1, 1), {Pod: uid(2), Container: id(2), Level: cgroup.Above, At: 5}}
+	data, err := Encode(nil, want)
+	require.NoError(t, err)
+	_, got, err := Decode(data)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestDecode_RefusesALineNoReaderSends(t *testing.T) {
+	for name, l := range map[string]Line{
+		"a UID with no dashes": {Pod: strings.Repeat("a", 32), Container: id(1), Level: cgroup.InPod},
+		"no container":         {Pod: uid(1), Level: cgroup.InPod},
+		"no level":             {Pod: uid(1), Container: id(1)},
+		"a level past Above":   {Pod: uid(1), Container: id(1), Level: cgroup.Above + 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			data, err := Encode(nil, []Line{l})
+			require.NoError(t, err)
+			_, _, err = Decode(data)
+			assert.Error(t, err)
+			_, err = l.MarshalBinary()
+			assert.Error(t, err)
+		})
+	}
+	data, err := Encode(nil, make([]Line, MaxLines+1))
+	require.NoError(t, err)
+	_, _, err = Decode(data)
+	assert.ErrorContains(t, err, "lines, over")
+}
+
+// A controller older than lines reads the kills of a report that has them.
+func TestDecode_AnOlderReaderSkipsLines(t *testing.T) {
+	data, err := Encode([]Kill{whole(1, 1, id(1))}, []Line{line(1, 1)})
+	require.NoError(t, err)
+	var old struct {
+		Version int    `json:"version"`
+		Kills   []Kill `json:"kills"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(data), &old))
+	assert.Equal(t, 1, old.Version)
+	assert.Len(t, old.Kills, 1)
+}
+
+func TestLine_Binary(t *testing.T) {
+	want := line(7, 9)
+	b, err := want.MarshalBinary()
+	require.NoError(t, err)
+	assert.Len(t, b, LineSize)
+	var got Line
+	require.NoError(t, got.UnmarshalBinary(b))
+	assert.Equal(t, want, got)
+	assert.Error(t, got.UnmarshalBinary(b[:LineSize-1]))
+	b[48] = 0
+	assert.Error(t, got.UnmarshalBinary(b), "a level of 0")
+}
+
+func TestLines_KeepsTheNewestOnce(t *testing.T) {
+	var l Lines
+	assert.True(t, l.Add(line(1, 1)))
+	assert.False(t, l.Add(line(1, 1)))
+	for i := range MaxLines {
+		l.Add(line(2, i+2))
+	}
+	got := l.Lines()
+	assert.Len(t, got, MaxLines)
+	assert.NotContains(t, got, line(1, 1))
+	assert.Equal(t, line(2, MaxLines+1), got[len(got)-1])
 }
 
 func TestDecode_RefusesWhatNoAgentWrites(t *testing.T) {
 	rise := `"rise":{"groupKills":1}`
 	kill := func(fields string) string { return `{"version":1,"kills":[{` + fields + `}]}` }
-	_, err := Decode(kill(`"pod":"` + uid(1) + `",` + rise))
+	_, _, err := Decode(kill(`"pod":"` + uid(1) + `",` + rise))
 	require.NoError(t, err)
 	for name, tc := range map[string]struct{ data, want string }{
 		"no JSON":                     {"version 1", "not a report"},
@@ -71,7 +147,7 @@ func TestDecode_RefusesWhatNoAgentWrites(t *testing.T) {
 			kill(`"pod":"` + uid(1) + `","rise":{"containers":[` + strings.Repeat(`"`+id(1)+`",`, maxContainers) + `"` + id(1) + `"]}`), "17 containers"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := Decode(tc.data)
+			_, _, err := Decode(tc.data)
 			assert.ErrorContains(t, err, tc.want)
 		})
 	}
@@ -90,9 +166,9 @@ func TestLog_AFullLogIsAReport(t *testing.T) {
 	}
 	kills := l.Kills()
 	assert.False(t, kills[0].Rise.Read)
-	data, err := Encode(kills)
+	data, err := Encode(kills, nil)
 	require.NoError(t, err)
-	got, err := Decode(data)
+	got, _, err := Decode(data)
 	require.NoError(t, err)
 	assert.Len(t, got, MaxKills)
 }

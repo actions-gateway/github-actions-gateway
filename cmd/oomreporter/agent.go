@@ -17,12 +17,15 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/agent"
 	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/cgroup"
+	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/logreader"
 	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/report"
 )
 
 type agentOptions struct {
 	node, namespace, mount, root string
-	poll                         time.Duration
+	// socket is where the log reader hands over the kernel log's kills, "" for none.
+	socket string
+	poll   time.Duration
 	// mountinfo is /proc/self/mountinfo.
 	mountinfo string
 }
@@ -34,6 +37,7 @@ func agentFlags(flags *flag.FlagSet, env func(string) string) func(context.Conte
 	flags.StringVar(&o.mount, "cgroup-mount", "/sys/fs/cgroup", "where the node's cgroup v2 hierarchy is mounted")
 	flags.StringVar(&o.root, "pods-root", "", "the kubelet's cgroup of all pods below that, where it is not found")
 	flags.DurationVar(&o.poll, "poll", 250*time.Millisecond, "the longest time between two samples")
+	flags.StringVar(&o.socket, "log-socket", "", "a socket to take the log reader's lines on (default none)")
 	return func(ctx context.Context, cfg *rest.Config, log *slog.Logger) error {
 		if o.node == "" || o.namespace == "" {
 			return errors.New("want -node and -namespace")
@@ -62,6 +66,20 @@ func (o agentOptions) run(ctx context.Context, kube kubernetes.Interface, log *s
 	defer wg.Wait()
 	defer stop()
 	wg.Go(func() { writer.Run(ctx) })
+	if o.socket != "" {
+		lines := make(chan report.Line, report.MaxLines)
+		wg.Go(func() { takeLines(ctx, lines, writer.WriteLines) })
+		wg.Go(func() {
+			if err := logreader.Serve(ctx, o.socket, func(l report.Line) {
+				select {
+				case lines <- l:
+				case <-ctx.Done():
+				}
+			}, log); err != nil {
+				log.Warn("takes no lines from the log reader", "error", err)
+			}
+		})
+	}
 	w, err := agent.NewWatcher(o.mount, tree.PodFile, log)
 	if err != nil {
 		log.Warn("cannot watch; kills are seen by the poll", "error", err)
@@ -100,5 +118,20 @@ func (o agentOptions) put(kube kubernetes.Interface) func(context.Context, strin
 			Data:       map[string]string{report.Key: data},
 		}, metav1.UpdateOptions{})
 		return err
+	}
+}
+
+// takeLines keeps the newest lines it is sent, and writes them each time one is new.
+func takeLines(ctx context.Context, lines <-chan report.Line, write func([]report.Line)) {
+	var kept report.Lines
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case l := <-lines:
+			if kept.Add(l) {
+				write(kept.Lines())
+			}
+		}
 	}
 }

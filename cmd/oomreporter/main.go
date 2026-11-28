@@ -2,8 +2,9 @@
 //
 //	oomreporter agent       samples its node's cgroup counters and reports the kills they show
 //	oomreporter controller  says on each pod what the reports say of it
+//	oomreporter logreader   hands the agent the kernel log's kills, as numbers
 //
-// The agent reads no pod, and the controller no node.
+// The agent reads no pod, the controller no node, and the log reader nothing of the API.
 package main
 
 import (
@@ -34,7 +35,7 @@ func main() {
 	}
 }
 
-var errUsage = errors.New("want a mode: agent or controller")
+var errUsage = errors.New("want a mode: agent, controller or logreader")
 
 // run runs the mode args name until ctx is done.
 func run(ctx context.Context, args []string, env func(string) string, config func() (*rest.Config, error), log *slog.Logger) error {
@@ -44,11 +45,14 @@ func run(ctx context.Context, args []string, env func(string) string, config fun
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	var start func(context.Context, *rest.Config, *slog.Logger) error
+	var offline func(context.Context, *slog.Logger) error
 	switch args[0] {
 	case "agent":
 		start = agentFlags(flags, env)
 	case "controller":
 		start = controllerFlags(flags, env)
+	case "logreader":
+		offline = logReaderFlags(flags)
 	default:
 		return fmt.Errorf("%w, not %q", errUsage, args[0])
 	}
@@ -61,6 +65,9 @@ func run(ctx context.Context, args []string, env func(string) string, config fun
 	}
 	if flags.NArg() > 0 {
 		return fmt.Errorf("unexpected argument %q", flags.Arg(0))
+	}
+	if offline != nil {
+		return offline(ctx, log)
 	}
 	cfg, err := config()
 	if err != nil {

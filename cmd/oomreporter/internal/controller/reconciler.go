@@ -144,7 +144,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	kills, err := report.Decode(cm.Data[report.Key])
+	kills, _, err := report.Decode(cm.Data[report.Key])
 	if err != nil {
 		log.FromContext(ctx).Info("skipped a report", "node", node, "reason", err.Error())
 		return reconcile.Result{RequeueAfter: left}, nil

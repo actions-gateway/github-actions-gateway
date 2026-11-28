@@ -33,6 +33,9 @@ func TestRun_RefusesWhatItCannotRunWith(t *testing.T) {
 		"an agent with no node":            {[]string{"agent", "-namespace=oom"}, "want -node"},
 		"an agent with no namespace":       {[]string{"agent", "-node=node-a"}, "want -node and -namespace"},
 		"an agent that never polls":        {[]string{"agent", "-node=node-a", "-namespace=oom", "-poll=0s"}, "-poll above 0"},
+		"a log reader with no socket":      {[]string{"logreader", "-pods-root=kubepods.slice"}, "want -socket"},
+		"a log reader with no root":        {[]string{"logreader", "-socket=/s"}, "want -socket and -pods-root"},
+		"a log reader that never reads":    {[]string{"logreader", "-socket=/s", "-pods-root=kubepods.slice", "-every=0s"}, "-every above 0"},
 		"a controller with no namespace":   {[]string{"controller", agents, "-all-namespaces"}, "want -namespace"},
 		"a controller with no agents":      {[]string{"controller", "-namespace=oom", "-all-namespaces"}, "want -agents"},
 		"a controller with a range of one": {[]string{"controller", "-namespace=oom", "-agents=app in (a,b)", "-all-namespaces"}, "want -agents"},
@@ -71,4 +74,11 @@ func TestRun_NeedsACluster(t *testing.T) {
 	none := errors.New("no cluster")
 	err := run(t.Context(), []string{"agent"}, env(nil), func() (*rest.Config, error) { return nil, none }, noLog)
 	require.ErrorIs(t, err, none)
+}
+
+// The log reader has no token, so it must start with no cluster to reach.
+func TestRun_TheLogReaderNeedsNoCluster(t *testing.T) {
+	none := errors.New("no cluster")
+	err := run(t.Context(), []string{"logreader", "-socket=/s", "-pods-root=kubepods.slice"}, env(nil), func() (*rest.Config, error) { return nil, none }, noLog)
+	assert.NotErrorIs(t, err, none)
 }

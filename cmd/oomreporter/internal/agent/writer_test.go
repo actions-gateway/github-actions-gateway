@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/cgroup"
 	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/report"
 )
 
@@ -31,7 +33,7 @@ func puts(t *testing.T, failing int, d time.Duration, steps func(w *Writer)) (go
 	t.Helper()
 	began := time.Now()
 	w := NewWriter(func(_ context.Context, data string) error {
-		k, err := report.Decode(data)
+		k, _, err := report.Decode(data)
 		require.NoError(t, err)
 		got = append(got, put{time.Since(began), len(k)})
 		if len(got) <= failing {
@@ -104,5 +106,27 @@ func TestWriter_StopsBetweenWrites(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		got := puts(t, 100, time.Second, func(w *Writer) { w.Write(kills(1)) })
 		assert.Equal(t, []put{{0, 1}}, got)
+	})
+}
+
+func TestWriter_WritesTheNewestKillsAndLinesTogether(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var reports []string
+		w := NewWriter(func(_ context.Context, data string) error { reports = append(reports, data); return nil }, quietLog)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+		defer cancel()
+		done := make(chan struct{})
+		go func() { defer close(done); w.Run(ctx) }()
+		line := report.Line{Pod: uid, Container: strings.Repeat("a", 64), Level: cgroup.PodLevel, At: 1}
+		w.Write(kills(2))
+		time.Sleep(time.Millisecond)
+		w.WriteLines([]report.Line{line})
+		w.Write(kills(3))
+		<-done
+		require.Len(t, reports, 2)
+		k, l, err := report.Decode(reports[1])
+		require.NoError(t, err)
+		assert.Len(t, k, 3)
+		assert.Equal(t, []report.Line{line}, l)
 	})
 }

@@ -79,7 +79,7 @@ func agentOn(node string) *corev1.Pod {
 
 func reportOf(t *testing.T, node string, kills ...report.Kill) *corev1.ConfigMap {
 	t.Helper()
-	data, err := report.Encode(kills)
+	data, err := report.Encode(kills, nil)
 	require.NoError(t, err)
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{Namespace: ownNamespace, Name: report.Name(node), UID: "report"},

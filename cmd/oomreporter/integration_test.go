@@ -646,7 +646,7 @@ func TestReporter_WritesNoMoreThanItsLimits(t *testing.T) {
 		data, err := report.Encode([]report.Kill{
 			{Pod: string(p.UID), At: time.Now().UnixMilli(), Rise: &rise},
 			{Pod: string(p.UID), At: time.Now().Add(-time.Duration(i) * 7 * time.Second).UnixMilli(), Processes: uint64(i + 1)},
-		})
+		}, nil)
 		require.NoError(t, err)
 		_, err = agent.CoreV1().ConfigMaps(reporter).Update(t.Context(), configMap(report.Name("node-a"), func(cm *corev1.ConfigMap) { cm.Data[report.Key] = data }), metav1.UpdateOptions{})
 		require.NoError(t, err)
