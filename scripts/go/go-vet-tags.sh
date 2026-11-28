@@ -57,6 +57,14 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 # host would build files for the wrong platform.
 BUILD_TAGS="integration,e2e,load,autoscaler,karpenter,rwxstorage"
 
+# Files a GOOS constraint leaves out on one platform or the other, which no tag can force on.
+# Each is one half of a pair: the logreader's syslog(2) exists on Linux alone, and its other
+# half is what every other platform builds.
+OS_EXEMPT=(
+	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/logreader/syslog_linux.go"
+	"github.com/actions-gateway/github-actions-gateway/oomreporter/internal/logreader/syslog_other.go"
+)
+
 # The golangci-lint config whose run.build-tags must name the same tags. Both
 # gates build the tagged trees, and each reads its own list.
 GOLANGCI_CONFIG="$REPO_ROOT/.golangci.yml"
@@ -134,17 +142,25 @@ assert_lint_tags_match() {
 assert_tags_cover_tree() {
 	local tags="$1"
 	shift
-	local ignored
-	ignored="$(go list -tags "$tags" \
-		-f '{{if .IgnoredGoFiles}}{{.ImportPath}}: {{.IgnoredGoFiles}}{{end}}' "$@")"
-	[[ -z "$ignored" ]] && return 0
+	local listed file exempt
+	local -a ignored=()
+	listed="$(go list -tags "$tags" \
+		-f '{{range .IgnoredGoFiles}}{{$.ImportPath}}/{{.}}{{"\n"}}{{end}}' "$@")"
+	while IFS= read -r file; do
+		[[ -z "$file" ]] && continue
+		for exempt in "${OS_EXEMPT[@]}"; do
+			[[ "$file" == "$exempt" ]] && continue 2
+		done
+		ignored+=("$file")
+	done <<<"$listed"
+	((${#ignored[@]} == 0)) && return 0
 	echo "ERROR: build constraints exclude first-party Go files even with -tags $tags:" >&2
-	echo "$ignored" >&2
+	printf '%s\n' "${ignored[@]}" >&2
 	echo >&2
 	echo "Every first-party .go file must be compiled by this gate (Q404). Either add the" >&2
 	echo "new tag to BUILD_TAGS in scripts/go/go-vet-tags.sh, or, if the constraint is" >&2
-	echo "environment-controlled (GOOS/GOARCH/go1.x) and cannot be forced on, exempt the" >&2
-	echo "file here with a comment saying why." >&2
+	echo "environment-controlled (GOOS/GOARCH/go1.x) and cannot be forced on, add the file" >&2
+	echo "to OS_EXEMPT here with a comment saying why." >&2
 	exit 1
 }
 

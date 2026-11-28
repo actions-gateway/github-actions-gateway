@@ -125,6 +125,19 @@ expect_coverage unlisted-tag-fails 1 "$unlisted"
 expect_output unlisted-tag-names-file 'tagged.go'
 expect_output unlisted-tag-explains 'BUILD_TAGS'
 
+# A GOOS no host here runs leaves its file out whatever the tags, and is reported until the
+# file is in OS_EXEMPT.
+goos="$(fixture goos-only plan9)"
+tracked_exempt=("${OS_EXEMPT[@]}")
+OS_EXEMPT=()
+expect_coverage goos-file-fails 1 "$goos"
+expect_output goos-file-names-file 'q404scratch/pkg/tagged.go'
+OS_EXEMPT=("q404scratch/pkg/tagged.go")
+expect_coverage goos-file-exempt 0 "$goos"
+OS_EXEMPT=("q404scratch/pkg/other.go")
+expect_coverage goos-file-exempt-by-name-alone 1 "$goos"
+OS_EXEMPT=("${tracked_exempt[@]}")
+
 # --- 2. vet sees tagged files ------------------------------------------------
 
 # The default tag set, which is what `make lint` and `make test` build, cannot
