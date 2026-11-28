@@ -64,6 +64,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Non-breaking: an out-of-memory retry waits for its job's start](#non-breaking-an-out-of-memory-retry-waits-for-its-jobs-start)
   - [Non-breaking: an out-of-memory retry's Events no longer name the limit as the cause](#non-breaking-an-out-of-memory-retrys-events-no-longer-name-the-limit-as-the-cause)
   - [Non-breaking: the text of `PlatformFaultOnFailedJob`](#non-breaking-the-text-of-platformfaultonfailedjob)
+  - [Non-breaking: `ActionsGateway.spec.oomKillReasons`, off by default](#non-breaking-actionsgatewayspecoomkillreasons-off-by-default)
   - [A disrupted job is not re-run while its set's workers cannot pull their image](#a-disrupted-job-is-not-re-run-while-its-sets-workers-cannot-pull-their-image)
   - [A worker evicted for its own storage limit is no longer re-run](#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run)
   - [Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once](#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once)
