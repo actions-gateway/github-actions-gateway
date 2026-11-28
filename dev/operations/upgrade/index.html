@@ -2205,6 +2205,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-worker-that-never-started-no-longer-force-cancels-a-run-with-a-job-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a worker that never started no longer force-cancels a run with a job running
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4658,6 +4669,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-worker-that-never-started-no-longer-force-cancels-a-run-with-a-job-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a worker that never started no longer force-cancels a run with a job running
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5581,6 +5603,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it">Non-breaking: a direct-egress v2 gateway reports <code>EgressRulesStale</code> and pages on it</a></li>
 <li><a href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart">Non-breaking: the GMC keeps GitHub egress across a restart</a></li>
 <li><a href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner">Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner</a></li>
+<li><a href="#non-breaking-a-worker-that-never-started-no-longer-force-cancels-a-run-with-a-job-running">Non-breaking: a worker that never started no longer force-cancels a run with a job running</a></li>
 <li><a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run</a></li>
 <li><a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically">Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically</a></li>
 <li><a href="#a-timed-out-job-whose-re-run-passes-counts-as-flaky">A timed-out job whose re-run passes counts as flaky</a></li>
@@ -6535,6 +6558,16 @@ The AGC now names that job from the listener's in-flight record, force-cancels i
 The evicted, preempted and drained shapes take the same path when no idle worker of the set could take a job instead (Q1235).
 It names none while a <code>Running</code> worker's job start may not be recorded yet, and walks again once the start lands, for up to ten minutes after the loss (Q1235).</p>
 <p><strong>Rolling back</strong> returns that job to waiting out the timeout.</p>
+<h3 id="non-breaking-a-worker-that-never-started-no-longer-force-cancels-a-run-with-a-job-running">Non-breaking: a worker that never started no longer force-cancels a run with a job running<a class="headerlink" href="#non-breaking-a-worker-that-never-started-no-longer-force-cancels-a-run-with-a-job-running" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> <code>ScaleSet</code> sets that run one job of a multi-job workflow, such as a matrix leg, or a job beside others on another <code>RunnerSet</code> or on GitHub-hosted runners.
+Nothing to do at upgrade time.</p>
+<p><strong>What changed.</strong> A worker reaped at <code>pendingPodDeadline</code>, or deleted before its container ran, has its run force-cancelled and then re-run.
+A force-cancel ends every unfinished job of the run on any runner, and the re-run restarts each from the beginning (measured 2026-11-27 on a four-job run).
+The AGC now checks first for another job of the run that is running, on its own set's workers and in the run's jobs at GitHub, and where it finds one it makes neither call (Q1426).</p>
+<p><strong>What you will see.</strong> <code>actions_gateway_eviction_rerun_withheld_total{cause="abandoned", reason="job_running"}</code> increments, and a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event names the running job.
+<code>actions_gateway_abandoned_run_force_cancels_total</code> does not move, and the worker's job stays queued at GitHub, where it gets a new worker if GitHub offers it to the set again.
+If it is still queued once the run's other jobs finish, cancel the run and re-run its failed jobs.</p>
+<p><strong>Rolling back</strong> returns such a run to being cancelled whole and re-run.</p>
 <h3 id="non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run<a class="headerlink" href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> clusters on Spot or preemptible capacity, or anywhere a node can go away while a worker is still <code>Pending</code>, pulling its image.
 Nothing to do.</p>

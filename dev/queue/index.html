@@ -3190,14 +3190,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>die_if_killed</code> (scripts/lib/common.sh) draws the line Q1023 asked for: a status above 128 is a signal, not a verdict, so it is handed back …</td>
 </tr>
 <tr>
-<td><a href="Q1426/">Q1426</a></td>
-<td><a href="../operations/troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">Reaped Pending worker force-cancels a run with a job still running</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A scale-set worker reaped at <code>pendingPodDeadline</code> has its own run force-cancelled even where another job of that run is running on a live …</td>
-</tr>
-<tr>
 <td><a href="Q1066/">Q1066</a></td>
 <td><a href="../operations/troubleshooting/#worker-image-runner-version">Registry read cannot present node-identity pull credentials (GAR, ECR)</a></td>
 <td><code>feature</code></td>

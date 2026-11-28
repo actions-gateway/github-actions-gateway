@@ -6660,11 +6660,17 @@ The deadline is a capacity-protection mechanism; the job is re-queued separately
 <p><strong>The AGC force-cancels the run (Q683, Q766).</strong> The worker never ran, so nothing will ever report its job, and the assignment is fire-and-forget, so the AGC has no way to report it either.
 The reconciler that reaped the pod issues a REST <code>force-cancel</code> of the run and logs <code>force-cancelled the abandoned job's run</code>: measured live (2026-08-05), the standalone call is accepted and concludes the run <em>and</em> job as <strong><code>cancelled</code></strong> about one second later, and the cancelled run <em>does</em> accept <code>rerun-failed-jobs</code>.
 The cancel is the run's: every other job of it that is still queued or running ends <code>cancelled</code> in the same second, on any runner, a GitHub-hosted one included, and the automatic re-run restarts each from the beginning (measured 2026-11-27 on a four-job run).
+So the AGC does not cancel a run while another job of it is running (Q1426).
 This holds whether the reaped pod was never scheduled or was bound and still pulling its image; for the second, a real kubelet publishes a transient <code>Failed</code> before the pod goes, and the AGC still reads it as never having started (Q1231).
 The same handling takes a still-<code>Pending</code> worker someone else deletes, such as a drain.
 When GitHub refuses the call (<code>outcome="error"</code> on <code>actions_gateway_abandoned_run_force_cancels_total</code>), GitHub's own ~15-minute unstarted-job timeout reaches the same <code>cancelled</code> ending.
 The AGC reads the run first, and a run already cancelled by anyone but the AGC is left alone: no force-cancel, no automatic re-run, and <code>actions_gateway_eviction_rerun_withheld_total{cause="abandoned",reason="run_cancelled"}</code> increments with a Normal <code>EvictionRerunWithheld</code> Event in place of a force-cancel outcome (Q1232).
 That includes GitHub's own ~15-minute unstarted-job timeout, which the run's conclusion cannot tell from a user's cancel: with <code>pendingPodDeadline</code> set past ~15 minutes, the timeout cancels the run before the reap, and the job needs a manual re-run.
+A run with another job running is left alone as well.
+The AGC looks for one on its own set's workers and then in the run's jobs at GitHub, which shows a job on another <code>RunnerSet</code> or a GitHub-hosted runner; where it finds one it cancels nothing, re-runs nothing, and counts <code>actions_gateway_eviction_rerun_withheld_total{cause="abandoned",reason="job_running"}</code> with a Normal <code>EvictionRerunWithheld</code> Event naming the job.
+The reaped pod's job stays queued at GitHub and gets a new worker if GitHub offers it to the set again.
+If it is still queued once the run's other jobs finish, cancel the run and re-run its failed jobs.
+Where the run's jobs cannot be read, the force-cancel goes ahead.
 The identity comes off the worker pod's <code>actions-gateway.com/run-id</code> annotation, so a missing one reports as <code>actions_gateway_eviction_recovery_identity_unknown_total{cause="abandoned"}</code> with an <code>EvictionRecoveryIdentityUnknown</code> Warning Event, and means the assignment message carried no <code>workflowRunId</code>.
 The cancelled run can belong to a different job than the reaped pod's: when another worker's runner took the pod's job, the AGC cancels the run of the job left without a runner instead, and logs <code>recovering the job left without a runner instead</code> with its <code>jobID</code> and <code>runID</code> (Q1195).
 A worker evicted, preempted or drained before its container ran is handled the same way when no idle worker of its set could take a job instead (Q1235).
@@ -7292,7 +7298,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>EvictionRerunWithheld</code></td>
 <td>Normal</td>
-<td>Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded <code>cancelled</code> by someone other than GAG, so the cancel stands (Q811, Q1181); or the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> or <code>emptyDir</code> limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181) or a newer merge group for the same pull request (Q1381); or already re-run by a later attempt, of a run that concluded <code>success</code>, or for a set whose workers are placed and cannot pull their image, which needs the image fixed and a manual re-run (Q1320); or a runner killed for memory that a re-run would repeat, or while out-of-memory retries are paused (Q1183); or no failed job of the run ran on the runner killed for memory (Q1319). Only that last one, and a cancel, a success or a newer merge group seen after detection, spend a slot.</td>
+<td>Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded <code>cancelled</code> by someone other than GAG, so the cancel stands (Q811, Q1181); or the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> or <code>emptyDir</code> limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181) or a newer merge group for the same pull request (Q1381); or already re-run by a later attempt, of a run that concluded <code>success</code>, or for a set whose workers are placed and cannot pull their image, which needs the image fixed and a manual re-run (Q1320); or another job of a never-started worker's run is running, which the force-cancel ahead of the re-run would end (Q1426); or a runner killed for memory that a re-run would repeat, or while out-of-memory retries are paused (Q1183); or no failed job of the run ran on the runner killed for memory (Q1319). Only that last one, and a cancel, a success or a newer merge group seen after detection, spend a slot.</td>
 <td><a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>; <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a></td>
 </tr>
 <tr>
@@ -8109,6 +8115,11 @@ The <code>EvictionRerunWithheld</code> Event names the reason and, where one is 
 <td><code class="gag-nowrap">already_rerun</code></td>
 <td>A later attempt of the run already re-ran the job</td>
 <td>Nothing</td>
+</tr>
+<tr>
+<td><code class="gag-nowrap">job_running</code></td>
+<td>A worker never started, and another job of its run is running, which the force-cancel ahead of the re-run would end</td>
+<td>Nothing while the job is queued; if it still is once the run's other jobs finish, <a href="#worker-pod-reaped-while-pending-workerpodstuckpending">cancel the run and re-run its failed jobs</a></td>
 </tr>
 <tr>
 <td><code class="gag-nowrap">run_succeeded</code></td>
