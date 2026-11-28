@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// The integer form of the admission ladder (Q443): the scale-set tier states how many
+// The integer form of the admission ladder: the scale-set tier states how many
 // jobs GitHub may keep assigned, once per poll, where the classic tier answers a
 // boolean per delivered job. These tests pin the arithmetic (QuotaHeadroomPods), the
 // delta-to-total conversion (WorkerQuotaCapacity), and the rung composition
@@ -113,7 +113,7 @@ func TestQuotaHeadroomPods(t *testing.T) {
 // decision to search the shared arithmetic instead of dividing: for every headroom
 // state, "the quota admits at least one more pod" must mean the same thing to both
 // tiers. A divergence here is a tenant getting different answers depending on which
-// acquisition protocol it happens to run — the exact class of bug Q443 fixes.
+// acquisition protocol it happens to run.
 func TestQuotaHeadroomPods_AgreesWithTheBooleanRung(t *testing.T) {
 	for _, used := range []string{"0", "1", "1500m", "1900m", "2"} {
 		quotas := []corev1.ResourceQuota{*cpuQuota("2", used)}
@@ -184,8 +184,8 @@ type capacityTarget struct {
 	// declinedMaxSeen is the same for the capacity rung, which runs after quota and
 	// must therefore be capped by whatever quota already left rather than the ceiling.
 	declinedMaxSeen int32
-	// scaleUp drives the Q717 rate rung; nil (the default) leaves it unbound, which
-	// is what every pre-Q717 case in this file asserts against.
+	// scaleUp drives the rate rung; nil (the default) leaves it unbound, which
+	// is what every case that sets no rate limit asserts against.
 	scaleUp *ScaleUpConfig
 }
 
@@ -263,7 +263,7 @@ func TestAdvertiseCapacity(t *testing.T) {
 			wantWithheld: map[string]int32{runnercore.AdmitReasonCapacity: 0, runnercore.AdmitReasonScaleUp: 0},
 		},
 		{
-			// Q405: a declining gate bounds the total at the set's own in-flight pods.
+			// A declining gate bounds the total at the set's own in-flight pods.
 			name:         "a declining capacity gate binds below the ceiling",
 			target:       capacityTarget{ceiling: 8, bounded: true, declinedLimit: 2, declinedBounded: true},
 			wantTotal:    2,
@@ -315,7 +315,7 @@ func TestAdvertiseCapacity(t *testing.T) {
 	}
 }
 
-// TestAdvertiseCapacity_RereadsEveryPoll pins the Q117 property on this tier: the
+// TestAdvertiseCapacity_RereadsEveryPoll pins the re-read property on this tier: the
 // function is built once when the listener starts, so a quota that frees up (or fills)
 // must be reflected on the next poll without an AGC restart. Recovery latency is one
 // poll interval — the granularity this tier trades for never spending a claim.
@@ -343,7 +343,7 @@ func activeWorkerPods(n int) []client.Object {
 	return objs
 }
 
-// TestAdvertiseCapacity_ScaleUpRungConvertsTokensToTotal is the Q717 rung's whole
+// TestAdvertiseCapacity_ScaleUpRungConvertsTokensToTotal is the rate rung's whole
 // point. Free tokens are a DELTA — how many more pods may be created now — while the
 // advertisement is a TOTAL bounding totalAssignedJobs, so the rung has to add the
 // set's own in-flight workers to convert between them.

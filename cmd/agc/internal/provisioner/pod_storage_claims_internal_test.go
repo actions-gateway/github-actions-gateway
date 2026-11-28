@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// Q453: the storage half of a worker's quota footprint. The compute keys were the
+// The storage half of a worker's quota footprint. The compute keys were the
 // only ones mapped, so ephemeral-storage, persistentvolumeclaims and
 // requests.storage never reached the conditions, the pre-claim gate, or the
 // scale-set capacity integer. A Kata set's per-worker PVCs were free.
@@ -61,11 +61,11 @@ func assertKey(t *testing.T, fp corev1.ResourceList, key corev1.ResourceName, wa
 	assert.Equal(t, want, got.String(), "%s", key)
 }
 
-// TestWorkerFootprint_KataPerWorkerPVC is the headline Q453 regression, on the
+// TestWorkerFootprint_KataPerWorkerPVC is the headline regression, on the
 // shape from deploy/dogfood-e2e/overlays/kata/resources.yaml: a 100Gi raw block
 // device per worker, declared as a generic ephemeral volume so each ephemeral pod
 // gets its own PVC. At maxWorkers 4 that is 4 PVCs and 400Gi of storage the
-// footprint used to report as zero.
+// footprint must not report as zero.
 func TestWorkerFootprint_KataPerWorkerPVC(t *testing.T) {
 	spec := &corev1.PodSpec{
 		RuntimeClassName: ptr.To("kata"),
@@ -232,7 +232,7 @@ func kataWorkerSpec() *corev1.PodSpec {
 }
 
 // TestWorkerQuotaExhausted_ClosesOnStorageKeys is the end-to-end assertion that the
-// new keys reach the pre-claim gate (the #784 quota rung), one key at a time so a
+// new keys reach the pre-claim gate (the quota rung), one key at a time so a
 // regression names the key it lost. Each case exhausts exactly one key and leaves
 // every other unconstrained.
 func TestWorkerQuotaExhausted_ClosesOnStorageKeys(t *testing.T) {

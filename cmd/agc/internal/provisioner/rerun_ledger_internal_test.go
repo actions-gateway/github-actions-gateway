@@ -28,7 +28,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 )
 
-// Q1182: the scale-set re-run budget in the per-set failure ledger. These tests pin the
+// The scale-set re-run budget in the per-set failure ledger. These tests pin the
 // two defects it fixes — a restart refilling the budget, and two disruptions of one
 // attempt landing two re-runs — plus the reservation's four outcomes, GAG's own
 // force-cancel record, and the version rules that let two AGC versions share the object.
@@ -146,8 +146,8 @@ func evictScaleSet(p *Provisioner, target Target, runID string, maxRetries int, 
 		maxRetries, 0, evictionTierScaleSet, cause, d)
 }
 
-// TestScaleSetBudget_SurvivesARestart is the headline defect: the budget used to be
-// process memory, so a restarted AGC re-ran a run whose budget was spent. A second
+// TestScaleSetBudget_SurvivesARestart is the headline: a budget in
+// process memory lets a restarted AGC re-run a run whose budget was spent. A second
 // Provisioner on the same cluster is the restart.
 func TestScaleSetBudget_SurvivesARestart(t *testing.T) {
 	c, api, srv, target := ledgerFixture(t)
@@ -386,7 +386,7 @@ func TestScaleSetBudget_AbandonedArmRecordsItsCancel(t *testing.T) {
 	assert.Equal(t, rerunDisruption{key: "pod-a", failedAttempt: 4}, e.disruption)
 }
 
-// TestScaleSetBudget_AbandonedArmWithholdsAUsersCancel pins Q1232: a run a user already
+// TestScaleSetBudget_AbandonedArmWithholdsAUsersCancel pins the user-cancel case: a run a user already
 // cancelled is not recorded as GAG's cancel, force-cancelled or registered for a re-run,
 // so no later arm's run_cancelled check takes the user's cancel for GAG's. The run is
 // withheld before the force-cancel POST, so the case holds whatever GitHub would answer

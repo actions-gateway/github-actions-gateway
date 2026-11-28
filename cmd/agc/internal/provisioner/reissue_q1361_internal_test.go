@@ -10,8 +10,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// TestReissueReplacement pins which worker counts as GitHub's re-issue of another's job
-// (Q1361): one created later carrying the same run ID and job name, for a worker whose
+// TestReissueReplacement pins which worker counts as GitHub's re-issue of another's job:
+// one created later carrying the same run ID and job name, for a worker whose
 // containers never started.
 func TestReissueReplacement(t *testing.T) {
 	base := time.Date(2026, 11, 18, 6, 0, 0, 0, time.UTC)

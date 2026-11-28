@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
-// Q844: recovering a scale-set worker that was already gone when the AGC came back.
+// Recovering a scale-set worker that was already gone when the AGC came back.
 //
 // Every arm of the disruption scan reads its discriminator off a pod that still exists,
 // and preemption and drain both DELETE their victim — so an AGC down across that window
@@ -22,7 +22,7 @@ import (
 // persisted in-flight set) and, just as importantly, the four ways it must NOT fire: on
 // a worker whose pod is still there, more than once per process, on a scan that could
 // not read the cluster, and on a record this process's own listener wrote after the
-// verdict was taken (Q1064).
+// verdict was taken.
 
 // orphan builds an in-flight record as the listener persists one, for the job whose
 // worker pod recoveryFixture's helpers name.
@@ -64,8 +64,8 @@ func TestRecoverOrphanedScaleSetWorkers_AHumansReRunIsLeftAlone(t *testing.T) {
 }
 
 // TestRecoverOrphanedScaleSetWorkers_RerunsAWorkerThatIsGone is the headline behaviour:
-// the run behind a worker pod that no longer exists is re-run, which before Q844 needed
-// a human because the pod was the only record of the disruption.
+// the run behind a worker pod that no longer exists is re-run, even though
+// the pod was the only record of the disruption.
 func TestRecoverOrphanedScaleSetWorkers_RerunsAWorkerThatIsGone(t *testing.T) {
 	ctx := context.Background()
 	// No pods: the preempted worker was torn down while this AGC was not running.
@@ -95,7 +95,7 @@ func TestRecoverOrphanedScaleSetWorkers_RerunsAWorkerThatIsGone(t *testing.T) {
 }
 
 // TestRecoverOrphanedScaleSetWorkers_LeavesAnAlreadyRecoveredWorkerAlone pins the
-// second discriminator, added with the durable claim (Q1108). A worker pod that is gone
+// second discriminator, added with the durable claim. A worker pod that is gone
 // is not necessarily one nobody recovered: a disruption a previous process claimed is
 // re-run at once, while the job's conclusion — the only thing that retires the in-flight
 // entry — arrives from GitHub seconds later and can miss that process entirely. Without
@@ -187,7 +187,7 @@ func TestRecoverOrphanedScaleSetWorkers_UnreadableClusterRecoversNothingAndRetri
 }
 
 // TestRecoverOrphanedScaleSetWorkers_SpendsTheSharedRetryBudget pins that this cause
-// draws on the same per-run budget as every other one (Q106). A run alternately
+// draws on the same per-run budget as every other one. A run alternately
 // disrupted and orphaned must not get two budgets.
 func TestRecoverOrphanedScaleSetWorkers_SpendsTheSharedRetryBudget(t *testing.T) {
 	ctx := context.Background()
@@ -210,7 +210,7 @@ func TestRecoverOrphanedScaleSetWorkers_SpendsTheSharedRetryBudget(t *testing.T)
 		testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "gpu", recoveryCauseVanished)))
 }
 
-// TestRecoverOrphanedScaleSetWorkers_EmptySetSpendsTheClaim is the dating rule (Q1064):
+// TestRecoverOrphanedScaleSetWorkers_EmptySetSpendsTheClaim is the dating rule:
 // the verdict is about the PROCESS, so the first reading takes it whether or not the set
 // is empty. A later restart re-asks the question because orphanScanState is in memory and
 // a restart is a new one — what a non-empty set arriving afterwards means instead is that

@@ -35,7 +35,7 @@ func mergeCommitEvent(event string) bool {
 }
 
 // RefuseForkJob decides, before a runner is minted, whether job is a fork pull
-// request's and so refused on target, a set that does not accept them (Q1330). It
+// request's and so refused on target, a set that does not accept them. It
 // returns nil to admit the job, an error wrapping ErrForkJobRefused once the job's run
 // has been force-cancelled, and any other error when the decision or the cancel could
 // not be made, which the caller holds and retries rather than admitting.

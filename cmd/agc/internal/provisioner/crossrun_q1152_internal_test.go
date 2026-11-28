@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Q1152: GitHub gives a scale-set job to whichever of the set's runners asks first, so
+// GitHub gives a scale-set job to whichever of the set's runners asks first, so
 // the worker created for job-a can run job-b, from another run. Every test here builds
 // that crossing — a pod minted for one job whose runner started another — because a
 // test that keeps each job on its own worker passes against the defect.
@@ -169,8 +169,8 @@ func TestRecoverOrphanedScaleSetWorkers_SparesAQueuedJobWhileAWorkerIsIdle(t *te
 	assert.NotContains(t, target.events, "OrphanedWorkerRecovered")
 }
 
-// TestRecoverOrphanedScaleSetWorkers_RecoversAVanishedWorkerWhileAnotherIsIdle is Q844's
-// base case beside an idle worker: job-a's own worker is gone and nothing started job-a,
+// TestRecoverOrphanedScaleSetWorkers_RecoversAVanishedWorkerWhileAnotherIsIdle is the
+// vanished-worker base case beside an idle worker: job-a's own worker is gone and nothing started job-a,
 // while job-c's worker is still starting. The idle worker does not make job-a queued; the
 // worker that vanished is job-a's.
 func TestRecoverOrphanedScaleSetWorkers_RecoversAVanishedWorkerWhileAnotherIsIdle(t *testing.T) {

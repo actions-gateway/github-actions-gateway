@@ -14,9 +14,9 @@ import (
 // Namespace-ResourceQuota headroom arithmetic, shared by the two consumers that
 // must agree on it:
 //
-//   - the pre-acquisition admission gate (Q59/#784), which refuses to claim a job
+//   - the pre-acquisition admission gate, which refuses to claim a job
 //     when the quota cannot admit the worker pod that job would need, and
-//   - the advisory WorkerQuota{Pressure,Exceeded} conditions (Q82) the v1
+//   - the advisory WorkerQuota{Pressure,Exceeded} conditions the v1
 //     RunnerGroup and v2 RunnerSet reconcilers publish.
 //
 // It lives in the provisioner package because the gate does — the controller
@@ -27,8 +27,8 @@ import (
 // Every consumer sizes a worker from a whole *corev1.PodSpec, resolved through
 // ResolveWorkerPodSpec, and never from spec.containers alone: native sidecars and
 // RuntimeClass overhead are both quota-charged and both invisible in the container
-// list (Q450), and a generic ephemeral volume is charged as a PVC that lives in
-// spec.volumes, not in any container (Q453). QuotaHeadroomPods and
+// list, and a generic ephemeral volume is charged as a PVC that lives in
+// spec.volumes, not in any container. QuotaHeadroomPods and
 // WorkerQuotaCapacity are the scale-set tier's integer form of the same question,
 // so they must read the identical footprint.
 //
@@ -57,7 +57,7 @@ var workerQuotaChecks = []quotaCheck{
 	{corev1.ResourceLimitsCPU, corev1.ResourceLimitsCPU},
 	{corev1.ResourceLimitsMemory, corev1.ResourceLimitsMemory},
 	// Local ephemeral storage: charged by the pod evaluator exactly like cpu and
-	// memory, legacy unprefixed alias included (Q453).
+	// memory, legacy unprefixed alias included.
 	{corev1.ResourceRequestsEphemeralStorage, corev1.ResourceRequestsEphemeralStorage},
 	{corev1.ResourceRequestsEphemeralStorage, corev1.ResourceEphemeralStorage},
 	{corev1.ResourceLimitsEphemeralStorage, corev1.ResourceLimitsEphemeralStorage},
@@ -105,8 +105,8 @@ func quotaChecksFor(demand corev1.ResourceList) []quotaCheck {
 //
 // It takes the whole PodSpec, not just the containers, because a worker pod's
 // quota charge is not the container sum: native sidecars and pod overhead both
-// count and neither is visible in spec.containers (Q450), and spec.volumes carries
-// the generic ephemeral volumes charged as PVCs (Q453). See
+// count and neither is visible in spec.containers, and spec.volumes carries
+// the generic ephemeral volumes charged as PVCs. See
 // pod_effective_resources.go and pod_storage_claims.go for the arithmetic and its
 // upstream provenance. Pass a spec that has been through ResolveWorkerPodSpec so
 // .Overhead is populated.
@@ -207,7 +207,7 @@ func QuotaHeadroomViolations(demand corev1.ResourceList, quotas []corev1.Resourc
 // WorkerQuotaExhausted answers as a boolean, and it exists because the two acquisition
 // tiers need different shapes of the one answer — the classic tier decides per
 // delivered job ("is there room for one more?"), while the scale-set tier advertises a
-// number of jobs per poll ("how many more fit?") (Q443).
+// number of jobs per poll ("how many more fit?").
 //
 // It is deliberately a search over the shared arithmetic rather than a division: the
 // footprint spans several resources with different units and quantity formats, so
@@ -243,7 +243,7 @@ func QuotaHeadroomPods(spec *corev1.PodSpec, quotas []corev1.ResourceQuota, max 
 // WorkerQuotaCapacity returns the total number of worker pods one owner may have in
 // flight given live namespace-ResourceQuota headroom — its own non-terminal worker
 // pods plus room for more — never reporting above max. It is the scale-set tier's
-// expression of the admission gate's quota rung (Q443): that tier advertises a total
+// expression of the admission gate's quota rung: that tier advertises a total
 // (X-ScaleSetMaxCapacity bounds GitHub's totalAssignedJobs) where the classic tier
 // decides per job, so the observed headroom *delta* has to be converted to a total.
 //
@@ -279,7 +279,7 @@ func WorkerQuotaCapacity(ctx context.Context, c client.Reader, ns string, spec *
 // currently lack the headroom to admit one more worker pod of the given shape,
 // plus a human-readable detail naming the binding resource.
 //
-// It is the live read behind the admission gate's quota rung (#784). Deliberately
+// It is the live read behind the admission gate's quota rung. Deliberately
 // FAIL-OPEN: a quota it cannot list, or a namespace with no quota at all, yields
 // (false, "") so the gate keeps today's behaviour and the provisioner's
 // maxQuotaRetries loop remains the backstop. The read is cache-backed (both
@@ -292,7 +292,7 @@ func WorkerQuotaCapacity(ctx context.Context, c client.Reader, ns string, spec *
 // and pod creation, and quota scopes are ignored. Closing the gate on it converts
 // the common case — a tenant sitting at its own quota ceiling — from "claim the job
 // and burn lock time retrying" into "leave it queued at GitHub", which is what the
-// Q59 gate exists to do.
+// pre-claim gate exists to do.
 func WorkerQuotaExhausted(ctx context.Context, c client.Reader, ns string, spec *corev1.PodSpec) (exhausted bool, detail string) {
 	var quotas corev1.ResourceQuotaList
 	if err := c.List(ctx, &quotas, client.InNamespace(ns)); err != nil {

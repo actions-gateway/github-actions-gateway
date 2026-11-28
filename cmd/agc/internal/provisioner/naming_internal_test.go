@@ -27,7 +27,7 @@ func requireValidPodName(t *testing.T, name string) {
 	}
 }
 
-// legacyPodName reproduces the pre-Q467 derivation: build the whole name, then cut
+// legacyPodName reproduces the truncating derivation: build the whole name, then cut
 // it at the DNS-label limit. It exists so the boundary tests below can show which
 // inputs it corrupted and prove the new derivation covers them.
 func legacyPodName(owner, id string) string {

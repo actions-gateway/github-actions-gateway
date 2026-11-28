@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
-// Q1233: the scale-set listener asks CheckScaleSetWorkerPod before it mints a JIT
+// The scale-set listener asks CheckScaleSetWorkerPod before it mints a JIT
 // config, so a job whose previous worker pod is still terminating registers no runner on
 // each re-offer. It must agree with adoptExistingScaleSetPod's verdict on a deleting pod,
 // and let everything else through to it.

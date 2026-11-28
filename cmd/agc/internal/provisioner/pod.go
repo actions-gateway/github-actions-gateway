@@ -33,7 +33,7 @@ func (p *Provisioner) resolveWorkerImage(spec *ResolvedSpec) string {
 
 // EffectiveWorkerImage resolves the same three-rung chain as resolveWorkerImage from
 // a bare per-owner override, for callers that hold a RunnerGroup/RunnerSet spec but
-// no ResolvedSpec — the reconcilers judging the image's runner version (Q715).
+// no ResolvedSpec — the reconcilers judging the image's runner version.
 func (p *Provisioner) EffectiveWorkerImage(workerImage string) string {
 	if workerImage != "" {
 		return workerImage
@@ -130,7 +130,7 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 
 	workerImage := p.resolveWorkerImage(spec)
 
-	// Stamp the worker lifetime cap as activeDeadlineSeconds (Q438). This is the
+	// Stamp the worker lifetime cap as activeDeadlineSeconds. This is the
 	// only deadline that survives the AGC being down: a Running worker whose job
 	// ended while the AGC was unavailable is indistinguishable in cluster state
 	// from one running a long job, so nothing observed later can reclaim it — but
@@ -188,7 +188,7 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	})
 
 	// Tell the wrapper where to hand its report back, and pin the path rather than
-	// relying on the kubelet default so the two sides cannot drift (Q792). A template
+	// relying on the kubelet default so the two sides cannot drift. A template
 	// that already set terminationMessagePath keeps it: the tenant may be reading the
 	// message for their own purposes, and the wrapper writes wherever this points.
 	//
@@ -231,7 +231,7 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 		})
 	}
 
-	// Project the GHES appliance's CA bundle (Q536) the same way, from the ConfigMap
+	// Project the GHES appliance's CA bundle the same way, from the ConfigMap
 	// the gateway's githubCABundleRef names. A certificate is public material, so the
 	// carrier is a ConfigMap and Items still pins the projection to the one key.
 	if spec.GitHubCAConfigMapName != "" {
@@ -278,7 +278,7 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	}
 	c.Env = mergeEnvOverride(c.Env, proxyEnvs)
 
-	// Inject the GAG worker wrapper (Q235) so the runner image can be an
+	// Inject the GAG worker wrapper so the runner image can be an
 	// unmodified upstream actions-runner. No-op when WrapperImage is unset
 	// (legacy: the worker image carries the wrapper as its own entrypoint). Must
 	// run before applySecurityDefaults so the initContainer is hardened too.
@@ -327,7 +327,7 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	annotations := applyDisruptionSafetyDefaults(meta.podAnnotations(), template.ObjectMeta.Annotations)
 
 	// Carry the sizing-profile marker the controller stamps on the resolved template
-	// when a profile derived this pod's ask (Q489) — it is what lets the
+	// when a profile derived this pod's ask — it is what lets the
 	// SizingProfileOverridden check tell a profile-built pod from a template-built
 	// one. Copied by key, deliberately: worker-pod annotations are a controlled set,
 	// and passing tenant template annotations through wholesale would be a different
@@ -335,7 +335,7 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	if v, ok := template.ObjectMeta.Annotations[AnnotationSizingProfile]; ok {
 		annotations[AnnotationSizingProfile] = v
 	}
-	// The same, for the re-run cause the scale-set path stamps on the template (Q1245).
+	// The same, for the re-run cause the scale-set path stamps on the template.
 	if v, ok := template.ObjectMeta.Annotations[AnnotationRerunCause]; ok {
 		annotations[AnnotationRerunCause] = v
 	}
@@ -385,7 +385,7 @@ func dropAPICredentialProjections(vols []corev1.Volume) {
 // injectWrapper delivers the GAG worker wrapper into the pod and points the
 // runner container's command at it, so the runner image can be the unmodified
 // upstream actions-runner (or any actions/runner-derived image) instead of a
-// baked-in wrapper image (Q235). The binary is exposed at wrapperMountDir/wrapper
+// baked-in wrapper image. The binary is exposed at wrapperMountDir/wrapper
 // either as a read-only OCI image volume (UseImageVolume; K8s ≥ 1.33, no init
 // container) or copied into an emptyDir by an initContainer that self-installs
 // from the wrapper image. Called from buildPod before applySecurityDefaults so

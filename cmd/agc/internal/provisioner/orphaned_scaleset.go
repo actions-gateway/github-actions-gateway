@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Orphaned-worker recovery on the scale-set tier (Q844).
+// Orphaned-worker recovery on the scale-set tier.
 //
 // # The gap this closes
 //
@@ -23,7 +23,7 @@ import (
 // a manual one.
 //
 // What is lost is the discriminator, not the run: GitHub still holds the run, concluded
-// failure by the Q385 SIGTERM relay, and rerun-failed-jobs still accepts it. Nor does
+// failure by the SIGTERM relay, and rerun-failed-jobs still accepts it. Nor does
 // the listener's assignment replay cover it — replay recovers a job still ASSIGNED at
 // GitHub, and the relay's conclusion is what stops it being one.
 //
@@ -31,11 +31,11 @@ import (
 //
 // The listener persists the run identity of every job whose worker it built, in the
 // per-RunnerSet guard ConfigMap it already writes ahead of each message delete
-// (scalesetlistener.GuardState.InFlight, Q606). An entry is added on a successful
+// (scalesetlistener.GuardState.InFlight). An entry is added on a successful
 // provision and dropped when the job concludes, so an entry that outlives its worker
 // is a run whose worker went away with nobody watching. Its worker is the pod whose
 // runner started the job (AnnotationStartedJobID), which need not be the pod created for
-// it: GitHub gives a scale-set job to whichever runner asks first (Q1152).
+// it: GitHub gives a scale-set job to whichever runner asks first.
 //
 // # Why the verdict is taken once per process, before the reaper
 //
@@ -50,7 +50,7 @@ import (
 //   - ONCE per process, because the failure being closed is exclusively "the AGC was
 //     absent". An entry this process created is covered by the live pod-watch recovery,
 //     so re-examining one can only produce a false positive. The claim is taken on the
-//     first reconcile that reads the set at all, empty or not (Q1064) — keying it on the
+//     first reconcile that reads the set at all, empty or not — keying it on the
 //     first non-empty reading dated the verdict to whenever the listener first wrote
 //     something, which is after this process started and so adjudicated its own entries.
 //
@@ -59,7 +59,7 @@ import (
 // immediately while the job's conclusion — the only thing that retires the entry —
 // arrives from GitHub seconds later and can miss the process entirely. So the scan also
 // consults the recovery-claim ledger, which is the record that survives both the pod
-// and the process (Q1108).
+// and the process.
 //
 // # What it deliberately does not do
 //
@@ -68,9 +68,9 @@ import (
 // recovery reports cause="vanished" rather than guessing.
 //
 // It does not force-cancel first. Whether a container ever ran is a fact about the pod
-// (Q766 reads it off podEverStarted), so a worker deleted before it started takes this
+// (abandoned-run recovery reads it off podEverStarted), so a worker deleted before it started takes this
 // path too and its re-run is refused by GitHub for having no failed job — the existing
-// error path logs and drops that, leaving the pre-Q844 outcome rather than a wrong one.
+// error path logs and drops that, leaving the run unrecovered rather than wrongly recovered.
 
 // OrphanedWorker is one job a previous AGC process provisioned a worker for and never
 // saw conclude — the identity half of a scalesetlistener.InFlightJob, taken as a
@@ -80,7 +80,7 @@ type OrphanedWorker struct {
 	Owner      string
 	Repository string
 	RunID      string
-	// Started is the listener's record that some runner took the job (Q1195).
+	// Started is the listener's record that some runner took the job.
 	Started bool
 	// AssignedAt is when the listener provisioned the job's worker.
 	AssignedAt time.Time
@@ -132,7 +132,7 @@ func (s *orphanScanState) release(key string) {
 // was taken; the owner's claim is released so the next reconcile retries it.
 func (p *Provisioner) RecoverOrphanedScaleSetWorkers(ctx context.Context, target Target, inFlight []OrphanedWorker) (<-chan struct{}, error) {
 	key := target.Key()
-	// Claimed ahead of the emptiness check, not behind it (Q1064): the verdict is about
+	// Claimed ahead of the emptiness check, not behind it: the verdict is about
 	// this process, and the caller reaches here before this process's listener starts,
 	// so an empty set is the answer "nothing was inherited" rather than a reading still
 	// to take. Claiming on the first non-empty set instead adjudicated an entry this
@@ -213,7 +213,7 @@ type scaleSetWorkerSet struct {
 // serving reports whether a live worker is running jobID. That is the worker whose
 // runner started it, wherever that worker was created: GitHub gives a scale-set job to
 // whichever runner asks first, so the pod named for jobID can have run another job and
-// gone, or be running one now (Q1152). With no start recorded for jobID, the worker
+// gone, or be running one now. With no start recorded for jobID, the worker
 // created for it stands in for it while it is still listed: the job is queued, and that
 // worker, or another whose runner has started nothing, may yet take it. With that worker
 // gone and no start recorded, the job's worker is taken to be the one that vanished.
@@ -227,7 +227,7 @@ func (s scaleSetWorkerSet) serving(ownerName, jobID string) bool {
 
 // startedElsewhere reports whether a worker other than podName has started the job
 // podName was created for. A worker's started job names the pod minted for it through
-// scaleSetPodName, so this needs no job ID off podName itself (Q1169).
+// scaleSetPodName, so this needs no job ID off podName itself.
 func (s scaleSetWorkerSet) startedElsewhere(ownerName, podName string) bool {
 	return s.holderOf(ownerName, podName) != ""
 }

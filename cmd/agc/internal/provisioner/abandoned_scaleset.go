@@ -8,7 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// Abandoned-run recovery on the scale-set tier (Q766).
+// Abandoned-run recovery on the scale-set tier.
 //
 // # Why this is not a fourth arm of disruptionAwaitingRecovery
 //
@@ -23,8 +23,8 @@ import (
 // The exclusion therefore stays. What the never-started shape gets instead is its own
 // detection and its own action, in that order: force-cancel the run FIRST, which is
 // what makes a re-run legal (a cancelled run accepts rerun-failed-jobs where the false
-// green refused it — Q683), then register it for the same capacity-gated re-run the
-// classic tier defers (Q691).
+// green refused it), then register it for the same capacity-gated re-run the
+// classic tier defers.
 //
 // # Where it is detected
 //
@@ -39,12 +39,12 @@ import (
 //   - abandonedAwaitingRecovery, in the RecoverEvictedScaleSetWorkers scan, for an
 //     external delete of a still-Pending worker. A real kubelet publishes a transient
 //     Failed carrying the deletion mark with no container start record for that shape
-//     (podEverStarted reads its synthetic termination, Q1231).
+//     (podEverStarted reads its synthetic termination).
 //     The same scan takes a still-Pending worker its node's shutdown failed, which
-//     nothing deletes (LostToNodeShutdownBeforeStart, Q1198).
+//     nothing deletes (LostToNodeShutdownBeforeStart).
 //
 // Run identity comes off the pod's run-id/repository annotations, the same
-// runIdentityFromPod read the Q417 eviction port relies on; a scale-set worker has no
+// runIdentityFromPod read eviction recovery relies on; a scale-set worker has no
 // goroutine holding it in memory.
 //
 // What is deliberately NOT recovered: a completed_pending reap (the job is already
@@ -77,7 +77,7 @@ func (p *Provisioner) RecoverAbandonedScaleSetWorker(ctx context.Context, target
 
 // recoverAbandoned force-cancels the workflow run behind a scale-set worker pod that
 // was removed before any of its containers ran, and registers the run for automatic
-// re-run once the owner places a worker pod again (Q766). detection names which seam
+// re-run once the owner places a worker pod again. detection names which seam
 // observed it, for the log line only.
 //
 // It returns a done channel that closes once the force-cancel has finished, so a caller
@@ -98,12 +98,12 @@ func (p *Provisioner) recoverAbandoned(ctx context.Context, target Target, pod *
 
 	// The pod's run identity is that of the job it was created for, which another runner
 	// of the set may have taken. That run lost nothing, so cancelling it would end a live
-	// job (Q1169). A worker lost with its node was placed, so the idle workers beside it
+	// job. A worker lost with its node was placed, so the idle workers beside it
 	// are not waiting on its capacity and count as able to take a job, as they did when
 	// this shape took the disruption path.
 	//
 	// Where another runner did take it, the set is still one runner short, and the job
-	// left without one is the one recovered instead (strandedScaleSetJob, Q1195).
+	// left without one is the one recovered instead (strandedScaleSetJob).
 	owner, repo, runID, ok := runIdentityFromPod(pod)
 	job := pod.Annotations[annotationJobName]
 	if workers, err := p.liveScaleSetWorkers(ctx, target); err != nil {
@@ -159,10 +159,10 @@ func (p *Provisioner) recoverAbandoned(ctx context.Context, target Target, pod *
 // container exit record — routed to the force-cancel path instead of being dropped. The
 // exclusion there is still correct for what it guards: handleEviction would call
 // rerun-failed-jobs on a job that never ran. Here the run is concluded first, which is
-// what makes the re-run legal (Q683/Q766).
+// what makes the re-run legal.
 //
 // A worker its node's shutdown failed while still Pending is taken too, without the
-// deletion mark, because nothing deletes it (LostToNodeShutdownBeforeStart, Q1198).
+// deletion mark, because nothing deletes it (LostToNodeShutdownBeforeStart).
 //
 // Otherwise three conditions narrow it, and each rules out a shape that must not be
 // recovered:
@@ -216,7 +216,7 @@ func (p *Provisioner) runStartedOnSet(ctx context.Context, target Target, worker
 }
 
 // strandedScaleSetJob names the job that podName's removal left with no runner, where
-// another worker's runner started the job podName was created for (Q1195).
+// another worker's runner started the job podName was created for.
 //
 // The set loses one runner and keeps every job, so some job goes unserved, and it is
 // not podName's own. It is found by following the runners: the worker that started
@@ -224,11 +224,11 @@ func (p *Provisioner) runStartedOnSet(ctx context.Context, target Target, worker
 // started in turn, until a job nobody started. That job's own worker is busy with
 // another job, and the walk declines while any runner's start may be unrecorded
 // (scaleSetWorkerSet.strandedJob), so a job a runner has just taken is not named;
-// strandedJobFor registers that decline for one re-check (Q1235).
+// strandedJobFor registers that decline for one re-check.
 //
 // A worker's name is a hash of the job it was created for, so the walk reads that job,
 // and the run identity to recover it by, from the listener's in-flight set; the
-// started stamp has already replaced the worker's own identity annotations (Q1152).
+// started stamp has already replaced the worker's own identity annotations.
 func (p *Provisioner) strandedScaleSetJob(ctx context.Context, target Target, workers scaleSetWorkerSet, podName string, log *slog.Logger) (OrphanedWorker, bool) {
 	lister, ok := target.(InFlightLister)
 	if !ok {
@@ -242,7 +242,7 @@ func (p *Provisioner) strandedScaleSetJob(ctx context.Context, target Target, wo
 	job, ok := workers.strandedJob(target.Key().Name, podName, inFlight)
 	// A force-cancel ends the whole run, so a stranded job sharing a run with a job a live
 	// worker has started, such as another leg of one matrix, is left to GitHub's
-	// unstarted-job timeout rather than recovered by ending that job (Q1235).
+	// unstarted-job timeout rather than recovered by ending that job.
 	if ok && workers.runStarted(job.RunID, inFlight) {
 		log.Info("the job left without a runner shares its run with a job another worker is running; not force-cancelling, which would end that job",
 			"jobID", job.JobID, "runID", job.RunID)

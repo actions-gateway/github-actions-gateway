@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-// Q1327: one repository's out-of-memory kills wrote a floor, a parked re-run and a
+// One repository's out-of-memory kills wrote a floor, a parked re-run and a
 // merged disruption per job, none of which the cap evicted, so its matrix runs alone
 // could fill the per-set ledger and every other repository's re-run was then refused.
 
@@ -36,8 +36,8 @@ func oomKillJob(ctx context.Context, p *Provisioner, target Target, repo, runID 
 }
 
 // TestRerunLedger_KilledJobsOfOneAttemptAddNoBudgetState kills 40 jobs of one run
-// attempt. Before Q1327 each wrote a parked re-run and a merged entry into the run's
-// budget record, which is never evicted, and 564 such jobs filled the ledger; now the
+// attempt. Each writing a parked re-run and a merged entry into the run's
+// budget record, which is never evicted, would fill the ledger; the
 // attempt keeps one parked re-run and a bounded list, so all that grows per job is its
 // floor, which TestRerunLedger_FloorsAreEvictedBeforeABudgetIsRefused evicts.
 func TestRerunLedger_KilledJobsOfOneAttemptAddNoBudgetState(t *testing.T) {

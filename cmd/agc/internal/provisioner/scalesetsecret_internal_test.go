@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
-// The Q373 contract for the ScaleSet worker path: a JIT-config Secret is
+// The Secret contract for the ScaleSet worker path: a JIT-config Secret is
 // credential-bearing, so it must never outlive the worker pod that consumes it. Every
 // exit of ProvisionScaleSetWorker that leaves no pod behind unstages the Secret it
 // staged, and the steady-state Secret is reclaimed by CleanupScaleSetJob when the
@@ -99,7 +99,7 @@ func TestProvisionScaleSetWorker_UnstagesSecretOnPodCreateError(t *testing.T) {
 }
 
 // TestProvisionScaleSetWorker_UnstagesSecretOnThrottleError covers the scale-up
-// rate-limit exit (Q223): the wait is abandoned (an AGC shutdown cancels it), so this
+// rate-limit exit: the wait is abandoned (an AGC shutdown cancels it), so this
 // job never reaches pod creation — while the already-provisioned job's Secret, which a
 // live pod mounts, must be left strictly alone.
 func TestProvisionScaleSetWorker_UnstagesSecretOnThrottleError(t *testing.T) {
@@ -176,7 +176,7 @@ func TestCleanupScaleSetJob_ReclaimsAndIsIdempotent(t *testing.T) {
 		"a completion for a job this process never provisioned must be a no-op")
 }
 
-// TestCleanupScaleSetJob_StampsJobCompletion covers Q420: the reclaim point is also
+// TestCleanupScaleSetJob_StampsJobCompletion covers the completion stamp: the reclaim point is also
 // where a worker pod learns its job is over, which is the only thing that gives a
 // still-Running scale-set worker a reap deadline. The stamp is set once — a replayed
 // completion (a re-created session polls from cursor 0) must not push the deadline
@@ -215,7 +215,7 @@ func TestCleanupScaleSetJob_StampsJobCompletion(t *testing.T) {
 
 // TestCleanupScaleSetJob_SurfacesStampErrors pins that a failure to stamp the pod is
 // reported rather than swallowed: an unstamped Running worker has no reap deadline, so
-// a persistent failure is the Q420 leak returning silently.
+// a persistent failure is a worker leak returning silently.
 func TestCleanupScaleSetJob_SurfacesStampErrors(t *testing.T) {
 	ctx := context.Background()
 	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).
@@ -271,7 +271,7 @@ func podAnnotations(ctx context.Context, t *testing.T, c client.Client, key clie
 	return pod.Annotations
 }
 
-// TestCleanupScaleSetJob_ReclaimsTheRunnerThatHeldTheJob is the Q1151 defect as
+// TestCleanupScaleSetJob_ReclaimsTheRunnerThatHeldTheJob is the shape
 // measured on dogfood: job-a's worker is running job-b, and job-a finished on job-b's
 // worker. The completion names that runner, so it is job-b's worker that is stamped and
 // loses its Secret, while job-a's worker — mid job — is left with neither.
@@ -336,8 +336,8 @@ func TestCleanupScaleSetJob_RunnerlessCompletionSparesABusyWorker(t *testing.T) 
 	assert.True(t, secretExists(ctx, t, fc, "team-a", "job-x"))
 }
 
-// TestCleanupScaleSetJob_RunnerlessCompletionReclaimsAnIdleWorker is the Q420 arm the
-// fix must keep: a job that ended before any runner took it leaves its minted worker
+// TestCleanupScaleSetJob_RunnerlessCompletionReclaimsAnIdleWorker is the arm that
+// must keep working: a job that ended before any runner took it leaves its minted worker
 // idle at "Listening for Jobs", and that worker is still stamped and loses its Secret.
 func TestCleanupScaleSetJob_RunnerlessCompletionReclaimsAnIdleWorker(t *testing.T) {
 	ctx := context.Background()

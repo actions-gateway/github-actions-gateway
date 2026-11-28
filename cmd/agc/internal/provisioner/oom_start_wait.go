@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// The out-of-memory class's wait for a start (Q1389). Until its JobStarted is handled a
+// The out-of-memory class's wait for a start. Until its JobStarted is handled a
 // worker's pod names the job it was created for, which is often not the job its runner
 // took, and acting on it would raise another job's limit and spend another run's slot. So
 // a kill whose pod carries no start is left unclaimed until the start stamps it, which a

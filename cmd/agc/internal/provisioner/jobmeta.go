@@ -15,7 +15,7 @@ type jobMeta struct {
 // Informational for an operator reading `kubectl describe pod` — with one exception:
 // AnnotationRunID and AnnotationRepository are also the durable record eviction
 // recovery reads back to name the run to re-run, since the AGC keeps no in-process
-// job state (Q417). Exported for that reason. The job-name key is read too, by
+// job state. Exported for that reason. The job-name key is read too, by
 // flaky-job and out-of-memory detection and by ReissueReplacement.
 const (
 	AnnotationRunID      = "actions-gateway.com/run-id"
@@ -44,7 +44,7 @@ func (m jobMeta) podAnnotations() map[string]string {
 }
 
 // ReissueReplacement names the worker GitHub's re-issue of pod's job was given, or ""
-// when there is none (Q1361). GitHub withdraws a scale-set assignment no runner takes
+// when there is none. GitHub withdraws a scale-set assignment no runner takes
 // within five minutes and re-issues the same workflow job under a new job ID, so the
 // replacement carries pod's run ID and job name and was created after it. A pod whose
 // containers ever started is not one GitHub gave up waiting on, and a pod missing

@@ -18,7 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// scaleUpTestMetrics builds the counter the Q223 scale-up limiter records into,
+// scaleUpTestMetrics builds the counter the scale-up limiter records into,
 // unregistered so each test observes only its own increments. runnercore.NewMetrics
 // registers with the process-global controller-runtime registry, whose counters
 // accumulate across repeats of the same test (-count>1).
@@ -35,10 +35,10 @@ func scaleUpTestMetrics() *runnercore.Metrics {
 type stubTarget struct {
 	key  client.ObjectKey
 	spec *ResolvedSpec
-	// quotaExhausted/quotaDetail drive the admission gate's quota rung (#784).
+	// quotaExhausted/quotaDetail drive the admission gate's quota rung.
 	quotaExhausted bool
 	quotaDetail    string
-	// capacityDeclined/capacityDetail drive the placeability rung (Q405).
+	// capacityDeclined/capacityDetail drive the placeability rung.
 	capacityDeclined bool
 	capacityDetail   string
 	// events records every RecordEvent reason, so a test can assert an owner-visible
@@ -75,8 +75,8 @@ func (s *stubTarget) Resolve(context.Context) (*ResolvedSpec, error) {
 	return s.spec, nil
 }
 
-// TestProvisioner_ScaleUpRateLimitDelaysPodCreation is the behaviour test the Q223
-// plan calls for: with a per-RunnerGroup token bucket of burst=1, the first worker
+// TestProvisioner_ScaleUpRateLimitDelaysPodCreation is the behaviour
+// test: with a per-RunnerGroup token bucket of burst=1, the first worker
 // pod is created instantly and the second waits one refill interval before its pod
 // is created — verifying the limiter actually gates pod CREATION at the configured
 // rate (not merely that the code runs), while both pods still get made.

@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// Q1174: a scale-set job is replayed to a re-created session after its worker was
+// A scale-set job is replayed to a re-created session after its worker was
 // deleted and before the garbage collector deleted the worker's Secret. The collector can
 // delete that Secret at any point after the pod went, so the replay must not hand it to
 // the new worker.
@@ -74,7 +74,7 @@ func TestProvisionScaleSetWorker_ReplayAfterItsWorkerWentGetsAFreshSecret(t *tes
 }
 
 // A Secret the RunnerSet still owns was staged by a delivery that has not created its pod
-// yet, so a replay finding it must leave it as it is (Q373).
+// yet, so a replay finding it must leave it as it is.
 func TestProvisionScaleSetWorker_ReplayLeavesAnInFlightSecretAlone(t *testing.T) {
 	ctx := context.Background()
 	fc := uidAssigningClient()
@@ -93,7 +93,7 @@ func TestProvisionScaleSetWorker_ReplayLeavesAnInFlightSecretAlone(t *testing.T)
 }
 
 // A Secret handed to a worker that is still there is that worker's mount, so a replay
-// finding it must leave it as it is (Q373).
+// finding it must leave it as it is.
 func TestProvisionScaleSetWorker_ReplayLeavesALiveWorkersSecretAlone(t *testing.T) {
 	ctx := context.Background()
 	fc := uidAssigningClient()

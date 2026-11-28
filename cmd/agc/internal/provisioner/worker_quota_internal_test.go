@@ -149,7 +149,7 @@ func TestWorkerQuotaExhausted_FailsOpenOnReadError(t *testing.T) {
 	assert.Empty(t, detail)
 }
 
-// TestAdmit_QuotaRungClosesGate verifies the #784 behaviour end to end: with the namespace quota exhausted the AdmitFunc refuses with
+// TestAdmit_QuotaRungClosesGate verifies the quota rung end to end: with the namespace quota exhausted the AdmitFunc refuses with
 // reason=quota, and — critically — reserves nothing, so the ceiling budget is
 // untouched and recovers the moment headroom returns.
 func TestAdmit_QuotaRungClosesGate(t *testing.T) {
@@ -177,7 +177,7 @@ func TestAdmit_QuotaRungClosesGate(t *testing.T) {
 }
 
 // TestAdmit_QuotaRungOptOut verifies AGC_QUOTA_ADMISSION=false (DisableQuotaAdmission)
-// restores the pre-#784 behaviour: the gate ignores quota entirely and admits on the
+// turns the quota rung off: the gate ignores quota entirely and admits on the
 // declared ceiling alone.
 func TestAdmit_QuotaRungOptOut(t *testing.T) {
 	fc := fake.NewClientBuilder().WithScheme(quotaTestScheme()).

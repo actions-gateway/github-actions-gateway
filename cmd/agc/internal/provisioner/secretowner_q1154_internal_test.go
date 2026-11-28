@@ -30,7 +30,7 @@ func uidAssigningClient() client.WithWatch {
 		}).Build()
 }
 
-// Q1154: a scale-set job-b ran on the worker created for job-a, and that worker was
+// A scale-set job-b ran on the worker created for job-a, and that worker was
 // deleted before job-b's completion arrived (a delayed listener, or a hand-run delete).
 // The completion finds no pod carrying the runner's name, and the worker created for
 // job-b is still there, so the fallback leaves job-a's Secret, which holds a runner

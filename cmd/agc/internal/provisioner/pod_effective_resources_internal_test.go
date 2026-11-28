@@ -10,7 +10,7 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-// Q450: a worker pod's ResourceQuota charge is not the sum of spec.containers.
+// A worker pod's ResourceQuota charge is not the sum of spec.containers.
 // These tests pin the four parts Kubernetes actually composes it from — regular
 // containers, native sidecars, the init-container floor, and pod overhead — against
 // the shapes this project ships, because the two ways to get this wrong have
@@ -19,7 +19,7 @@ import (
 // capacity it paid for.
 
 // sidecar returns an init container with restartPolicy: Always — a native sidecar,
-// which is how the DinD daemon must be declared (Q249).
+// which is how the DinD daemon must be declared.
 func sidecar(name string, req, lim corev1.ResourceList) corev1.Container {
 	return corev1.Container{
 		Name:          name,
@@ -71,7 +71,7 @@ func assertFootprint(t *testing.T, fp corev1.ResourceList, reqCPU, reqMem, limCP
 }
 
 // TestWorkerFootprint_DinDReferenceShape is the regression test for the headline
-// Q450 under-count. This is the measured shape from
+// under-count. This is the measured shape from
 // deploy/dogfood-e2e/overlays/dind/resources.yaml: the `dind` daemon is a native
 // sidecar, so Kubernetes SUMS it with the runner container. Counting containers
 // alone reported 3 CPU / 1Gi — under by the sidecar's entire ask (1 CPU / 3Gi

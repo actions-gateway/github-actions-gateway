@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// Q766: the abandoned-run force-cancel (Q683) and capacity-gated auto re-run (Q691) on
+// The abandoned-run force-cancel and capacity-gated auto re-run on
 // the scale-set tier. Both were wired into the classic provision() goroutine only, so no
 // v2beta1 tenant had either.
 //
@@ -137,7 +137,7 @@ func reapedPendingWorker(name string) *corev1.Pod {
 
 // TestQ766_ReapedPendingScaleSetWorker_ForceCancelsThenRerunsOnCapacity is the headline
 // port: on the scale-set tier a worker reaped while Pending now gets the same one-second
-// cancelled ending and the same deferred re-run the classic tier has had since Q683/Q691.
+// cancelled ending and the same deferred re-run the classic tier has.
 //
 // It asserts the ORDER, not just that both calls happen. The force-cancel has to land
 // first — a run that concluded green refuses rerun-failed-jobs with a 403 (measured
@@ -284,7 +284,7 @@ func TestQ766_AbandonedAwaitingRecovery(t *testing.T) {
 		},
 		{
 			name: "never started on an out-of-service node",
-			// Q1207: LostToNodeShutdown declines a worker with no Running runner, so
+			// LostToNodeShutdown declines a worker with no Running runner, so
 			// this arm is the one that has to take it.
 			pod: func() *corev1.Pod {
 				pod := outOfService(scaleSetWorkerPod("g", identityAnnotations()))
@@ -298,7 +298,7 @@ func TestQ766_AbandonedAwaitingRecovery(t *testing.T) {
 			pod:  outOfService(scaleSetWorkerPod("h", identityAnnotations())),
 		},
 		{
-			// Q1198: the kubelet's shutdown manager fails a still-Pending worker and
+			// The kubelet's shutdown manager fails a still-Pending worker and
 			// deletes nothing, so the deletion mark this arm otherwise needs is absent.
 			name: "never started on a node the kubelet shut down",
 			pod:  shutDown(scaleSetWorkerPod("i", identityAnnotations()), corev1.PodReasonTerminationByKubelet),
@@ -363,7 +363,7 @@ func TestQ766_ScanSendsNeverStartedToForceCancelAndDisruptedToRerun(t *testing.T
 		AnnotationRunID: "222", AnnotationRepository: "myorg/myrepo",
 	}))
 	// The delete request (deletionTimestamp less the grace period) predates the exit, so
-	// this is the drained-worker shape Q502 recovers.
+	// this is the drained-worker shape recovery acts on.
 	ranAndDied.Status.ContainerStatuses = []corev1.ContainerStatus{{
 		Name: "runner",
 		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
@@ -390,7 +390,7 @@ func TestQ766_ScanSendsNeverStartedToForceCancelAndDisruptedToRerun(t *testing.T
 	assert.Equal(t, "111", keys[0].runID)
 }
 
-// TestQ1198_ScanSendsNodeLostBeforeStartToForceCancel is the scan half of Q1198, made on
+// TestQ1198_ScanSendsNodeLostBeforeStartToForceCancel is the scan half of the node-lost-before-start case, made on
 // the endpoints. Both workers' node shut down under them; only the one whose runner ran
 // has a failed job to re-run, and the one still pulling its image has a run to cancel.
 func TestQ1198_ScanSendsNodeLostBeforeStartToForceCancel(t *testing.T) {

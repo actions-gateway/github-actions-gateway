@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
-// Q1374: a job GitHub cancelled at its time limit, re-run and passed, is counted as a
+// A job GitHub cancelled at its time limit, re-run and passed, is counted as a
 // failed one is, and any other cancelled job is not.
 
 // annotationsStub answers a run's job list, and each check run's annotations.

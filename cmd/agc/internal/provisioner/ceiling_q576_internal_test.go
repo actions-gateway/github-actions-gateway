@@ -17,7 +17,7 @@ import (
 // The scale-set listener has to tell a full worker ceiling apart from a transient
 // provisioning failure: a transient failure is retried by redelivering the queue
 // message, which is immediate, while a full ceiling is still full on the next delivery
-// and belongs on the re-offer backoff (Q576). That distinction rests on the ceiling
+// and belongs on the re-offer backoff. That distinction rests on the ceiling
 // rejection being a typed error and on the pre-mint check agreeing with it.
 
 // activeWorkerPod builds a Running worker pod owned by the "gpu" set, so it counts

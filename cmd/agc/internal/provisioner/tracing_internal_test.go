@@ -28,7 +28,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 )
 
-// The Q1278 contract: each scale-set job is one root span, Provisioner.ProvisionScaleSetWorker,
+// The tracing contract: each scale-set job is one root span, Provisioner.ProvisionScaleSetWorker,
 // with a child span per provisioning phase, so a collector configured through
 // spec.tracing receives the job-to-pod path.
 

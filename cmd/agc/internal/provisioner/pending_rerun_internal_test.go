@@ -290,7 +290,7 @@ func TestPendingRerun_ExpiresAfterADay(t *testing.T) {
 	assert.Empty(t, l.Pending)
 }
 
-// TestPendingRerun_AdoptedPastADayReadsTheRunFirst is Q1254: a run that concluded while
+// TestPendingRerun_AdoptedPastADayReadsTheRunFirst: a run that concluded while
 // no process swept is released by the process that adopts it past the 24-hour mark,
 // rather than expired unread as never concluding.
 func TestPendingRerun_AdoptedPastADayReadsTheRunFirst(t *testing.T) {
@@ -357,7 +357,7 @@ func TestPendingRerun_TheFinalReadRetriesAFailure(t *testing.T) {
 		"team-a", "gpu", recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
 }
 
-// TestPendingRerun_AnUnwritableLedgerKeepsTheCadence is the review finding on #2228: an
+// TestPendingRerun_AnUnwritableLedgerKeepsTheCadence: an
 // expiry whose ledger write fails leaves the entry for a later sweep, which must wait out
 // the poll cadence rather than read the run on every 30-second tick.
 func TestPendingRerun_AnUnwritableLedgerKeepsTheCadence(t *testing.T) {
@@ -432,7 +432,7 @@ func TestPendingRerun_PollCadenceBoundsTheReads(t *testing.T) {
 	assert.InDelta(t, 175, reads, 5)
 }
 
-// TestPendingRerun_AFailedReadRetries is the review finding on #2216: over a day of
+// TestPendingRerun_AFailedReadRetries: over a day of
 // polling a run read will fail now and then, a rate limit or a token that would not
 // mint, and that must cost the entry one poll rather than its re-run.
 func TestPendingRerun_AFailedReadRetries(t *testing.T) {

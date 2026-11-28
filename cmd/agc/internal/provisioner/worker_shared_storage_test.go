@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// Shared worker storage (Q719): the ReadWriteMany volume several workers of one
+// Shared worker storage: the ReadWriteMany volume several workers of one
 // tenant mount to pass files, which is also what ARC's `containerMode: kubernetes`
 // depends on.
 //

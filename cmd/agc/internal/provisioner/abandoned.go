@@ -23,30 +23,30 @@ const abandonedForceCancelTimeout = 30 * time.Second
 // forceCancelAbandonedRun drives the run of an acquired-but-never-run job terminal.
 // Nothing will ever report such a job — its worker was removed before the runner
 // binary registered, and every accepted completejob value concludes the run as a
-// false green while failed is refused (Q645/Q676) — so told nothing, GitHub cancels
+// false green while failed is refused — so told nothing, GitHub cancels
 // the run and job at its ~15-minute unstarted-job timeout. A standalone REST
 // force-cancel (no prior plain cancel; a plain cancel alone is sluggish against an
 // orphaned acquire) reaches the same cancelled conclusion in about a second, and the
-// cancelled run accepts rerun-failed-jobs where the false green refused it (measured
-// live 2026-08-05, Q683; the Q645 plan doc carries the runs).
+// cancelled run accepts rerun-failed-jobs where the false green refused it
+// (measured live 2026-08-05).
 //
 // Best-effort: on an unknown identity or a refused call the unstarted-job timeout
 // remains the honest backstop, so every outcome is logged and counted, none returned.
 //
 // A cancelled run is also registered for automatic re-run once the owner can place a
-// worker pod again (Q691) — not immediately, because the job was abandoned for want of
+// worker pod again — not immediately, because the job was abandoned for want of
 // capacity and re-queueing it into the same starved pool is how a shortage compounds.
 //
-// Both acquisition tiers run the identical call (Q766). On the
+// Both acquisition tiers run the identical call. On the
 // scale-set tier the run's attempt is read and recorded in the owner's failure ledger
 // as GAG's own cancel before cancelling, so the cancelled conclusion it produces is not
-// taken for a user's (Q1182), and the re-run it registers is judged against that
+// taken for a user's, and the re-run it registers is judged against that
 // attempt. Neither step blocks the cancel: without them the run is cancelled as before,
 // and every later scale-set check, this arm's own re-run included, reads the cancel as a
-// user's and withholds the re-run, the safe direction (Q1181). A run the read finds
+// user's and withholds the re-run, the safe direction. A run the read finds
 // already cancelled on an attempt the ledger does not hold as GAG's is not cancelled
-// again: it is withheld as run_cancelled under cause abandoned, and nothing is recorded
-// (Q1232). The conclusion does not say who cancelled, so this covers a user's cancel, a
+// again: it is withheld as run_cancelled under cause abandoned, and nothing is recorded.
+// The conclusion does not say who cancelled, so this covers a user's cancel, a
 // concurrency group's, and GitHub's own unstarted-job timeout, which a pendingPodDeadline
 // past ~15 minutes lets land before the reap. A run with a job in progress on a runner
 // is not cancelled either, since the cancel ends every unfinished job of the run: it is
@@ -69,7 +69,7 @@ func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target
 			}
 			if cancelledElsewhere {
 				// Recording this attempt as GAG's would turn that cancel into one the
-				// run_cancelled check re-runs (Q1232). No force-cancel, no re-run, and no
+				// run_cancelled check re-runs. No force-cancel, no re-run, and no
 				// force-cancel outcome: the withhold is counted instead.
 				p.recordRerunWithheld(target, runID, recoveryCauseAbandoned, rerunWithheldReasonRunCancelled,
 					runCancelledMessage(runID, recoveryCauseAbandoned))
@@ -91,7 +91,7 @@ func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target
 				"runID", runID)
 			// Only this outcome is re-runnable: the cancelled conclusion is the state
 			// rerun-failed-jobs was measured to accept, and it is the one outcome in
-			// which we know the run concluded at all (Q691, abandoned_rerun.go).
+			// which we know the run concluded at all (abandoned_rerun.go).
 			p.registerAbandonedRerun(target, owner, repo, runID, tier, d)
 		}
 	}
@@ -182,7 +182,7 @@ func (p *Provisioner) forceCancelRun(ctx context.Context, owner, repo, runID str
 		return fmt.Errorf("get installation token: %w", err)
 	}
 	// No silent default: refusing to guess an endpoint keeps the installation
-	// token from being posted to a host that never issued it (see GitHubAPIURL, Q504).
+	// token from being posted to a host that never issued it (see GitHubAPIURL).
 	if p.GitHubAPIURL == "" {
 		return fmt.Errorf("GitHubAPIURL is not configured; refusing to guess an endpoint for the force-cancel call")
 	}

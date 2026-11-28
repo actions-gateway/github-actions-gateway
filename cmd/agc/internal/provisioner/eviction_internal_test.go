@@ -22,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
-// TestHandleEviction_ConcurrentSameRunRespectsBudget is the Q106 regression
+// TestHandleEviction_ConcurrentSameRunRespectsBudget is the budget regression
 // test. handleEviction read-modify-writes a per-run eviction counter; without
 // per-run serialization two concurrent evictions of the same run_id can both
 // read the same count, both pass the budget check, and both fire a rerun —
@@ -34,8 +34,7 @@ import (
 // class -race exists to catch.
 //
 // It drives the classic tier, whose budget is this in-process map. The scale-set tier's
-// is the owner's failure ledger, and its concurrency is pinned in rerun_ledger_internal_test.go
-// (Q1182).
+// is the owner's failure ledger, and its concurrency is pinned in rerun_ledger_internal_test.go.
 func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	const (
 		maxRetries  = 2
@@ -72,7 +71,7 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	// the fix must defend against. retryDelay=0 keeps the test fast.
 	// Both disruption causes are interleaved, because the budget is one budget across
 	// them: a run that is alternately evicted and preempted must still be capped at
-	// maxRetries re-runs in total (Q497).
+	// maxRetries re-runs in total.
 	var wg sync.WaitGroup
 	for i := 0; i < concurrency; i++ {
 		cause := recoveryCauseEviction
@@ -106,8 +105,8 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 
 // TestHandleEviction_BudgetIsHardCap verifies that the eviction-retry budget is
 // a hard lifetime cap: repeated (sequential) evictions of the same run never
-// fire more than maxRetries reruns. This guards the Q106 fix's removal of the
-// delete-on-exhaustion that previously reset the budget on the next eviction.
+// fire more than maxRetries reruns. Deleting the counter on
+// exhaustion would reset the budget on the next eviction.
 func TestHandleEviction_BudgetIsHardCap(t *testing.T) {
 	const (
 		maxRetries = 1
@@ -137,10 +136,10 @@ func TestHandleEviction_BudgetIsHardCap(t *testing.T) {
 		"budget must not refill across sequential evictions")
 }
 
-// TestSweepEvictionCounts_ReclaimsExpiredKeepsFresh verifies the Q141 cleanup:
+// TestSweepEvictionCounts_ReclaimsExpiredKeepsFresh verifies the cleanup:
 // the background sweep deletes per-run counters older than the TTL while
 // retaining entries still inside the window. Bounding map growth this way is the
-// whole point — Q106 made the counter a hard lifetime cap with no delete on
+// whole point — the counter is a hard lifetime cap with no delete on
 // exhaustion, so without the sweep one entry leaks per distinct evicted run_id.
 func TestSweepEvictionCounts_ReclaimsExpiredKeepsFresh(t *testing.T) {
 	const ttl = 24 * time.Hour
@@ -166,10 +165,10 @@ func TestSweepEvictionCounts_ReclaimsExpiredKeepsFresh(t *testing.T) {
 	assert.True(t, freshPresent, "in-TTL entry retained")
 }
 
-// TestSweepEvictionCounts_RefreshKeepsLiveRunPinned is the core Q141/Q106
+// TestSweepEvictionCounts_RefreshKeepsLiveRunPinned is the core sweep
 // invariant test. A still-evicting run is provably live, so the sweep must never
 // reclaim its counter — reclaiming would let the next eviction refill the retry
-// budget to zero (the Q106 over-budget bug). reserveEvictionRetry refreshes
+// budget to zero (the over-budget bug). reserveEvictionRetry refreshes
 // lastUpdate on every eviction, including the exhausted/rejected path, so the
 // entry stays out of the sweep as long as evictions keep arriving within the TTL.
 func TestSweepEvictionCounts_RefreshKeepsLiveRunPinned(t *testing.T) {
@@ -208,7 +207,7 @@ func TestSweepEvictionCounts_RefreshKeepsLiveRunPinned(t *testing.T) {
 	assert.False(t, ok, "budget must not refill while the run is live")
 }
 
-// rerunLoopMetrics builds the counters the Q503 re-run loop records into.
+// rerunLoopMetrics builds the counters the re-run loop records into.
 func rerunLoopMetrics() *runnercore.Metrics {
 	return &runnercore.Metrics{
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -224,14 +223,14 @@ func rerunLoopMetrics() *runnercore.Metrics {
 }
 
 // alreadyRunningBody is GitHub's rerun-failed-jobs refusal while the original run has
-// not concluded, verbatim from the live measurement (Q396/Q503).
+// not concluded, verbatim from the live measurement.
 const alreadyRunningBody = `{"message":"This workflow is already running","documentation_url":"https://docs.github.com/rest"}`
 
-// TestHandleEviction_RetriesUntilTheRunConcludes is the Q503 regression test. GitHub
+// TestHandleEviction_RetriesUntilTheRunConcludes pins the retry loop. GitHub
 // refuses rerun-failed-jobs with 403 "This workflow is already running" until it has
-// concluded the original run — measured at 9m36s after an ungraceful kill — while the
-// AGC used to fire exactly once, ~5s after the eviction. The refusal spent the retry
-// budget and the job was never re-run.
+// concluded the original run — measured at 9m36s after an ungraceful kill, so a
+// single attempt ~5s after the eviction is refused, spends the retry budget, and
+// the job is never re-run.
 //
 // The invariant now: a still-running refusal is "not yet", so recovery keeps calling
 // until GitHub accepts, and the whole wait costs ONE budget slot.
@@ -273,8 +272,8 @@ func TestHandleEviction_RetriesUntilTheRunConcludes(t *testing.T) {
 	assert.True(t, ok, "one recovery must consume exactly one of the two budget slots")
 }
 
-// handlerPacedWindow drives the re-run loop off the handler instead of the wall clock
-// (Q1089). The handler closes the window on the attempt the test wants to be the last,
+// handlerPacedWindow drives the re-run loop off the handler instead of the wall clock.
+// The handler closes the window on the attempt the test wants to be the last,
 // and every wait before that fires immediately, so the loop makes exactly that many
 // attempts on a loaded host and an idle one alike. A real window asserts only that N
 // loopback round trips plus goroutine scheduling fit inside it, which is a property of
@@ -313,7 +312,7 @@ func (h *handlerPacedWindow) retry(time.Duration) <-chan time.Time {
 	return ch
 }
 
-// TestHandleEviction_RunNeverConcludingIsSurfaced bounds the Q503 retry loop: if the
+// TestHandleEviction_RunNeverConcludingIsSurfaced bounds the retry loop: if the
 // re-run window closes with GitHub still refusing, recovery gives up loudly — the
 // failure counter and an owner Event — rather than retrying forever or, worse,
 // pretending the spent budget slot recovered anything.
@@ -355,8 +354,8 @@ func TestHandleEviction_RunNeverConcludingIsSurfaced(t *testing.T) {
 // tests would stay green if startRerunWindow's real branch returned a channel that
 // never fires, because they never take it.
 //
-// The assertion is the failure counter alone, never an attempt count, so this is not
-// the Q1089 shape reintroduced: it needs the window to close eventually, which 50ms of
+// The assertion is the failure counter alone, never an attempt count, so it does not
+// depend on host speed: it needs the window to close eventually, which 50ms of
 // wall clock always delivers, rather than N loopback round trips to fit inside it. How
 // many attempts the loop got there in is the host's business and nothing asserts it.
 func TestHandleEviction_TheUnseamedWindowCloses(t *testing.T) {
@@ -430,13 +429,13 @@ func TestHandleEviction_TerminalFailuresDoNotRetry(t *testing.T) {
 }
 
 // runConcludedFailure is the shape a drained or evicted run concludes on, measured at
-// live GitHub (Q459). It is what a fake must answer the Q811 conclusion check with for a
+// live GitHub. It is what a fake must answer the conclusion check with for a
 // recovery to proceed to its re-run.
 const runConcludedFailure = `{"status":"completed","conclusion":"failure","run_attempt":1}`
 
-// answeredRunConclusion answers the run GET the Q811 conclusion check makes, reporting
+// answeredRunConclusion answers the run GET the conclusion check makes, reporting
 // whether it did. Every fake a disruption recovery can reach owes this arm: the deletion
-// arm makes two differently-shaped calls where there used to be one, and a fake that
+// arm makes two differently-shaped calls, and a fake that
 // answers both alike both miscounts its re-runs and, when its body will not decode,
 // leaves the recovery re-asking for the whole 15-minute window.
 func answeredRunConclusion(w http.ResponseWriter, r *http.Request, body string) bool {
@@ -448,7 +447,7 @@ func answeredRunConclusion(w http.ResponseWriter, r *http.Request, body string) 
 	return true
 }
 
-// runAPIStub is a fake of the two run endpoints the Q811 conclusion gate touches: the
+// runAPIStub is a fake of the two run endpoints the conclusion gate touches: the
 // run GET, answered from states in order (the last one repeats), and the rerun POST,
 // answered 201. It counts both so a test can assert what was NOT called.
 type runAPIStub struct {
@@ -474,14 +473,14 @@ func (s *runAPIStub) server() *httptest.Server {
 	}))
 }
 
-// TestHandleEviction_CancelledRunIsNotReRun is the Q811 regression test, and the whole
+// TestHandleEviction_CancelledRunIsNotReRun is the whole
 // point of the conclusion gate.
 //
 // The graceful-deletion arm keys on a deletion mark no AGC delete stamped, and the
 // cancel runbook's own remedy for a worker that will not stop is to delete its pod —
 // which supplies that mark by hand. GitHub accepts rerun-failed-jobs for a `cancelled`
-// conclusion (measured 2026-08-05, Q683), so recovery used to re-queue the job the
-// operator had just stopped. It must now stand down without calling at all.
+// conclusion (measured 2026-08-05), so an unchecked recovery re-queues the job the
+// operator had just stopped. It must stand down without calling at all.
 func TestHandleEviction_CancelledRunIsNotReRun(t *testing.T) {
 	stub := &runAPIStub{states: [][2]string{{"completed", "cancelled"}}}
 	srv := stub.server()
@@ -514,7 +513,7 @@ func TestHandleEviction_CancelledRunIsNotReRun(t *testing.T) {
 
 // TestHandleEviction_DrainedRunStillReRuns is the negative control for the gate above:
 // the deletion arm's whole purpose is that a drained worker's job comes back. Its run
-// concludes `failure` (measured, Q459), and the conclusion check must let it through —
+// concludes `failure` (measured), and the conclusion check must let it through —
 // including across the wait, since at detection the run has not concluded at all and its
 // conclusion is null.
 func TestHandleEviction_DrainedRunStillReRuns(t *testing.T) {
@@ -669,7 +668,7 @@ func TestHandleEviction_UnanswerableConclusionIsTerminal(t *testing.T) {
 	}
 }
 
-// TestRerunFailedJobs_RequiresAnExplicitBaseURL is the Q504 regression test.
+// TestRerunFailedJobs_RequiresAnExplicitBaseURL pins the explicit endpoint.
 //
 // The bug was not a wrong URL — it was an UNSET field with a silent default:
 // nothing in cmd/agc assigned Provisioner.GitHubAPIURL, so rerunFailedJobs

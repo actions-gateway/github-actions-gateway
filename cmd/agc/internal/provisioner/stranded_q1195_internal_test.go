@@ -10,7 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// Q1195: a worker reaped Pending whose own job another runner took still costs the set
+// A worker reaped Pending whose own job another runner took still costs the set
 // a runner, and the job left without one is a different job, named only by the
 // listener's in-flight set. Recovery follows the runners to that job and recovers its
 // run instead.
@@ -119,7 +119,7 @@ func TestRecoverAbandonedScaleSetWorker_Q1195_RecoversTheStrandedJob(t *testing.
 	}
 }
 
-// A target that cannot list the in-flight set keeps Q1169's behaviour: the reaped
+// A target that cannot list the in-flight set keeps the conservative behaviour: the reaped
 // worker's own run is spared and nothing else is named.
 func TestRecoverAbandonedScaleSetWorker_Q1195_NoInFlightListerSparesAll(t *testing.T) {
 	f := newAbandonedScaleSetFixture(t, http.StatusAccepted,

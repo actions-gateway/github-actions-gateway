@@ -33,33 +33,33 @@ type PodOutcome struct {
 	// or for the pod's own limit (OwnLimitEviction tells them apart).
 	Reason string
 	// OwnLimitEviction is the kubelet's message when the pod was evicted for exceeding
-	// its own local-storage limit, and empty otherwise (ownLimitEviction, Q1177).
+	// its own local-storage limit, and empty otherwise (ownLimitEviction).
 	OwnLimitEviction string
 	// Preempted reports a DisruptionTarget=True/PreemptionByScheduler condition, which
-	// only kube-scheduler writes (Q497).
+	// only kube-scheduler writes.
 	Preempted bool
 	// NodeShutdown reports that the pod failed because its node shut down, its Node object
-	// was deleted, or its dead node was tainted out-of-service (Q1179, Q1207; see
+	// was deleted, or its dead node was tainted out-of-service (see
 	// LostToNodeShutdown). Every writer publishes PodFailed before the pod is removed, so
 	// it is read off the terminal phase only.
 	NodeShutdown bool
 	// NodeLostBeforeStart reports that the pod failed to the same node loss before any of
-	// its containers started (LostToNodeShutdownBeforeStart, Q1198): a job that never
+	// its containers started (LostToNodeShutdownBeforeStart): a job that never
 	// ran, which takes the abandoned handling rather than a re-run.
 	NodeLostBeforeStart bool
 	// ExternallyDeleted reports that the pod's terminal phase published while an
 	// external (non-AGC) deletion that interrupted its running container was in
-	// flight — the drained/deleted-worker discriminator Q459 measured: a human cancel
+	// flight — the drained/deleted-worker discriminator: a human cancel
 	// and a genuine job failure publish the same Failed/empty-reason shape with no
-	// deletion mark (Q502). See externallyDeletedBeforeTerminal for the two
+	// deletion mark. See externallyDeletedBeforeTerminal for the two
 	// exclusions folded in (the AGC's own stamped deletions, and a deletion whose
 	// container never ran or had already exited).
 	ExternallyDeleted bool
 	// DeletedBeforeStart reports that the pod was removed before any of its
 	// containers began executing, so no step of the job ever ran and no runner
 	// registered. Set on the paths that resolve a wait from a deletion, where the
-	// outcome was otherwise indistinguishable from a clean run (Q628), and on the
-	// transient Failed a deleted pod publishes first (deletedBeforeStart, Q1231).
+	// outcome was otherwise indistinguishable from a clean run, and on the
+	// transient Failed a deleted pod publishes first (deletedBeforeStart).
 	DeletedBeforeStart bool
 }
 
@@ -98,7 +98,7 @@ func terminalPhase(pod *corev1.Pod) (PodOutcome, bool) {
 
 // deletedBeforeStart reports whether pod reached PodFailed because it was being deleted
 // before any of its containers started: the transient Failed a real kubelet publishes,
-// deletion mark set, for a deleted worker still waiting on its image (Q1231). The
+// deletion mark set, for a deleted worker still waiting on its image. The
 // waiter resolves on that update before the delete event arrives, so this is the
 // terminal path's reading of what onPodDelete sets for a pod that vanishes. Whoever
 // deleted it, the AGC's own reaper included: on the classic tier the provision
@@ -245,14 +245,14 @@ type InformerPodWaiter struct {
 	//
 	// They hang off the informer rather than off a registered waiter because the
 	// scale-set tier provisions fire-and-forget and registers none, which left the
-	// tier every new tenant runs emitting both series empty (Q713). The informer
+	// tier every new tenant runs emitting both series empty. The informer
 	// sees both tiers' pods identically, so one emission site gives them one span.
 	PodCreationLatency *prometheus.HistogramVec
 	JobDuration        *prometheus.HistogramVec
 
 	// WorkerAudit selects the worker-address audit record emitted off these same
 	// pod events. The zero value is WorkerAuditOff, so a waiter nobody configured
-	// records nothing (Q986). See WorkerAuditMode.
+	// records nothing. See WorkerAuditMode.
 	WorkerAudit WorkerAuditMode
 
 	mu      sync.Mutex
@@ -515,9 +515,9 @@ func (w *InformerPodWaiter) onPodEvent(obj any, isInInitialList bool) {
 // before the informer sees its terminal phase) publishes no terminal phase at all. The
 // delivered object is the pod's last-known state — including the DisruptionTarget
 // condition the scheduler stamped before the delete — so the marker is read off it here
-// rather than from a re-Get that would race the object's removal (Q497).
+// rather than from a re-Get that would race the object's removal.
 //
-// ExternallyDeleted is deliberately NOT set here. Q459's decision gates drained-worker
+// ExternallyDeleted is deliberately NOT set here. The design gates drained-worker
 // recovery on the deletion mark being present when a terminal phase publishes; a pod
 // that vanished without one never ran its job to a reportable end, and this is also the
 // path the reaper's pending-deadline deletions resolve through.
@@ -525,7 +525,7 @@ func (w *InformerPodWaiter) onPodEvent(obj any, isInInitialList bool) {
 // DeletedBeforeStart separates the two shapes this one path carries. A worker deleted
 // mid-run reported whatever it had done; one deleted before any container started ran
 // nothing at all, and the Succeeded phase alone made those indistinguishable to the
-// caller (Q628).
+// caller.
 func (w *InformerPodWaiter) onPodDelete(obj any) {
 	pod := podFromDeleteObj(obj)
 	if pod == nil {

@@ -171,13 +171,13 @@ func TestInformerPodWaiter_DeleteResolvesSucceeded(t *testing.T) {
 	}
 }
 
-// Q628, on the production waiter rather than the poll fallback. The reaper's
+// The never-started discriminator, on the production waiter rather than the poll fallback. The reaper's
 // pending_deadline delete removes a pod that never scheduled, so the pod it delivers
 // is Pending, not Running, and no container of it ever ran. The phase stays Succeeded
-// — the delete path's contract, which Q497 preemption detection also rides — and
+// — the delete path's contract, which preemption detection also rides — and
 // DeletedBeforeStart is what separates it from a worker deleted mid-run.
 //
-// ExternallyDeleted stays false: setting it would arm Q502 recovery, which re-runs a
+// ExternallyDeleted stays false: setting it would arm drained-worker recovery, which re-runs a
 // job through rerun-failed-jobs and has nothing to act on for a job that never ran.
 func TestInformerPodWaiter_Q628_DeletedPendingPodNeverStarted(t *testing.T) {
 	w := newTestWaiter(pod("ns", "p", corev1.PodPending, ""))
@@ -206,7 +206,7 @@ func TestInformerPodWaiter_Q628_DeletedPendingPodNeverStarted(t *testing.T) {
 	}
 }
 
-// The other half of the Q628 discriminator: a worker deleted while its container was
+// The other half of the discriminator: a worker deleted while its container was
 // running did run the job, so it keeps the plain Succeeded outcome and is not reported
 // as abandoned.
 func TestInformerPodWaiter_Q628_DeletedRunningPodHasStarted(t *testing.T) {
@@ -256,7 +256,7 @@ func TestInformerPodWaiter_DeleteTombstone(t *testing.T) {
 // The waiter must carry the preemption marker out on the DELETE path, because that is
 // the path a scheduler preemption almost always takes: the scheduler removes its victim
 // by deleting it, and a victim that never got a container running (image still pulling —
-// the shape Q423 reproduced) publishes no terminal phase at all. The informer's delete
+// the measured shape) publishes no terminal phase at all. The informer's delete
 // event carries the pod's last-known state, which is the only place the condition
 // survives; a re-Get would race the object out of existence.
 func TestInformerPodWaiter_DeleteCarriesPreemptionMarker(t *testing.T) {
@@ -301,7 +301,7 @@ func TestInformerPodWaiter_DeleteTombstoneCarriesPreemptionMarker(t *testing.T) 
 
 // A preemption whose container did exit resolves through the terminal-phase path
 // instead, and must carry the marker there too. The phase itself is uninformative —
-// Q423 measured Succeeded from a preemption — so the marker is the entire signal.
+// a preemption was measured to publish Succeeded — so the marker is the entire signal.
 func TestInformerPodWaiter_TerminalPhaseCarriesPreemptionMarker(t *testing.T) {
 	w := newTestWaiter(pod("ns", "p", corev1.PodRunning, ""))
 
@@ -354,8 +354,8 @@ func deletingPod(ns, name string, phase corev1.PodPhase) *corev1.Pod {
 // drainedPod is deletingPod plus the container exit a drained *running* worker records
 // as the kubelet tears it down: a SIGTERM-honouring runner exits seconds after the
 // delete was REQUESTED — and therefore well before deletionTimestamp, which carries
-// the grace period (Q459's measured shape; the raw-mark comparison this fixture once
-// modelled recovered only a worker that ignored SIGTERM to its SIGKILL — Q519).
+// the grace period (the measured shape; a raw-mark comparison
+// recovers only a worker that ignored SIGTERM to its SIGKILL).
 func drainedPod(ns, name string) *corev1.Pod {
 	p := deletingPod(ns, name, corev1.PodFailed)
 	p.Status.ContainerStatuses = []corev1.ContainerStatus{{
@@ -370,7 +370,7 @@ func drainedPod(ns, name string) *corev1.Pod {
 // A worker whose terminal phase publishes while its deletion is in flight must carry
 // the mark out of the wait — it is the entire discriminator between a drained worker
 // and a genuinely failed (or human-cancelled) one, which share the phase and the empty
-// reason (Q459/Q502).
+// reason.
 func TestInformerPodWaiter_TerminalPhaseCarriesDeletionMark(t *testing.T) {
 	w := newTestWaiter(pod("ns", "p", corev1.PodRunning, ""))
 
@@ -394,7 +394,7 @@ func TestInformerPodWaiter_TerminalPhaseCarriesDeletionMark(t *testing.T) {
 
 // The reaper stamps its own deletions before issuing them, and those must NOT read as
 // external — the reaper deletes pods the AGC gave up on, and re-running them would turn
-// cleanup into a re-run trigger (Q502).
+// cleanup into a re-run trigger.
 func TestInformerPodWaiter_AGCOwnDeletionIsNotExternal(t *testing.T) {
 	w := newTestWaiter(pod("ns", "p", corev1.PodRunning, ""))
 
@@ -622,7 +622,7 @@ func TestInformerPodWaiter_MultipleWaiters(t *testing.T) {
 
 // A stuck/cancelled wait must leave a Debug trail: the loop is otherwise silent,
 // so a session blocked on a pod that never terminates produces no output. This
-// asserts the cancel-path Debug line is emitted (Q88, logging-audit Theme E).
+// asserts the cancel-path Debug line is emitted (logging-audit Theme E).
 func TestInformerPodWaiter_DebugLogsOnCancel(t *testing.T) {
 	buf := &lockedBuffer{}
 	log := slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
@@ -784,7 +784,7 @@ func TestInformerPodWaiter_PodCreationLatencySkippedWhenNeverStarted(t *testing.
 // The scale-set tier provisions fire-and-forget and registers no waiter, so a
 // scale-set worker pod resolves with an empty waiter set. Both histograms must
 // still be observed for it: hanging them off the waiter set is exactly what left
-// the tier every new tenant runs emitting both series empty (Q713).
+// the tier every new tenant runs emitting both series empty.
 func TestInformerPodWaiter_ObservesScaleSetPodWithNoWaiter(t *testing.T) {
 	w := newTestWaiter()
 	w.PodCreationLatency = newLatencyHistogram()

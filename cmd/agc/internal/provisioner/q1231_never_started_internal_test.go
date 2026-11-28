@@ -11,7 +11,7 @@ import (
 )
 
 // kubeletDeletedPending returns a scale-set worker carrying the status a real kubelet
-// published for a deleted worker still waiting on its image (Q1231): PodFailed, the
+// published for a deleted worker still waiting on its image: PodFailed, the
 // deletion mark, and a synthetic Terminated/ContainerStatusUnknown container with no
 // start, exit or ID. testdata/deleted_pending_pod_failed.json is the kind v1.36.1 capture.
 func kubeletDeletedPending(t *testing.T) *corev1.Pod {

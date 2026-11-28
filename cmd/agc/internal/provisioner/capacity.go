@@ -26,7 +26,7 @@ func (p *Provisioner) createPodWithQuotaRetry(ctx context.Context, target Target
 		// Non-quota errors are never retried. Surface them on the owner object:
 		// a worker pod the apiserver refuses is invisible at GitHub, which reports
 		// only that the runner "lost communication" and points the operator at
-		// networking (Q467). The apiserver's own message — an invalid name, a
+		// networking. The apiserver's own message — an invalid name, a
 		// rejecting admission webhook, a denied security profile — is the shortest
 		// path to the real cause. An AlreadyExists is a replayed delivery finding
 		// its own pod, which is success on the v2 path, so it is not reported.
@@ -97,7 +97,7 @@ func (p *Provisioner) activePodCount(ctx context.Context, namespace string, sele
 // It is a distinct type rather than a plain error because the scale-set listener has to
 // tell it apart from a genuinely transient provisioning failure: a transient failure is
 // retried by redelivering the queue message, while a full ceiling will still be full on
-// the next redelivery and belongs on the re-offer backoff instead (Q576).
+// the next redelivery and belongs on the re-offer backoff instead.
 type CeilingReachedError struct {
 	// ActivePods is the Running+Pending worker count that met the ceiling.
 	ActivePods int32
@@ -119,7 +119,7 @@ func IsCeilingReached(err error) bool {
 // It exists so the scale-set listener can ask before it mints a JIT config, because
 // minting one REGISTERS a runner at GitHub: a ceiling-blocked attempt that mints first
 // leaves behind a registration the next attempt has to deregister, which is how a
-// saturated set on the rc.3 dogfood gate issued 704 deregister calls for one job (Q576).
+// saturated set on the rc.3 dogfood gate issued 704 deregister calls for one job.
 // The authoritative check is still the one ProvisionScaleSetWorker makes with the pod
 // about to be created; this one only keeps the doomed attempts from costing a
 // registration. An error other than *CeilingReachedError means the check itself could

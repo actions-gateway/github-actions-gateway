@@ -10,7 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// Q1177. The messages and conditions below are the kubelet's, captured verbatim from
+// The messages and conditions below are the kubelet's, captured verbatim from
 // kind v1.35.5 (docs/design/04-operational-flows.md §4.2), not composed from its format
 // strings: a fixture written from the format would pass against a discriminator that
 // drifted from what the kubelet actually writes.

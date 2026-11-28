@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Q1235: the job a lost scale-set worker left without a runner (Q1195) is recovered on
+// The job a lost scale-set worker left without a runner is recovered on
 // the disruption path too, and a walk declined while a Running worker's start was
 // unrecorded is re-checked once, after the start lands.
 

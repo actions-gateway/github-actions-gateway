@@ -23,7 +23,7 @@ import (
 // GitHub completes a job that reached its timeout-minutes as canceled, as it does a user's
 // cancel, and tells the two apart only in an annotation on the job's check run. A cancelled
 // job is held in memory, and its annotations are read only once a later attempt of it
-// succeeds (Q1374, docs/design/04-operational-flows.md §4.2).
+// succeeds (docs/design/04-operational-flows.md §4.2).
 
 const (
 	// maxCancelHolds bounds the cancelled jobs held, over every set of this process.

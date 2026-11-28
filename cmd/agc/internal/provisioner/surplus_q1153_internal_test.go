@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// Q1153: job-x ended before any runner started it, so the set holds one runner more
+// Job-x ended before any runner started it, so the set holds one runner more
 // than it has jobs. The worker created for job-x is not that runner when its runner has
 // started job-d, and leaving the completion at that left the real surplus worker
 // listening until spec.maxWorkerLifetime. Every test here crosses a worker onto
@@ -80,7 +80,7 @@ func TestCleanupScaleSetJob_NeverReclaimsABusyWorker(t *testing.T) {
 }
 
 // TestCleanupScaleSetJob_PrefersARunningIdleWorkerToAPendingOne pins the order: a
-// Pending worker is reclaimed only when no idle Running one is left (Q1360).
+// Pending worker is reclaimed only when no idle Running one is left.
 func TestCleanupScaleSetJob_PrefersARunningIdleWorkerToAPendingOne(t *testing.T) {
 	ctx := context.Background()
 	p, target, fc, keys := surplusFixture(ctx, t, "job-x", "job-y", "job-z")

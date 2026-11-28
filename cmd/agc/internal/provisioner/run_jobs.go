@@ -14,7 +14,7 @@ import (
 )
 
 // Two jobs of one run may share a display name and a completion carries no attempt, so
-// only the run's job list tells a job's re-run from the other one (Q1375,
+// only the run's job list tells a job's re-run from the other one (
 // docs/design/04-operational-flows.md §4.2).
 
 const (

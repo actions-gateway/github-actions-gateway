@@ -17,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// Flaky-job detection on the scale-set tier (Q555). A failed JobCompleted records the
+// Flaky-job detection on the scale-set tier. A failed JobCompleted records the
 // job in the failure ledger's failures map with the worker's platform context; a later
 // completion of the same job (same run, same display name, a new job ID, and a re-run by
 // the run's job list) pairs with the record and is attributed to whoever re-ran it, from

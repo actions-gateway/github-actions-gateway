@@ -10,7 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// Q1169: a worker whose runner never started a job carries the run identity of the job
+// A worker whose runner never started a job carries the run identity of the job
 // it was created for, and GitHub can have given that job to another runner of the set.
 // Recovering the worker by that identity then cancels or re-runs a run that lost
 // nothing. Each test builds the crossing — job-a running on the worker minted for
@@ -32,7 +32,7 @@ func TestRecoverAbandonedScaleSetWorker_SparesARunWhoseJobRunsElsewhere(t *testi
 }
 
 // TestRecoverAbandonedScaleSetWorker_StillCancelsBesideOtherWorkers is the control: the
-// other workers are busy with other jobs or idle, so nothing holds job-a, and Q766's
+// other workers are busy with other jobs or idle, so nothing holds job-a, and abandoned-run
 // recovery stands. An idle worker does not count here, since it is most often waiting
 // on the same capacity the reaped one never got.
 func TestRecoverAbandonedScaleSetWorker_StillCancelsBesideOtherWorkers(t *testing.T) {

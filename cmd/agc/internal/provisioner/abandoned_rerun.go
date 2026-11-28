@@ -48,15 +48,15 @@ type pendingAbandonedRerun struct {
 	runID       string
 	abandonedAt time.Time
 	// tier is the acquisition tier the abandonment was detected on, carried through
-	// to the recovery's log lines and its choice of budget (Q766, Q1182).
+	// to the recovery's log lines and its choice of budget.
 	tier string
 	// disruption names the abandoned worker and the attempt GAG force-cancelled to the
 	// scale-set budget, so the re-run merges into one already reserved for that attempt.
 	disruption rerunDisruption
 }
 
-// registerAbandonedRerun records a force-cancelled run to re-run once capacity returns
-// (Q691). Called only on the cancelled force-cancel outcome: that is the state measured
+// registerAbandonedRerun records a force-cancelled run to re-run once capacity returns.
+// Called only on the cancelled force-cancel outcome: that is the state measured
 // to accept rerun-failed-jobs (2026-08-05), where the false-green completejob endings
 // were refused 403, and it is the only outcome in which we know the run is concluded.
 //
@@ -167,10 +167,10 @@ func (p *Provisioner) sweepAbandonedReruns(ctx context.Context) []<-chan struct{
 		p.countAbandonedRerunWait(e.target, abandonedRerunOutcomeCapacityReturned)
 		log.Info("a worker pod was placed for this owner since the run was abandoned; re-running it",
 			"runID", key.runID, "tier", e.tier)
-		// The budget is the tier's per-run one (Q106, Q1182), so an abandoned run that
+		// The budget is the tier's per-run one, so an abandoned run that
 		// is re-run and abandoned again is capped exactly like a repeatedly evicted one.
 		// No retry delay: the force-cancel already concluded the run, which is the
-		// state rerun-failed-jobs was measured to accept (Q683).
+		// state rerun-failed-jobs was measured to accept.
 		armed = append(armed, p.handleEviction(ctx, e.target, e.owner, e.repo, e.runID, log,
 			p.ownerMaxEvictionRetries(ctx, e.target), 0, e.tier, recoveryCauseAbandoned, e.disruption))
 	}
@@ -189,7 +189,7 @@ func (p *Provisioner) ownerMaxEvictionRetries(ctx context.Context, target Target
 }
 
 // capacityReturnedSince reports whether any of the owner's worker pods bound to a node
-// after t. Binding is the Q512 evidence-of-capacity test: the scheduler placing a pod
+// after t. Binding is the evidence-of-capacity test: the scheduler placing a pod
 // of this owner's shape is what proves the pool can hold another one, and the pod's
 // phase is irrelevant (one still pulling images proves as much as one running).
 func (p *Provisioner) capacityReturnedSince(ctx context.Context, target Target, t time.Time) (bool, error) {
@@ -232,7 +232,7 @@ func (p *Provisioner) abandonedRerunWaitWindow() time.Duration {
 // phase: a bound pod still pulling images proves as much as a running one.
 //
 // Exported because both readers of that evidence need the same answer: the capacity
-// gate's latch (Q512) and the abandoned-run re-run trigger (Q691).
+// gate's latch and the abandoned-run re-run trigger.
 func PodScheduledAt(pod *corev1.Pod) (time.Time, bool) {
 	for i := range pod.Status.Conditions {
 		c := &pod.Status.Conditions[i]
@@ -244,7 +244,7 @@ func PodScheduledAt(pod *corev1.Pod) (time.Time, bool) {
 }
 
 // AbandonedRerunSweeper drives the capacity-returned trigger for force-cancelled
-// abandoned runs (Q691). It implements sigs.k8s.io/controller-runtime/pkg/
+// abandoned runs. It implements sigs.k8s.io/controller-runtime/pkg/
 // manager.Runnable; wire it with mgr.Add. The waiting set is per-process, like the
 // eviction counters, so it runs on every replica (NeedLeaderElection is false).
 type AbandonedRerunSweeper struct {
@@ -277,18 +277,18 @@ func (s *AbandonedRerunSweeper) Start(ctx context.Context) error {
 			if n := len(s.p.sweepAbandonedReruns(ctx)); n > 0 {
 				log.Info("re-ran abandoned runs whose capacity returned", "count", n)
 			}
-			// The same tick re-checks stranded-job walks that declined (Q1235), so the
+			// The same tick re-checks stranded-job walks that declined, so the
 			// re-check does not depend on a reconcile following the start's stamp.
 			if n := len(s.p.sweepStrandedRechecks(ctx)); n > 0 {
 				log.Info("force-cancelled jobs left without a runner, found on re-check", "count", n)
 			}
-			// And releases parked retry-class re-runs whose run has concluded (Q1244);
+			// And releases parked retry-class re-runs whose run has concluded;
 			// its 30-second cadence is the fastest those are polled at.
 			if n := len(s.p.sweepPendingReruns(ctx)); n > 0 {
 				log.Info("released parked re-runs whose run concluded", "count", n)
 			}
 			// And ends a retry class's pause on time, so its paused gauge drops when the
-			// cooldown passes rather than at the class's next fire (Q1245).
+			// cooldown passes rather than at the class's next fire.
 			s.p.closeExpiredBreakers(s.p.nowFn())
 		}
 	}

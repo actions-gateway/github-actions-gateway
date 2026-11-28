@@ -4,7 +4,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// Node-shutdown recovery (Q1179, Q1207): a worker whose node went away under it — a Spot
+// Node-shutdown recovery: a worker whose node went away under it — a Spot
 // or preemptible reclamation the kubelet shuts down gracefully, a Node object deleted
 // under it, or a dead node an admin taints out-of-service — reaches the same automatic
 // re-run an eviction does. A node that goes NotReady and keeps its Node object with no
@@ -25,7 +25,7 @@ import (
 // arm requires. All three shapes read from kubernetes v1.35.2
 // (pkg/kubelet/nodeshutdown/nodeshutdown_manager.go, pkg/controller/podgc/gc_controller.go,
 // pkg/controller/tainteviction/taint_eviction.go); the out-of-service shape is measured
-// on kind v1.36.1 (Q1207). The operator-facing boundary is the table in
+// on kind v1.36.1. The operator-facing boundary is the table in
 // docs/design/04-operational-flows.md §4.2.
 
 // podReasonDeletionByPodGC is the DisruptionTarget reason PodGC writes on a pod whose
@@ -66,7 +66,7 @@ const podReasonDeletionByTaintManager = "DeletionByTaintManager"
 //
 // A worker none of whose containers ever started is excluded on every reason: it ran
 // no job, so there is no failed job for rerun-failed-jobs to act on, and
-// LostToNodeShutdownBeforeStart routes it to the abandoned handling instead (Q1198).
+// LostToNodeShutdownBeforeStart routes it to the abandoned handling instead.
 func LostToNodeShutdown(pod *corev1.Pod) bool {
 	reason, ok := nodeLossReason(pod)
 	if !ok || !podEverStarted(pod) {

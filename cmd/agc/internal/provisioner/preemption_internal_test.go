@@ -13,17 +13,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Q497: scheduler preemption reaches the same automatic re-run a kubelet eviction does.
+// Scheduler preemption reaches the same automatic re-run a kubelet eviction does.
 //
-// Q423 measured that it did not: a priorityTiers preemption deletes its victim rather
-// than failing it, so neither tier's Evicted-shaped detection saw anything and the
-// displaced run needed a manual re-run. These tests pin the discriminator that closes
+// A priorityTiers preemption deletes its victim rather
+// than failing it, so neither tier's Evicted-shaped detection sees anything.
+// These tests pin the discriminator that closes
 // it, both tiers' use of it, and — as importantly — the removals it must still NOT fire
 // on, since over-firing would re-run work an operator deliberately stopped.
 
 // drained marks a pod as a graceful external removal (a drain, a `kubectl delete pod`)
 // leaves it when the kubelet's terminal-phase update wins the race against the object's
-// removal — the shape Q459 measured at live GitHub: PodFailed with an empty reason, the
+// removal — the shape measured at live GitHub: PodFailed with an empty reason, the
 // deletion mark, and a container exit after the delete was issued.
 func drained(pod *corev1.Pod) *corev1.Pod {
 	delTime := metav1.NewTime(time.Now().Add(-10 * time.Second))
@@ -54,7 +54,7 @@ func preempted(pod *corev1.Pod) *corev1.Pod {
 	return pod
 }
 
-// shutDown marks a pod as a node shutdown leaves it (Q1179): PodFailed and a
+// shutDown marks a pod as a node shutdown leaves it: PodFailed and a
 // DisruptionTarget with reason — TerminationByKubelet from the kubelet's shutdown
 // manager, which also sets Status.Reason "Terminated", or DeletionByPodGC once the node
 // is gone.
@@ -82,7 +82,7 @@ func ranRunner(pod *corev1.Pod) *corev1.Pod {
 	return pod
 }
 
-// outOfService marks a pod as a dead node's out-of-service taint leaves it (Q1207): the
+// outOfService marks a pod as a dead node's out-of-service taint leaves it: the
 // taint manager's DisruptionTarget and graceful delete, then PodFailed from PodGC over a
 // container no kubelet ever recorded stopping.
 func outOfService(pod *corev1.Pod) *corev1.Pod {
@@ -121,7 +121,7 @@ func TestLostToNodeShutdown(t *testing.T) {
 		{name: "kubelet shutdown", phase: corev1.PodFailed, conditions: cond(corev1.ConditionTrue, corev1.PodReasonTerminationByKubelet), containers: terminated, want: true},
 		{name: "PodGC orphan", phase: corev1.PodFailed, conditions: cond(corev1.ConditionTrue, podReasonDeletionByPodGC), containers: running, want: true},
 		{
-			// Q1198: the kubelet fails a still-Pending worker too. It ran no job, so it is
+			// The kubelet fails a still-Pending worker too. It ran no job, so it is
 			// the abandoned handling's (LostToNodeShutdownBeforeStart).
 			name: "kubelet shutdown, worker never started", phase: corev1.PodFailed,
 			conditions: cond(corev1.ConditionTrue, corev1.PodReasonTerminationByKubelet), containers: waiting,
@@ -196,8 +196,8 @@ func TestLostToNodeShutdown(t *testing.T) {
 	}
 }
 
-// TestLostToNodeShutdownBeforeStart pins the never-started half of the node-loss shape
-// (Q1198): every node-loss reason on a failed pod no container of which started, and
+// TestLostToNodeShutdownBeforeStart pins the never-started half of the node-loss shape:
+// every node-loss reason on a failed pod no container of which started, and
 // nothing LostToNodeShutdown takes, so no pod reaches both a re-run and a force-cancel.
 func TestLostToNodeShutdownBeforeStart(t *testing.T) {
 	cond := func(reason string) []corev1.PodCondition {
@@ -253,7 +253,7 @@ func TestLostToNodeShutdownBeforeStart(t *testing.T) {
 // whole safety argument for recovering this path rests on PreemptionByScheduler having
 // exactly one writer, so anything short of the full type/status/reason triple must read
 // as "not a preemption" — a near-miss that returned true would recover removals that are
-// deliberately out of scope (Q459's drain and human-cancel slice).
+// deliberately out of scope (drains and human cancels).
 func TestPreemptedByScheduler_RequiresTheFullTriple(t *testing.T) {
 	cond := func(t corev1.PodConditionType, s corev1.ConditionStatus, reason string) corev1.PodCondition {
 		return corev1.PodCondition{Type: t, Status: s, Reason: reason}
@@ -286,7 +286,7 @@ func TestPreemptedByScheduler_RequiresTheFullTriple(t *testing.T) {
 		},
 		{
 			// The eviction API (a drain, a PDB-mediated eviction) also writes
-			// DisruptionTarget, with its own reason. That is Q459's slice, not this one.
+			// DisruptionTarget, with its own reason. That is the drain arm, not this one.
 			name:       "DisruptionTarget from the eviction API",
 			conditions: []corev1.PodCondition{cond(corev1.DisruptionTarget, corev1.ConditionTrue, "EvictionByEvictionAPI")},
 		},
@@ -315,7 +315,7 @@ func TestPreemptedByScheduler_RequiresTheFullTriple(t *testing.T) {
 // up, with which cause, and — the load-bearing half — which removals it still leaves
 // alone: the AGC's own reaper deletions, cleanup of already-failed pods, ordinary
 // failures (which a human cancel is indistinguishable from at the pod — no deletion
-// mark, measured by Q459), and pods deleted without ever reaching a terminal phase.
+// mark), and pods deleted without ever reaching a terminal phase.
 func TestDisruptionAwaitingRecovery(t *testing.T) {
 	deleted := func(pod *corev1.Pod) *corev1.Pod {
 		now := metav1.Now()
@@ -347,8 +347,8 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 		},
 		{
 			// The terminal phase on the preemption path is the interrupted container's
-			// own exit status, so a preempted victim can land in Succeeded (Q423
-			// measured exactly that). The condition, not the phase, is what decides.
+			// own exit status, so a preempted victim can land in Succeeded (as
+			// measured). The condition, not the phase, is what decides.
 			name: "preemption whose container exited 0",
 			pod: func() *corev1.Pod {
 				pod := preempted(scaleSetWorkerPod("p", identityAnnotations()))
@@ -358,14 +358,14 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 			wantCause: recoveryCausePreemption, wantOK: true,
 		},
 		{
-			// Q1179: a graceful node shutdown fails the pod with reason Terminated and a
+			// A graceful node shutdown fails the pod with reason Terminated and a
 			// kubelet DisruptionTarget, and deletes nothing.
 			name:      "node shutdown",
 			pod:       ranRunner(shutDown(scaleSetWorkerPod("p", identityAnnotations()), corev1.PodReasonTerminationByKubelet)),
 			wantCause: recoveryCauseNodeShutdown, wantOK: true,
 		},
 		{
-			// Q1198: shut down before any container started; abandonedAwaitingRecovery's.
+			// Shut down before any container started; abandonedAwaitingRecovery's.
 			name: "node shutdown, worker never started",
 			pod:  shutDown(scaleSetWorkerPod("p", identityAnnotations()), corev1.PodReasonTerminationByKubelet),
 		},
@@ -379,7 +379,7 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 			wantCause: recoveryCauseNodeShutdown, wantOK: true,
 		},
 		{
-			// Q1207: an admin tainted the dead node out-of-service; PodGC failed the pod and
+			// An admin tainted the dead node out-of-service; PodGC failed the pod and
 			// no kubelet wrote the termination record the deletion arm orders against.
 			name:      "out-of-service node",
 			pod:       outOfService(scaleSetWorkerPod("p", identityAnnotations())),
@@ -450,7 +450,7 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 			pod:  deleted(scaleSetWorkerPod("p", identityAnnotations())),
 		},
 		{
-			// The Q502 arm: an external graceful deletion whose victim reached Failed
+			// The drain arm: an external graceful deletion whose victim reached Failed
 			// before the object went away. The mark predates the container exit, which
 			// is what separates a disrupting delete from a later cleanup.
 			name:      "drained worker that reached a terminal phase",
@@ -459,7 +459,7 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 		},
 		{
 			// The reaper stamps its own deletions; recovering them would re-run every
-			// job the AGC itself gave up on (Q502's reaper exclusion).
+			// job the AGC itself gave up on (the reaper exclusion).
 			name: "reaper-deleted worker that reached a terminal phase",
 			pod: func() *corev1.Pod {
 				pod := drained(scaleSetWorkerPod("p", identityAnnotations()))
@@ -571,7 +571,7 @@ func TestRecoverScaleSetWorkers_PreemptionIsAtMostOnce(t *testing.T) {
 }
 
 // TestRecoverScaleSetWorkers_DeleteWithoutTerminalPhaseIsNotRecovered pins the boundary
-// of the Q502 arm: a deletion whose victim never published a terminal phase never ran
+// of the drain arm: a deletion whose victim never published a terminal phase never ran
 // its job to a reportable end, so there is no failed job for rerun-failed-jobs to act
 // on. This is also the shape the reaper's pending-deadline deletions take.
 func TestRecoverScaleSetWorkers_DeleteWithoutTerminalPhaseIsNotRecovered(t *testing.T) {
@@ -591,7 +591,7 @@ func TestRecoverScaleSetWorkers_DeleteWithoutTerminalPhaseIsNotRecovered(t *test
 		"a deletion with no terminal phase must not be re-run automatically")
 }
 
-// TestRecoverScaleSetWorkers_RerunsTheDrainedRun is the scale-set half of Q502: the
+// TestRecoverScaleSetWorkers_RerunsTheDrainedRun is the scale-set half of drain recovery: the
 // scan finds a drained worker inside its teardown window — PodFailed with the deletion
 // mark, no scheduler condition — and re-runs the interrupted run, attributed to the
 // deletion cause so an operator does not read it as node pressure or preemption.
@@ -624,8 +624,8 @@ func TestRecoverScaleSetWorkers_RerunsTheDrainedRun(t *testing.T) {
 		"the drained pod must be stamped as handled")
 }
 
-// TestRecoverScaleSetWorkers_ReaperDeletionIsNotRecovered is the exclusion the Q459
-// plan calls out by name: the reaper's own deletions publish the same
+// TestRecoverScaleSetWorkers_ReaperDeletionIsNotRecovered is the reaper
+// exclusion: the reaper's own deletions publish the same
 // Failed-with-deletion-mark shape a drain does, and recovering them would re-run every
 // job the AGC itself gave up on. The AnnotationDeletionReason stamp the reaper writes
 // before deleting is what keeps them apart.
