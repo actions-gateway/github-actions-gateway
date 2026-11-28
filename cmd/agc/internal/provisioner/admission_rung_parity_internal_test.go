@@ -20,12 +20,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// The two-tier rung parity Q443 exists to enforce, as a gate rather than as the
-// prose obligation in admission.go (Q973). Every rung is stated twice — once per
-// delivered job in Admit, once per long-poll in AdvertiseCapacity — and a rung
-// added to one but not the other ships to one acquisition tier, which is the
-// defect Q443 fixed for the quota rung and Q717 then hand-mirrored for the rate
-// rung.
+// The two-tier rung parity, as a gate rather than as the prose obligation in
+// admission.go. Every rung is stated twice — once per delivered job in Admit, once
+// per long-poll in AdvertiseCapacity — and a rung added to one but not the other
+// ships to one acquisition tier.
 //
 // The obligation decays if nothing re-walks it. Two tests hold it here:
 //

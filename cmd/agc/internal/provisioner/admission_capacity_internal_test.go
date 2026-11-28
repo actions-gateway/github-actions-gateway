@@ -52,7 +52,7 @@ func (s *rungTarget) ScaleUpLimit(context.Context) *ScaleUpConfig {
 func (s *rungTarget) RecordEvent(_, _, _, _ string)                  {}
 func (s *rungTarget) Resolve(context.Context) (*ResolvedSpec, error) { return &ResolvedSpec{}, nil }
 
-// TestAdmit_CapacityRung pins the Q405 rung's placement in the ladder and its
+// TestAdmit_CapacityRung pins the capacity rung's placement in the ladder and its
 // rejection reason. The ordering matters beyond tidiness: the capacity rung reserves
 // nothing, so it must sit ahead of the ceiling rung — refusing after a reservation
 // would leak a slot on every declined job.
@@ -141,8 +141,8 @@ func TestAdmit_CapacityRungFailsOpen(t *testing.T) {
 	assert.Empty(t, reason)
 }
 
-// TestAdmit_CapacityRungRereadsEveryDelivery pins the Q117 property for this rung: the
-// AdmitFunc is built once when the listener starts, so a gate that closes (or opens)
+// TestAdmit_CapacityRungRereadsEveryDelivery pins the re-read property for this rung:
+// the AdmitFunc is built once when the listener starts, so a gate that closes (or opens)
 // must take effect on the next delivered job without an AGC restart.
 //
 // It is also the trickle property in miniature — the cycle that keeps a Phase 1 gate
@@ -178,7 +178,7 @@ func TestAdmit_CapacityRungRereadsEveryDelivery(t *testing.T) {
 	assert.Equal(t, 3, target.declinedCalls, "the rung must be re-read on every delivery, never cached")
 }
 
-// TestAdmit_ScaleUpRung pins the Q717 rung: the classic tier charges the scale-up
+// TestAdmit_ScaleUpRung pins the rate rung: the classic tier charges the scale-up
 // token bucket BEFORE it claims the job, so a burst that outruns the bucket is left
 // queued at GitHub rather than claimed and then slept on with its job lock held.
 //
@@ -395,8 +395,8 @@ func TestAdmit_RateRefusalRefundsUnderConcurrency(t *testing.T) {
 	// after done.Wait(), so it cannot observe a mid-flight excursion and nothing here
 	// would fail from one. The invariant it corresponds to — admit refuses at
 	// reserved >= limit, so the reserve-then-release churn inflates the count only
-	// WITHIN the ceiling, which is what makes Q977 a labelling artifact rather than an
-	// over-admission bug — is a property of the code, not something this assertion
+	// WITHIN the ceiling, which is what makes the transient "ceiling" reason a labelling
+	// artifact rather than an over-admission bug — is a property of the code, not something this assertion
 	// establishes.
 	assert.LessOrEqual(t, p.admission.reservedCount(target.Key().String()), target.ceiling,
 		"the settled reservation count must not exceed the declared ceiling")

@@ -160,7 +160,7 @@ func TestWorkerCeilingFromTiers(t *testing.T) {
 // TestAdmit_AbortedOutcomeRefundsTheScaleUpToken covers the whole ladder spend, not
 // just the bucket: an admitted delivery that returns without asking for a worker pod
 // must hand back both the ceiling reservation and the scale-up token, while one that
-// provisions hands back only the reservation (Q972).
+// provisions hands back only the reservation.
 func TestAdmit_AbortedOutcomeRefundsTheScaleUpToken(t *testing.T) {
 	newGate := func() (runnercore.AdmitFunc, *Provisioner) {
 		target := &rungTarget{ceiling: 10, ceilingBounded: true, scaleUp: &ScaleUpConfig{MaxPerSecond: 1, Burst: 2}}

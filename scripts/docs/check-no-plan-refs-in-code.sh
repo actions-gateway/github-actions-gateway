@@ -7,8 +7,8 @@
 # a plan rots the moment that plan is archived, and "fixing" the path turns a
 # docs-only archival into a code change — which re-triggers the heavy
 # path-gated CI (e2e / integration / trivy), the exact tax this guard exists to
-# avoid. Cite the durable layer instead: a design/operations doc, or a stable
-# Q-ID / appendix §-ref (those survive archival untouched).
+# avoid. Cite the durable layer instead: a design or operations doc, or an
+# appendix §-ref, which survive archival untouched.
 #
 # Two rules, because the languages differ in what they legitimately do with a
 # plan file:
@@ -31,8 +31,7 @@
 # operates on — opts out inline with a `no-plan-refs: <reason>` marker on the
 # same line. One line, visible in the diff, silencing exactly that line.
 #
-# Stable IDs and §-refs in prose ("Q88", "§H.10") are fine and encouraged. See
-# docs/development/maintaining-backlog.md#archiving-completed-plan-docs.
+# See docs/development/maintaining-backlog.md#archiving-completed-plan-docs.
 #
 set -euo pipefail
 shopt -s inherit_errexit
