@@ -196,9 +196,10 @@ The raised limit stays with that job of that run for up to 7 days, so a manual r
 | `same_class_again` | The job was killed again after a retry raised its limit: one raise per job | If the runner [reached its limit](#which-limit-ran-out), look at what grew or raise the limit; then, in either case, re-run by hand, which gets the raised limit for up to 7 days |
 | `job_not_found` | No failed job of the run ran on the killed worker's runner: the runner took no job, or its job ended before the kill. Decided after the run concludes, so this one has spent its slot | Nothing, unless a job was lost; find it in the run's other attempts and re-run it by hand |
 | `breaker_open` | More than 10 runs were re-run for memory within 10 minutes, so retries are paused for 30, with one Warning `AutoRetryPaused` Event | Look for a shared cause first: a dependency that grew every job, or nodes packed past their memory |
+| `above_container` | Under [`oomKillReasons: Act`](oom-reporter.md#what-the-gateway-does-with-it), the pod's condition says the pod's limit ran out (`PodLimit`), or memory above the pod (`PodsLimit`, `AbovePods`). Decided before any other row, so a runner with no limit or a `Static` set gets it too | Raise the template's pod-level memory limit where the Event names it; otherwise look at the node's other pods, and re-run by hand |
 
 A sidecar killed for memory, such as `dind`, is not retried: the runner survives it and reports the job's own result.
-Neither is a runner with no memory limit, since there is none to raise; it gets no Event from the retry, and `PlatformFaultOnFailedJob` reports its job.
+Neither is a runner with no memory limit, since there is none to raise; it gets no Event from the retry, but for `above_container`, and `PlatformFaultOnFailedJob` reports its job.
 
 **What it hides.** A change that doubles a job's memory gets the memory on its one retry instead of failing.
 Watch `actions_gateway_eviction_retries_total{cause="oom"}` and the `MemoryLimitRaisedForRetry` Events; `actions_gateway_eviction_rerun_outcomes_total{cause="oom"}` says how often the raised retry passed, and the `ActionsGatewayRetryCauseMisclassified` alert fires when more than half of them fail over 7 days (Q1245).
@@ -208,7 +209,8 @@ The re-run's worker pods carry `actions-gateway.com/rerun-cause: oom`, so [cost 
 #### Which limit ran out
 
 `OOMKilled` says the runner was killed for memory, and a runner is expected to read that way too when its node ran out, or the pod reached a limit of its own (Q1400).
-The AGC cannot tell them apart, so its Events name no cause and give you the node, the memory request and the limit.
+With no [oom-reporter](oom-reporter.md) the AGC cannot tell them apart, so its Events name no cause and give you the node, the memory request and the limit.
+Under `oomKillReasons: Act` its Events say what the pod's condition names, and a limit above the runner's gets no raise (`above_container`, above).
 
 - **A `PlatformFaultOnFailedJob` Event that says `(a pod condition says …)`** names the limit, as the pod's condition did ([what that rests on](troubleshooting.md#flaky-jobs-and-platform-faults-on-failed-jobs)).
 - **The runner's own limit is likely** where the template sets no pod-level `spec.resources`, and either the request equals the limit, as `Binpack` sets them, or the pod's `status.qosClass` is `Guaranteed`.

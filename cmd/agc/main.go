@@ -610,6 +610,7 @@ func setupProvisioner(mgr ctrl.Manager, cfg agcConfig, m *runnercore.Metrics,
 	// reverts to the pre-#784 behaviour. Operator runbook: the quota-backpressure
 	// section in docs/operations/troubleshooting.md.
 	prov.DisableQuotaAdmission = cfg.QuotaAdmission == "false"
+	prov.OOMKillReasons = provisioner.ParseOOMKillReasonsMode(cfg.OOMKillReasons)
 	if cfg.WorkerImage != "" {
 		prov.DefaultWorkerImage = cfg.WorkerImage
 	}

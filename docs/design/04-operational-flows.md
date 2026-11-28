@@ -696,8 +696,8 @@ Nothing the AGC reads tells them apart:
 | A `SystemOOM` Event on the node | The node | The AGC has no grant on Node Events; the Event names a process and not a pod, and the kubelet raises none for a kill at `kubepods`' limit (`pkg/kubelet/oom/oom_watcher_linux.go`, v1.35.5) |
 
 So the class acts on the limit the next attempt would get, and its Events give the worker, its node, its request and its limit, and name no cause.
-Where an out-of-memory reporter's condition is on the pod, the failed job's record and Event say what it names ([below](#the-limit-a-pod-condition-names-q1403)), and the class does not act on it.
-For a runner killed because its node ran out, that has a cost.
+Where an out-of-memory reporter's condition is on the pod, the failed job's record and Event say what it names ([below](#the-limit-a-pod-condition-names-q1403)), and the class acts on it only where the gateway opts in ([below](#acting-on-the-limit-a-pod-condition-names-q1406)).
+Otherwise, for a runner killed because its node ran out, that has a cost.
 Withheld as `own_limit`, it is not re-run where a fresh node might have passed it.
 Raised, it gets memory it did not need: under `Binpack` a request no node may hold, under `Throughput` a limit that overcommits nodes further.
 A raised run also counts toward the breaker, which can then withhold kills that more memory would fix.
@@ -710,6 +710,7 @@ A raised run also counts toward the breaker, which can then withhold kills that 
 | The same job killed again after its limit was raised | Withheld: one raise per job, so growth is bounded by the ceiling | `same_class_again` |
 | More than 10 distinct runs held a slot in 10 minutes | Withheld for 30 minutes, with one **Warning** `AutoRetryPaused` Event when it opens | `breaker_open` |
 | The runner had no memory limit | Not this class: there is no limit to raise. No re-run, and no Event of its own; the job's failure still raises `PlatformFaultOnFailedJob` | none: not recognised |
+| Under `oomKillReasons: Act`, the runner's condition says `PodLimit`, `PodsLimit` or `AbovePods` | Withheld ahead of every row above, a runner with no limit included: raising the runner's limit does not reach the one that ran out | `above_container` |
 
 Every withhold spends no slot and emits the **Normal** `EvictionRerunWithheld` Event saying what to do.
 
@@ -912,7 +913,7 @@ That event starts no recovery and queues no reconcile, and the snapshot's other 
 A condition the pod already has when it fails, or when a completion reads it, is in the snapshot.
 
 The reason is `oomReason` beside the container in the record, and words of the AGC's in the Event and the log line.
-Whoever can write `pods/status` can write such a condition, so it changes no action, and what it can change in a record is bounded:
+Whoever can write `pods/status` can write such a condition, so in the record it changes no action, and what it can change there is bounded:
 
 - It adds words to a fault that is there: the container its type names, `OOMKilled` in the pod's status, and for any container but the runner with exit code 137.
   Whoever can write `pods/status` can write that too, as they could before this.
@@ -922,6 +923,28 @@ Whoever can write `pods/status` can write such a condition, so it changes no act
 - A container that restarted is recorded as without one, since its condition may be an earlier kill's.
 - The first reason read for a container's ID stands, except that any other replaces `Unknown`.
 - A condition that comes after the completion is not recorded, nor one whose update reaches the AGC in one event with the pod's deletion, and an AGC restart drops the snapshots that wait.
+
+#### Acting on the limit a pod condition names (Q1406)
+
+`ActionsGateway.spec.oomKillReasons` decides whether the class acts on the reason too.
+`Record`, the default, leaves it to the record.
+`Act` is what an operator sets once the reporter is installed, and the GMC threads it to the AGC as `AGC_OOM_KILL_REASONS`, set only off the default, so a gateway left at `Record` keeps its pod template.
+
+Under `Act`, a runner's kill waits until its condition carries one of the counters' five reasons or 30 seconds have passed since the pod ended, whichever comes first.
+The wait runs from the pod's end, so an AGC restart does not extend it, and after the start wait where both apply.
+The reaper keeps the pod for it whether or not the class would retry the kill, the condition's update starts the recovery, and a pod deleted while it waits is recovered at once with no reason.
+The 30 seconds is a guess at several times the reporter's delay, 10 of which are its hold of an answer that rests on a container's end time ([the design](../plan/q1403-oom-kill-reporter.md#timing)).
+
+| Reason | What the class does |
+|---|---|
+| `ContainerLimit` | As with no reason, and its Events say the container's limit ran out |
+| `PodLimit` | No raise and no re-run, withheld as `above_container`; the Event names the template's pod-level limit |
+| `PodsLimit`, `AbovePods` | No raise and no re-run, withheld as `above_container`, and not counted by the breaker; the job is re-run by hand |
+| `Unknown`, a reason read from the kernel log alone, any other, or none in time | As with no reason, with Q1400's text |
+
+A reason from the kernel log alone ends no wait and changes no action, since a job can write such a line before the counters answer.
+Because whoever can write `pods/status` can write the condition, `Act` lets them withhold a re-run the job would otherwise get, and nothing more: no reason gets a kill a raise or a re-run it would not get without one.
+Re-running a kill made above the pods is not built (Q1408).
 
 #### Why preemption *deletes* rather than *evicts*, and what that costs us
 

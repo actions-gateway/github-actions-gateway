@@ -590,6 +590,11 @@ func buildAGCDeploymentV2(ag *gmcv2.ActionsGateway, agcImage string, proxy *gmcv
 	if ag.Spec.AuditLogging != "" && ag.Spec.AuditLogging != auditLoggingOff {
 		env = append(env, corev1.EnvVar{Name: "AGC_AUDIT_LOGGING", Value: ag.Spec.AuditLogging})
 	}
+	// Injected only off its default, as AGC_AUDIT_LOGGING is; the AGC reads an absent one
+	// as Record.
+	if ag.Spec.OOMKillReasons != "" && ag.Spec.OOMKillReasons != "Record" {
+		env = append(env, corev1.EnvVar{Name: "AGC_OOM_KILL_REASONS", Value: ag.Spec.OOMKillReasons})
+	}
 
 	// GHES private-CA trust (Q536): names the ConfigMap applyCABundleV2 mounts,
 	// so the AGC knows it was opted in and its pod provisioner can project the same

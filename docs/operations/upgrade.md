@@ -1371,6 +1371,17 @@ Where a pod condition names the limit that ran out, the fault of that container 
 
 **Rolling back** returns the old text, and an older AGC keeps the `oomReason` of a record it rewrites.
 
+### Non-breaking: `ActionsGateway.spec.oomKillReasons`, off by default
+
+**Who is affected:** nobody until it is set.
+The field defaults to `Record`, which changes nothing the AGC does, and the GMC adds nothing to the AGC's pod template for it, so the upgrade rolls no AGC on its account.
+
+**What changed.** `Act` has the AGC act on the [oom-reporter](oom-reporter.md)'s condition: a runner's kill waits up to 30 seconds for it, and one at the pod's limit or above the pod raises no limit and re-runs nothing ([what it does](oom-reporter.md#what-the-gateway-does-with-it), Q1406).
+
+**What you will see**, under `Act` only: a Normal `EvictionRerunWithheld` Event and `actions_gateway_eviction_rerun_withheld_total{cause="oom", reason="above_container"}` where a raise and a re-run used to be, and Event text that names the limit for a kill at the container's own.
+
+**Rolling back** either the GMC or the AGC leaves the AGC acting as under `Record`: an older GMC sets no `AGC_OOM_KILL_REASONS`, and an older AGC reads none.
+
 ### A disrupted job is not re-run while its set's workers cannot pull their image
 
 **Who is affected:** a tenant whose scale-set workers are stuck in `ImagePullBackOff` when another of the set's jobs loses its worker.

@@ -266,6 +266,10 @@ type Provisioner struct {
 	// opt-out gets promoted to a real field if a production case ever needs it.
 	DisableQuotaAdmission bool
 
+	// OOMKillReasons is what the out-of-memory class does with the reason a reporter
+	// writes on a killed worker's pod. main.go sets it from AGC_OOM_KILL_REASONS.
+	OOMKillReasons OOMKillReasonsMode
+
 	// WrapperImage is the GAG worker-wrapper image (ghcr.io/actions-gateway/wrapper,
 	// a ~2 MB scratch image holding just the wrapper binary). When non-empty, the
 	// provisioner injects the wrapper into every worker pod and overrides the

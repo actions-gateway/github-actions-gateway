@@ -1023,6 +1023,19 @@ func TestBuildAGCDeploymentV2_AuditLogging(t *testing.T) {
 		agcEnv(buildAGCDeploymentV2(on, "agc:test", nil, gmcv2.SecurityProfileBaseline, nil))["AGC_AUDIT_LOGGING"])
 }
 
+func TestBuildAGCDeploymentV2_OOMKillReasons(t *testing.T) {
+	for _, set := range []string{"", "Record"} {
+		ag := v2Gateway("gw", "team-a", "github-app", "")
+		ag.Spec.OOMKillReasons = set
+		assert.NotContains(t, agcEnv(buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2.SecurityProfileBaseline, nil)),
+			"AGC_OOM_KILL_REASONS", "oomKillReasons %q must inject nothing", set)
+	}
+	act := v2Gateway("gw", "team-a", "github-app", "")
+	act.Spec.OOMKillReasons = "Act"
+	assert.Equal(t, "Act",
+		agcEnv(buildAGCDeploymentV2(act, "agc:test", nil, gmcv2.SecurityProfileBaseline, nil))["AGC_OOM_KILL_REASONS"])
+}
+
 // TestEgressAuditAttribution covers all five states of the Q986 pair the
 // EgressAuditUnattributed condition reports (Q1062), including the two half-on ones —
 // each names the half still to turn on, because that is what the operator does next.

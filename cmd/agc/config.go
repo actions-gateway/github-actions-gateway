@@ -15,6 +15,10 @@ type agcConfig struct {
 	// worker-address audit record the GMC threads from
 	// ActionsGateway.spec.auditLogging. Off with the variable absent (Q986).
 	AuditLogging string
+	// OOMKillReasons (AGC_OOM_KILL_REASONS, Record|Act) is what the AGC does with an
+	// out-of-memory reporter's reason, threaded from ActionsGateway.spec.oomKillReasons.
+	// Record with the variable absent.
+	OOMKillReasons string
 	// PodNamespace (POD_NAMESPACE) scopes the controller cache to the AGC's own
 	// tenant namespace.
 	PodNamespace string
@@ -56,6 +60,7 @@ func loadConfig(getenv func(string) string) agcConfig {
 	return agcConfig{
 		LogLevel:                  getenv("LOG_LEVEL"),
 		AuditLogging:              getenv("AGC_AUDIT_LOGGING"),
+		OOMKillReasons:            getenv("AGC_OOM_KILL_REASONS"),
 		PodNamespace:              getenv("POD_NAMESPACE"),
 		GatewayName:               getenv("GATEWAY_NAME"),
 		WorkerServiceAccount:      getenv("WORKER_SERVICE_ACCOUNT"),

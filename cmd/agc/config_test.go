@@ -34,6 +34,7 @@ func TestLoadConfig(t *testing.T) {
 		"WORKER_USAGE_SAMPLE_INTERVAL": "30s",
 		"STUB_AUTH_URL":                "http://stub/auth",
 		"STUB_BROKER_URL":              "http://stub/broker",
+		"AGC_OOM_KILL_REASONS":         "Act",
 	}
 	cfg := loadConfig(fakeGetenv(env))
 
@@ -53,6 +54,7 @@ func TestLoadConfig(t *testing.T) {
 		"WorkerUsageSampleInterval": {cfg.WorkerUsageSampleInterval, "30s"},
 		"StubAuthURL":               {cfg.StubAuthURL, "http://stub/auth"},
 		"StubBrokerURL":             {cfg.StubBrokerURL, "http://stub/broker"},
+		"OOMKillReasons":            {cfg.OOMKillReasons, "Act"},
 	}
 	for field, c := range checks {
 		if c.got != c.want {

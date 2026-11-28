@@ -98,3 +98,33 @@ func TestWorkerPodHandler_AReasonThatComesWithTheFailureTakesNothingFromIt(t *te
 	assert.Equal(t, 1, q.Len())
 	assert.Eventually(t, func() bool { return reruns.Load() == 1 }, 5*time.Second, 20*time.Millisecond)
 }
+
+// TestWorkerPodHandler_AReasonEndsTheWaitOfAKill: under Act the condition is what starts
+// the recovery of a kill waiting for it, still with no reconcile; under Record it is not.
+func TestWorkerPodHandler_AReasonEndsTheWaitOfAKill(t *testing.T) {
+	for mode, recovers := range map[provisioner.OOMKillReasonsMode]bool{
+		provisioner.OOMKillReasonsAct: true, provisioner.OOMKillReasonsRecord: false,
+	} {
+		t.Run(string(mode), func(t *testing.T) {
+			ctx := context.Background()
+			pod := killedWorkerPod("team-a", "set", time.Now())
+			pod.Annotations[provisioner.AnnotationStartedJobID] = "job-1"
+			r, q, _ := podWatchFixture(t, pod)
+			r.Provisioner.OOMKillReasons = mode
+
+			r.workerPodHandler().Update(ctx, event.UpdateEvent{ObjectOld: pod, ObjectNew: told(pod, "AbovePods")}, q)
+			assert.Zero(t, q.Len(), "no reconcile")
+			claimed := func() bool {
+				var got corev1.Pod
+				require.NoError(t, r.Get(ctx, client.ObjectKeyFromObject(pod), &got))
+				_, ok := got.Annotations[provisioner.AnnotationEvictionHandledAt]
+				return ok
+			}
+			if recovers {
+				assert.Eventually(t, claimed, 5*time.Second, 20*time.Millisecond)
+			} else {
+				assert.Never(t, claimed, 300*time.Millisecond, 20*time.Millisecond)
+			}
+		})
+	}
+}

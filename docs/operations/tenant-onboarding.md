@@ -1181,6 +1181,19 @@ The GMC cannot delete Secrets, so delete it in the tenant namespace; the next re
 
 What the pool keeps, for how long, and who can read it are in the [security design](../design/05-security.md#proxy-failure-attribution).
 
+### Acting on which memory limit killed a runner
+
+Where the [oom-reporter](oom-reporter.md) is installed, a failed job's Event already says which memory limit killed its runner.
+`oomKillReasons: Act` has the AGC act on it too: after a kill at the pod's limit or above the pod it raises no limit and re-runs nothing, where today it raises the runner's.
+It is **off by default** (`Record`), and changing it restarts the AGC:
+
+```sh
+kubectl patch actionsgateway -n <tenant-namespace> <gateway> \
+  --type merge -p '{"spec":{"oomKillReasons":"Act"}}'
+```
+
+Anyone who can write a pod's status in the namespace can write the reporter's condition, so under `Act` they can withhold a re-run; [what it does](oom-reporter.md#what-the-gateway-does-with-it) has the table.
+
 ### Workload-identity credentials (external signer)
 
 `spec.credentials` is a discriminated union (keyed by `credentials.type`) with two members.

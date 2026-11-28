@@ -243,6 +243,18 @@ type ActionsGatewaySpec struct {
     // +kubebuilder:validation:Enum=info;debug
     LogLevel string `json:"logLevel,omitempty"`
 
+    // OOMKillReasons selects what this tenant's AGC does with the reason an
+    // out-of-memory reporter writes on a killed worker's pod. Record (the
+    // default) repeats it in the failed job's record and changes no action. Act
+    // also waits up to 30 seconds after the pod ends for the runner's reason,
+    // and withholds the raise and the re-run where it names the pod's limit or
+    // one above the pod (04 §4.2, Q1406). The GMC threads Act alone, as
+    // AGC_OOM_KILL_REASONS, so a gateway left at Record keeps its pod template.
+    // +optional
+    // +kubebuilder:default=Record
+    // +kubebuilder:validation:Enum=Record;Act
+    OOMKillReasons string `json:"oomKillReasons,omitempty"`
+
     // Tracing configures opt-in OpenTelemetry distributed tracing for this
     // tenant's AGC. The GMC translates these fields into the standard
     // OpenTelemetry OTEL_* environment variables on the AGC Deployment — the
