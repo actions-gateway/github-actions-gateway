@@ -341,7 +341,7 @@ func (f *fakeTarget) Resolve(context.Context) (*provisioner.ResolvedSpec, error)
 	return f.spec, nil
 }
 
-// TestProvisioner_ScaleSetWorker_StagesJITAndSetsMode covers the Q264 scale-set
+// TestProvisioner_ScaleSetWorker_StagesJITAndSetsMode covers the scale-set
 // provision path: a JIT-config Secret (the blob, no acquired payload) and a worker pod
 // switched into scale-set mode (WORKER_MODE=scaleset → run.sh --jitconfig). It is
 // fire-and-forget (no wait for completion) and idempotent per jobID.
@@ -387,10 +387,10 @@ func TestProvisioner_ScaleSetWorker_StagesJITAndSetsMode(t *testing.T) {
 }
 
 // TestProvisioner_ScaleSetWorker_StampsRunnerName pins the pod as the durable record of
-// its runner registration (Q550). The listener pre-registers the runner before the pod
+// its runner registration. The listener pre-registers the runner before the pod
 // exists and then forgets the name; the reaper has to deregister that record long
-// afterwards, so the name has to survive on the pod — as the run identity (Q417) and the
-// reap deadline (Q420) already do. A job with no name stamps no annotation, keeping a
+// afterwards, so the name has to survive on the pod — as the run identity and the
+// reap deadline already do. A job with no name stamps no annotation, keeping a
 // pre-upgrade or classic worker exactly as it was.
 func TestProvisioner_ScaleSetWorker_StampsRunnerName(t *testing.T) {
 	defer goleak.VerifyNone(t)
@@ -592,7 +592,7 @@ func TestProvisioner_WorkerImageFallback(t *testing.T) {
 	assert.Equal(t, "my-custom-image:latest", runnerContainer.Image)
 }
 
-// TestProvisioner_NamedImagelessRunnerGapFilled covers Q233: a tenant podTemplate
+// TestProvisioner_NamedImagelessRunnerGapFilled covers the image gap-fill: a tenant podTemplate
 // may name the "runner" container but omit its image. The provisioner must fill the
 // resolved worker image (otherwise the API server rejects the Pod with
 // spec.containers[].image: Required value) without overriding a tenant-set image.
@@ -614,7 +614,7 @@ func TestProvisioner_NamedImagelessRunnerGapFilled(t *testing.T) {
 	assert.Equal(t, "my-custom-image:latest", runner.Image, "image-less runner must be gap-filled with the resolved worker image")
 }
 
-// TestProvisioner_NamedRunnerImageNotOverridden asserts the Q233 gap-fill never
+// TestProvisioner_NamedRunnerImageNotOverridden asserts the gap-fill never
 // clobbers an image the tenant set explicitly on the runner container.
 func TestProvisioner_NamedRunnerImageNotOverridden(t *testing.T) {
 	defer goleak.VerifyNone(t)
@@ -1184,7 +1184,7 @@ func TestProvisioner_QuotaRetryExhausted(t *testing.T) {
 	assert.Equal(t, float64(1), testutil.ToFloat64(m.QuotaRetriesExhausted.WithLabelValues("team-a", "mygroup")))
 
 	// A Warning Event is recorded on the owner so quota exhaustion surfaces in
-	// `kubectl describe`, not just the metric (Q170).
+	// `kubectl describe`, not just the metric.
 	evs := rec.withReason("QuotaRetriesExhausted")
 	require.Len(t, evs, 1)
 	assert.Equal(t, corev1.EventTypeWarning, evs[0].eventtype)
@@ -1271,7 +1271,7 @@ func TestBuildPod_BaselineSecurityDefaults(t *testing.T) {
 	require.NotNil(t, pod.Spec.SecurityContext)
 	require.NotNil(t, pod.Spec.SecurityContext.RunAsNonRoot)
 	assert.True(t, *pod.Spec.SecurityContext.RunAsNonRoot)
-	// Q115: a numeric runAsUser must accompany runAsNonRoot so kubelet can
+	// A numeric runAsUser must accompany runAsNonRoot so kubelet can
 	// verify non-root against the runner image's non-numeric `USER runner`.
 	require.NotNil(t, pod.Spec.SecurityContext.RunAsUser, "baseline must gap-fill a numeric runAsUser")
 	assert.Equal(t, int64(1001), *pod.Spec.SecurityContext.RunAsUser)
@@ -1301,7 +1301,7 @@ func TestBuildPod_RestrictedSecurityDefaults(t *testing.T) {
 	require.NotNil(t, pod.Spec.SecurityContext)
 	require.NotNil(t, pod.Spec.SecurityContext.RunAsNonRoot)
 	assert.True(t, *pod.Spec.SecurityContext.RunAsNonRoot)
-	// Q115: the numeric runAsUser is stamped at pod level on restricted too, so
+	// The numeric runAsUser is stamped at pod level on restricted too, so
 	// every container inherits a kubelet-verifiable non-root UID.
 	require.NotNil(t, pod.Spec.SecurityContext.RunAsUser, "restricted must gap-fill a numeric runAsUser")
 	assert.Equal(t, int64(1001), *pod.Spec.SecurityContext.RunAsUser)
@@ -1374,7 +1374,7 @@ func TestBuildPod_TenantOverridesPreserved(t *testing.T) {
 
 	require.NotNil(t, pod.Spec.SecurityContext.RunAsNonRoot)
 	assert.False(t, *pod.Spec.SecurityContext.RunAsNonRoot, "tenant runAsNonRoot:false must be preserved")
-	// Q115: with non-root opted out (a root-based image), we must NOT force the
+	// With non-root opted out (a root-based image), we must NOT force the
 	// runner UID — doing so would contradict the tenant's choice.
 	assert.Nil(t, pod.Spec.SecurityContext.RunAsUser, "runAsUser must not be gap-filled when the tenant disabled runAsNonRoot")
 	// Seccomp still gap-filled because the tenant left it unset.
@@ -1384,7 +1384,7 @@ func TestBuildPod_TenantOverridesPreserved(t *testing.T) {
 	assert.True(t, pod.Spec.Containers[0].Resources.Limits.Cpu().IsZero(), "tenant-set resources must not be overwritten with defaults")
 }
 
-// TestBuildPod_TenantRunAsUserPreserved verifies the Q115 runAsUser gap-fill is
+// TestBuildPod_TenantRunAsUserPreserved verifies the runAsUser gap-fill is
 // gap-fill only: a tenant that pins its own UID (e.g. a custom image whose user
 // is not 1001) keeps it, and runAsNonRoot is still enforced.
 func TestBuildPod_TenantRunAsUserPreserved(t *testing.T) {
@@ -1425,7 +1425,7 @@ func TestBuildPod_RecommendedLabels(t *testing.T) {
 }
 
 // TestBuildPod_DisruptionSafetyDefaults verifies every worker pod is stamped
-// with the node-disruption-safety markers (Q218) so Karpenter consolidation,
+// with the node-disruption-safety markers so Karpenter consolidation,
 // cluster-autoscaler scale-down, and the descheduler do not evict a pod
 // mid-job and strand the CI run.
 func TestBuildPod_DisruptionSafetyDefaults(t *testing.T) {
@@ -1480,7 +1480,7 @@ func defaultCPU() string { return "500m" }
 // TestProvisioner_SetsOwnerReferences verifies the worker pod and job Secret
 // carry the target's controller OwnerReference, so deleting the owner (or its
 // namespace) cascade-deletes both — including objects
-// orphaned by an AGC crash (Q95).
+// orphaned by an AGC crash.
 func TestProvisioner_SetsOwnerReferences(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx := context.Background()
@@ -1492,7 +1492,7 @@ func TestProvisioner_SetsOwnerReferences(t *testing.T) {
 
 	require.NoError(t, rg.provision(ctx, p, "plan-ownerref"))
 
-	// The worker Secret is handed to its pod once the pod exists (Q1154), so only
+	// The worker Secret is handed to its pod once the pod exists, so only
 	// the pod carries the RunnerSet reference.
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
@@ -1520,7 +1520,7 @@ const (
 	testGitHubCAFileName   = "ca.crt"
 )
 
-// TestBuildPod_MountsGitHubCABundle is the worker half of Q536: an AGC whose gateway
+// TestBuildPod_MountsGitHubCABundle is the worker half of the private-CA bundle: an AGC whose gateway
 // set githubCABundleRef projects the same ConfigMap into every worker pod, so the
 // runner's own calls to a private-CA GHES appliance — checkout, log and artifact
 // upload — complete the handshake the control plane already can. A ConfigMap, not a

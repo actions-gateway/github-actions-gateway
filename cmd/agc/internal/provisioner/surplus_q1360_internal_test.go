@@ -9,7 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// Q1360, as measured on dogfood on 2026-11-18: GitHub assigned job-x, and with no runner
+// As measured on dogfood on 2026-11-18: GitHub assigned job-x, and with no runner
 // taking it in five minutes, withdrew it (a JobCompleted naming no runner) and re-issued
 // the same workflow job as job-y. job-x's runner came up four seconds later and took
 // job-y, while job-y's own worker was still Pending. The surplus that moved off job-x's

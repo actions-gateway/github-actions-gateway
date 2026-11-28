@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
-// Q417: eviction recovery on the scale-set tier. The capability existed only on
+// Eviction recovery on the scale-set tier. The capability existed only on
 // classic, where provision() watches the pod it created and still holds the acquired
 // payload's run identity. The scale-set tier has neither, so identity is stamped on the
 // worker pod at creation and the owning reconciler drives detection —
@@ -100,7 +100,7 @@ func recoveryFixture(t *testing.T, pods ...*corev1.Pod) (*Provisioner, *stubTarg
 }
 
 // recoveryFixtureWith is recoveryFixture with the fake client's calls intercepted, for
-// the apiserver races the claim path has to classify (Q809).
+// the apiserver races the claim path has to classify.
 func recoveryFixtureWith(t *testing.T, ic interceptor.Funcs, pods ...*corev1.Pod) (*Provisioner, *stubTarget, *runnercore.Metrics, *atomic.Int64, chan string) {
 	t.Helper()
 
@@ -158,8 +158,8 @@ func recoveryFixtureWith(t *testing.T, ic interceptor.Funcs, pods ...*corev1.Pod
 }
 
 // TestRecoverEvictedScaleSetWorkers_RerunsTheEvictedRun is the headline behaviour: an
-// evicted scale-set worker gets its run re-run automatically, which before Q417 required
-// a human. It asserts the run named in the API call comes from the pod's own
+// evicted scale-set worker gets its run re-run automatically.
+// It asserts the run named in the API call comes from the pod's own
 // annotations — the only place this tier records it.
 func TestRecoverEvictedScaleSetWorkers_RerunsTheEvictedRun(t *testing.T) {
 	ctx := context.Background()
@@ -319,11 +319,11 @@ func TestRecoverEvictedScaleSetWorkers_RerunURLRejectsAdversarialRepository(t *t
 	}
 }
 
-// TestRecoverEvictedScaleSetWorkers_OneAttemptIsOneRerun pins the merge (Q1182): three
+// TestRecoverEvictedScaleSetWorkers_OneAttemptIsOneRerun pins the merge: three
 // evicted workers of one run attempt cost one re-run and one budget slot, because
-// rerun-failed-jobs re-runs every failed job of the attempt at once. Each used to
-// reserve a slot and run its own loop, so the second landed another re-run once the
-// first concluded and the third found the budget exhausted. Deleting the merge branch
+// rerun-failed-jobs re-runs every failed job of the attempt at once. Unmerged, each
+// reserves a slot and runs its own loop, so the second lands another re-run once the
+// first concludes and the third finds the budget exhausted. Deleting the merge branch
 // of reserveScaleSetRerun turns this red with exactly that shape.
 func TestRecoverEvictedScaleSetWorkers_OneAttemptIsOneRerun(t *testing.T) {
 	ctx := context.Background()
@@ -480,7 +480,7 @@ func TestProvisionScaleSetWorker_ProvisionsWithoutIdentity(t *testing.T) {
 // both read the pod before either writes, so both see an unadjudicated disruption; the
 // recovery-claim ledger is what stops both from calling rerun-failed-jobs. It replaced
 // the pod's own optimistic lock because the lock has to outlive a pod two of the
-// recovery arms delete (Q1108).
+// recovery arms delete.
 func TestClaimDisruptionRecovery_LedgerRejectsTheSecondClaimant(t *testing.T) {
 	ctx := context.Background()
 	p, target, _, _, _ := recoveryFixture(t)
@@ -498,7 +498,7 @@ func TestClaimDisruptionRecovery_LedgerRejectsTheSecondClaimant(t *testing.T) {
 }
 
 // TestClaimDisruptionRecovery_SurvivesAConcurrentLedgerWrite pins the retry the ledger
-// needs for the case the pod claim used to face: the two detection paths are routinely
+// needs: the two detection paths are routinely
 // concurrent, so the optimistic lock raises a Conflict that is another CLAIM rather
 // than a rival for this pod. Re-reading and re-applying is what keeps the second pod's
 // disruption recoverable.
@@ -562,7 +562,7 @@ func TestClaimDisruptionRecovery_ConcurrentClaimsAllLand(t *testing.T) {
 // with a rolling update: two replicas share one ledger, and claimMu serialises only a
 // replica's own claims, so the other replica's back-to-back burst wins a round of the
 // compare-and-swap with every write. The claim here loses a dozen rounds, each to a
-// landed claim, and must still land (Q1197).
+// landed claim, and must still land.
 func TestClaimDisruptionRecovery_OutlastsAnotherReplicasBurst(t *testing.T) {
 	ctx := context.Background()
 	const burst = 12
@@ -658,7 +658,7 @@ func TestPruneRecoveryClaims_BoundsTheLedger(t *testing.T) {
 		"the oldest claim must be the one dropped")
 }
 
-// drainedWorker builds the disruption arm Q809's flake lives on: a scale-set worker
+// drainedWorker builds the drain disruption arm: a scale-set worker
 // deleted while running, whose container then recorded an exit — the drain shape
 // externallyDeletedBeforeTerminal admits.
 func drainedWorker(name string) *corev1.Pod {
@@ -680,10 +680,10 @@ func drainedWorker(name string) *corev1.Pod {
 }
 
 // TestRecoverEvictedScaleSetWorkers_PodGoneBeforeTheStampIsStillRecovered is the
-// headline of Q1108, and the arm that cost Q809 two of its three CI failures: the
+// headline of the recovery-claim ledger: the
 // kubelet finished tearing the drained pod down between the cached List and the write
-// back to it. That used to end the recovery, because the pod carried the claim. It no
-// longer does — the claim is in the ledger, taken before the pod is touched, and the
+// back to it. That does not end the recovery
+// — the claim is in the ledger, taken before the pod is touched, and the
 // evidence was read off the informer before the pod went.
 func TestRecoverEvictedScaleSetWorkers_PodGoneBeforeTheStampIsStillRecovered(t *testing.T) {
 	ctx := context.Background()
@@ -705,12 +705,12 @@ func TestRecoverEvictedScaleSetWorkers_PodGoneBeforeTheStampIsStillRecovered(t *
 	assert.NotContains(t, target.events, "EvictionRecoveryEvidenceLost")
 }
 
-// TestRecoverEvictedScaleSetWorkers_ConcurrentPodWriteDoesNotCostTheRerun is Q809's
-// other flavour: the kubelet publishing the terminal phase is guaranteed to be racing,
-// because that transition is the edge that triggers the reconcile. It used to raise a
-// Conflict against the pod's optimistic lock and be read as "already claimed
-// elsewhere", which is how run 31556806760 lost a drained worker's re-run. The pod
-// write no longer arbitrates anything, so any failure of it is advisory.
+// TestRecoverEvictedScaleSetWorkers_ConcurrentPodWriteDoesNotCostTheRerun covers the
+// concurrent write: the kubelet publishing the terminal phase is guaranteed to be racing,
+// because that transition is the edge that triggers the reconcile. A
+// Conflict against the pod's optimistic lock must not be read as "already claimed
+// elsewhere": the pod
+// write arbitrates nothing, so any failure of it is advisory.
 func TestRecoverEvictedScaleSetWorkers_ConcurrentPodWriteDoesNotCostTheRerun(t *testing.T) {
 	ctx := context.Background()
 	p, target, _, rerunCount, _ := recoveryFixtureWith(t, interceptor.Funcs{
@@ -892,7 +892,7 @@ func (l *lockedWriter) Write(b []byte) (int, error) {
 	return l.w.Write(b)
 }
 
-// TestRecoverEvictedScaleSetWorkers_DeclinedDisruptionIsLogged pins the Q549 signal: a
+// TestRecoverEvictedScaleSetWorkers_DeclinedDisruptionIsLogged pins the declined-scan log line: a
 // scan that judged a terminating worker and declined must say so, because an
 // unrecovered pod looks identical whether a scan judged it or no scan ever saw it. The
 // e2e drain spec re-stages on the second and fails on the first, and before this line
@@ -957,7 +957,7 @@ func TestRecoverEvictedScaleSetWorkers_DeclineIsNotLoggedForNonCandidates(t *tes
 	}
 }
 
-// TestRecoverDisruptedScaleSetWorker_RerunsOffTheEvent is Q1029's headline: the pod a
+// TestRecoverDisruptedScaleSetWorker_RerunsOffTheEvent is the event path's headline: the pod a
 // worker-pod watch event carries is claimed and its run re-run with no reconcile
 // listing it. The scan is deliberately never called here, so the rerun can only have
 // come off the event path.

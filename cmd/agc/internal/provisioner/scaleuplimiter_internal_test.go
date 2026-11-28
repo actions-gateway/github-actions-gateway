@@ -146,7 +146,7 @@ func TestScaleUpLimiter_ReReadsConfig(t *testing.T) {
 	l := newTestLimiter(clock, nil)
 
 	// Same key, changing config: the per-key limiter is reused and reconciled to the
-	// new rate/burst (Q117: a spec edit takes effect on the next job).
+	// new rate/burst (a spec edit takes effect on the next job).
 	lim1 := l.limiterFor("ns/rg", &ScaleUpConfig{MaxPerSecond: 1, Burst: 1})
 	lim2 := l.limiterFor("ns/rg", &ScaleUpConfig{MaxPerSecond: 5, Burst: 10})
 	if lim1 != lim2 {
@@ -206,7 +206,7 @@ func TestScaleUpLimiter_PerKeyIsolation(t *testing.T) {
 }
 
 // TestScaleUpLimiter_RefundRestoresOneToken pins the refund at the level the ramp
-// is felt: a spent token that bought no pod must buy one later (Q972).
+// is felt: a spent token that bought no pod must buy one later.
 func TestScaleUpLimiter_RefundRestoresOneToken(t *testing.T) {
 	clock := newFakeClock()
 	l := newTestLimiter(clock, nil)
@@ -239,7 +239,7 @@ func TestScaleUpLimiter_RefundRestoresOneToken(t *testing.T) {
 // bucket that owes nothing must not raise availability above Burst, or an operator
 // who set burst=N could see N+k pods start at once. This is the property the
 // AllowN(now, -1) mechanism rests on, so a golang.org/x/time bump that dropped the
-// burst cap fails here rather than silently loosening the limit (Q972).
+// burst cap fails here rather than silently loosening the limit.
 func TestScaleUpLimiter_RefundCannotExceedBurst(t *testing.T) {
 	clock := newFakeClock()
 	l := newTestLimiter(clock, nil)

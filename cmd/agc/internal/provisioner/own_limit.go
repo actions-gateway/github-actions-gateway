@@ -8,7 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// Own-limit evictions (Q1177): the PodFailed/Evicted shape the eviction arm keys on is
+// Own-limit evictions: the PodFailed/Evicted shape the eviction arm keys on is
 // written by the kubelet for two different causes, and only one of them is a
 // disruption. Node pressure evicts whichever pod the kubelet ranks worst, so a fresh
 // pod on a fresh node clears it. A pod that outgrows its OWN local-storage limit — the

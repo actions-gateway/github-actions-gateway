@@ -16,7 +16,7 @@ import (
 )
 
 // TestPendingRerun_ActsOnTheRunTheLedgerNames is the measurement behind the accepted
-// residual Q1327 records in 05-security.md: recovery state is trusted on read, so an
+// residual recorded in 05-security.md: recovery state is trusted on read, so an
 // entry anyone with ConfigMap update in the tenant namespace writes steers the re-run
 // to the run and repository it names, and a spent budget stored beside it does not
 // stop the call. What bounds it is the tenant's own installation token.

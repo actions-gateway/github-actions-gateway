@@ -281,7 +281,7 @@ func readLedger(t *testing.T, p *Provisioner, target Target) *rerunLedger {
 	return l
 }
 
-// TestJobRerun_AGenuineFailureIsLeftAlone is Q1319: the class re-runs the job its worker
+// TestJobRerun_AGenuineFailureIsLeftAlone: the class re-runs the job its worker
 // was killed under and not the sibling that failed on its own, and the ledger says so.
 func TestJobRerun_AGenuineFailureIsLeftAlone(t *testing.T) {
 	p, api, target, clock, _ := jobsFixture(t,
@@ -303,7 +303,7 @@ func TestJobRerun_AGenuineFailureIsLeftAlone(t *testing.T) {
 
 // TestJobRerun_MatchesTheRunnerAndNotTheName: two jobs of one name, and a pod whose
 // recorded name is another job's, which is what a worker killed before its JobStarted is
-// handled leaves (Q1389).
+// handled leaves.
 func TestJobRerun_MatchesTheRunnerAndNotTheName(t *testing.T) {
 	for _, tc := range []struct{ name, podJob string }{
 		{"the second of two jobs that share a name", "dup"},
@@ -517,7 +517,7 @@ func matrixJobs(b, c string, more ...runJob) []runJob {
 	}, more...)
 }
 
-// TestSiblings_ARedGateIsNoOtherFailure is Q1401: the attempt after a killed leg's own
+// TestSiblings_ARedGateIsNoOtherFailure: the attempt after a killed leg's own
 // re-run says what depends on it, so a gate red in both attempts does not keep the rest of
 // the matrix from one re-run of every failed job.
 func TestSiblings_ARedGateIsNoOtherFailure(t *testing.T) {

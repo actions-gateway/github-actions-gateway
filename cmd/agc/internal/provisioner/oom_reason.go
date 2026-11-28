@@ -7,7 +7,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// The out-of-memory reporter's answer in a failed job's record (Q1403). It writes a pod
+// The out-of-memory reporter's answer in a failed job's record. It writes a pod
 // condition per killed container, whose reason names the limit that ran out
 // (cmd/oomreporter/internal/controller/words.go). Whoever can write pods/status can write
 // one too, so the record repeats it as words of its own beside a kill the pod's status

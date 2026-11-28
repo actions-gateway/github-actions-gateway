@@ -11,7 +11,7 @@ import (
 	"slices"
 )
 
-// Job-granular re-runs (Q1319). rerun-failed-jobs re-runs every failed job of the run, so
+// Job-granular re-runs. rerun-failed-jobs re-runs every failed job of the run, so
 // a class firing on one job would re-run, and could hide, a sibling's genuine failure. A
 // parked re-run therefore re-runs only the jobs whose workers the class killed, found in
 // the latest attempt's jobs list by their runners' names. Display names are not enough: two

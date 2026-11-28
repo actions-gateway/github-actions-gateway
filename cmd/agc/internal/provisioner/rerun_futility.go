@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Known-futile re-runs on the scale-set tier (Q1181; docs/design/04-operational-flows.md
+// Known-futile re-runs on the scale-set tier (docs/design/04-operational-flows.md
 // §4.2 has the operator account). A disruption arm's re-run that GitHub will refuse,
 // or that a newer commit has made pointless, still costs a budget slot, a node and queue
 // time, and ends in an Event asking for a manual re-run that would not help either.
@@ -38,7 +38,7 @@ const (
 
 const (
 	// githubRerunLimit is how many times GitHub lets a workflow run be re-run, counting
-	// full and partial re-runs alike (changelog 2026-04-10, "Actions workflows are
+	// full and partial re-runs alike (GitHub changelog, "Actions workflows are
 	// limited to 50 reruns"), so attempt githubRerunLimit+1 is the last.
 	githubRerunLimit = 50
 	// attemptStartSkew is how much later than a job's assignment an attempt must start to
@@ -47,7 +47,7 @@ const (
 	// jobListSettle is how old a running attempt must be before a job missing from its list
 	// is one it re-ran. GitHub fills the list over the attempt's first seconds: in 62 re-run
 	// attempts across 15 repositories, every carried job was created within 15 s of the
-	// start (2026-11-23). The rest allows for the AGC's clock running ahead.
+	// start (measured 2026-11-23). The rest allows for the AGC's clock running ahead.
 	jobListSettle = 2 * time.Minute
 	// githubRerunWindow is how long after a run is created GitHub lets it be re-run.
 	githubRerunWindow = 30 * 24 * time.Hour

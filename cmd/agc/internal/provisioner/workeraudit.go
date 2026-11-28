@@ -15,7 +15,7 @@ import (
 // ConnectionsWithSource, the source address that reached it; this one says which
 // tenant and which job held that address, and names no destination at all.
 // Neither is a movement log alone — the join of the two is — so each half is
-// opted into separately and both default off (Q986, docs/design/05-security.md).
+// opted into separately and both default off (docs/design/05-security.md).
 //
 // The join has to be recorded live: a worker pod is deleted when its job ends
 // and its address returns to the CNI's pool, so nothing can resolve an address

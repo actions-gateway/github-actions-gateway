@@ -24,10 +24,10 @@ const LabelRunnerSet = "actions-gateway.com/runner-set"
 // held, or — for a job no runner started — the job the pod was created for. It is the
 // reap deadline for a worker that is still Running after its job is over — a worker
 // that registered but never received its job would otherwise hold a concurrency slot
-// and a node forever, because the reaper counts PodRunning as active (Q420).
+// and a node forever, because the reaper counts PodRunning as active.
 //
 // It is not stamped by job ID alone: GitHub gives a scale-set job to whichever runner
-// asks first, so the pod created for a job can be running a different one (Q1151).
+// asks first, so the pod created for a job can be running a different one.
 //
 // It is controller-set and informational: never set it by hand and never use it for
 // security enforcement. The classic tier never stamps it (its provision() goroutine
@@ -38,12 +38,12 @@ const AnnotationJobCompletedAt = "actions-gateway.com/job-completed-at"
 // pre-registered its runner under at GitHub (generatejitconfig mints the record before
 // the pod exists). It is the pod's registration handle: the reaper reads it back to
 // deregister the record when it deletes the pod, and the listener's start-up sweep
-// treats a name stamped on a live pod as claimed and therefore not collectable (Q550).
+// treats a name stamped on a live pod as claimed and therefore not collectable.
 //
 // It has to live on the pod because nothing else outlives the listener goroutine that
 // minted the name. The reaper runs arbitrarily later and possibly in a different AGC
 // process, and the fire-and-forget scale-set tier keeps no in-process job state — the
-// same reason Q417 put the run identity and Q420 the reap deadline here.
+// same reason the run identity and the reap deadline live here.
 //
 // A pod without it (any classic-tier worker, or a scale-set worker created before this
 // annotation existed) is reaped exactly as before, with no deregistration attempted.
@@ -55,7 +55,7 @@ const AnnotationRunnerName = "actions-gateway.com/runner-name"
 // AnnotationStartedJobID is stamped on a scale-set worker pod, with GitHub's job ID as
 // its value, when the scale-set listener observes a JobStarted naming that pod's runner
 // (MarkScaleSetJobStarted). It records which job the runner actually took, which is not
-// necessarily the one the pod was created for (Q1151): a completion that names no runner
+// necessarily the one the pod was created for: a completion that names no runner
 // leaves a worker carrying another job's ID alone, rather than reaping a live job.
 //
 // Controller-set and informational: never set it by hand and never use it for security
@@ -65,7 +65,7 @@ const AnnotationStartedJobID = "actions-gateway.com/started-job-id"
 // AnnotationSurplusForJob is stamped beside AnnotationJobCompletedAt, with a job ID as its
 // value, on the idle worker reclaimed because that job ended before any runner started
 // it: the set then has one runner more than it has jobs, and this worker is the one
-// picked to go, which need not be the one created for that job (Q1153). It makes the
+// picked to go, which need not be the one created for that job. It makes the
 // reclaim idempotent per job, and a JobStarted on the worker removes it with the stamp
 // and moves both to another idle worker.
 //
@@ -76,7 +76,7 @@ const AnnotationSurplusForJob = "actions-gateway.com/surplus-for-job"
 // AnnotationRunnerBusyAt is stamped on a scale-set worker pod, with an RFC 3339 UTC
 // timestamp as its value, when the reaper's idle-runner check found the pod's runner
 // running a job at GitHub although the AGC has recorded no start for it — the state an
-// AGC outage across the job's start leaves (Q1360). An ephemeral runner takes one job,
+// AGC outage across the job's start leaves. An ephemeral runner takes one job,
 // so the stamp exempts the pod from that check for good, and the job's own completion
 // or the pod's exit ends it.
 //
@@ -85,8 +85,8 @@ const AnnotationSurplusForJob = "actions-gateway.com/surplus-for-job"
 const AnnotationRunnerBusyAt = "actions-gateway.com/runner-busy-at"
 
 // AnnotationSizingProfile is stamped on a worker pod, with the profile name as its
-// value, when an opt-in sizing profile actually derived that pod's cpu/memory ask
-// (Q489). A pod built from the template's static values — Static, or a history-based
+// value, when an opt-in sizing profile actually derived that pod's cpu/memory ask.
+// A pod built from the template's static values — Static, or a history-based
 // profile still AwaitingSamples — carries no such annotation, so presence answers
 // "was this pod sized by the profile, or by the template?" without inferring it from
 // the numbers.
@@ -104,7 +104,7 @@ const AnnotationSizingProfile = "actions-gateway.com/sizing-profile"
 
 // AnnotationRerunCause is stamped on a scale-set worker pod of a run GAG has re-run,
 // with the cause of GAG's latest re-run of it (eviction, oom, ...) as its value, so cost
-// tooling can split re-run compute by cause (Q1245). It is read off the failure ledger,
+// tooling can split re-run compute by cause. It is read off the failure ledger,
 // which records re-runs by run and not by attempt, so a pod the original attempt builds
 // after GAG reserved its re-run carries it too.
 //
@@ -120,7 +120,7 @@ const AnnotationRerunCause = "actions-gateway.com/rerun-cause"
 // something outside the pod has to be able to tell them apart. A classic worker is
 // watched to a terminal phase by the provision() goroutine that created it, which
 // handles its own eviction; a scale-set worker is fire-and-forget, so the owning
-// reconciler adopts eviction recovery for it (Q417). Firing both on the same pod
+// reconciler adopts eviction recovery for it. Firing both on the same pod
 // would spend two slots of one run's retry budget for one eviction, so the
 // reconciler's pass filters on this label.
 const LabelAcquisitionProtocol = "actions-gateway.com/acquisition-protocol"
@@ -133,7 +133,7 @@ const AcquisitionProtocolScaleSet = "ScaleSet"
 // AnnotationEvictionHandledAt is stamped on a scale-set worker pod, with an RFC 3339
 // UTC timestamp as its value, when the owning reconciler has adjudicated that pod's
 // eviction — whether it went on to trigger a re-run, found no run identity to re-run,
-// or found the retry budget exhausted (Q417).
+// or found the retry budget exhausted.
 //
 // It is a claim, not a log line: the reconciler sets it under an optimistic lock
 // BEFORE calling GitHub, so an evicted pod re-observed by a later reconcile (or by a
@@ -148,7 +148,7 @@ const AnnotationEvictionHandledAt = "actions-gateway.com/eviction-handled-at"
 
 // WorkerContainerName is the name of the runner container in every worker pod
 // template — the container the runner engine executes in, and the one the
-// NodeShare sizing profile targets (Q359 Phase 3).
+// NodeShare sizing profile targets.
 const WorkerContainerName = "runner"
 
 // Target is the controller object a Provisioner provisions worker pods and job
@@ -158,7 +158,7 @@ const WorkerContainerName = "runner"
 //
 // The provisioner uses the Target for the OwnerReference and identity stamped on
 // every worker pod/Secret, and calls Resolve once per acquired job to obtain the
-// fresh provisioning inputs — preserving the Q117 property that a spec edit made
+// fresh provisioning inputs — preserving the property that a spec edit made
 // after a listener started takes effect on the next job without an AGC restart.
 // Resolve is what makes v2 reference resolution (templateRef → RunnerTemplate,
 // proxyRef → EgressProxy) re-evaluate per job and fail closed when a reference no
@@ -182,16 +182,16 @@ type Target interface {
 
 	// Ceiling returns the maximum concurrent worker pods the owner may run and
 	// whether a ceiling applies at all, re-read from the fresh spec each call so
-	// the admission gate honours maxWorkers/priorityTiers edits without a restart
-	// (Q117). It is the cheap path used by the admission gate; Resolve is the full
-	// path used to actually build a pod.
+	// the admission gate honours maxWorkers/priorityTiers edits without a restart.
+	// It is the cheap path used by the admission gate; Resolve is the full
+	// path that actually builds a pod.
 	Ceiling(ctx context.Context) (limit int32, bounded bool)
 
 	// QuotaExhausted reports whether the namespace ResourceQuota currently lacks
 	// the headroom to admit one more worker pod of this owner's shape, with a
 	// human-readable detail naming the binding resource. It is the observed
 	// counterpart to Ceiling's declared limit, and the admission gate refuses to
-	// claim a job when it returns true (#784) — see admission.go for why the quota
+	// claim a job when it returns true — see admission.go for why the quota
 	// rung is safe to gate on and the scheduler's Unschedulable verdict is not.
 	//
 	// Fail-open by contract: an owner or quota it cannot read yields false, leaving
@@ -203,7 +203,7 @@ type Target interface {
 	// boolean: the total number of worker pods this owner may have in flight given
 	// live namespace-ResourceQuota headroom, never above max. It is what the
 	// scale-set tier advertises the quota rung with, because that tier states a
-	// number of jobs per poll rather than deciding per delivered job (Q443) — see
+	// number of jobs per poll rather than deciding per delivered job — see
 	// AdvertiseCapacity.
 	//
 	// Fail-open by contract, exactly like QuotaExhausted: bounded=false means "no
@@ -214,7 +214,7 @@ type Target interface {
 
 	// CapacityDeclined reports whether the owner's opt-in capacity gate is currently
 	// refusing intake because the cluster cannot place this owner's worker pods, with
-	// a human-readable detail naming the signal that said so (Q405). It is the third
+	// a human-readable detail naming the signal that said so. It is the third
 	// rung of the ladder — placeability, which neither the declared ceiling nor
 	// namespace quota can answer, because quota is namespace-wide and pool-blind
 	// while placeability is a property of the pod shape and the pools it can land on.
@@ -224,17 +224,17 @@ type Target interface {
 	// cannot read, or an owner whose tier has no capacity gate all yield false. The
 	// gate may under-gate freely — that is today's behavior — but must never
 	// over-gate, because over-gating starves a tenant. A LATCHED gate (the declined
-	// evidence was reaped, Q512) is not fully closed either: it declines only while
+	// evidence was reaped) is not fully closed either: it declines only while
 	// a probe pod is outstanding, admitting exactly one probe job per deadline
 	// window so the latch can resolve.
 	CapacityDeclined(ctx context.Context) (declined bool, detail string)
 
 	// DeclinedCapacity returns the same capacity signal as an integer instead of a
 	// boolean, for the scale-set tier's per-poll advertisement — the CapacityDeclined
-	// counterpart of QuotaCapacity (Q443's invariant: a rung expressed in only one
+	// counterpart of QuotaCapacity (the invariant: a rung expressed in only one
 	// form ships to only one tier). A live decline means "no room for another worker
 	// pod", so the bound is the owner's own in-flight worker pods: GitHub keeps the
-	// jobs it has already assigned and is offered no more. A latched decline (Q512)
+	// jobs it has already assigned and is offered no more. A latched decline
 	// adds one probe slot while no probe pod is outstanding, so this tier trickles
 	// at one job per deadline window instead of snapping back to the full ceiling
 	// when the reaper deletes the gate's evidence.
@@ -244,9 +244,9 @@ type Target interface {
 	// readable) and the caller keeps whatever the earlier rungs left.
 	DeclinedCapacity(ctx context.Context, max int32) (limit int32, bounded bool)
 
-	// ScaleUpLimit returns the owner's opt-in worker-pod creation-rate limit (Q223),
+	// ScaleUpLimit returns the owner's opt-in worker-pod creation-rate limit,
 	// re-read from the fresh spec on every call so a spec edit takes effect on the
-	// next job or poll without an AGC restart (Q117). It is the cheap counterpart of
+	// next job or poll without an AGC restart. It is the cheap counterpart of
 	// Resolve's ScaleUp field, on the same footing as Ceiling: the rate rung of the
 	// admission ladder runs per delivered job and per long-poll, where the full
 	// Resolve path (template and proxy chains) is far too expensive.
@@ -302,8 +302,8 @@ type ResolvedSpec struct {
 	CompletedPodTTL    time.Duration
 
 	// MaxWorkerLifetime is the worker pod's activeDeadlineSeconds — the
-	// provision-time cap that bounds a worker orphaned while the AGC was down
-	// (Q438). Zero means no cap is stamped (the operator opted out with "0s").
+	// provision-time cap that bounds a worker orphaned while the AGC was down.
+	// Zero means no cap is stamped (the operator opted out with "0s").
 	MaxWorkerLifetime time.Duration
 
 	// Egress-proxy wiring injected into the worker runner container. In v1 these
@@ -320,7 +320,7 @@ type ResolvedSpec struct {
 
 	// GitHubCAConfigMapName names the ConfigMap holding the CA bundle fronting this
 	// gateway's GHES appliance, projected into the runner container so it trusts the
-	// same appliance the AGC does (Q536). v2 only: it comes from the gateway's
+	// same appliance the AGC does. v2 only: it comes from the gateway's
 	// spec.githubCABundleRef, which v1alpha1 has no field for.
 	GitHubCAConfigMapName string
 
@@ -329,11 +329,11 @@ type ResolvedSpec struct {
 	SecurityProfile string
 
 	// MemoryRetry is how an out-of-memory retry raises the killed container's memory
-	// limit (Q1183), or nil where the sizing profile derives no limit from history, so
+	// limit, or nil where the sizing profile derives no limit from history, so
 	// a re-run would get the limit the killed pod had.
 	MemoryRetry *MemoryRetryPolicy
 
-	// ScaleUp is the opt-in worker-pod creation-rate limit (Q223), or nil for no
+	// ScaleUp is the opt-in worker-pod creation-rate limit, or nil for no
 	// limit (the default). Nil ⇒ immediate provisioning; non-nil ⇒ the provisioner
 	// gates each pod creation through a per-owner token bucket. The v1/v2 adapters
 	// fill it from RunnerGroup/RunnerSet.spec.scaleUp, defaulting Burst to

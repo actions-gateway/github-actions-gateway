@@ -517,7 +517,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### M-16. `safeName` collapses arbitrary characters; collisions possible
 
-- **Location:** [cmd/agc/internal/provisioner/provisioner.go:508-526](../../cmd/agc/internal/provisioner/provisioner.go), cmd/gmc/internal/controller/builder.go:454-466
+- **Location:** [cmd/agc/internal/provisioner/provisioner.go:507-525](../../cmd/agc/internal/provisioner/provisioner.go), cmd/gmc/internal/controller/builder.go:454-466
 - **Category:** OWASP A04:2025 — Insecure Design
 - **Description:** Both `safeName` variants replace any non-DNS character with `-`.
   Two distinct inputs (e.g.

@@ -16,13 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The specs half of the deletion boundary (Q599). deletion.go states the obligation a
+// The specs half of the deletion boundary. deletion.go states the obligation a
 // new delete path owes the code — stamp, or be ordered after the container's exit —
-// and nothing extended it to the tests that pin the same boundary. #1032 gave the
-// Q501 actuator a delete of a cancelled run's worker while
-// E2E_GitHub_CancelledRunLeavesNoDeletionMark still asserted that nothing ever deleted
-// one; that spec skips without live-GitHub credentials, so no gate went red and the
-// contradiction shipped.
+// and the tests that pin the same boundary owe it too. A spec such as
+// E2E_GitHub_CancelledRunLeavesNoDeletionMark skips without live-GitHub credentials,
+// so a new delete path can contradict it with no gate going red.
 //
 // The inventory below closes the gap the only way a credential-gated spec can be
 // defended by a gate that cannot run it: it makes the delete paths themselves the
@@ -40,7 +38,7 @@ type deleteSite struct {
 func (s deleteSite) String() string { return s.file + " " + s.fn }
 
 // declaredDeleteSites is every client Delete in the `agc` module, with how each one
-// stays outside Q502's graceful-deletion recovery. Keep it exhaustive rather than
+// stays outside graceful-deletion recovery. Keep it exhaustive rather than
 // pod-only: "not a worker pod" is a judgement the reviewer of a new delete has to
 // make, and recording it is what makes the omission of a real one visible.
 var declaredDeleteSites = map[deleteSite]string{
@@ -178,7 +176,7 @@ func TestDeletePathInventory_MatchesDeclaredSites(t *testing.T) {
 // TestDeletePathInventory_BoundarySpecsExist keeps the roster honest: a spec renamed
 // or moved out from under it would otherwise leave the failure above naming tests that
 // no longer exist.
-// TestDeletePathInventory_MatcherSeesAnyDeleteArgName pins the widening of Q698 from
+// TestDeletePathInventory_MatcherSeesAnyDeleteArgName pins the matcher from
 // both sides. The odd-context case is the one that shipped: the scanner's answer moved
 // with the argument's name, so an undeclared worker-pod delete passed the gate. The
 // negative cases are what stops the widening from turning into "match everything",
@@ -223,7 +221,7 @@ func TestDeletePathInventory_BoundarySpecsExist(t *testing.T) {
 // files that read the deletion mark and requires each to be accounted for: either it
 // contributes a spec to the roster, or it is written off in nonBoundaryFiles with a
 // reason. Without this the roster is only as complete as whoever last read the design
-// docs, which is the decay Q599 is about.
+// docs.
 //
 // It classifies at file granularity, not per spec. A brand-new test file that touches
 // the boundary is the case it catches; a new spec added to a file already in the
@@ -374,7 +372,7 @@ func scanDeleteSites(t *testing.T, root string) map[deleteSite]struct{} {
 // isClientDelete matches any two-or-more argument .Delete( call. It deliberately does
 // not test whether the first argument looks like a context: that made the arg's *name*
 // decide whether a real delete was inventoried, so Client.Delete(c, pod) was skipped
-// silently — fail-open inside a fail-closed gate (Q698). Over-matching costs a row in
+// silently — fail-open inside a fail-closed gate. Over-matching costs a row in
 // declaredDeleteSites, which a reviewer has to classify anyway; under-matching drops a
 // delete path and the gate says nothing.
 func isClientDelete(n ast.Node) bool {

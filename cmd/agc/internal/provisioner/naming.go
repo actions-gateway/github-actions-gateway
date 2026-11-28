@@ -29,7 +29,7 @@ func safeName(s string) string { return apinames.Segment(s, "job") }
 //
 // Truncation is unavoidable: "runner-" plus a sanitised owner plus a sanitised
 // 36-char UUID overruns 63 characters for any realistic tenant name. Truncating the
-// concatenation is what broke (Q467) — a cut that landed on one of a UUID's hyphens
+// concatenation is what broke — a cut that landed on one of a UUID's hyphens
 // produced a name the apiserver rejected, so every worker pod for that owner failed
 // to create and no job ever ran, while GitHub reported only that the runner had lost
 // communication. [apinames.Join] splits the budget across the segments before

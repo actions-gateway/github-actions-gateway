@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// TestMaxWorkerLifetimeOrDefault covers the defaulting rule for the Q438 worker
+// TestMaxWorkerLifetimeOrDefault covers the defaulting rule for the worker
 // lifetime cap: omitted means the 12-hour default, an explicit value is honoured,
 // and an explicit "0s" is an opt-out rather than something to re-default. A
 // negative value (which the CRD's XValidation rejects) must also resolve to "no
@@ -57,7 +57,7 @@ func TestMaxWorkerLifetimeDefaultIsTwiceGitHubJobTimeout(t *testing.T) {
 // TestBuildPod_StampsDefaultWorkerLifetime verifies the cap reaches the worker
 // pod as activeDeadlineSeconds. This is the whole mechanism: the kubelet enforces
 // that field, so it bounds a worker orphaned while the AGC is down — the one
-// orphan class no AGC-side reconciliation can reclaim (Q438, residual of Q435).
+// orphan class no AGC-side reconciliation can reclaim.
 func TestBuildPod_StampsDefaultWorkerLifetime(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx := context.Background()
@@ -90,7 +90,7 @@ func TestBuildPod_WorkerLifetimeGroupOverride(t *testing.T) {
 }
 
 // TestBuildPod_WorkerLifetimeDisabled verifies "0s" is a real opt-out: no
-// deadline is stamped at all, restoring the pre-Q438 behaviour for an operator
+// deadline is stamped at all, restoring the uncapped behaviour for an operator
 // who accepts the orphan risk rather than any job being killed.
 func TestBuildPod_WorkerLifetimeDisabled(t *testing.T) {
 	defer goleak.VerifyNone(t)

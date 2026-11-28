@@ -116,7 +116,7 @@ func (f *waitFixture) unknown() float64 {
 	return testutil.ToFloat64(f.p.Metrics.EvictionRecoveryIdentityUnknown.WithLabelValues("team-a", "gpu", recoveryCauseOOM))
 }
 
-// TestOOMStartWait_WaitsForTheStart is Q1389: a kill whose pod names only the job it was
+// TestOOMStartWait_WaitsForTheStart: a kill whose pod names only the job it was
 // created for is left alone by both detection paths, even where another worker has started
 // that job.
 func TestOOMStartWait_WaitsForTheStart(t *testing.T) {

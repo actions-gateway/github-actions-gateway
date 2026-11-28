@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-// The PersistentVolumeClaim (PVC) half of a worker's quota footprint (Q453).
+// The PersistentVolumeClaim (PVC) half of a worker's quota footprint.
 //
 // This is a *different* quota evaluator from the one pod_effective_resources.go
 // mirrors, and the distinction is the whole reason this is easy to get wrong. The
@@ -19,7 +19,7 @@ import (
 //
 // So a PVC-exhausted quota does not reject the worker pod. It admits it, then fails
 // the PVC create, and the pod sits Pending forever with its volume unbound — the
-// job is claimed and stalls. That is precisely the outcome the Q59 pre-claim gate
+// job is claimed and stalls. That is precisely the outcome the pre-claim gate
 // exists to prevent, which is why these keys must be in the footprint even though
 // no pod create ever fails on them.
 //
@@ -80,7 +80,7 @@ func podClaimFootprint(spec *corev1.PodSpec) corev1.ResourceList {
 		// be constrained on. An unset storageClassName resolves to the cluster default
 		// at PVC creation, whose name we cannot know from the template — omitting the
 		// scoped keys there is the fail-open answer, matching how an unresolvable
-		// RuntimeClass yields no overhead (Q450).
+		// RuntimeClass yields no overhead.
 		sc := claim.StorageClassName
 		if sc == nil || *sc == "" {
 			continue

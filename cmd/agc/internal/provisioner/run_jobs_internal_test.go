@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Q1375: two jobs of one run can share a display name, and the run's job list tells a
+// Two jobs of one run can share a display name, and the run's job list tells a
 // re-run from the other one.
 
 // runJobsStub answers a run's job list, and counts the reads.

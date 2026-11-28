@@ -21,7 +21,7 @@ var (
 // DefaultWorkerResources returns (a copy of) the gap-fill requests/limits
 // stamped on a worker container that declares neither — the effective ask the
 // sizing-drift judgment compares against when a template omits resources
-// entirely (Q359 Phase 2).
+// entirely.
 func DefaultWorkerResources() corev1.ResourceList {
 	return corev1.ResourceList{
 		corev1.ResourceCPU:    defaultWorkerCPU,
@@ -82,8 +82,8 @@ func applyDisruptionSafetyDefaults(dst, templateAnnotations map[string]string) m
 //     seccomp RuntimeDefault. runAsUser is gap-filled to the runner image's
 //     numeric UID (defaultWorkerRunAsUser) whenever non-root is being enforced,
 //     because kubelet cannot verify runAsNonRoot against the image's
-//     non-numeric `USER runner` and would otherwise reject the pod at admission
-//     (Q115). All three are compatible with the standard non-root runner image
+//     non-numeric `USER runner` and would otherwise reject the pod at admission.
+//     All three are compatible with the standard non-root runner image
 //     and, crucially, do not block in-job privilege escalation (sudo), which
 //     baseline PSA permits and many CI jobs rely on.
 //   - restricted: additionally stamps the per-container PSA-restricted floor
@@ -105,7 +105,7 @@ func applySecurityDefaults(spec *corev1.PodSpec, securityProfile string) {
 	// Gap-fill a numeric runAsUser only while non-root is actually enforced and
 	// the tenant didn't pick a UID. kubelet can only verify runAsNonRoot against
 	// a numeric UID; the runner image's non-numeric `USER runner` otherwise
-	// trips CreateContainerConfigError at admission (Q115). Skipped when a tenant
+	// trips CreateContainerConfigError at admission. Skipped when a tenant
 	// opted out with runAsNonRoot:false (a root-based image) so we don't force a
 	// UID that contradicts their choice, and gap-fill so an explicit per-pod or
 	// per-container runAsUser still wins.

@@ -9,7 +9,7 @@ import (
 )
 
 // strandedRecheckWindow bounds how long a declined stranded-job walk waits for every
-// Running worker's start to be recorded (Q1235). GitHub cancels a job no runner started
+// Running worker's start to be recorded. GitHub cancels a job no runner started
 // at its ~15-minute unstarted-job timeout, which runs from the job's queueing, before
 // its worker was lost, so a walk still declined after ten minutes would at best
 // force-cancel a run GitHub is about to cancel itself.
@@ -43,7 +43,7 @@ func (p *Provisioner) strandedJobFor(ctx context.Context, target Target, workers
 
 // deferStrandedWalk registers podName's walk for a re-check. In process memory, like the
 // abandoned arm's waiting set: a restart drops it, and the stranded job then waits out
-// GitHub's unstarted-job timeout, as it did before Q1235.
+// GitHub's unstarted-job timeout.
 func (p *Provisioner) deferStrandedWalk(target Target, podName string) {
 	key := strandedRecheckKey{owner: target.Key(), podName: podName}
 	p.strandedRechecksMu.Lock()
@@ -137,8 +137,8 @@ func (p *Provisioner) sweepStrandedRechecks(ctx context.Context) []<-chan struct
 }
 
 // forceCancelStranded force-cancels the run of a job a lost worker left without a
-// runner and registers it for the capacity-gated re-run, keyed by the lost worker
-// (Q1195, Q1235). The job never started, so it takes the abandoned arm's action and
+// runner and registers it for the capacity-gated re-run, keyed by the lost worker.
+// The job never started, so it takes the abandoned arm's action and
 // labels: cause abandoned, one slot of the run's scale-set budget.
 func (p *Provisioner) forceCancelStranded(ctx context.Context, target Target, podName string, job OrphanedWorker, log *slog.Logger) <-chan struct{} {
 	if job.Owner == "" || job.Repository == "" || job.RunID == "" || job.RunID == "0" {

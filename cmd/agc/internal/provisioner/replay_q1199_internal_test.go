@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Q1199: a scale-set job is replayed to a re-created session while its previous worker
+// A scale-set job is replayed to a re-created session while its previous worker
 // pod is terminating. The pod name is derived from the jobID, so the replay's create
 // collides with a pod that is going away and will never run the runner this delivery
 // registered.

@@ -39,7 +39,7 @@ func kataRuntimeClass() *nodev1.RuntimeClass {
 	}
 }
 
-// TestResolveWorkerPodSpec_ReadsRuntimeClassOverhead is the Q450 fix for the Kata
+// TestResolveWorkerPodSpec_ReadsRuntimeClassOverhead covers the Kata
 // half: the reference Kata worker names a runtimeClassName but declares no overhead
 // of its own, so the 250m/160Mi is only discoverable from the cluster-scoped
 // RuntimeClass. Without this read every Kata worker is under-counted by that much.
@@ -82,7 +82,7 @@ func TestResolveWorkerPodSpec_DeclaredOverheadWins(t *testing.T) {
 }
 
 // TestResolveWorkerPodSpec_FailsOpen covers every way the resolution can come up
-// empty. All of them must degrade to "no overhead" — the pre-Q450 answer — rather
+// empty. All of them must degrade to "no overhead" rather
 // than erroring or blocking: overhead lives on a cluster-scoped object the tenant
 // does not control, and starving a tenant over it would be worse than under-counting
 // it. The unauthorized case is the one that matters operationally: an install whose
@@ -152,8 +152,8 @@ func TestResolveWorkerPodSpec_NilInputs(t *testing.T) {
 }
 
 // TestWorkerQuotaExhausted_ChargesRuntimeClassOverhead is the end-to-end assertion
-// that the resolved overhead actually reaches the pre-claim gate — the consumer Q450
-// names first. The quota below has exactly 1 CPU free and the containers ask for
+// that the resolved overhead actually reaches the pre-claim gate.
+// The quota below has exactly 1 CPU free and the containers ask for
 // exactly 1, so the gate flips on the 250m of Kata overhead alone.
 func TestWorkerQuotaExhausted_ChargesRuntimeClassOverhead(t *testing.T) {
 	spec := &corev1.PodSpec{

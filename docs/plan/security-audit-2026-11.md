@@ -979,7 +979,7 @@ The call carries the tenant's own installation token, so a writer reaches only r
 The 05-security claim that a run ID cannot be substituted now says the identity is trusted on read, and [Recovery state in the tenant namespace is trusted on read](../design/05-security.md#recovery-state-in-the-tenant-namespace-is-trusted-on-read) records the residual and its bound.
 Binding a stored identity to the set's scope needs that scope in the provisioner, which it does not hold; who holds ConfigMap update without the App key in a real install was not established.
 
-**Evidence.** `docs/design/05-security.md:200`, `cmd/agc/internal/provisioner/pending_rerun.go:285`, `cmd/agc/internal/provisioner/pending_rerun.go:132`, `cmd/agc/internal/provisioner/eviction_scaleset.go:436`, `cmd/agc/internal/provisioner/abandoned_scaleset.go:218`, `cmd/agc/internal/provisioner/abandoned.go:138`, `cmd/agc/internal/provisioner/rerun_ledger.go:400`, `cmd/agc/internal/provisioner/rerun_futility.go:45`, `cmd/agc/internal/provisioner/naming.go:12`, `cmd/agc/internal/scalesetlistener/listener.go:2323`.
+**Evidence.** `docs/design/05-security.md:200`, `cmd/agc/internal/provisioner/pending_rerun.go:285`, `cmd/agc/internal/provisioner/pending_rerun.go:132`, `cmd/agc/internal/provisioner/eviction_scaleset.go:434`, `cmd/agc/internal/provisioner/abandoned_scaleset.go:218`, `cmd/agc/internal/provisioner/abandoned.go:138`, `cmd/agc/internal/provisioner/rerun_ledger.go:399`, `cmd/agc/internal/provisioner/rerun_futility.go:45`, `cmd/agc/internal/provisioner/naming.go:12`, `cmd/agc/internal/scalesetlistener/listener.go:2323`.
 
 ### One repository's OOM-killed jobs can fill the per-set failure ledger and withhold automatic re-runs for every repository on the RunnerSet
 
@@ -1012,7 +1012,7 @@ Now one parked re-run is kept per run attempt, since its release re-runs every f
 With the fix, 768 such jobs left 228.7 KiB (234,204 bytes) and the other repository's reservation succeeded; that measurement took 44 s, so the shipped tests are smaller: 40 killed jobs of one attempt add one parked re-run and 16 merged entries (`TestRerunLedger_KilledJobsOfOneAttemptAddNoBudgetState`), and a ledger past the cap with floors alone gives up its oldest floors, freed in one batch, rather than the re-run (`TestRerunLedger_FloorsAreEvictedBeforeABudgetIsRefused`); each of the three mechanisms, deleted, turns one of the two red.
 Budget records stay unevictable by design, so one repository can still spend the documented budget capacity over 30 days.
 
-**Evidence.** `cmd/agc/internal/provisioner/rerun_ledger.go:525`, `cmd/agc/internal/provisioner/flaky_jobs.go:344`, `cmd/agc/internal/provisioner/eviction.go:268`, `cmd/agc/internal/provisioner/oom_class.go:378`, `cmd/agc/internal/provisioner/oom_class.go:134`, `cmd/agc/internal/provisioner/oom_class.go:197`, `cmd/agc/internal/provisioner/pending_rerun.go:349`, `cmd/agc/internal/controller/runnerset_sizing_profile.go:120`, `cmd/agc/internal/provisioner/rerun_ledger_internal_test.go:523`, `docs/operations/upgrade.md:770`, `docs/design/04-operational-flows.md:617`.
+**Evidence.** `cmd/agc/internal/provisioner/rerun_ledger.go:524`, `cmd/agc/internal/provisioner/flaky_jobs.go:344`, `cmd/agc/internal/provisioner/eviction.go:266`, `cmd/agc/internal/provisioner/oom_class.go:378`, `cmd/agc/internal/provisioner/oom_class.go:134`, `cmd/agc/internal/provisioner/oom_class.go:197`, `cmd/agc/internal/provisioner/pending_rerun.go:349`, `cmd/agc/internal/controller/runnerset_sizing_profile.go:120`, `cmd/agc/internal/provisioner/rerun_ledger_internal_test.go:523`, `docs/operations/upgrade.md:770`, `docs/design/04-operational-flows.md:617`.
 
 ### Throughput sizing profile derives the worker memory limit from job-controlled peak usage with no maxRequests clamp, so the limit can exceed the operator's envelope and may ratchet
 
@@ -1083,7 +1083,7 @@ The `ParseReference` and `NO_PROXY` unit cases were not written; the `NO_PROXY` 
 ### AGC run-status, re-run and force-cancel errors carry the raw upstream body into logs, and run-status and re-run errors into a tenant-namespace Event, bypassing SanitizeBody
 
 `agc-rest-error-body-unsanitized`: needs validation.
-Starts at `cmd/agc/internal/provisioner/eviction.go:795`.
+Starts at `cmd/agc/internal/provisioner/eviction.go:793`.
 
 The provisioner's REST helpers sit outside the shared redactor: they format strings.TrimSpace(string(body)) directly into the error, and recordRerunFailure forwards the error text into an Event note.
 The sibling scale-set client routes the same kind of body through githubapp.SanitizeBody with a 512-byte cap.
@@ -1106,7 +1106,7 @@ A non-2xx body echoing a `ghs_`-shaped token plus 100 KiB of padding reached the
 All six sites now pass the body through `githubapp.SanitizeBody` with a 512-byte cap, so the token and padding are gone, and reverting any one site turns a case of `TestRESTErrors_UpstreamBodyIsSanitized` red.
 No upstream was observed echoing a credential; the fix does not depend on one doing so.
 
-**Evidence.** `docs/design/05-security.md:199`, `cmd/agc/internal/provisioner/abandoned.go:162`, `cmd/agc/internal/provisioner/eviction.go:860`, `scaleset/client.go:413`, `cmd/agc/internal/controller/runnerset_controller.go:538`, `cmd/agc/internal/controller/runnerset_target.go:152`.
+**Evidence.** `docs/design/05-security.md:199`, `cmd/agc/internal/provisioner/abandoned.go:162`, `cmd/agc/internal/provisioner/eviction.go:858`, `scaleset/client.go:413`, `cmd/agc/internal/controller/runnerset_controller.go:538`, `cmd/agc/internal/controller/runnerset_target.go:152`.
 
 ## Worker pod and NetworkPolicy leads
 

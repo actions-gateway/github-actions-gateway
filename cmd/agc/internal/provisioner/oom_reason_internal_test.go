@@ -16,7 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Q1403: the out-of-memory reporter's answer in a failed job's record and Event, and the
+// The out-of-memory reporter's answer in a failed job's record and Event, and the
 // limits on repeating it (docs/design/04-operational-flows.md §4.2).
 
 // oomWorker is a Failed worker whose runner's status shows it killed for memory.

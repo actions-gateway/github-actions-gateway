@@ -17,14 +17,14 @@ import (
 // ClusterRole is missing the runtimeclasses grant — an install upgraded image-first,
 // or hand-rolled RBAC — that informer can never sync, and an unbounded Get would
 // block the job-acquisition path rather than degrade. Bounding it converts that
-// into the same fail-open zero-overhead answer the gate gave before Q450, at a
+// into the same fail-open zero-overhead answer of a gate that ignores overhead, at a
 // cost of one short stall per evaluation on a misconfigured install.
 const runtimeClassReadTimeout = 2 * time.Second
 
 // ResolveWorkerPodSpec returns the worker pod spec to compute a quota footprint
 // from: spec with .Overhead populated from the RuntimeClass named by
 // .RuntimeClassName, mirroring what the RuntimeClass admission plugin stamps on
-// the pod at create time (Q450). Pod overhead is real quota-charged capacity —
+// the pod at create time. Pod overhead is real quota-charged capacity —
 // the reference Kata shape carries 250m CPU / 160Mi memory per pod on top of its
 // containers — and a footprint that ignores it reads low on exactly the most
 // expensive worker shapes.
@@ -37,7 +37,7 @@ const runtimeClassReadTimeout = 2 * time.Second
 // Deliberately FAIL-OPEN at every step, matching WorkerQuotaExhausted: a spec with
 // no runtimeClassName, a RuntimeClass that does not exist or declares no overhead,
 // and a read the AGC is not authorized for all yield "no overhead". Under-counting
-// overhead only restores the pre-Q450 behaviour; refusing to evaluate the gate at
+// overhead only weakens the gate; refusing to evaluate the gate at
 // all would starve a tenant over a cluster-scoped object they do not control.
 //
 // An overhead the tenant declared on the template wins without any read. That is

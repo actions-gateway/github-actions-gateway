@@ -1,6 +1,6 @@
 //go:build rwxstorage
 
-// The live half of the shared worker storage validation (Q719).
+// The live half of the shared worker storage validation.
 //
 // worker_shared_storage_test.go pins what the provisioner emits. It cannot say
 // whether that pod actually mounts a ReadWriteMany volume, because the property

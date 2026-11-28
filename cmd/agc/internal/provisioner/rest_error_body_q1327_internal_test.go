@@ -13,7 +13,7 @@ import (
 
 // TestRESTErrors_UpstreamBodyIsSanitized: the run-status, re-run and force-cancel
 // errors reach logs and, for the first two, a tenant-namespace Event, so a non-2xx body
-// goes through githubapp.SanitizeBody like the scale-set client's (Q1327).
+// goes through githubapp.SanitizeBody like the scale-set client's.
 func TestRESTErrors_UpstreamBodyIsSanitized(t *testing.T) {
 	token := "ghs_" + strings.Repeat("A1b2C3d4", 5)
 	padding := strings.Repeat("z", 100<<10)

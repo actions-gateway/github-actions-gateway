@@ -6,7 +6,7 @@ import (
 )
 
 // Effective pod requests/limits — the quantities Kubernetes charges a pod against
-// a ResourceQuota (Q450).
+// a ResourceQuota.
 //
 // This is a deliberate mirror of k8s.io/component-helpers/resource.PodRequests /
 // PodLimits (which the quota evaluator itself calls, via
@@ -110,7 +110,7 @@ func aggregateContainerResources(spec *corev1.PodSpec, pick func(corev1.Resource
 // restartPolicy: Always (KEP-753, GA in Kubernetes 1.29). Kubernetes sums a
 // native sidecar's resources into the pod's effective requests/limits, unlike a
 // plain init container. This is how the DinD daemon must be declared — a
-// regular-container sidecar strands the pod (Q249).
+// regular-container sidecar strands the pod.
 func IsNativeSidecar(c *corev1.Container) bool {
 	return c.RestartPolicy != nil && *c.RestartPolicy == corev1.ContainerRestartPolicyAlways
 }

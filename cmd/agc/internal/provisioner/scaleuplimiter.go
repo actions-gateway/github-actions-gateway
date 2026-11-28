@@ -9,7 +9,7 @@ import (
 )
 
 // scaleUpLimiter is an in-memory, per-RunnerGroup token-bucket rate limiter over
-// worker-pod CREATION (Q223). It smooths cold-start stampedes on a shared,
+// worker-pod CREATION. It smooths cold-start stampedes on a shared,
 // rate-sensitive egress path (NAT/SNAT, firewall conntrack, site-to-site VPN) by
 // spreading a burst of simultaneously-acquired jobs' pod creations over time. It
 // is DEFAULT-OFF: a nil config disables it entirely (immediate provisioning, zero
@@ -21,7 +21,7 @@ import (
 //
 // Both acquisition tiers charge the bucket before the job is committed to, so an
 // empty bucket refuses intake rather than blocking a job that already holds a GitHub
-// lock (Q717). The classic tier takes its token in Admit's rate rung, before the
+// lock. The classic tier takes its token in Admit's rate rung, before the
 // claim, via allow; the scale-set tier has no per-job decision point, so it reads the
 // bucket per long-poll via tokens and folds the answer into the advertised capacity,
 // leaving wait as the pod-creation backstop behind it.
@@ -64,7 +64,7 @@ func (l *scaleUpLimiter) sleepFn(ctx context.Context, d time.Duration) error {
 
 // limiterFor returns the rate.Limiter for key under cfg, creating it on first use
 // and reconciling its limit/burst to cfg on every call so a spec edit takes effect
-// on the next job without an AGC restart (Q117), mirroring the admission gate.
+// on the next job without an AGC restart, mirroring the admission gate.
 // Returns nil when cfg disables limiting (nil, or a non-positive rate/burst), in
 // which case wait is a no-op.
 func (l *scaleUpLimiter) limiterFor(key string, cfg *ScaleUpConfig) *rate.Limiter {
@@ -137,7 +137,7 @@ func (l *scaleUpLimiter) wait(ctx context.Context, key string, cfg *ScaleUpConfi
 // worker pod may be created now. It is the pre-claim form of wait: the classic
 // tier's admission ladder calls it BEFORE the job is claimed from GitHub, so a job
 // the bucket cannot admit is left queued for redelivery instead of claimed and then
-// slept on while its GitHub lock runs down (Q717).
+// slept on while its GitHub lock runs down.
 //
 // It takes the token rather than observing one, because an observation cannot bind
 // on the case the bucket exists for: every listener in a simultaneously-delivered
@@ -147,7 +147,7 @@ func (l *scaleUpLimiter) wait(ctx context.Context, key string, cfg *ScaleUpConfi
 //
 // A token taken here is spent until the caller says how the admitted job ended: a
 // delivery that reaches worker-pod creation keeps it, and one that returns first
-// gets it back via refund (Q972). Only the caller can tell those apart, which is
+// gets it back via refund. Only the caller can tell those apart, which is
 // why runnercore.AdmitOutcome exists — the reservation release alone cannot, and
 // refunding on COMPLETION would turn the rate limit into a second concurrency
 // ceiling.
@@ -163,7 +163,7 @@ func (l *scaleUpLimiter) allow(key string, cfg *ScaleUpConfig) bool {
 }
 
 // refund returns one token to key's bucket for a delivery that took one in allow
-// and then returned without any worker pod being created (Q972). Without it a
+// and then returned without any worker pod being created. Without it a
 // fanned-out job charges one token per sibling delivery for the single pod its
 // dedup winner creates, so N-way fan-out cuts the effective ramp to MaxPerSecond/N
 // under exactly the burst spec.scaleUp exists to smooth.

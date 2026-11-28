@@ -51,7 +51,7 @@ var tracer = otel.Tracer(tracing.InstrumentationName)
 // agentpool's defaultRegistrarClient: the AGC patches http.DefaultTransport with the
 // per-tenant egress proxy CA in main(), after this package's vars initialize. An
 // eager clone would trust only the system roots and fail any GitHub call routed
-// through the proxy with "certificate signed by unknown authority" (Q219).
+// through the proxy with "certificate signed by unknown authority".
 var defaultProvisionerClient = sync.OnceValue(httpx.NewClient)
 
 const (
@@ -119,7 +119,7 @@ const (
 	// non-numeric user`. Pinning the runner's own UID (1001 — see the
 	// `USER runner (UID 1001)` line in the root Dockerfile's `worker` stage and
 	// the upstream actions/runner-images base) lets kubelet verify non-root
-	// without changing which user the runner actually runs as. (Q115)
+	// without changing which user the runner actually runs as.
 	defaultWorkerRunAsUser int64 = 1001
 
 	payloadMountPath = "/run/secrets/job-payload"
@@ -137,14 +137,14 @@ const (
 	jobPayloadVolume = "job-payload"
 
 	// workerModeEnvVar / workerModeScaleSetValue switch the worker wrapper into the
-	// Q264 scale-set path: instead of the classic pipes handoff to Runner.Worker, the
+	// scale-set path: instead of the classic pipes handoff to Runner.Worker, the
 	// pod runs the full runner (run.sh --jitconfig) and pulls its own job (§2.4). Set
 	// only by ProvisionScaleSetWorker; unset for classic sets (default behaviour).
 	workerModeEnvVar        = "WORKER_MODE"
 	workerModeScaleSetValue = "scaleset"
 
 	// wrapperVolumeName / wrapperMountDir / wrapperInitName describe how the GAG
-	// worker wrapper is injected into a worker pod (Q235) so the runner container
+	// worker wrapper is injected into a worker pod so the runner container
 	// can be the unmodified upstream actions-runner image. The wrapper binary lands
 	// at wrapperMountDir/wrapper either via a read-only OCI image volume (≥1.33) or
 	// an initContainer that runs `wrapper install wrapperMountDir` into an emptyDir;
@@ -175,7 +175,7 @@ const (
 	proxyShareCACertKey = "ca.crt"
 
 	// githubCAVolumeName / githubCAMountPath / githubCAFileName describe how the
-	// operator-supplied GitHub CA bundle is projected into the worker pod (Q536).
+	// operator-supplied GitHub CA bundle is projected into the worker pod.
 	// Same shape and same reason as the proxy CA above, one hop further out: on a
 	// GHES appliance behind a private CA the runner's own calls — checkout, log and
 	// artifact upload — fail the handshake unless the appliance's CA is in its trust
@@ -199,7 +199,7 @@ const (
 
 	// DefaultMaxWorkerLifetime is the effective worker-pod lifetime cap when
 	// spec.maxWorkerLifetime is omitted — the provision-time deadline that bounds a
-	// worker orphaned while the AGC was down (Q438). It is applied as the pod's
+	// worker orphaned while the AGC was down. It is applied as the pod's
 	// activeDeadlineSeconds, so the kubelet enforces it with no live AGC.
 	//
 	// Twelve hours is 2× GitHub's own 360-minute default job timeout: a job this
@@ -224,10 +224,10 @@ type Provisioner struct {
 	Client client.Client
 	// APIReader is the manager's uncached reader, used for the reads whose answer an
 	// informer cache can get wrong at a cost. One is an ABSENCE: the orphaned-worker
-	// scan re-runs a job precisely because its worker pod is not there (Q844), so a
+	// scan re-runs a job precisely because its worker pod is not there, so a
 	// cache that has not synced would read as a whole set's workers having been
 	// disrupted. The other is a scale-set worker's started-job and completion stamps,
-	// which the listener writes and then reads back within one message batch (Q1151):
+	// which the listener writes and then reads back within one message batch:
 	// a cache that has not seen the start stamps a busy worker, and its job is reaped.
 	// Every other read here is served from the shared informer cache, where a stale
 	// answer only costs a deferred action. Nil falls back to Client (tests).
@@ -239,14 +239,14 @@ type Provisioner struct {
 	// EvictionRerunWindow bounds how long a single disruption recovery keeps
 	// retrying a re-run that GitHub refuses with "This workflow is already
 	// running" — the refusal every re-run gets until GitHub concludes the
-	// original run, ~10 minutes after an ungraceful kill (Q503). Zero means the
+	// original run, ~10 minutes after an ungraceful kill. Zero means the
 	// default (15 minutes).
 	EvictionRerunWindow time.Duration
 	// EvictionRerunRetryInterval paces the refused re-run attempts inside the
 	// window. Zero means the default (30 seconds).
 	EvictionRerunRetryInterval time.Duration
 	// AbandonedRerunWaitWindow bounds how long a force-cancelled abandoned run waits
-	// for capacity to return before its automatic re-run is given up on (Q691). Zero
+	// for capacity to return before its automatic re-run is given up on. Zero
 	// means the default (30 minutes).
 	AbandonedRerunWaitWindow time.Duration
 	MaxQuotaRetries          int
@@ -255,7 +255,7 @@ type Provisioner struct {
 	DefaultWorkerImage       string
 
 	// DisableQuotaAdmission turns OFF the admission gate's namespace-ResourceQuota
-	// rung (#784), reverting to the pre-#784 behaviour where quota exhaustion is
+	// rung, so quota exhaustion is
 	// discovered only after AcquireJob, by createPodWithQuotaRetry burning lock time.
 	// Opt-out rather than opt-in: leaving jobs queued at GitHub strictly dominates
 	// claiming them and then failing to place them, so the safer path is the default.
@@ -271,9 +271,9 @@ type Provisioner struct {
 	// provisioner injects the wrapper into every worker pod and overrides the
 	// runner container's command to run it — so the runner image can be the
 	// unmodified upstream actions-runner (or any actions/runner-derived image)
-	// rather than a baked-in wrapper image (Q235). Empty disables injection: the
+	// rather than a baked-in wrapper image. Empty disables injection: the
 	// worker image is then expected to carry the wrapper as its own entrypoint
-	// (the pre-Q235 behaviour, kept for tests and the legacy worker image).
+	// (kept for tests and the legacy worker image).
 	WrapperImage string
 	// UseImageVolume selects the wrapper delivery mechanism when WrapperImage is
 	// set: true mounts WrapperImage as a read-only OCI image volume (K8s ≥ 1.33,
@@ -342,33 +342,33 @@ type Provisioner struct {
 	// GitHubAPIURL is the base URL for the GitHub REST API — the same endpoint the
 	// installation token was minted against.
 	//
-	// REQUIRED for the disruption auto-retry path; there is deliberately no default
-	// (Q504): a default that diverges from the token exchange's endpoint posts a
+	// REQUIRED for the disruption auto-retry path; there is deliberately no default:
+	// a default that diverges from the token exchange's endpoint posts a
 	// valid installation token to a host that never issued it (a bare 401 on GHES).
 	// Resolve it with githubapp.ResolveAPIBaseURL so the two cannot drift.
 	GitHubAPIURL string
 
 	// HTTPClient is used for GitHub API calls. nil uses a bounded
-	// httpx.NewClient() (Q138) so a slow GitHub endpoint cannot wedge the caller.
+	// httpx.NewClient() so a slow GitHub endpoint cannot wedge the caller.
 	HTTPClient *http.Client
 
 	// evictionCounts tracks per run_id eviction retry counts. The value carries
 	// the running count plus the time of the last eviction touch, which the
 	// background sweeper uses to reclaim entries for runs that can no longer be
-	// evicted (Q141). Q106 made the count a hard lifetime cap (no delete on
+	// evicted. The count is a hard lifetime cap (no delete on
 	// exhaustion), so without the sweep one entry would leak per distinct evicted
 	// run_id for the process lifetime.
 	evictionCounts sync.Map // key: run_id (string) → value: evictionEntry
 
 	// evictionLocks serializes the per-run check-and-increment of
-	// evictionCounts so the budget is never exceeded under concurrency (Q106).
+	// evictionCounts so the budget is never exceeded under concurrency.
 	// It is a fixed-size sharded lock keyed by a hash of run_id: bounded by
 	// construction (no per-key map to grow or reap), while still letting
 	// distinct runs evict concurrently. The zero value is ready to use.
 	evictionLocks [evictionLockShards]sync.Mutex
 
 	// abandonedReruns holds the force-cancelled abandoned runs waiting for capacity
-	// to return before they are re-run (Q691), keyed by owner and run_id so two
+	// to return before they are re-run, keyed by owner and run_id so two
 	// abandoned jobs of one run cost one run-level re-run. Bounded by the wait
 	// window rather than by a cap: an entry that never sees a worker pod placed is
 	// dropped once it expires. abandonedRerunsMu guards it; the lock is never held
@@ -377,8 +377,8 @@ type Provisioner struct {
 	abandonedRerunsMu sync.Mutex
 
 	// strandedRechecks holds the lost scale-set workers whose stranded-job walk declined
-	// while a Running worker's start was unrecorded, keyed by owner and lost worker
-	// (Q1235). Bounded by strandedRecheckWindow. strandedRechecksMu guards it; the lock
+	// while a Running worker's start was unrecorded, keyed by owner and lost worker.
+	// Bounded by strandedRecheckWindow. strandedRechecksMu guards it; the lock
 	// is never held across a pod list or a GitHub call.
 	strandedRechecks   map[strandedRecheckKey]pendingStrandedRecheck
 	strandedRechecksMu sync.Mutex
@@ -387,38 +387,38 @@ type Provisioner struct {
 	// drive the eviction-counter TTL sweep deterministically.
 	now func() time.Time
 
-	// rerunWindowC and rerunRetryC supply the two timers bounding the Q503 re-run
+	// rerunWindowC and rerunRetryC supply the two timers bounding the re-run
 	// loop: the window that ends it and the wait between refused attempts. nil means
 	// the real clock. Tests override both so the number of attempts is a property the
 	// handler fixes rather than one the loop races the host's scheduler for — a real
 	// window asserts only that N loopback round trips fit inside it, which is a
-	// property of the host (Q1089). rerunWindowC returns the channel and its stop func.
+	// property of the host. rerunWindowC returns the channel and its stop func.
 	rerunWindowC func(time.Duration) (<-chan time.Time, func())
 	rerunRetryC  func(time.Duration) <-chan time.Time
 
 	// admission is the in-memory reservation counter that gates job acquisition
-	// on worker capacity before AcquireJob claims the job from GitHub (Q59). Its
+	// on worker capacity before AcquireJob claims the job from GitHub. Its
 	// zero value is ready to use, so a struct-literal Provisioner (tests) gets a
 	// working gate without explicit initialization. See admission.go.
 	admission admissionGate
 
 	// scaleUp is the opt-in, per-RunnerGroup token bucket that rate-limits worker-pod
-	// CREATION (Q223), gating each pod creation in provision/ProvisionScaleSetWorker
+	// CREATION, gating each pod creation in provision/ProvisionScaleSetWorker
 	// when the owner sets spec.scaleUp. Default-off: a nil ScaleUpConfig makes every
 	// wait a no-op. Its zero value is ready to use. See scaleuplimiter.go.
 	scaleUp scaleUpLimiter
 
 	// claimMu serialises this process's writes to a recovery-claim ledger, so the
 	// ConfigMap's own optimistic lock arbitrates between replicas rather than between
-	// the goroutines of one AGC (Q1108, recovery_claims.go).
+	// the goroutines of one AGC (recovery_claims.go).
 	claimMu sync.Mutex
 
 	// ledgerMu serialises this process's writes to a failure ledger, for the same
-	// reason claimMu does (Q1182, rerun_ledger.go).
+	// reason claimMu does (rerun_ledger.go).
 	ledgerMu sync.Mutex
 
 	// failureIndex and workerSnapshots are flaky-job detection's in-memory state
-	// (Q555, flaky_jobs.go). Their zero values are ready to use.
+	// (flaky_jobs.go). Their zero values are ready to use.
 	failureIndex    failureIndex
 	workerSnapshots workerSnapshots
 	pairings        pairingQueue
@@ -426,21 +426,21 @@ type Provisioner struct {
 	// pairingDelay is how long a run's completions gather before its jobs are read.
 	pairingDelay time.Duration
 
-	// classBreakers is the retry classes' set-wide stampede breaker (Q1183,
+	// classBreakers is the retry classes' set-wide stampede breaker (
 	// oom_class.go). Its zero value is ready to use.
 	classBreakers classBreakers
 
 	// orphanScans records which owners have already had their persisted in-flight set
-	// adjudicated by this process (Q844), which is what makes that scan a startup
+	// adjudicated by this process, which is what makes that scan a startup
 	// question rather than a per-reconcile one. Its zero value is ready to use. See
 	// orphaned_scaleset.go.
 	orphanScans orphanScanState
-	// startWaits times the out-of-memory class's wait for a killed worker's start (Q1389).
+	// startWaits times the out-of-memory class's wait for a killed worker's start.
 	startWaits startWaitState
 
 	// pendingSets is the sets whose ledgers hold parked retry-class re-runs, and
 	// pendingAdoptions the sets this process has already read for entries a previous
-	// one parked (Q1244, pending_rerun.go). Their zero values are ready to use.
+	// one parked (pending_rerun.go). Their zero values are ready to use.
 	pendingSets      pendingSets
 	pendingAdoptions orphanScanState
 }
@@ -469,8 +469,7 @@ func NewProvisioner(c client.Client, m *runnercore.Metrics, log *slog.Logger) *P
 //
 // The run identity is what makes eviction recovery possible. A scale-set worker has no
 // owning goroutine to hold it for the life of the job, so the identity is stamped onto
-// the worker pod at creation and read back off the pod when the pod turns up evicted
-// (Q417).
+// the worker pod at creation and read back off the pod when the pod turns up evicted.
 //
 // Owner, Repository, and RunID are empty together when the assignment carried no
 // complete identity — the worker provisions and runs normally, and only automatic
@@ -480,7 +479,7 @@ type ScaleSetJob struct {
 	JITConfig string
 	// RunnerName is the name the listener pre-registered this job's runner under, and
 	// is stamped on the pod as AnnotationRunnerName so the reap path can deregister the
-	// record it leaves behind (Q550). Empty stamps nothing.
+	// record it leaves behind. Empty stamps nothing.
 	RunnerName string
 
 	Owner      string
@@ -488,7 +487,7 @@ type ScaleSetJob struct {
 	RunID      string
 	JobName    string
 	// EventName and WorkflowRef are the run's triggering event and the job's workflow
-	// ref; only RecordScaleSetJobCompleted reads them (Q555).
+	// ref; only RecordScaleSetJobCompleted reads them.
 	EventName   string
 	WorkflowRef string
 }
@@ -519,8 +518,8 @@ func (j ScaleSetJob) jobMeta() jobMeta {
 // concurrency-ceiling hit here is a narrow race the listener retries on its next poll.
 //
 // Cleanup: every exit that fails BEFORE the worker pod exists deletes the Secret this
-// call staged, so a credential-bearing Secret never outlives a job that never ran
-// (Q373). In steady state the Secret must outlive this method — the pod mounts it — so
+// call staged, so a credential-bearing Secret never outlives a job that never ran.
+// In steady state the Secret must outlive this method — the pod mounts it — so
 // it is reclaimed by CleanupScaleSetJob, which the scale-set listener calls on the
 // terminal JobCompleted for the job. The Secret is staged with the RunnerSet OwnerRef and
 // handed to the pod once it exists (handScaleSetSecretToPod), so it is garbage-collected
@@ -562,7 +561,7 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	spec = p.applyRerunCause(target, spec, job)
 
 	// runID pairs with jobID because one run has many jobs: without it two provisioning
-	// lines cannot say whether they are sibling jobs or one job redelivered (Q661). The
+	// lines cannot say whether they are sibling jobs or one job redelivered. The
 	// pod annotation carries the same pairing only once the pod exists.
 	log = log.With("podName", podName, "jobID", jobID, "runID", job.RunID)
 
@@ -575,7 +574,7 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	// below delete it: an AlreadyExists means an earlier delivery of the same job staged
 	// it, and that delivery may already have a live worker pod mounting it (or be about
 	// to create one). Deleting another delivery's Secret would strand its pod in
-	// ContainerCreating, so a replay cleans up nothing it does not own (Q373).
+	// ContainerCreating, so a replay cleans up nothing it does not own.
 	staged := false
 	secret := p.buildSecret(target, secretName, jobID, workerVersion, jitConfig)
 	fresh := secret.DeepCopy()
@@ -629,18 +628,18 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	if held {
 		unstage()
 		// Typed, so the listener re-offers the job on a backoff instead of holding the
-		// queue cursor for an immediate redelivery that would find the same full ceiling
-		// (Q576). The listener normally asks CheckScaleSetCapacity before it mints the
+		// queue cursor for an immediate redelivery that would find the same full ceiling.
+		// The listener normally asks CheckScaleSetCapacity before it mints the
 		// JIT config, so reaching this is the race that check cannot close.
 		return &CeilingReachedError{ActivePods: count}
 	}
 
-	// 3. Scale-up rate limit (Q223): gate pod creation on the owner's opt-in token
+	// 3. Scale-up rate limit: gate pod creation on the owner's opt-in token
 	// bucket so a burst of scale-set assignments ramps up in waves (default-off is a
 	// no-op). A ctx cancellation abandons this assignment; the scale-set listener
 	// re-drives it on its next poll.
 	//
-	// This tier keeps the wait where the classic tier dropped it (Q717), because it
+	// This tier keeps the wait where the classic tier dropped it, because it
 	// has no per-job decision point to charge the token at: it states a capacity once
 	// per long-poll, and AdvertiseCapacity's rate rung already bounds assignments by
 	// what the bucket can absorb. So this is the backstop behind that advertisement —
@@ -659,8 +658,8 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	//    The pod carries the assignment's run identity as annotations and the tier
 	//    marker as a label: fire-and-forget provisioning keeps no process state about
 	//    this job, so the pod itself has to be the durable, restart-safe record of
-	//    which run to re-run if it is evicted (Q417) — the same reason Q420 put the
-	//    reap deadline on the pod rather than in memory.
+	//    which run to re-run if it is evicted — the same reason the
+	//    reap deadline is on the pod rather than in memory.
 	pod := p.buildPod(target, spec, podName, secretName, priorityClass, job.jobMeta())
 	pod.Labels[LabelAcquisitionProtocol] = AcquisitionProtocolScaleSet
 	if job.RunnerName != "" {
@@ -698,7 +697,7 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 // so the Secret must survive; it is reclaimed with every other steady-state Secret by
 // CleanupScaleSetJob on the job's completion. A pod being deleted is not a worker for
 // this delivery, which registered a runner that pod will never start, so the delivery
-// fails with a *WorkerTerminatingError and is re-offered once the pod is gone (Q1199).
+// fails with a *WorkerTerminatingError and is re-offered once the pod is gone.
 func (p *Provisioner) adoptExistingScaleSetPod(ctx context.Context, namespace, podName, secretName string, unstage func(), log *slog.Logger) error {
 	var pod corev1.Pod
 	err := p.liveReader().Get(ctx, client.ObjectKey{Namespace: namespace, Name: podName}, &pod)
@@ -725,7 +724,7 @@ func (p *Provisioner) adoptExistingScaleSetPod(ctx context.Context, namespace, p
 //
 // It is the terminating twin of CheckScaleSetCapacity, asked by the scale-set listener
 // before it mints a JIT config, so a job held for a terminating pod registers no runner
-// on each re-offer (Q1233). It reads the cache, because it runs on every assignment; a
+// on each re-offer. It reads the cache, because it runs on every assignment; a
 // cache that has not yet seen the deletion lets the job through to the authoritative
 // check adoptExistingScaleSetPod makes, and one that has not yet seen the pod go costs one
 // more re-offer. Any other error means the check could not be made.
@@ -748,7 +747,7 @@ func (p *Provisioner) CheckScaleSetWorkerPod(ctx context.Context, target Target,
 }
 
 // WorkerTerminatingError reports that a scale-set job's worker pod name is held by a pod
-// already being deleted, so the job cannot have a worker until that pod is gone (Q1199).
+// already being deleted, so the job cannot have a worker until that pod is gone.
 //
 // It is a distinct type for the reason CeilingReachedError is: the listener redelivers a
 // transient failure immediately, and a graceful termination lasts seconds to minutes (a
@@ -770,7 +769,7 @@ func IsWorkerTerminating(err error) bool {
 
 // handScaleSetSecretToPod makes the worker pod the only owner of the JIT-config Secret
 // it mounts, so the garbage collector deletes the Secret once the pod is gone, however
-// it went: the reaper, a drain, or a hand-run delete (Q1154). The Secret is staged
+// it went: the reaper, a drain, or a hand-run delete. The Secret is staged
 // before the pod exists, owned by the RunnerSet, and the completion that reclaims it is
 // keyed by the runner that held the job, which reads the Secret's name off a pod that
 // may already have been deleted. A Secret holding a runner credential then outlived its
@@ -815,11 +814,11 @@ func (p *Provisioner) handScaleSetSecretToPod(ctx context.Context, namespace, po
 // owners are all Pods that no longer exist belongs to a worker that is gone: it holds
 // that worker's spent JIT config rather than the one this delivery minted, and the
 // garbage collector can delete it before the new pod is handed it, leaving that pod
-// Pending on a missing Secret (Q1174). It is deleted under a UID precondition, so a
+// Pending on a missing Secret. It is deleted under a UID precondition, so a
 // concurrent replay's fresh Secret is never the one removed, and re-created from secret.
 // A Secret already being deleted is waited out by an error the listener retries. Any
 // other Secret, staged by a delivery still in flight or mounted by a live worker, is
-// left alone (Q373).
+// left alone.
 func (p *Provisioner) replaceStaleScaleSetSecret(ctx context.Context, secret *corev1.Secret, log *slog.Logger) (bool, error) {
 	var existing corev1.Secret
 	err := p.liveReader().Get(ctx, client.ObjectKeyFromObject(secret), &existing)
@@ -886,7 +885,7 @@ func scaleSetSecretName(jobID string) string { return "job-ss-" + safeName(jobID
 //
 // It shares workerPodName with the v1 path, which owns the 63-char DNS-label budget:
 // this tier truncated the assembled name identically, so the invalid-name defect did
-// not disappear when a tenant migrated to v2 (Q467). Renaming does mean an AGC
+// not disappear when a tenant migrated to v2. Renaming does mean an AGC
 // upgraded mid-job computes a different name for a v1-era in-flight pod than the one
 // that created it; CleanupScaleSetJob then finds no pod and skips the stamp, so the
 // worker still runs to completion and completedPodTTL still reaps it.
@@ -896,7 +895,7 @@ func scaleSetPodName(ownerName, jobID string) string {
 
 // CleanupScaleSetJob deletes the per-job JIT-config Secret ProvisionScaleSetWorker
 // staged for the worker that held jobID. It is the steady-state reclaim point for the
-// scale-set path (Q373): the Secret cannot be deleted when the worker pod is created
+// scale-set path: the Secret cannot be deleted when the worker pod is created
 // (the pod mounts it), so the scale-set listener calls this on the terminal
 // JobCompleted for the job, at which point that worker's runner has consumed its JIT
 // config and exited.
@@ -908,7 +907,7 @@ func scaleSetPodName(ownerName, jobID string) string {
 // A job completed before its pod ever started (a cancellation, or a replayed queue) is
 // the case the listener works to avoid reaching: it handles a batch's completions before
 // its assignments and refuses to provision a job already known completed, so no pod is
-// built for a job whose Secret is already reclaimed (Q575). When the completion arrives
+// built for a job whose Secret is already reclaimed. When the completion arrives
 // after the pod exists anyway, the pod can no longer mount the Secret — markJobCompleted
 // stamps it below, and the reaper collects it on completedJobPendingGrace rather than
 // leaving it to sit out the unrelated pendingPodDeadline.
@@ -917,18 +916,18 @@ func scaleSetPodName(ownerName, jobID string) string {
 // completion for a job whose Secret a failure path already unstaged, is a no-op.
 //
 // It also stamps AnnotationJobCompletedAt on the worker pod, which is what gives a
-// still-Running scale-set worker a reap deadline (Q420) — see markJobCompleted.
+// still-Running scale-set worker a reap deadline — see markJobCompleted.
 //
 // Which worker it reclaims is decided by runnerName, not jobID. GitHub hands a
 // scale-set job to whichever of the set's runners asks first, so the worker minted for
 // jobID can be running a different job while jobID finishes on another runner — and
-// stamping the minted worker then reaps a live job five minutes later (Q1151). The
+// stamping the minted worker then reaps a live job five minutes later. The
 // completion names the runner that held the job, and the worker carrying that name in
 // AnnotationRunnerName is the one whose runner has now exited. With no runnerName (the
 // job ended before any runner started it) the set has one runner more than it has jobs:
 // the minted worker is that surplus one, unless its runner has been seen starting
 // another job (AnnotationStartedJobID), and then an idle worker is reclaimed in its
-// place (reclaimSurplusWorker, Q1153).
+// place (reclaimSurplusWorker).
 func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, jobID, runnerName string) error {
 	key := target.Key()
 	minted := scaleSetPodName(key.Name, jobID)
@@ -992,9 +991,9 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 
 // reclaimSurplusWorker stamps one idle worker of target for collection, in place of the
 // worker minted for jobID: jobID ended before any runner started it, so one of the set's
-// runners will never be given a job, but the one minted for it is busy with another
-// (Q1153). Left alone, that idle runner sits at "Listening for Jobs" holding a
-// concurrency slot and a node until the reaper's idle-runner check finds it (Q1360).
+// runners will never be given a job, but the one minted for it is busy with another.
+// Left alone, that idle runner sits at "Listening for Jobs" holding a
+// concurrency slot and a node until the reaper's idle-runner check finds it.
 //
 // Every runner of the set can take any of its jobs, so which idle one goes does not
 // change how many jobs still have a runner to take them. A candidate is a Running or
@@ -1007,12 +1006,12 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 // A Pending worker is still a candidate because the surplus one is often still starting:
 // when GitHub withdraws an assignment no runner took and re-issues the job under a new
 // job ID, the worker created for the re-issue is Pending when the first runner takes the
-// job, and skipping it left that worker idle with no deadline (Q1360).
+// job, and skipping it left that worker idle with no deadline.
 //
 // It is idempotent per jobID: a worker already carrying AnnotationSurplusForJob for it
 // means a replayed completion has nothing left to reclaim. except names a pod never to
 // pick. Finding no candidate is not an error; the reaper's idle-runner check is the
-// backstop for a worker this leaves idle (Q1360).
+// backstop for a worker this leaves idle.
 func (p *Provisioner) reclaimSurplusWorker(ctx context.Context, target Target, jobID, except string) error {
 	key := target.Key()
 	var pods corev1.PodList
@@ -1084,7 +1083,7 @@ func surplusBefore(a, b *corev1.Pod) bool {
 // job name) the started job's. ProvisionScaleSetWorker stamped the identity of the job
 // the pod was created for, but GitHub gives a scale-set job to whichever runner asks
 // first, so the pod can be serving another run — and eviction recovery re-runs the run
-// these annotations name (Q1152). A start that carries no complete identity, on a pod
+// these annotations name. A start that carries no complete identity, on a pod
 // created for a different job, removes the stamped identity instead: recovery then
 // reports the identity unknown rather than re-running an unrelated run.
 //
@@ -1092,7 +1091,7 @@ func surplusBefore(a, b *corev1.Pod) bool {
 // the worker's own job cannot precede its start, since the listener drops a JobStarted
 // for a job it has already seen complete — so it is removed: the runner that was idle
 // is running a job now. A worker that is gone or already terminal is not an error, and a
-// terminal one is stamped only where its out-of-memory kill waits for the start (Q1389).
+// terminal one is stamped only where its out-of-memory kill waits for the start.
 func (p *Provisioner) MarkScaleSetJobStarted(ctx context.Context, target Target, job ScaleSetJob) error {
 	found, err := p.scaleSetWorkerByRunner(ctx, target, job.RunnerName)
 	if err != nil || found == nil {
@@ -1145,7 +1144,7 @@ func (p *Provisioner) MarkScaleSetJobStarted(ctx context.Context, target Target,
 		return nil
 	}
 	// The stamp marked this runner as the set's surplus, and it has just been given a
-	// job, so the runner that would have taken that job is the surplus one now (Q1153).
+	// job, so the runner that would have taken that job is the surplus one now.
 	return p.reclaimSurplusWorker(ctx, target, surplusFor, pod.Name)
 }
 
@@ -1222,7 +1221,7 @@ func scaleSetPodSecretName(pod *corev1.Pod) string {
 // but never receives its job — its assignment lapsed, was cancelled, or completed
 // elsewhere — sits at "Listening for Jobs" forever, and the reaper counted PodRunning as
 // active with no deadline of any kind, so it held a concurrency slot and a node until an
-// operator deleted it by hand (Q420). The annotation converts "GitHub says this job is
+// operator deleted it by hand. The annotation converts "GitHub says this job is
 // over" into a durable, restart-safe deadline the reaper can act on, rather than the
 // process-scoped state a fire-and-forget provisioner has no way to keep.
 //
@@ -1232,7 +1231,7 @@ func scaleSetPodSecretName(pod *corev1.Pod) string {
 //
 // A Pending pod is stamped as well as a Running one, and the reaper reads the stamp in
 // both arms: Pending means the pod never mounted its now-reclaimed Secret and can only
-// be collected, Running means the runner is shutting down (Q420).
+// be collected, Running means the runner is shutting down.
 //
 // A pod that has already reached a terminal phase — the ordinary case, where the runner
 // ran the job and exited — is left unstamped: completedPodTTL already owns it, so the
@@ -1288,7 +1287,7 @@ func (p *Provisioner) logFor() *slog.Logger {
 }
 
 // logForKey returns the base logger scoped to the owning object's namespace/name
-// so a session→job→pod trail is followable (Q87, Theme F).
+// so a session→job→pod trail is followable (Theme F).
 func (p *Provisioner) logForKey(key client.ObjectKey) *slog.Logger {
 	return p.logFor().With("namespace", key.Namespace, "owner", key.Name)
 }

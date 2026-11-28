@@ -262,7 +262,7 @@ func TestPodLevelMemoryRoom(t *testing.T) {
 
 // TestRecoverOOMKilled_HoldsTheRaiseToThePodLevelRoom: a raise past the template's
 // pod-level resources would build a pod the API server refuses, so it is cut to the room
-// they leave, and withheld where that is no raise at all (Q1402).
+// they leave, and withheld where that is no raise at all.
 func TestRecoverOOMKilled_HoldsTheRaiseToThePodLevelRoom(t *testing.T) {
 	mem := func(q string) corev1.ResourceList {
 		return corev1.ResourceList{corev1.ResourceMemory: resource.MustParse(q)}
@@ -395,7 +395,7 @@ func oomNotes(t *testing.T, pod, node, job string) map[string]string {
 
 // TestOOMNotes_NameWhatWasReadAndNoCause: a kill made above the container is expected to
 // leave the status a kill at its limit does, so every note gives what was read of the
-// worker and none says the runner reached its limit or that its job needs more (Q1400).
+// worker and none says the runner reached its limit or that its job needs more.
 func TestOOMNotes_NameWhatWasReadAndNoCause(t *testing.T) {
 	const facts = "killed for memory on node node-a, with a memory request of 1Gi and a limit of 2Gi; " +
 		"its termination reason does not say whether it reached that limit or memory ran out above it, as on a full node. "
@@ -691,7 +691,7 @@ func TestApplyMemoryFloor_NeverLowersALimit(t *testing.T) {
 }
 
 // TestApplyMemoryFloor_HeldToALoweredPodLimit: a template edited after the kill to a
-// lower pod-level limit gets that limit, not a pod the API server refuses (Q1402).
+// lower pod-level limit gets that limit, not a pod the API server refuses.
 func TestApplyMemoryFloor_HeldToALoweredPodLimit(t *testing.T) {
 	ctx := context.Background()
 	p, target, _, _, _ := recoveryFixture(t)

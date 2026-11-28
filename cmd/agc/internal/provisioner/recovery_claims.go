@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// The durable recovery claim on the scale-set tier (Q1108).
+// The durable recovery claim on the scale-set tier.
 //
 // # Why the claim left the pod
 //
@@ -24,12 +24,12 @@ import (
 // victim. The evidence — the cause and the run identity — is in hand by the time
 // recovery acts on it, read from the informer; the at-most-once claim was not, because
 // it was written back onto that same pod. So a pod removed in between took the lock
-// with it and its run was reported unrecoverable (Q809 measured about two seconds on a
+// with it and its run was reported unrecoverable (measured at about two seconds on a
 // drain). The evidence stays the pod's; the claim lives here instead, where the
 // deletion does not reach it.
 //
 // The alternatives, and why a separate object rather than a field in the listener's
-// guard ConfigMap (Q606): docs/design/04-operational-flows.md §4.2, "Detecting a
+// guard ConfigMap: docs/design/04-operational-flows.md §4.2, "Detecting a
 // disruption is not the same as claiming it". The short form is that guards.json is
 // re-serialised whole from the listener's memory on every save, so nothing another
 // writer puts inside it survives.
@@ -65,7 +65,7 @@ type recoveryClaim struct {
 	Cause     string    `json:"cause"`
 	// JobID is the job the worker's runner had started (AnnotationStartedJobID), empty
 	// where none was recorded. It is what lets the orphaned-worker scan find a recovery
-	// taken for a job off a worker created for a different one (Q1152).
+	// taken for a job off a worker created for a different one.
 	JobID string `json:"jobID,omitempty"`
 }
 
@@ -118,7 +118,7 @@ func (p *Provisioner) claimDisruptionRecovery(ctx context.Context, target Target
 
 	// A conflict means another replica's claim landed, so the loop retries rather than
 	// counting: claimMu turns a replica's claims into a back-to-back burst that wins one
-	// round per write, which outlasts any count sized to the replica set (Q1197; the
+	// round per write, which outlasts any count sized to the replica set (the
 	// failure ledger's loop measured it). Each round needs a rival write, so the loop ends
 	// when those stop; ctx ends it sooner where the caller set a deadline — the watch
 	// path's disruptedWorkerRecoveryBudget, but not the reconcile scan's.

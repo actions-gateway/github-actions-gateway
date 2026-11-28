@@ -4,7 +4,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// Preemption recovery (Q497): the discriminator that lets a worker displaced by a
+// Preemption recovery: the discriminator that lets a worker displaced by a
 // higher priorityTiers tier reach the same automatic re-run a kubelet eviction does.
 //
 // Two mechanisms are both colloquially called eviction and only one produces the
@@ -13,7 +13,7 @@ import (
 // DisruptionTarget condition. Both tiers feed this file's result into the same
 // handleEviction they already use.
 //
-// Two constraints this file must not lose, both measured rather than assumed (Q423):
+// Two constraints this file must not lose, both measured rather than assumed:
 //
 //   - Detection must key on the CONDITION, never the phase. A preempted worker lands in
 //     Pending, Succeeded or Failed depending on what its container was doing, so no
@@ -21,7 +21,7 @@ import (
 //   - It must match the full type/status/REASON triple, never the condition type alone.
 //     The eviction API stamps the same type with its own reason, so a type-only match
 //     would silently pull in the drain path, which is gated separately — on the deletion
-//     mark, not on this condition (Q459/Q502; see deletion.go).
+//     mark, not on this condition (see deletion.go).
 //
 // The full reasoning — why the scheduler deletes rather than evicts, why the worker's
 // disruption-safety annotations and a PodDisruptionBudget cannot deflect it, why
@@ -64,20 +64,20 @@ func PreemptedByScheduler(pod *corev1.Pod) bool {
 // — and troubleshooting sends an operator looking for different things in each case.
 //
 // A climbing node_shutdown count means workers are landing on nodes that go away under
-// them — usually Spot or preemptible capacity being reclaimed (Q1179).
+// them — usually Spot or preemptible capacity being reclaimed.
 //
 // recoveryCauseAbandoned is the one whose re-run is not immediate: the worker never
-// started, so the run was force-cancelled (Q683) and the re-run waits for capacity to
-// return before spending its slot (Q691, abandoned_rerun.go).
+// started, so the run was force-cancelled and the re-run waits for capacity to
+// return before spending its slot (abandoned_rerun.go).
 //
 // recoveryCauseVanished is the one named for what was observed rather than for what
 // happened: the worker was gone when the AGC came back, and which of the three deleting
-// causes took it is exactly what the missing pod no longer says (Q844,
+// causes took it is exactly what the missing pod no longer says (
 // orphaned_scaleset.go).
 //
 // recoveryCauseOOM is the one a retry class owns rather than a disruption arm: the
 // runner was killed for memory, which is re-run only where the sizing profile lets the
-// next attempt have a strictly higher limit (Q1183, oom_class.go).
+// next attempt have a strictly higher limit (oom_class.go).
 const (
 	recoveryCauseEviction     = "eviction"
 	recoveryCausePreemption   = "preemption"

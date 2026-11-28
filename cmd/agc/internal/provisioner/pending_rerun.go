@@ -14,7 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// Deferred retry-class re-runs (Q1244). A class re-run takes its slot when the class
+// Deferred retry-class re-runs. A class re-run takes its slot when the class
 // fires, as the disruption arms' do, and then waits in the failure ledger's pending map
 // until GitHub has concluded the run, because either re-run call answers `403 This
 // workflow is already running` until every job of the run has concluded, and a job's
@@ -76,7 +76,7 @@ type pendingRerun struct {
 func (r *pendingRerun) siblingsKey() string { return r.Disruption + "/siblings" }
 
 // parkRerun records r in l, reporting whether it changed l. An attempt has one entry, which
-// lists every worker killed in it (Q1327). A job killed again, in the attempt its own
+// lists every worker killed in it. A job killed again, in the attempt its own
 // re-run started, takes the place of an entry left for its siblings: the attempt r's release
 // starts carries the same cancelled jobs.
 func parkRerun(l *rerunLedger, now time.Time, r pendingRerun) bool {

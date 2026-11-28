@@ -23,7 +23,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 )
 
-// Q555: flaky-job detection. These pin the design's pairing table row by row, a
+// Flaky-job detection. These pin the design's pairing table row by row, a
 // replayed completion, a user's cancel, the snapshot's fault reading, and the cap
 // evicting failure records before it refuses a budget.
 
@@ -305,7 +305,7 @@ func TestFlakyJobs_ASnapshotNamesThePlatformFault(t *testing.T) {
 	assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, target.events, "a red test on a healthy worker is not a fault")
 }
 
-// TestFlakyJobs_ASidecarThatSurvivedANestedKillIsNotAFault (Q1395): a nested container's
+// TestFlakyJobs_ASidecarThatSurvivedANestedKillIsNotAFault: a nested container's
 // kill leaves OOMKilled on a sidecar that was never killed, so a sidecar's reason is a
 // fault only with a SIGKILL's exit code.
 func TestFlakyJobs_ASidecarThatSurvivedANestedKillIsNotAFault(t *testing.T) {
@@ -361,7 +361,7 @@ type proxyTarget struct {
 	staticProxy
 }
 
-// TestFlakyJobs_AnUnreadyColocatedProxyIsAPlatformFault (Q1237): a red test on a
+// TestFlakyJobs_AnUnreadyColocatedProxyIsAPlatformFault: a red test on a
 // healthy worker is a platform fault when its colocated proxy pool was not Ready or
 // had no ready replica, and never for a shared pool, whose readiness is unread.
 func TestFlakyJobs_AnUnreadyColocatedProxyIsAPlatformFault(t *testing.T) {
@@ -411,7 +411,7 @@ func TestFlakyJobs_AnUnreadyColocatedProxyIsAPlatformFault(t *testing.T) {
 }
 
 // TestFlakyJobs_AStartOnAFailedWorkerKeepsItsProxyReading: the start of a job whose runner
-// was killed first snapshots its Failed worker again (Q1389), and what became of the proxy
+// was killed first snapshots its Failed worker again, and what became of the proxy
 // in between did not fail the job.
 func TestFlakyJobs_AStartOnAFailedWorkerKeepsItsProxyReading(t *testing.T) {
 	reading := func(ready string) staticProxy {
@@ -538,7 +538,7 @@ func terminated(name, reason string, code int32, at time.Time) corev1.ContainerS
 		Terminated: &corev1.ContainerStateTerminated{Reason: reason, ExitCode: code, FinishedAt: metav1.NewTime(at)}}}
 }
 
-// TestFlakyJobs_ARunningWorkersRecordIsCompletedWhenItFinishes (Q1376): a job that ends
+// TestFlakyJobs_ARunningWorkersRecordIsCompletedWhenItFinishes: a job that ends
 // on a step's result completes while its worker runs, so the record starts from the
 // running pod and is rewritten at the worker's terminal transition. Only what happened
 // before the completion is reported as a fault, and only once.

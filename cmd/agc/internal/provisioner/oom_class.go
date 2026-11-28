@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// Classified platform retry on the scale-set tier (Q1183), and its first class: a runner
+// Classified platform retry on the scale-set tier, and its first class: a runner
 // killed for memory on a set whose sizing profile derives limits from history. A class
 // is a failure shape GAG recognises from objects it owns and re-runs on the disruption
 // arms' path, with their recovery claim, futility checks and ledger budget, once the

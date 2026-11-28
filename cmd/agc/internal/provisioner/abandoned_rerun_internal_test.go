@@ -161,7 +161,7 @@ func failingListInterceptor() interceptor.Funcs {
 	}
 }
 
-// TestAbandonedRerun_WaitsForCapacityBeforeReRunning is the core Q691 behaviour: a
+// TestAbandonedRerun_WaitsForCapacityBeforeReRunning is the core behaviour: a
 // force-cancelled abandoned run is NOT re-run while the owner still cannot place a
 // worker pod, and IS re-run once one binds.
 //
@@ -206,7 +206,7 @@ func TestAbandonedRerun_WaitsForCapacityBeforeReRunning(t *testing.T) {
 // the capacity test. The abandoned job's own worker may itself have bound (scheduled,
 // then removed before its containers started), and a pod that was already placed when
 // the run was abandoned proves nothing about the pool NOW — treating it as evidence
-// would make the trigger fire immediately and turn Q691 into the storm it exists to
+// would make the trigger fire immediately and turn the re-run into the storm it exists to
 // avoid.
 func TestAbandonedRerun_PodBoundBeforeTheAbandonmentIsNotEvidence(t *testing.T) {
 	ctx := context.Background()
@@ -256,11 +256,11 @@ func TestAbandonedRerun_ExpiresWhenCapacityNeverReturns(t *testing.T) {
 	assert.Equal(t, 0, f.tally.for_("555"))
 }
 
-// TestAbandonedRerun_LoopBudgetBindsPerRun is the loop-bound test the Q691 row demands.
+// TestAbandonedRerun_LoopBudgetBindsPerRun is the loop-bound test.
 //
 // A re-run re-queues the job into the pool that starved it, so a run can be abandoned,
 // re-run, and abandoned again indefinitely. The bound is the shared per-run_id retry
-// budget (Q106): each recovery reserves one slot, and the run stops being re-run once
+// budget: each recovery reserves one slot, and the run stops being re-run once
 // maxEvictionRetries are spent.
 //
 // It is asserted PER RUN, over two distinct runs abandoned in the same cycles, because
@@ -329,7 +329,7 @@ func TestAbandonedRerun_OneRunOneEntry(t *testing.T) {
 }
 
 // TestAbandonedRerun_OnlyTheCancelledOutcomeRegisters pins registration to the state
-// the Q683 measurement covers. identity_unknown has no endpoint to address, and after
+// the force-cancel measurement covers. identity_unknown has no endpoint to address, and after
 // a refused force-cancel the run was never concluded by us, so neither is a run whose
 // re-run GitHub was measured to accept.
 func TestAbandonedRerun_OnlyTheCancelledOutcomeRegisters(t *testing.T) {

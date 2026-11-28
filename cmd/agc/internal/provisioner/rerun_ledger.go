@@ -18,11 +18,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// The per-set failure ledger and the scale-set re-run budget it holds (Q1182).
+// The per-set failure ledger and the scale-set re-run budget it holds.
 //
-// The budget used to be the in-process evictionCounts map, so an AGC restart refilled
-// every run's maxEvictionRetries, and two disruptions in one run each reserved a slot
-// and each landed a re-run. It now lives in a ConfigMap per scale-set RunnerSet, as a
+// An in-process budget is refilled by an AGC restart, and counts two disruptions of one
+// attempt as two re-runs. This one lives in a ConfigMap per scale-set RunnerSet, as a
 // count of GAG's own re-runs per run plus a record of what each re-run covered, so a
 // second disruption of an attempt GAG already re-ran merges into that re-run instead of
 // spending a slot and re-running the run again. The classic tier keeps evictionCounts.
@@ -31,8 +30,8 @@ import (
 // to be rewritten by a version that does not understand all of it: unknown fields and
 // maps survive a rewrite, every map entry ages itself by its own expiresAt, and a
 // writer below minWriterVersion reads but never writes. The operator-facing account is
-// docs/design/04-operational-flows.md §4.2. Q555 adds the failures map (flaky_jobs.go),
-// Q1183 the memoryFloors map (oom_class.go), and Q1244 the pending map (pending_rerun.go).
+// docs/design/04-operational-flows.md §4.2. The ledger also holds the failures map (flaky_jobs.go),
+// the memoryFloors map (oom_class.go), and the pending map (pending_rerun.go).
 
 // rerunLedgerDataKey is the one data key in a failure-ledger ConfigMap.
 const rerunLedgerDataKey = "failures.json"
@@ -69,7 +68,7 @@ const failureRecordsCeiling = rerunLedgerMaxBytes / 2
 
 // maxMergedPerAttempt bounds the disruptions and jobs one re-run attempt lists. A
 // budget record is never evicted, so an unbounded list let one run's matrix of killed
-// jobs fill the ledger and refuse every other repository's re-run (Q1327). A merged
+// jobs fill the ledger and refuse every other repository's re-run. A merged
 // disruption past the bound is not recorded, and replayed it merges again, which spends
 // no slot either.
 const maxMergedPerAttempt = 16
@@ -552,7 +551,7 @@ func (r *rerunRecord) advance(from string, d *rerunDisruption) bool {
 }
 
 // recordSelfCancel records that GAG is about to force-cancel attempt of runID, so the
-// cancelled conclusion it produces is not read as a user's cancel (Q1182, replacing an
+// cancelled conclusion it produces is not read as a user's cancel (replacing an
 // exemption for the abandoned arm).
 func (p *Provisioner) recordSelfCancel(ctx context.Context, target Target, runID string, attempt int) error {
 	return p.updateRerunLedger(ctx, target, func(l *rerunLedger, now time.Time) bool {

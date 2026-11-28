@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// Q1181: the known-futile checks on the scale-set re-run path. Each case drives one
+// The known-futile checks on the scale-set re-run path. Each case drives one
 // disruption through handleEviction against a fake GitHub and asserts both halves of a
 // withhold: no re-run call, and no budget slot spent.
 
@@ -239,7 +239,7 @@ func secondAttempt(now time.Time, overrides map[string]any) map[string]any {
 
 // ranInAttempt is a job secondAttempt ran, and carriedJob one it did not, in the shapes
 // GitHub lists them: a carried job has the new attempt's created_at and the old one's
-// runner and completed_at (run 45310657002, 2026-11-23).
+// runner and completed_at (run 45310657002, measured 2026-11-23).
 func ranInAttempt(now time.Time, name, runner, conclusion string) map[string]any {
 	return map[string]any{"name": name, "runner_name": runner, "conclusion": conclusion, "run_attempt": 2,
 		"created_at":   now.Add(-10 * time.Minute).Format(time.RFC3339),
@@ -423,7 +423,7 @@ func TestFutileRerun_AConcludedAttemptsListIsSettled(t *testing.T) {
 
 // TestFutileRerun_AJobThatNeverRanIsNotCarried: GitHub lists a job that never got a runner
 // as completed a second before it was created, in the attempt that cancelled it
-// (apache/airflow run 45322354372, 2026-11-23).
+// (apache/airflow run 45322354372, measured 2026-11-23).
 func TestFutileRerun_AJobThatNeverRanIsNotCarried(t *testing.T) {
 	now := time.Now()
 	api := &futilityAPI{run: secondAttempt(now, nil), jobs: []map[string]any{
@@ -710,8 +710,8 @@ func TestFutileRerun_GAGsOwnCancelIsNotWithheld(t *testing.T) {
 
 // TestFutileRerun_ACancelWhileWaitingIsHonouredOnEveryArm covers the cancel that lands
 // after detection, which only the re-run loop's read sees: an eviction's run is still in
-// progress when it is detected and is cancelled before GitHub accepts the re-run. Before
-// Q1181 only the deletion arm checked, so the eviction arm re-ran a cancelled run.
+// progress when it is detected and is cancelled before GitHub accepts the re-run. A check on
+// the deletion arm alone would let the eviction arm re-run a cancelled run.
 func TestFutileRerun_ACancelWhileWaitingIsHonouredOnEveryArm(t *testing.T) {
 	now := time.Now()
 	api := &futilityAPI{runAt: func(call int) map[string]any {
