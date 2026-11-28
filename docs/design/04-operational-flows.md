@@ -931,7 +931,7 @@ Whoever can write `pods/status` can write such a condition, so in the record it 
 `Act` is what an operator sets once the reporter is installed, and the GMC threads it to the AGC as `AGC_OOM_KILL_REASONS`, set only off the default, so a gateway left at `Record` keeps its pod template.
 
 Under `Act`, a runner's kill waits until its condition carries one of the counters' five reasons or 30 seconds have passed since the pod ended, whichever comes first.
-The wait runs from the pod's end, so an AGC restart does not extend it, and after the start wait where both apply.
+The wait runs from the pod's end, beside the start wait where both apply, so an AGC restart does not extend it.
 The reaper keeps the pod for it whether or not the class would retry the kill, the condition's update starts the recovery, and a pod deleted while it waits is recovered at once with no reason.
 The 30 seconds is a guess at several times the reporter's delay, 10 of which are its hold of an answer that rests on a container's end time ([the design](../plan/q1403-oom-kill-reporter.md#timing)).
 
