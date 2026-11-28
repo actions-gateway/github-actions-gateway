@@ -127,7 +127,7 @@ Two ways are left:
   It cannot change how a path of its own starts: with its pod, or, for an unsandboxed `privileged-dind` job with `--cgroup-parent`, with whatever slice it named.
   **The reader matches the line against its full form, and refuses one**
   - whose prefix is not the kernel's facility at the priority the kernel prints a kill with, `<6>`;
-  - where a key appears twice, or `global_oom` and `oom_memcg` both do;
+  - where a key appears twice; one with both `global_oom` and `oom_memcg` is not in that form, since the kernel prints one of the two after `mems_allowed`;
   - where `constraint=CONSTRAINT_MEMCG` and an `oom_memcg` do not come together (read, `constrained_alloc`);
   - that does not end in `,task=…,pid=…,uid=…`, or prints a path as `(name too long)` or without a leading `/`;
   - whose victim is not inside the cgroup whose limit it names, which is where the kernel takes a victim from.
@@ -672,10 +672,11 @@ PRs 1 to 6 are Q1403, which gates 2.1; the three that do not gate it have rows o
 | 6 | AGC, the record: the edge, and the reason in the failed job's record and Event, with a test for each of [its limits](#reading-it) | S | The answer outliving the worker |
 | 7 | ([Q1406](../queue/Q1406.md)) AGC, the action: the setting through the GMC, the wait, text by reason, no raise and no re-run above the container; its e2e and docs | M | D3 |
 | 8 | ([Q1408](../queue/Q1408.md)) The re-run class | M, and a dogfood run | After 2.1 |
-| 9 | ([Q1407](../queue/Q1407.md)) The kernel-log option: the second container and its chart value, the parser and its fixtures, the two-witness table in the controller, its words in PR 6's record, an e2e lane with it on (reading 10) and its part of the operator's page | L | D1's option |
+| 9a | The kernel-log option's reader: the parser and its fixtures, the second container and its chart value, the numbers in the agent's report, the e2e lane with it on (reading 10 on kind) and its part of the operator's page | M | D1's option |
+| 9b | ([Q1407](../queue/Q1407.md)) The kernel-log option's witness: the two-witness table in the controller, the four `Log` reasons, their words in PR 6's record, and an e2e kill the counters miss | M | D1's option, after 7 |
 
 **Order.** 1, then 2 and 4 together, 3, 5; 6 any time after 2 fixes the condition's type, and 7 after 6.
-9 after 5 and 6.
+9a after 5 and 6, and 9b after 7 and 9a.
 PRs 1 to 5 have no gateway code and can run beside the 2.1 stream; 6 needs the edge Q1389 landed in the same predicate, and 7 the text Q1400 did.
 PR 1 starts from files a local container gives.
 A kubelet's are the kind run's, which PR 1 carries as its test data.

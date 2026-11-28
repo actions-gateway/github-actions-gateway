@@ -30,6 +30,8 @@ A kill that ended no container, such as a build's child process, gets the Event 
 | Writes | Its node's report, one ConfigMap in this namespace | Pod conditions of its own domain, and Events, in the namespaces you list |
 | Runs as | Not root, no capability, read-only root filesystem, a `hostPath` volume | The same, with no `hostPath` |
 
+With `kernelLog.enabled`, the agent's pod has a second container, which reads the kernel's log and writes nothing but numbers to the agent: the node's uid 0 with `CAP_SYSLOG` alone, no token, no `hostPath`.
+
 Three ValidatingAdmissionPolicies hold each to less than its RBAC grants, and no value turns them off.
 An agent writes only the report of the node its token names, and that holds no label, no annotation and no other data.
 The controller makes nothing but reports, changes nothing of a pod but conditions of its own domain, and its Events carry only its own reasons.
@@ -108,6 +110,8 @@ Delete the `oom-report-` ConfigMaps before it, and the controller makes them aga
 | `agent.tolerations` | every taint | As above. |
 | `agent.priorityClassName` | `""` | |
 | `agent.resources` | 50m and 64Mi, limit 128Mi | |
+| `kernelLog.enabled` | `false` | Adds a container to each agent's pod that reads the kernel's out-of-memory lines by `syslog(2)`, as the node's uid 0 with `CAP_SYSLOG` alone, no token and no `hostPath`. The agent keeps what it hands over in its report, and no condition or Event changes in this release. Taken over, it reads the node's whole kernel log. |
+| `kernelLog.resources` | 10m and 32Mi, limit 64Mi | |
 | `controller.placement` | `NodeLabel` | `NodeLabel` requires `controller.nodeLabel`. `Taints` requires nothing, and refuses `controller.tolerations`. |
 | `controller.nodeLabel.{key,value}` | `node-restriction.kubernetes.io/oom-reporter`, `controller` | The label. Its key has to be in the `node-restriction.kubernetes.io` namespace. |
 | `controller.nodeSelector` | `{}` | Beside Linux. |

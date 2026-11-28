@@ -47,6 +47,32 @@ Three admission policies hold each to less than its grants, and no value turns t
 It is off unless installed.
 It adds a `hostPath` pod on every node, a namespace at the Pod Security level `privileged`, and write access to the status of pods in the namespaces it is given.
 
+## The kernel log, as an option
+
+`kernelLog.enabled`, off by default, adds a second container to each agent's pod.
+It reads the kernel's own line for each out-of-memory kill, which names the limit outright, and hands the agent four numbers for it: the pod, the container killed, where the limit was, and when.
+The agent keeps them in its report ConfigMap.
+In this release nothing reads them: turning the option on changes no condition, no Event, and nothing the gateway does.
+
+Turning it on grants more than the counters need:
+
+| | The log reader's container |
+|---|---|
+| Runs as | The node's uid 0, with every capability dropped but `SYSLOG`, no privilege escalation, and a read-only root filesystem |
+| Has | No service-account token, no `hostPath`, no device. The chart moves the agent's token into the agent's container alone |
+| Reaches, taken over | The node's whole kernel log, which names every process in each kill's dump and its size, any tenant's; it can clear that log, and take lines from a reader of `/proc/kmsg` |
+| Is refused by | A policy that refuses added capabilities, a security module that refuses `syslog(2)`, and `hostUsers: false` |
+
+A container's process can make the kernel print a cgroup name of its choosing in that line, so the reader takes a line only in the form the kernel prints and refuses the rest, logging each refusal by its reason.
+Read them:
+
+```bash
+kubectl logs -n <release-namespace> <agent-pod> -c log-reader
+```
+
+On the repository's kind lane the option is on, each kill's line is required in the agent's report at the limit the kernel names, and a line a job forged with its own cgroup names is required to be refused.
+A line a job forges about its own pod can still be taken.
+
 ## Where its answers have been checked
 
 Each answer comes from a rule over the cgroup counters, and the rule's tests hold it to the limit the kernel's own line names for the same kill.
