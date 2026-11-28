@@ -48,7 +48,9 @@ const abandonedForceCancelTimeout = 30 * time.Second
 // again: it is withheld as run_cancelled under cause abandoned, and nothing is recorded
 // (Q1232). The conclusion does not say who cancelled, so this covers a user's cancel, a
 // concurrency group's, and GitHub's own unstarted-job timeout, which a pendingPodDeadline
-// past ~15 minutes lets land before the reap. d
+// past ~15 minutes lets land before the reap. A run with a job in progress on a runner
+// is not cancelled either, since the cancel ends every unfinished job of the run: it is
+// withheld as job_running, and the abandoned job stays queued at GitHub. d
 // names the abandoned worker to the ledger, and is ignored on the classic tier.
 func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target, owner, repo, runID, tier string, log *slog.Logger, d rerunDisruption) {
 	outcome := "cancelled"
@@ -59,8 +61,12 @@ func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target
 		if tier == evictionTierScaleSet {
 			// Its own deadline, so a slow ledger write cannot spend the cancel's.
 			rctx, rcancel := context.WithTimeout(ctx, abandonedForceCancelTimeout)
-			attempt, cancelledElsewhere := p.recordAbandonedAttempt(rctx, target, owner, repo, runID, log)
+			attempt, cancelledElsewhere, running := p.recordAbandonedAttempt(rctx, target, owner, repo, runID, log)
 			rcancel()
+			if running != "" {
+				p.withholdForRunningJob(target, runID, running, log)
+				return
+			}
 			if cancelledElsewhere {
 				// Recording this attempt as GAG's would turn that cancel into one the
 				// run_cancelled check re-runs (Q1232). No force-cancel, no re-run, and no
@@ -101,22 +107,65 @@ func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target
 // ledger does not hold as GAG's, which is recorded nothing: that cancel is a user's, a
 // concurrency group's or GitHub's unstarted-job timeout. A cancel GAG made itself, for
 // another abandoned job of the run, is recorded again and force-cancelled as before.
-func (p *Provisioner) recordAbandonedAttempt(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger) (attempt int, cancelledElsewhere bool) {
+// running names a job of the attempt that is running on a runner, where there is one:
+// nothing is recorded, because the caller does not cancel.
+func (p *Provisioner) recordAbandonedAttempt(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger) (attempt int, cancelledElsewhere bool, running string) {
 	run, err := p.runConclusion(ctx, owner, repo, runID)
 	if err != nil || run.attempt == 0 {
 		log.Warn("could not read the abandoned job's run attempt; force-cancelling without recording it, so the cancel may read as a user's",
 			"runID", runID, "error", err)
-		return 0, false
+		return 0, false, ""
 	}
 	if run.status == runStatusCompleted && run.conclusion == runConclusionCancelled &&
 		p.selfCancelledAttempt(ctx, target, runID) != run.attempt {
-		return run.attempt, true
+		return run.attempt, true, ""
+	}
+	if run.status != runStatusCompleted {
+		if running = p.runningJob(ctx, owner, repo, runID, run.attempt, log); running != "" {
+			return run.attempt, false, running
+		}
 	}
 	if err := p.recordSelfCancel(ctx, target, runID, run.attempt); err != nil {
 		log.Warn("could not record GAG's own force-cancel in the failure ledger; force-cancelling anyway, so the cancel may read as a user's",
 			"runID", runID, "runAttempt", run.attempt, "error", err)
 	}
-	return run.attempt, false
+	return run.attempt, false, ""
+}
+
+// rerunWithheldReasonJobRunning is the EvictionRerunWithheld reason for an abandoned job
+// whose run has another job running: a force-cancel ends every unfinished job of the run,
+// on any runner, so the run is left alone.
+const rerunWithheldReasonJobRunning = "job_running"
+
+// runningJob returns the name of a job of the run's attempt that is running on a runner,
+// "" where none is or the list cannot be read. An abandoned job is not one: it is listed
+// queued, with no runner. An unread list does not withhold the cancel.
+func (p *Provisioner) runningJob(ctx context.Context, owner, repo, runID string, attempt int, log *slog.Logger) string {
+	jobs, err := p.attemptJobs(ctx, owner, repo, runID, attempt)
+	if err != nil {
+		log.Warn("could not list the abandoned job's run's jobs; force-cancelling without knowing whether another job of the run is running",
+			"runID", runID, "runAttempt", attempt, "error", err)
+		return ""
+	}
+	for _, j := range jobs {
+		if j.Status == jobStatusInProgress && j.RunnerName != "" {
+			return j.Name
+		}
+	}
+	return ""
+}
+
+// withholdForRunningJob surfaces an abandoned job whose run is not force-cancelled because
+// job, another job of it, is running. job is "" where the set's own workers showed it.
+func (p *Provisioner) withholdForRunningJob(target Target, runID, job string, log *slog.Logger) {
+	log.Info("another job of the abandoned job's run is running, and a force-cancel would end it; not force-cancelling or re-running the run",
+		"runID", runID, "runningJob", job)
+	which := "another job of the run"
+	if job != "" {
+		which = fmt.Sprintf("job %q of the run", job)
+	}
+	p.recordRerunWithheld(target, runID, recoveryCauseAbandoned, rerunWithheldReasonJobRunning,
+		fmt.Sprintf("a worker pod for run %s was removed before it ran, and %s is running, so the run is not force-cancelled: that would end every unfinished job of it. The job left without a worker stays queued for GitHub to offer again", runID, which))
 }
 
 // forceCancelRun calls POST /repos/{owner}/{repo}/actions/runs/{run_id}/force-cancel.

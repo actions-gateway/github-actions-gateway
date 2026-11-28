@@ -125,6 +125,9 @@ func (p *Provisioner) recoverAbandoned(ctx context.Context, target Target, pod *
 		owner, repo, runID = stranded.Owner, stranded.Repository, stranded.RunID
 		ok = owner != "" && repo != "" && runID != "" && runID != "0"
 		job = ""
+	} else if ok && p.runStartedOnSet(ctx, target, workers, runID, log) {
+		p.withholdForRunningJob(target, runID, "", log)
+		return closedChan()
 	}
 
 	if !ok {
@@ -194,6 +197,22 @@ func abandonedAwaitingRecovery(pod *corev1.Pod) bool {
 // It is optional: a Target without it leaves a stranded job unnamed.
 type InFlightLister interface {
 	InFlightJobs(ctx context.Context) ([]OrphanedWorker, error)
+}
+
+// runStartedOnSet reports whether a live worker of target's set has started a job of
+// runID, as far as the listener's in-flight set records it. It answers without a GitHub
+// call, and sees no job on another set or a GitHub-hosted runner, which runningJob does.
+func (p *Provisioner) runStartedOnSet(ctx context.Context, target Target, workers scaleSetWorkerSet, runID string, log *slog.Logger) bool {
+	lister, ok := target.(InFlightLister)
+	if !ok {
+		return false
+	}
+	inFlight, err := lister.InFlightJobs(ctx)
+	if err != nil {
+		log.Warn("could not read the set's in-flight jobs to check whether another job of the run is running", "error", err)
+		return false
+	}
+	return workers.runStarted(runID, inFlight)
 }
 
 // strandedScaleSetJob names the job that podName's removal left with no runner, where

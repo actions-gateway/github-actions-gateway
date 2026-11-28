@@ -7,7 +7,8 @@ The fast ending (Q683) is measured and shipped 2026-08-05: a standalone REST for
 The recovery arm that ending arms (Q691) shipped 2026-08-08: the cancelled run is re-run automatically once capacity returns, bounded by the shared per-run retry budget, per [the recovery re-run arm](#q691--the-recovery-re-run-arm-2026-08-08).
 The sibling `skipped` arm (Q682) was never measured; Q264 removed the classic fan-out that sent it.
 What the force-cancel does to a multi-job run's healthy jobs (Q1246) is measured 2026-11-27 on dogfood: it ends every unfinished job of the run, per [the multi-job measurement](#q1246--the-multi-job-measurement-2026-11-27).
-Open: the check that keeps it off a run with a job running is [Q1426](../queue/Q1426.md), and the scale-set tier's unstarted-job timeout, which that measurement did not show, is [Q1248](../queue/Q1248.md).
+The check that keeps it off a run with a job running has shipped (Q1426).
+Open: the scale-set tier's unstarted-job timeout, which that measurement did not show, is [Q1248](../queue/Q1248.md).
 
 Queue item: Q645 (completed; done rows are deleted).
 Origin: [release-1.3.md § The rc.5 re-run](archive/release-1.3.md#the-rc5-re-run-2026-08-02).
@@ -240,7 +241,7 @@ One run, so the five-minute figure and the count of two are readings and not a r
 ### What this decides
 
 - A never-started job left alone costs its run's other jobs nothing, for at least 41 minutes, and the force-cancel costs each of them its progress.
-  The check the stranded-job branch makes before cancelling (Q1235) is right, and the direct branch needs it too ([Q1426](../queue/Q1426.md)).
+  The check the stranded-job branch makes before cancelling (Q1235) is right, and the direct branch now makes it too, with a read of the run's jobs for a job the set cannot see (Q1426).
 - `maxEvictionRetries: 0` has to skip the force-cancel, since at 0 it ends healthy jobs and re-runs nothing ([Q1428](../queue/Q1428.md)).
 - Routing never-started preemption and eviction victims through the force-cancel would end the healthy jobs of every multi-job run it touched ([Q1230](../queue/Q1230.md)).
 - "GitHub cancels it at its ~15-minute unstarted-job timeout" is a classic-tier reading, and the operator docs state it for the scale-set tier, where this run did not show it ([Q1248](../queue/Q1248.md)).

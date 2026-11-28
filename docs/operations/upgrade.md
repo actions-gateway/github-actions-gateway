@@ -56,6 +56,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Non-breaking: a direct-egress v2 gateway reports `EgressRulesStale` and pages on it](#non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it)
   - [Non-breaking: the GMC keeps GitHub egress across a restart](#non-breaking-the-gmc-keeps-github-egress-across-a-restart)
   - [Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner](#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner)
+  - [Non-breaking: a worker that never started no longer force-cancels a run with a job running](#non-breaking-a-worker-that-never-started-no-longer-force-cancels-a-run-with-a-job-running)
   - [Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run](#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run)
   - [Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically](#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically)
   - [A timed-out job whose re-run passes counts as flaky](#a-timed-out-job-whose-re-run-passes-counts-as-flaky)
@@ -1253,6 +1254,21 @@ The evicted, preempted and drained shapes take the same path when no idle worker
 It names none while a `Running` worker's job start may not be recorded yet, and walks again once the start lands, for up to ten minutes after the loss (Q1235).
 
 **Rolling back** returns that job to waiting out the timeout.
+
+### Non-breaking: a worker that never started no longer force-cancels a run with a job running
+
+**Who is affected:** `ScaleSet` sets that run one job of a multi-job workflow, such as a matrix leg, or a job beside others on another `RunnerSet` or on GitHub-hosted runners.
+Nothing to do at upgrade time.
+
+**What changed.** A worker reaped at `pendingPodDeadline`, or deleted before its container ran, has its run force-cancelled and then re-run.
+A force-cancel ends every unfinished job of the run on any runner, and the re-run restarts each from the beginning (measured 2026-11-27 on a four-job run).
+The AGC now checks first for another job of the run that is running, on its own set's workers and in the run's jobs at GitHub, and where it finds one it makes neither call (Q1426).
+
+**What you will see.** `actions_gateway_eviction_rerun_withheld_total{cause="abandoned", reason="job_running"}` increments, and a **Normal** `EvictionRerunWithheld` Event names the running job.
+`actions_gateway_abandoned_run_force_cancels_total` does not move, and the worker's job stays queued at GitHub, where it gets a new worker if GitHub offers it to the set again.
+If it is still queued once the run's other jobs finish, cancel the run and re-run its failed jobs.
+
+**Rolling back** returns such a run to being cancelled whole and re-run.
 
 ### Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run
 
