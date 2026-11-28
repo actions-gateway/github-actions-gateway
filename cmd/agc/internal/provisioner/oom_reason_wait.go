@@ -72,7 +72,8 @@ func (p *Provisioner) oomReasonToActOn(pod *corev1.Pod) string {
 // awaitingOOMReason returns when pod's wait for its runner's reason ends, and whether it
 // is still waiting at now.
 func (p *Provisioner) awaitingOOMReason(pod *corev1.Pod, now time.Time) (deadline time.Time, waiting bool) {
-	if p.OOMKillReasons != OOMKillReasonsAct || !oomKilledAwaitingRecovery(pod) || runnerOOMReason(pod) != "" {
+	// The pod's own test first: the reaper calls this on every terminal pod.
+	if !oomKilledAwaitingRecovery(pod) || p.OOMKillReasons != OOMKillReasonsAct || runnerOOMReason(pod) != "" {
 		return time.Time{}, false
 	}
 	if _, disrupted := disruptionAwaitingRecovery(pod); disrupted {
